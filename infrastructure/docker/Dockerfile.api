@@ -1,37 +1,60 @@
-FROM oven/bun:1.2-alpine AS base
+# ─── Dockerfile.api ──────────────────────────────────────────────────────────
+# API server image for the Emailed REST/GraphQL gateway.
+# Extends the base image pattern for the API service.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Stage 1: Dependencies
+FROM oven/bun:1.2-alpine AS deps
 
 WORKDIR /app
 
-# Install dependencies
-FROM base AS deps
 COPY package.json bun.lockb ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
+COPY packages/email-parser/package.json ./packages/email-parser/
 COPY apps/api/package.json ./apps/api/
+
 RUN bun install --frozen-lockfile
 
-# Build
-FROM base AS builder
+# Stage 2: Build
+FROM oven/bun:1.2-alpine AS builder
+
+WORKDIR /app
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# Build shared dependencies first, then the API
 RUN bun run --filter @emailed/shared build
 RUN bun run --filter @emailed/db build
+RUN bun run --filter @emailed/email-parser build
 RUN bun run --filter @emailed/api build
 
-# Runtime
-FROM base AS runner
+# Stage 3: Production runtime
+FROM oven/bun:1.2-alpine AS runner
+
+WORKDIR /app
+
 ENV NODE_ENV=production
+ENV PORT=3000
 
-RUN addgroup --system --gid 1001 emailed
-RUN adduser --system --uid 1001 api
+# Create non-root user
+RUN addgroup --system --gid 1001 emailed && \
+    adduser --system --uid 1001 --ingroup emailed api
 
-COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder /app/packages/db/dist ./packages/db/dist
-COPY --from=builder /app/node_modules ./node_modules
+# Copy only the built artifacts and necessary runtime files
+COPY --from=builder --chown=api:emailed /app/apps/api/dist ./apps/api/dist
+COPY --from=builder --chown=api:emailed /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder --chown=api:emailed /app/packages/db/dist ./packages/db/dist
+COPY --from=builder --chown=api:emailed /app/packages/email-parser/dist ./packages/email-parser/dist
+COPY --from=builder --chown=api:emailed /app/node_modules ./node_modules
+COPY --from=builder --chown=api:emailed /app/package.json ./
 
 USER api
 
 EXPOSE 3000
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["sh", "-c", "wget --no-verbose --spider http://localhost:3000/health || exit 1"]
 
 CMD ["bun", "run", "apps/api/dist/index.js"]
