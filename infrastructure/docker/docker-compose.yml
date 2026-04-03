@@ -1,0 +1,117 @@
+version: "3.9"
+
+services:
+  # ─── Core Infrastructure ───
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: emailed
+      POSTGRES_USER: emailed
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emailed"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-dev_master_key}
+    ports:
+      - "7700:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-emailed}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev_password}
+    ports:
+      - "9002:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  # ─── Application Services ───
+  api:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.api
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://emailed:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/emailed
+      REDIS_URL: redis://redis:6379
+      CLICKHOUSE_URL: http://clickhouse:8123
+      MEILI_URL: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-dev_master_key}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-emailed}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev_password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.web
+    ports:
+      - "3001:3001"
+    environment:
+      API_URL: http://api:3000
+    depends_on:
+      - api
+
+  mta:
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.mta
+    ports:
+      - "25:25"
+      - "587:587"
+      - "465:465"
+    environment:
+      DATABASE_URL: postgres://emailed:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/emailed
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  clickhouse_data:
+  meilisearch_data:
+  minio_data:

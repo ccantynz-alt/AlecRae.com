@@ -1,0 +1,36 @@
+FROM oven/bun:1.2-alpine AS base
+
+WORKDIR /app
+
+# Install dependencies
+FROM base AS deps
+COPY package.json bun.lockb ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/ui/package.json ./packages/ui/
+COPY apps/web/package.json ./apps/web/
+RUN bun install --frozen-lockfile
+
+# Build
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN bun run --filter @emailed/shared build
+RUN bun run --filter @emailed/ui build
+RUN bun run --filter @emailed/web build
+
+# Runtime
+FROM base AS runner
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 emailed
+RUN adduser --system --uid 1001 web
+
+COPY --from=builder /app/apps/web/.next/standalone ./
+COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+USER web
+
+EXPOSE 3001
+
+CMD ["bun", "run", "apps/web/server.js"]

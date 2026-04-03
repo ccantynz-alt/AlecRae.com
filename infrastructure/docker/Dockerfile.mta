@@ -1,0 +1,43 @@
+FROM oven/bun:1.2-alpine AS base
+
+WORKDIR /app
+
+# Install dependencies
+FROM base AS deps
+COPY package.json bun.lockb ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/crypto/package.json ./packages/crypto/
+COPY packages/email-parser/package.json ./packages/email-parser/
+COPY packages/db/package.json ./packages/db/
+COPY services/mta/package.json ./services/mta/
+RUN bun install --frozen-lockfile
+
+# Build
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/crypto/node_modules ./packages/crypto/node_modules
+COPY --from=deps /app/services/mta/node_modules ./services/mta/node_modules
+COPY . .
+RUN bun run --filter @emailed/shared build
+RUN bun run --filter @emailed/crypto build
+RUN bun run --filter @emailed/mta build
+
+# Runtime
+FROM base AS runner
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 emailed
+RUN adduser --system --uid 1001 mta
+
+COPY --from=builder /app/services/mta/dist ./services/mta/dist
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/crypto/dist ./packages/crypto/dist
+COPY --from=builder /app/node_modules ./node_modules
+
+USER mta
+
+# SMTP port (25), submission (587), submissions (465)
+EXPOSE 25 587 465
+
+CMD ["bun", "run", "services/mta/dist/index.js"]

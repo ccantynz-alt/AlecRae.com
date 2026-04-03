@@ -1,0 +1,46 @@
+version: "3.9"
+
+# Development overrides — only infrastructure services
+# App services run locally via `bun run dev`
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: emailed
+      POSTGRES_USER: emailed
+      POSTGRES_PASSWORD: dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24-alpine
+    ports:
+      - "8123:8123"
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    environment:
+      MEILI_MASTER_KEY: dev_master_key
+    ports:
+      - "7700:7700"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: emailed
+      MINIO_ROOT_PASSWORD: dev_password
+    ports:
+      - "9002:9000"
+      - "9001:9001"
+
+volumes:
+  postgres_dev:
