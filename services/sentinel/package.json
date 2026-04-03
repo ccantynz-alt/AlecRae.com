@@ -1,0 +1,18 @@
+{
+  "name": "@emailed/sentinel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered zero-latency validation pipeline — the immune system of Emailed",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target node",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@emailed/shared": "workspace:*"
+  }
+}
