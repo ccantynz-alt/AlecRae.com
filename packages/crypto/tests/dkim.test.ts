@@ -21,7 +21,7 @@ describe("formatDkimDnsRecord", () => {
   it("should format an RSA DKIM DNS record", () => {
     const fakePem = "-----BEGIN PUBLIC KEY-----\nTUlH\n-----END PUBLIC KEY-----";
     const record = formatDkimDnsRecord(fakePem, "rsa-sha256");
-    expect(record).toBe("v=DKIM1; k=rsa; p=TUIH");
+    expect(record).toBe("v=DKIM1; k=rsa; p=TUlH");
   });
 
   it("should format an Ed25519 DKIM DNS record", () => {
