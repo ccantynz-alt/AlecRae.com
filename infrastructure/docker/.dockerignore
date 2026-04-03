@@ -1,0 +1,60 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build output
+**/dist
+**/.next
+**/.turbo
+
+# Version control
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Test and documentation
+**/coverage
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+docs/
+*.md
+!README.md
+
+# Infrastructure (not needed in app images)
+infrastructure/kubernetes
+infrastructure/pulumi
+infrastructure/scripts
+
+# Docker files (avoid recursive COPY)
+**/Dockerfile*
+**/docker-compose*
+**/.dockerignore
+
+# Miscellaneous
+.turbo
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn

@@ -1,0 +1,13 @@
+name: emailed-infrastructure
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Emailed AI-native email infrastructure platform — AWS cloud resources
+config:
+  aws:region:
+    default: us-east-1
+  emailed:environment:
+    default: dev
+  emailed:domain:
+    default: emailed.dev

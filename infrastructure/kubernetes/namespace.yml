@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: emailed
+  labels:
+    app.kubernetes.io/name: emailed
+    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    description: "Emailed AI-native email infrastructure platform"

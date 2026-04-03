@@ -1,0 +1,82 @@
+# ─── Dockerfile.base ─────────────────────────────────────────────────────────
+# Multi-stage base image for all Emailed TypeScript services.
+# Provides Node 20 + Bun runtime, dependency installation, and build tooling.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Stage 1: Base runtime with Node.js and Bun
+FROM node:20-alpine AS base
+
+# Install Bun
+RUN apk add --no-cache curl bash && \
+    curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash && \
+    ln -sf /usr/local/bin/bun /usr/local/bin/bunx
+
+# Set working directory
+WORKDIR /app
+
+# Create non-root user for runtime
+RUN addgroup --system --gid 1001 emailed && \
+    adduser --system --uid 1001 --ingroup emailed emailed
+
+# Stage 2: Install dependencies
+FROM base AS deps
+
+# Copy workspace root manifests
+COPY package.json bun.lockb ./
+COPY turbo.json ./
+
+# Copy all package.json files for workspace resolution
+COPY apps/web/package.json ./apps/web/
+COPY apps/api/package.json ./apps/api/
+COPY apps/admin/package.json ./apps/admin/
+COPY services/mta/package.json ./services/mta/
+COPY services/sentinel/package.json ./services/sentinel/
+COPY services/inbound/package.json ./services/inbound/
+COPY services/ai-engine/package.json ./services/ai-engine/
+COPY services/dns/package.json ./services/dns/
+COPY services/jmap/package.json ./services/jmap/
+COPY services/reputation/package.json ./services/reputation/
+COPY services/support/package.json ./services/support/
+COPY services/analytics/package.json ./services/analytics/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/email-parser/package.json ./packages/email-parser/
+COPY packages/crypto/package.json ./packages/crypto/
+COPY packages/sdk/package.json ./packages/sdk/
+
+# Install all dependencies (frozen lockfile for reproducibility)
+RUN bun install --frozen-lockfile
+
+# Stage 3: Build all packages
+FROM base AS builder
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/*/node_modules ./packages/
+COPY --from=deps /app/services/*/node_modules ./services/
+COPY --from=deps /app/apps/*/node_modules ./apps/
+
+# Copy full source
+COPY . .
+
+# Build shared packages first, then all services
+RUN bun run build
+
+# Stage 4: Production-ready base (used by service-specific Dockerfiles)
+FROM base AS production
+
+ENV NODE_ENV=production
+
+# Copy built artifacts and production node_modules
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/services ./services
+COPY --from=builder /app/apps ./apps
+COPY --from=builder /app/package.json ./
+
+# Default to non-root user
+USER emailed
+
+# Health check placeholder (overridden by service-specific images)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["node", "-e", "process.exit(0)"]

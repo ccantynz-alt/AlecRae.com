@@ -1,0 +1,180 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mta
+  namespace: emailed
+  labels:
+    app.kubernetes.io/name: mta
+    app.kubernetes.io/component: mail
+    app.kubernetes.io/part-of: emailed-platform
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mta
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mta
+        app.kubernetes.io/component: mail
+        app.kubernetes.io/part-of: emailed-platform
+    spec:
+      serviceAccountName: emailed-mta
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+      # Anti-affinity: spread MTA pods across different nodes for HA
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - mta
+              topologyKey: kubernetes.io/hostname
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - mta
+                topologyKey: topology.kubernetes.io/zone
+      containers:
+        - name: mta
+          image: registry.emailed.dev/emailed/mta:latest
+          imagePullPolicy: Always
+          ports:
+            - name: smtp
+              containerPort: 25
+              protocol: TCP
+            - name: submission
+              containerPort: 587
+              protocol: TCP
+            - name: submissions
+              containerPort: 465
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: emailed-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: emailed-secrets
+                  key: REDIS_URL
+            - name: S3_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: emailed-config
+                  key: S3_ENDPOINT
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: emailed-secrets
+                  key: S3_ACCESS_KEY
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: emailed-secrets
+                  key: S3_SECRET_KEY
+            - name: HOSTNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: emailed-config
+                  key: MTA_HOSTNAME
+            - name: DKIM_SELECTOR
+              valueFrom:
+                configMapKeyRef:
+                  name: emailed-config
+                  key: DKIM_SELECTOR
+          volumeMounts:
+            - name: dkim-keys
+              mountPath: /app/data/dkim
+              readOnly: true
+            - name: tls-certs
+              mountPath: /app/data/tls
+              readOnly: true
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          livenessProbe:
+            tcpSocket:
+              port: submission
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: submission
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          startupProbe:
+            tcpSocket:
+              port: submission
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+      volumes:
+        - name: dkim-keys
+          secret:
+            secretName: mta-dkim-keys
+        - name: tls-certs
+          secret:
+            secretName: mta-tls-certs
+      terminationGracePeriodSeconds: 120
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mta
+  namespace: emailed
+  labels:
+    app.kubernetes.io/name: mta
+    app.kubernetes.io/component: mail
+    app.kubernetes.io/part-of: emailed-platform
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+    - name: smtp
+      port: 25
+      targetPort: smtp
+      protocol: TCP
+    - name: submission
+      port: 587
+      targetPort: submission
+      protocol: TCP
+    - name: submissions
+      port: 465
+      targetPort: submissions
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: mta
