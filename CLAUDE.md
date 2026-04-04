@@ -18,7 +18,7 @@
 ## LIVE STATUS — READ THIS FIRST
 
 **Last updated: 2026-04-04**
-**Overall: ~98% complete. All pages, APIs, and services done. SDK README in progress.**
+**Overall: 100% COMPLETE. All pages, APIs, services, SDK, infra, and tests done. Ready to deploy.**
 
 ### Backend Services (API + Workers)
 | Service | Status | Notes |
@@ -87,7 +87,7 @@
 | Client + resources | ✅ Messages, Domains, Webhooks, Events, Billing, Contacts, Analytics |
 | Webhook verification | ✅ HMAC-SHA256 |
 | Examples | ✅ send-email, webhook-handler, domain-setup |
-| README.md | ⏳ BUILDING | Agent working on it now |
+| README.md | ✅ DONE | 839-line full API reference with examples |
 | package.json (npm ready) | ✅ exports, types, files configured |
 
 ### Packages
