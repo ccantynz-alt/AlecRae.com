@@ -9,7 +9,7 @@ import type {
   DeliverabilityPoint,
   EngagementPoint,
 } from "../types.js";
-import { getDatabase, emails, events } from "@emailed/db";
+import { getDatabase, emails, events, domains } from "@emailed/db";
 
 const analytics = new Hono();
 
@@ -204,6 +204,214 @@ analytics.get(
         from: from.toISOString(),
         to: to.toISOString(),
         granularity: query.granularity,
+      },
+    });
+  },
+);
+
+// GET /v1/analytics/timeseries - Daily counts for the time period
+analytics.get(
+  "/timeseries",
+  requireScope("analytics:read"),
+  validateQuery(AnalyticsQuerySchema),
+  async (c) => {
+    const query = getValidatedQuery<AnalyticsQuery>(c);
+    const auth = c.get("auth");
+    const db = getDatabase();
+    const { from, to } = parseTimeRange(query);
+    const granularity = query.granularity || "day";
+    const buckets = generateBuckets(from, to, granularity);
+
+    const truncExpr =
+      granularity === "hour"
+        ? sql`date_trunc('hour', ${emails.createdAt})`
+        : granularity === "week"
+          ? sql`date_trunc('week', ${emails.createdAt})`
+          : granularity === "month"
+            ? sql`date_trunc('month', ${emails.createdAt})`
+            : sql`date_trunc('day', ${emails.createdAt})`;
+
+    // Get email counts by status per bucket
+    const rows = await db
+      .select({
+        bucket: truncExpr.as("bucket"),
+        status: emails.status,
+        count: count(),
+      })
+      .from(emails)
+      .where(
+        and(
+          eq(emails.accountId, auth.accountId),
+          gte(emails.createdAt, from),
+          lte(emails.createdAt, to),
+        ),
+      )
+      .groupBy(sql`bucket`, emails.status);
+
+    // Get engagement events per bucket
+    const eventTruncExpr =
+      granularity === "hour"
+        ? sql`date_trunc('hour', ${events.timestamp})`
+        : granularity === "week"
+          ? sql`date_trunc('week', ${events.timestamp})`
+          : granularity === "month"
+            ? sql`date_trunc('month', ${events.timestamp})`
+            : sql`date_trunc('day', ${events.timestamp})`;
+
+    const eventRows = await db
+      .select({
+        bucket: eventTruncExpr.as("bucket"),
+        type: events.type,
+        count: count(),
+      })
+      .from(events)
+      .where(
+        and(
+          eq(events.accountId, auth.accountId),
+          gte(events.timestamp, from),
+          lte(events.timestamp, to),
+          sql`${events.type} IN ('email.opened', 'email.clicked')`,
+        ),
+      )
+      .groupBy(sql`bucket`, events.type);
+
+    // Build lookup maps
+    const emailBucketMap = new Map<string, Record<string, number>>();
+    for (const row of rows) {
+      const key = String(row.bucket);
+      const existing = emailBucketMap.get(key) ?? {};
+      existing[row.status] = row.count;
+      emailBucketMap.set(key, existing);
+    }
+
+    const eventBucketMap = new Map<string, Record<string, number>>();
+    for (const row of eventRows) {
+      const key = String(row.bucket);
+      const existing = eventBucketMap.get(key) ?? {};
+      existing[row.type] = row.count;
+      eventBucketMap.set(key, existing);
+    }
+
+    const series = buckets.map((ts) => {
+      const key = ts.toISOString();
+      const emailData = emailBucketMap.get(key) ?? {};
+      const eventData = eventBucketMap.get(key) ?? {};
+
+      const sent =
+        (emailData["sent"] ?? 0) +
+        (emailData["delivered"] ?? 0) +
+        (emailData["bounced"] ?? 0) +
+        (emailData["complained"] ?? 0);
+      const delivered = emailData["delivered"] ?? 0;
+      const bounced = emailData["bounced"] ?? 0;
+      const opened = eventData["email.opened"] ?? 0;
+      const clicked = eventData["email.clicked"] ?? 0;
+
+      return {
+        timestamp: ts.toISOString(),
+        sent,
+        delivered,
+        bounced,
+        opened,
+        clicked,
+      };
+    });
+
+    return c.json({
+      data: series,
+      meta: {
+        from: from.toISOString(),
+        to: to.toISOString(),
+        granularity,
+      },
+    });
+  },
+);
+
+// GET /v1/analytics/domains - Per-domain stats
+analytics.get(
+  "/domains",
+  requireScope("analytics:read"),
+  validateQuery(AnalyticsQuerySchema),
+  async (c) => {
+    const query = getValidatedQuery<AnalyticsQuery>(c);
+    const auth = c.get("auth");
+    const db = getDatabase();
+    const { from, to } = parseTimeRange(query);
+
+    // Join emails with domains to get per-domain breakdown
+    const rows = await db
+      .select({
+        domainId: emails.domainId,
+        domainName: domains.domain,
+        status: emails.status,
+        count: count(),
+      })
+      .from(emails)
+      .innerJoin(domains, eq(emails.domainId, domains.id))
+      .where(
+        and(
+          eq(emails.accountId, auth.accountId),
+          gte(emails.createdAt, from),
+          lte(emails.createdAt, to),
+        ),
+      )
+      .groupBy(emails.domainId, domains.domain, emails.status);
+
+    // Aggregate per domain
+    const domainMap = new Map<
+      string,
+      {
+        domainId: string;
+        domain: string;
+        sent: number;
+        delivered: number;
+        bounced: number;
+        complained: number;
+      }
+    >();
+
+    for (const row of rows) {
+      const existing = domainMap.get(row.domainId) ?? {
+        domainId: row.domainId,
+        domain: row.domainName,
+        sent: 0,
+        delivered: 0,
+        bounced: 0,
+        complained: 0,
+      };
+
+      const c = row.count;
+      if (row.status === "delivered") {
+        existing.delivered += c;
+        existing.sent += c;
+      } else if (row.status === "bounced") {
+        existing.bounced += c;
+        existing.sent += c;
+      } else if (row.status === "complained") {
+        existing.complained += c;
+        existing.sent += c;
+      } else if (row.status === "sent") {
+        existing.sent += c;
+      }
+
+      domainMap.set(row.domainId, existing);
+    }
+
+    const domainStats = Array.from(domainMap.values()).map((d) => ({
+      ...d,
+      deliveryRate: d.sent > 0 ? d.delivered / d.sent : 0,
+      bounceRate: d.sent > 0 ? d.bounced / d.sent : 0,
+    }));
+
+    // Sort by sent desc
+    domainStats.sort((a, b) => b.sent - a.sent);
+
+    return c.json({
+      data: domainStats,
+      meta: {
+        from: from.toISOString(),
+        to: to.toISOString(),
       },
     });
   },

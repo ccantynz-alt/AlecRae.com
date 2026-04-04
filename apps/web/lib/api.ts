@@ -312,6 +312,26 @@ export const domainsApi = {
 
 // ─── Analytics ─────────────────────────────────────────────────────────────
 
+export interface TimeseriesPoint {
+  timestamp: string;
+  sent: number;
+  delivered: number;
+  bounced: number;
+  opened: number;
+  clicked: number;
+}
+
+export interface DomainStats {
+  domainId: string;
+  domain: string;
+  sent: number;
+  delivered: number;
+  bounced: number;
+  complained: number;
+  deliveryRate: number;
+  bounceRate: number;
+}
+
 export const analyticsApi = {
   overview(params?: { from?: string; to?: string }) {
     const qs = new URLSearchParams();
@@ -320,6 +340,27 @@ export const analyticsApi = {
     const query = qs.toString();
     return apiFetch<{ data: OverviewStats }>(
       `/v1/analytics/overview${query ? `?${query}` : ""}`,
+    );
+  },
+
+  timeseries(params?: { from?: string; to?: string; granularity?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    if (params?.granularity) qs.set("granularity", params.granularity);
+    const query = qs.toString();
+    return apiFetch<{ data: TimeseriesPoint[]; meta: { from: string; to: string; granularity: string } }>(
+      `/v1/analytics/timeseries${query ? `?${query}` : ""}`,
+    );
+  },
+
+  domains(params?: { from?: string; to?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    const query = qs.toString();
+    return apiFetch<{ data: DomainStats[]; meta: { from: string; to: string } }>(
+      `/v1/analytics/domains${query ? `?${query}` : ""}`,
     );
   },
 
@@ -410,6 +451,62 @@ export const apiKeysApi = {
 export const accountApi = {
   get() {
     return apiFetch<{ data: Account }>("/v1/account");
+  },
+};
+
+// ─── Templates ────────────────────────────────────────────────────────────
+
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  htmlBody: string | null;
+  textBody: string | null;
+  variables: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const templatesApi = {
+  create(payload: {
+    name: string;
+    subject: string;
+    htmlBody?: string;
+    textBody?: string;
+  }) {
+    return apiFetch<{ data: EmailTemplate }>("/v1/templates", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  list() {
+    return apiFetch<{ data: EmailTemplate[] }>("/v1/templates");
+  },
+
+  get(id: string) {
+    return apiFetch<{ data: EmailTemplate }>(`/v1/templates/${id}`);
+  },
+
+  update(
+    id: string,
+    payload: {
+      name?: string;
+      subject?: string;
+      htmlBody?: string;
+      textBody?: string;
+    },
+  ) {
+    return apiFetch<{ data: EmailTemplate }>(`/v1/templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  remove(id: string) {
+    return apiFetch<{ deleted: boolean }>(`/v1/templates/${id}`, {
+      method: "DELETE",
+    });
   },
 };
 
