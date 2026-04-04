@@ -624,13 +624,13 @@ templatesRouter.post(
 
     const rawMessage = buildRawMessage(
       {
-        from: input.from,
-        to: input.to,
-        cc: input.cc,
+        from: { email: input.from.email, ...(input.from.name ? { name: input.from.name } : {}) },
+        to: input.to.map((r) => ({ email: r.email, ...(r.name ? { name: r.name } : {}) })),
+        ...(input.cc ? { cc: input.cc.map((r) => ({ email: r.email, ...(r.name ? { name: r.name } : {}) })) } : {}),
         subject: rendered.subject,
         html: rendered.html,
         text: rendered.text,
-        headers: input.headers,
+        ...(input.headers ? { headers: input.headers } : {}),
       },
       messageId,
       id,
@@ -650,12 +650,12 @@ templatesRouter.post(
       messageId,
       fromAddress: input.from.email,
       fromName: input.from.name ?? null,
-      toAddresses: input.to.map((r) => ({ address: r.email, name: r.name })),
+      toAddresses: input.to.map((r) => ({ address: r.email, ...(r.name ? { name: r.name } : {}) })),
       ccAddresses: input.cc
-        ? input.cc.map((r) => ({ address: r.email, name: r.name }))
+        ? input.cc.map((r) => ({ address: r.email, ...(r.name ? { name: r.name } : {}) }))
         : null,
       bccAddresses: input.bcc
-        ? input.bcc.map((r) => ({ address: r.email, name: r.name }))
+        ? input.bcc.map((r) => ({ address: r.email, ...(r.name ? { name: r.name } : {}) }))
         : null,
       replyToAddress: null,
       replyToName: null,
@@ -742,7 +742,7 @@ templatesRouter.post(
       textBody: rendered.text ?? null,
       fromAddress: input.from.email,
       fromName: input.from.name ?? null,
-      toAddresses: input.to.map((r) => ({ address: r.email, name: r.name })),
+      toAddresses: input.to.map((r) => ({ address: r.email, ...(r.name ? { name: r.name } : {}) })),
       snippet: (rendered.text ?? rendered.html ?? "").replace(/<[^>]+>/g, " ").slice(0, 200),
       hasAttachments: false,
       status: "queued",
