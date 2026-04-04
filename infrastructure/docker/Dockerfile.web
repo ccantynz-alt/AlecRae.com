@@ -61,4 +61,4 @@ EXPOSE ${APP_PORT}
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
     CMD ["sh", "-c", "wget --no-verbose --spider http://localhost:${PORT}/api/health || exit 1"]
 
-CMD ["bun", "run", "apps/${APP_NAME}/server.js"]
+CMD ["bun", "run", "server.js"]
