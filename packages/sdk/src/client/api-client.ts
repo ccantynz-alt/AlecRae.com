@@ -193,12 +193,16 @@ export class ApiClient {
           }
         }
 
-        const response = await fetch(url, {
+        const fetchInit: RequestInit = {
           method: options.method,
           headers,
-          body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
           signal: controller.signal,
-        });
+        };
+        if (options.body !== undefined) {
+          fetchInit.body = JSON.stringify(options.body);
+        }
+
+        const response = await fetch(url, fetchInit);
 
         clearTimeout(timeoutId);
 
@@ -215,12 +219,16 @@ export class ApiClient {
             console.log(`[emailed-sdk] Response ${response.status}:`, JSON.stringify(data, null, 2));
           }
 
-          return {
+          const result: ApiResponse<T> = {
             data,
             status: response.status,
             headers: responseHeaders,
-            requestId: response.headers.get("x-request-id") ?? undefined,
           };
+          const reqId = response.headers.get("x-request-id");
+          if (reqId !== null) {
+            (result as { requestId: string }).requestId = reqId;
+          }
+          return result;
         }
 
         // Parse error body
@@ -289,7 +297,11 @@ export class ApiClient {
     path: string,
     query?: Readonly<Record<string, string | number | boolean | undefined>>,
   ): Promise<ApiResponse<T>> {
-    return this.request<T>({ method: "GET", path, query });
+    const opts: RequestOptions = { method: "GET", path };
+    if (query !== undefined) {
+      (opts as { query: typeof query }).query = query;
+    }
+    return this.request<T>(opts);
   }
 
   /**

@@ -214,6 +214,66 @@ export interface ApiKeyRecord {
   revokedAt?: string;
 }
 
+// --- Suppression ---
+export const SuppressionReasonSchema = z.enum([
+  "bounce",
+  "complaint",
+  "unsubscribe",
+  "manual",
+]);
+
+export type SuppressionReason = z.infer<typeof SuppressionReasonSchema>;
+
+export const AddSuppressionSchema = z.object({
+  email: z.string().email(),
+  domain: z.string().min(1),
+  reason: SuppressionReasonSchema.default("manual"),
+});
+
+export type AddSuppressionInput = z.infer<typeof AddSuppressionSchema>;
+
+export const BatchAddSuppressionsSchema = z.object({
+  suppressions: z.array(AddSuppressionSchema).min(1).max(1000),
+});
+
+export type BatchAddSuppressionsInput = z.infer<typeof BatchAddSuppressionsSchema>;
+
+export const CheckSuppressionsSchema = z.object({
+  emails: z.array(z.string().email()).min(1).max(1000),
+  domain: z.string().min(1),
+});
+
+export type CheckSuppressionsInput = z.infer<typeof CheckSuppressionsSchema>;
+
+export const ImportSuppressionsSchema = z.object({
+  domain: z.string().min(1),
+  reason: SuppressionReasonSchema.default("manual"),
+  entries: z.array(z.object({
+    email: z.string().email(),
+    reason: SuppressionReasonSchema.optional(),
+  })).min(1).max(10000),
+});
+
+export type ImportSuppressionsInput = z.infer<typeof ImportSuppressionsSchema>;
+
+export const ListSuppressionsQuery = PaginationSchema.extend({
+  domain: z.string().optional(),
+  reason: SuppressionReasonSchema.optional(),
+  search: z.string().optional(),
+  createdAfter: z.string().datetime().optional(),
+  createdBefore: z.string().datetime().optional(),
+});
+
+export type ListSuppressionsParams = z.infer<typeof ListSuppressionsQuery>;
+
+export interface SuppressionRecord {
+  id: string;
+  email: string;
+  domain: string;
+  reason: SuppressionReason;
+  createdAt: string;
+}
+
 // --- Error ---
 export interface ApiError {
   error: {

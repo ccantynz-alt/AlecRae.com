@@ -1,13 +1,18 @@
-# Development overrides — only infrastructure services.
-# App services run locally via `bun run dev`.
+# Development overrides — infrastructure services only.
+# App services run locally via `bun run dev` for hot reload.
 #
 # Usage:
 #   docker compose -f infrastructure/docker/docker-compose.dev.yml up -d
 #   bun run dev
+#
+# Full stack (including app containers with source mounts):
+#   docker compose -f infrastructure/docker/docker-compose.dev.yml --profile apps up -d
 
 services:
+  # ─── Infrastructure (always started) ─────────────────────────────────────────
+
   postgres:
-    image: postgres:17-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: emailed
       POSTGRES_USER: emailed
@@ -27,6 +32,8 @@ services:
     command: redis-server --appendonly yes
     ports:
       - "6379:6379"
+    volumes:
+      - redis_dev:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -42,6 +49,8 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+    volumes:
+      - clickhouse_dev:/var/lib/clickhouse
 
   meilisearch:
     image: getmeili/meilisearch:v1.11
@@ -51,6 +60,8 @@ services:
       MEILI_NO_ANALYTICS: "true"
     ports:
       - "7700:7700"
+    volumes:
+      - meilisearch_dev:/meili_data
 
   minio:
     image: minio/minio:latest
@@ -61,6 +72,202 @@ services:
     ports:
       - "9002:9000"
       - "9001:9001"
+    volumes:
+      - minio_dev:/data
+
+  # ─── App Services (--profile apps) ───────────────────────────────────────────
+  # These mount local source for hot reload inside containers.
+  # Only used when you want to run everything in Docker.
+
+  api:
+    profiles: ["apps"]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.api
+      target: deps
+    command: ["bun", "run", "--hot", "src/index.ts"]
+    working_dir: /app/apps/api
+    ports:
+      - "3001:3000"
+    volumes:
+      - ../../apps/api/src:/app/apps/api/src
+      - ../../packages/shared/src:/app/packages/shared/src
+      - ../../packages/db/src:/app/packages/db/src
+      - ../../packages/crypto/src:/app/packages/crypto/src
+    environment:
+      NODE_ENV: development
+      PORT: "3000"
+      DATABASE_URL: postgres://emailed:dev_password@postgres:5432/emailed
+      REDIS_URL: redis://redis:6379
+      CLICKHOUSE_URL: http://clickhouse:8123
+      CLICKHOUSE_USER: emailed
+      CLICKHOUSE_PASSWORD: dev_password
+      MEILI_URL: http://meilisearch:7700
+      MEILI_MASTER_KEY: dev_master_key
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: emailed
+      S3_SECRET_KEY: dev_password
+      S3_BUCKET: emailed-attachments
+      JWT_SECRET: dev_jwt_secret
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    profiles: ["apps"]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.web
+      target: deps
+    command: ["bun", "run", "next", "dev", "--turbopack"]
+    working_dir: /app/apps/web
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../../apps/web/app:/app/apps/web/app
+      - ../../apps/web/components:/app/apps/web/components
+      - ../../apps/web/lib:/app/apps/web/lib
+      - ../../packages/ui/src:/app/packages/ui/src
+      - ../../packages/shared/src:/app/packages/shared/src
+    environment:
+      NODE_ENV: development
+      API_URL: http://api:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    depends_on:
+      - api
+
+  admin:
+    profiles: ["apps"]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.admin
+      target: deps
+    command: ["bun", "run", "next", "dev", "--turbopack", "--port", "3002"]
+    working_dir: /app/apps/admin
+    ports:
+      - "3002:3002"
+    volumes:
+      - ../../apps/admin/app:/app/apps/admin/app
+      - ../../apps/admin/components:/app/apps/admin/components
+      - ../../packages/ui/src:/app/packages/ui/src
+      - ../../packages/shared/src:/app/packages/shared/src
+    environment:
+      NODE_ENV: development
+      API_URL: http://api:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+    depends_on:
+      - api
+
+  mta:
+    profiles: ["apps"]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.mta
+      target: deps
+    command: ["bun", "run", "--watch", "src/index.ts"]
+    working_dir: /app/services/mta
+    ports:
+      - "25:25"
+      - "587:587"
+      - "465:465"
+    volumes:
+      - ../../services/mta/src:/app/services/mta/src
+      - ../../packages/shared/src:/app/packages/shared/src
+      - ../../packages/crypto/src:/app/packages/crypto/src
+      - ../../packages/email-parser/src:/app/packages/email-parser/src
+      - ../../packages/db/src:/app/packages/db/src
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://emailed:dev_password@postgres:5432/emailed
+      REDIS_URL: redis://redis:6379
+      HOSTNAME: localhost
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  inbound:
+    profiles: ["apps"]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.inbound
+      target: deps
+    command: ["bun", "run", "--hot", "src/index.ts"]
+    working_dir: /app/services/inbound
+    ports:
+      - "2525:25"
+      - "8025:8025"
+    volumes:
+      - ../../services/inbound/src:/app/services/inbound/src
+      - ../../packages/shared/src:/app/packages/shared/src
+      - ../../packages/db/src:/app/packages/db/src
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://emailed:dev_password@postgres:5432/emailed
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  jmap:
+    profiles: ["apps"]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.jmap
+      target: deps
+    command: ["bun", "run", "--hot", "src/index.ts"]
+    working_dir: /app/services/jmap
+    ports:
+      - "8080:8080"
+      - "993:993"
+    volumes:
+      - ../../services/jmap/src:/app/services/jmap/src
+      - ../../packages/shared/src:/app/packages/shared/src
+      - ../../packages/db/src:/app/packages/db/src
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://emailed:dev_password@postgres:5432/emailed
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev_jwt_secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  reputation:
+    profiles: ["apps"]
+    build:
+      context: ../..
+      dockerfile: infrastructure/docker/Dockerfile.reputation
+      target: deps
+    command: ["bun", "run", "--watch", "src/index.ts"]
+    working_dir: /app/services/reputation
+    ports:
+      - "3005:3005"
+    volumes:
+      - ../../services/reputation/src:/app/services/reputation/src
+      - ../../packages/shared/src:/app/packages/shared/src
+      - ../../packages/db/src:/app/packages/db/src
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://emailed:dev_password@postgres:5432/emailed
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres_dev:
+  redis_dev:
+  clickhouse_dev:
+  meilisearch_dev:
+  minio_dev:

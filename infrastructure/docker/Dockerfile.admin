@@ -1,0 +1,56 @@
+# ─── Dockerfile.admin ────────────────────────────────────────────────────────
+# Next.js admin dashboard image for the Emailed platform.
+# Uses the same pattern as Dockerfile.web but targets the admin app on port 3002.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Stage 1: Dependencies
+FROM oven/bun:1.2-alpine AS deps
+
+WORKDIR /app
+
+COPY package.json bun.lockb ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/ui/package.json ./packages/ui/
+COPY apps/admin/package.json ./apps/admin/
+
+RUN bun install --frozen-lockfile
+
+# Stage 2: Build
+FROM oven/bun:1.2-alpine AS builder
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build shared dependencies first, then admin
+RUN bun run --filter @emailed/shared build
+RUN bun run --filter @emailed/ui build
+RUN bun run --filter @emailed/admin build
+
+# Stage 3: Production runtime
+FROM oven/bun:1.2-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3002
+
+# Create non-root user
+RUN addgroup --system --gid 1001 emailed && \
+    adduser --system --uid 1001 --ingroup emailed admin
+
+# Copy Next.js standalone output
+COPY --from=builder --chown=admin:emailed /app/apps/admin/.next/standalone ./
+COPY --from=builder --chown=admin:emailed /app/apps/admin/.next/static ./apps/admin/.next/static
+COPY --from=builder --chown=admin:emailed /app/apps/admin/public ./apps/admin/public
+
+USER admin
+
+EXPOSE 3002
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["sh", "-c", "wget --no-verbose --spider http://localhost:3002/api/health || exit 1"]
+
+CMD ["bun", "run", "server.js"]

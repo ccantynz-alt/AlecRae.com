@@ -1,0 +1,60 @@
+# ─── Dockerfile.reputation ───────────────────────────────────────────────────
+# IP and domain reputation management service.
+# Handles warm-up orchestration, feedback loops, blocklist monitoring,
+# and compliance enforcement.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Stage 1: Dependencies
+FROM oven/bun:1.2-alpine AS deps
+
+WORKDIR /app
+
+COPY package.json bun.lockb ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY services/reputation/package.json ./services/reputation/
+
+RUN bun install --frozen-lockfile
+
+# Stage 2: Build
+FROM oven/bun:1.2-alpine AS builder
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build shared dependencies first, then reputation
+RUN bun run --filter @emailed/shared build
+RUN bun run --filter @emailed/db build
+RUN bun run --filter @emailed/reputation build
+
+# Stage 3: Production runtime
+FROM oven/bun:1.2-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Install runtime dependencies for DNS lookups (blocklist checks)
+RUN apk add --no-cache ca-certificates bind-tools
+
+# Create non-root user
+RUN addgroup --system --gid 1001 emailed && \
+    adduser --system --uid 1001 --ingroup emailed reputation
+
+# Copy built artifacts
+COPY --from=builder --chown=reputation:emailed /app/services/reputation/dist ./services/reputation/dist
+COPY --from=builder --chown=reputation:emailed /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder --chown=reputation:emailed /app/packages/db/dist ./packages/db/dist
+COPY --from=builder --chown=reputation:emailed /app/node_modules ./node_modules
+COPY --from=builder --chown=reputation:emailed /app/package.json ./
+
+USER reputation
+
+EXPOSE 3005
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["sh", "-c", "wget --no-verbose --spider http://localhost:3005/health || exit 1"]
+
+CMD ["bun", "run", "services/reputation/dist/index.js"]

@@ -1,0 +1,64 @@
+# ─── Dockerfile.jmap ─────────────────────────────────────────────────────────
+# JMAP protocol server and IMAP compatibility layer.
+# Exposes JMAP HTTP (8080) and IMAP TLS (993).
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Stage 1: Dependencies
+FROM oven/bun:1.2-alpine AS deps
+
+WORKDIR /app
+
+COPY package.json bun.lockb ./
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY services/jmap/package.json ./services/jmap/
+
+RUN bun install --frozen-lockfile
+
+# Stage 2: Build
+FROM oven/bun:1.2-alpine AS builder
+
+WORKDIR /app
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+# Build shared dependencies first, then JMAP
+RUN bun run --filter @emailed/shared build
+RUN bun run --filter @emailed/db build
+RUN bun run --filter @emailed/jmap build
+
+# Stage 3: Production runtime
+FROM oven/bun:1.2-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Install runtime dependencies for TLS
+RUN apk add --no-cache ca-certificates
+
+# Create non-root user
+RUN addgroup --system --gid 1001 emailed && \
+    adduser --system --uid 1001 --ingroup emailed jmap
+
+# Copy built artifacts
+COPY --from=builder --chown=jmap:emailed /app/services/jmap/dist ./services/jmap/dist
+COPY --from=builder --chown=jmap:emailed /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder --chown=jmap:emailed /app/packages/db/dist ./packages/db/dist
+COPY --from=builder --chown=jmap:emailed /app/node_modules ./node_modules
+COPY --from=builder --chown=jmap:emailed /app/package.json ./
+
+# Create directories for TLS certificates
+RUN mkdir -p /app/data/tls && \
+    chown -R jmap:emailed /app/data
+
+USER jmap
+
+# JMAP HTTP (8080) and IMAP TLS (993)
+EXPOSE 8080 993
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["sh", "-c", "wget --no-verbose --spider http://localhost:8080/health || exit 1"]
+
+CMD ["bun", "run", "services/jmap/dist/index.js"]
