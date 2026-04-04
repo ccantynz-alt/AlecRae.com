@@ -94,8 +94,14 @@ app.route("/t", tracking);
 
 // ─── Authenticated routes ──────────────────────────────────────────────────
 
-app.use("/v1/*", authMiddleware);
-app.use("/v1/*", rateLimiter);
+// Apply auth + rate limiting to all /v1/* EXCEPT /v1/auth/* and /v1/health/*
+app.use("/v1/messages/*", authMiddleware, rateLimiter);
+app.use("/v1/domains/*", authMiddleware, rateLimiter);
+app.use("/v1/webhooks/*", authMiddleware, rateLimiter);
+app.use("/v1/analytics/*", authMiddleware, rateLimiter);
+app.use("/v1/suppressions/*", authMiddleware, rateLimiter);
+app.use("/v1/api-keys/*", authMiddleware, rateLimiter);
+app.use("/v1/account/*", authMiddleware, rateLimiter);
 
 // Mount route handlers
 app.route("/v1/messages", messages);
