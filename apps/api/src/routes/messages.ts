@@ -24,7 +24,7 @@ import type {
   PaginationParams,
   PaginatedResponse,
 } from "../types.js";
-import { getDatabase, emails, deliveryResults, domains } from "@emailed/db";
+import { getDatabase, emails, deliveryResults, domains, accounts } from "@emailed/db";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -355,7 +355,16 @@ async function handleSend(c: Context) {
     },
   );
 
-  // ── 7. Return response ────────────────────────────────────────────
+  // ── 7. Increment account usage counter (fire-and-forget) ─────────
+  db.update(accounts)
+    .set({
+      emailsSentThisPeriod: sql`${accounts.emailsSentThisPeriod} + 1`,
+      updatedAt: now,
+    })
+    .where(eq(accounts.id, auth.accountId))
+    .catch(() => {});
+
+  // ── 8. Return response ────────────────────────────────────────────
   return c.json({ id, messageId, status: "queued" as const }, 202);
 }
 
