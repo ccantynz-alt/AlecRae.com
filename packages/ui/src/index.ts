@@ -8,7 +8,7 @@ export { Card, CardHeader, CardContent, CardFooter, type CardProps, type CardHea
 // Composites
 export { EmailList, type EmailListProps, type EmailListItem } from "./composites/email-list";
 export { EmailViewer, type EmailViewerProps, type EmailMessage, type EmailBodyPart, type EmailAttachment } from "./composites/email-viewer";
-export { ComposeEditor, type ComposeEditorProps, type AISuggestion } from "./composites/compose-editor";
+export { ComposeEditor, type ComposeEditorProps, type ComposeData, type AISuggestion } from "./composites/compose-editor";
 export { DomainCard, type DomainCardProps, type DnsRecord, type DomainVerificationState } from "./composites/domain-card";
 export { AnalyticsChart, type AnalyticsChartProps, type ChartDataPoint, type ChartType } from "./composites/analytics-chart";
 export { StatCard, type StatCardProps, type StatTrend } from "./composites/stat-card";

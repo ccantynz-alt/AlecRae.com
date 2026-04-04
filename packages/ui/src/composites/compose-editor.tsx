@@ -13,14 +13,24 @@ export interface AISuggestion {
   preview: string;
 }
 
+export interface ComposeData {
+  from: string;
+  to: string;
+  cc: string;
+  bcc: string;
+  subject: string;
+  body: string;
+}
+
 export interface ComposeEditorProps extends HTMLAttributes<HTMLDivElement> {
+  from?: string;
   to?: string;
   cc?: string;
   bcc?: string;
   subject?: string;
   body?: string;
   suggestions?: AISuggestion[];
-  onSend?: (data: { to: string; cc: string; bcc: string; subject: string; body: string }) => void;
+  onSend?: (data: ComposeData) => void;
   onSaveDraft?: () => void;
   onDiscard?: () => void;
   onApplySuggestion?: (suggestion: AISuggestion) => void;
@@ -30,6 +40,7 @@ export interface ComposeEditorProps extends HTMLAttributes<HTMLDivElement> {
 
 export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(function ComposeEditor(
   {
+    from: initialFrom = "",
     to: initialTo = "",
     cc: initialCc = "",
     bcc: initialBcc = "",
@@ -46,22 +57,114 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
   },
   ref
 ) {
-  const [showCcBcc, setShowCcBcc] = useState(false);
+  const [showCcBcc, setShowCcBcc] = useState(!!initialCc || !!initialBcc);
+  const [from, setFrom] = useState(initialFrom);
+  const [to, setTo] = useState(initialTo);
+  const [cc, setCc] = useState(initialCc);
+  const [bcc, setBcc] = useState(initialBcc);
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState(initialBody);
+
+  const handleSend = () => {
+    onSend?.({ from, to, cc, bcc, subject, body });
+  };
 
   return (
     <Box ref={ref} className={`flex flex-col h-full bg-surface ${className}`} {...props}>
-      <ComposeToolbar onSend={onSend} onSaveDraft={onSaveDraft} onDiscard={onDiscard} />
+      <Box className="flex items-center gap-2 px-4 py-3 border-b border-border">
+        <Button variant="primary" size="md" onClick={handleSend}>
+          Send
+        </Button>
+        <Button variant="secondary" size="md" onClick={onSaveDraft}>
+          Save Draft
+        </Button>
+        <Box className="flex-1" />
+        <Button variant="ghost" size="md" onClick={onDiscard}>
+          Discard
+        </Button>
+      </Box>
       <Box className="flex flex-1 overflow-hidden">
         <Box className="flex-1 flex flex-col">
-          <ComposeFields
-            initialTo={initialTo}
-            initialCc={initialCc}
-            initialBcc={initialBcc}
-            initialSubject={initialSubject}
-            showCcBcc={showCcBcc}
-            onToggleCcBcc={() => setShowCcBcc((prev) => !prev)}
-          />
-          <ComposeBody defaultValue={initialBody} />
+          <Box className="px-4 py-2 border-b border-border space-y-2">
+            {from && (
+              <Box className="flex items-center gap-2">
+                <Text variant="label" className="w-16 text-content-secondary">
+                  From
+                </Text>
+                <Input
+                  variant="email"
+                  value={from}
+                  onChange={(e) => setFrom(e.target.value)}
+                  placeholder="you@example.com"
+                  className="border-0 shadow-none focus:ring-0"
+                />
+              </Box>
+            )}
+            <Box className="flex items-center gap-2">
+              <Text variant="label" className="w-16 text-content-secondary">
+                To
+              </Text>
+              <Input
+                variant="email"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                placeholder="recipient@example.com"
+                className="border-0 shadow-none focus:ring-0"
+              />
+              <Button variant="ghost" size="sm" onClick={() => setShowCcBcc((prev) => !prev)}>
+                Cc/Bcc
+              </Button>
+            </Box>
+            {showCcBcc && (
+              <Box className="space-y-2">
+                <Box className="flex items-center gap-2">
+                  <Text variant="label" className="w-16 text-content-secondary">
+                    Cc
+                  </Text>
+                  <Input
+                    variant="email"
+                    value={cc}
+                    onChange={(e) => setCc(e.target.value)}
+                    placeholder="cc@example.com"
+                    className="border-0 shadow-none focus:ring-0"
+                  />
+                </Box>
+                <Box className="flex items-center gap-2">
+                  <Text variant="label" className="w-16 text-content-secondary">
+                    Bcc
+                  </Text>
+                  <Input
+                    variant="email"
+                    value={bcc}
+                    onChange={(e) => setBcc(e.target.value)}
+                    placeholder="bcc@example.com"
+                    className="border-0 shadow-none focus:ring-0"
+                  />
+                </Box>
+              </Box>
+            )}
+            <Box className="flex items-center gap-2">
+              <Text variant="label" className="w-16 text-content-secondary">
+                Subject
+              </Text>
+              <Input
+                variant="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="Email subject"
+                className="border-0 shadow-none focus:ring-0"
+              />
+            </Box>
+          </Box>
+          <Box className="flex-1 p-4">
+            <Box
+              as="textarea"
+              value={body}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
+              placeholder="Write your email..."
+              className="w-full h-full resize-none bg-transparent text-body-md text-content focus:outline-none placeholder:text-content-tertiary"
+            />
+          </Box>
         </Box>
         {showAIPanel && suggestions.length > 0 && (
           <AISuggestionsPanel
@@ -75,115 +178,6 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
 });
 
 ComposeEditor.displayName = "ComposeEditor";
-
-interface ComposeToolbarProps {
-  onSend?: (data: { to: string; cc: string; bcc: string; subject: string; body: string }) => void;
-  onSaveDraft?: () => void;
-  onDiscard?: () => void;
-}
-
-function ComposeToolbar({ onSend, onSaveDraft, onDiscard }: ComposeToolbarProps) {
-  return (
-    <Box className="flex items-center gap-2 px-4 py-3 border-b border-border">
-      <Button variant="primary" size="md" onClick={() => onSend?.({ to: "", cc: "", bcc: "", subject: "", body: "" })}>
-        Send
-      </Button>
-      <Button variant="secondary" size="md" onClick={onSaveDraft}>
-        Save Draft
-      </Button>
-      <Box className="flex-1" />
-      <Button variant="ghost" size="md" onClick={onDiscard}>
-        Discard
-      </Button>
-    </Box>
-  );
-}
-
-ComposeToolbar.displayName = "ComposeToolbar";
-
-interface ComposeFieldsProps {
-  initialTo: string;
-  initialCc: string;
-  initialBcc: string;
-  initialSubject: string;
-  showCcBcc: boolean;
-  onToggleCcBcc: () => void;
-}
-
-function ComposeFields({ initialTo, initialCc, initialBcc, initialSubject, showCcBcc, onToggleCcBcc }: ComposeFieldsProps) {
-  return (
-    <Box className="px-4 py-2 border-b border-border space-y-2">
-      <Box className="flex items-center gap-2">
-        <Text variant="label" className="w-16 text-content-secondary">
-          To
-        </Text>
-        <Input
-          variant="email"
-          defaultValue={initialTo}
-          placeholder="recipient@example.com"
-          className="border-0 shadow-none focus:ring-0"
-        />
-        <Button variant="ghost" size="sm" onClick={onToggleCcBcc}>
-          Cc/Bcc
-        </Button>
-      </Box>
-      {showCcBcc && (
-        <Box className="space-y-2">
-          <Box className="flex items-center gap-2">
-            <Text variant="label" className="w-16 text-content-secondary">
-              Cc
-            </Text>
-            <Input
-              variant="email"
-              defaultValue={initialCc}
-              placeholder="cc@example.com"
-              className="border-0 shadow-none focus:ring-0"
-            />
-          </Box>
-          <Box className="flex items-center gap-2">
-            <Text variant="label" className="w-16 text-content-secondary">
-              Bcc
-            </Text>
-            <Input
-              variant="email"
-              defaultValue={initialBcc}
-              placeholder="bcc@example.com"
-              className="border-0 shadow-none focus:ring-0"
-            />
-          </Box>
-        </Box>
-      )}
-      <Box className="flex items-center gap-2">
-        <Text variant="label" className="w-16 text-content-secondary">
-          Subject
-        </Text>
-        <Input
-          variant="text"
-          defaultValue={initialSubject}
-          placeholder="Email subject"
-          className="border-0 shadow-none focus:ring-0"
-        />
-      </Box>
-    </Box>
-  );
-}
-
-ComposeFields.displayName = "ComposeFields";
-
-function ComposeBody({ defaultValue }: { defaultValue: string }) {
-  return (
-    <Box className="flex-1 p-4">
-      <Box
-        as="textarea"
-        defaultValue={defaultValue}
-        placeholder="Write your email..."
-        className="w-full h-full resize-none bg-transparent text-body-md text-content focus:outline-none placeholder:text-content-tertiary"
-      />
-    </Box>
-  );
-}
-
-ComposeBody.displayName = "ComposeBody";
 
 interface AISuggestionsPanelProps {
   suggestions: AISuggestion[];

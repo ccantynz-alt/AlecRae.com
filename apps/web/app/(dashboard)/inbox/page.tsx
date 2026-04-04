@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Box,
   Text,
@@ -104,6 +105,7 @@ function toEmailMessage(detail: MessageDetail): EmailMessage {
 }
 
 export default function InboxPage() {
+  const router = useRouter();
   const [emailItems, setEmailItems] = useState<EmailListItem[]>([]);
   const [selectedEmailId, setSelectedEmailId] = useState<string | undefined>();
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
@@ -259,11 +261,54 @@ export default function InboxPage() {
           ) : (
             <EmailViewer
               email={selectedEmail}
-              onReply={() => {}}
-              onReplyAll={() => {}}
-              onForward={() => {}}
-              onArchive={() => {}}
-              onDelete={() => {}}
+              onReply={() => {
+                if (!selectedEmail) return;
+                const params = new URLSearchParams({
+                  mode: "reply",
+                  to: selectedEmail.sender.email,
+                  subject: selectedEmail.subject,
+                  body: selectedEmail.bodyParts.map((p) => "content" in p ? p.content : "").join("\n\n"),
+                });
+                router.push(`/compose?${params.toString()}`);
+              }}
+              onReplyAll={() => {
+                if (!selectedEmail) return;
+                const allRecipients = [
+                  selectedEmail.sender.email,
+                  ...(selectedEmail.recipients ?? []).map((r) => r.email),
+                ];
+                const params = new URLSearchParams({
+                  mode: "replyAll",
+                  to: selectedEmail.sender.email,
+                  cc: allRecipients.slice(1).join(","),
+                  subject: selectedEmail.subject,
+                  body: selectedEmail.bodyParts.map((p) => "content" in p ? p.content : "").join("\n\n"),
+                });
+                router.push(`/compose?${params.toString()}`);
+              }}
+              onForward={() => {
+                if (!selectedEmail) return;
+                const params = new URLSearchParams({
+                  mode: "forward",
+                  subject: selectedEmail.subject,
+                  body: selectedEmail.bodyParts.map((p) => "content" in p ? p.content : "").join("\n\n"),
+                });
+                router.push(`/compose?${params.toString()}`);
+              }}
+              onArchive={() => {
+                if (selectedEmailId) {
+                  setEmailItems((prev) => prev.filter((e) => e.id !== selectedEmailId));
+                  setSelectedEmailId(undefined);
+                  setSelectedEmail(null);
+                }
+              }}
+              onDelete={() => {
+                if (selectedEmailId) {
+                  setEmailItems((prev) => prev.filter((e) => e.id !== selectedEmailId));
+                  setSelectedEmailId(undefined);
+                  setSelectedEmail(null);
+                }
+              }}
             />
           )}
         </Box>
