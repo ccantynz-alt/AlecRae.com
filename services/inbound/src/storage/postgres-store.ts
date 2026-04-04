@@ -12,6 +12,7 @@ import type {
   FilterVerdict,
 } from "../types.js";
 import type { EmailStore } from "./store.js";
+import { indexEmail } from "@emailed/shared";
 
 function generateId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -160,6 +161,28 @@ export class PostgresEmailStore implements EmailStore {
 
       await db.insert(attachments).values(attachmentRows);
     }
+
+    // Index in Meilisearch (fire-and-forget — don't block storage)
+    indexEmail({
+      id,
+      accountId: recipient.accountId,
+      mailboxId,
+      subject: email.subject ?? "(no subject)",
+      textBody: email.text ?? null,
+      fromAddress,
+      fromName,
+      toAddresses: email.to.map((a) => {
+        const entry: { address: string; name?: string } = { address: a.address };
+        if (a.name !== undefined) entry.name = a.name;
+        return entry;
+      }),
+      snippet: generateSnippet(email.text, email.html),
+      hasAttachments: (email.attachments ?? []).length > 0,
+      status: "delivered",
+      createdAt: now,
+    }).catch((err) => {
+      console.warn("[PostgresEmailStore] Meilisearch indexing failed:", err);
+    });
 
     // Build the StoredEmail return object
     const stored: StoredEmail = {

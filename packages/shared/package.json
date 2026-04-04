@@ -20,6 +20,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "meilisearch": "^0.44.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

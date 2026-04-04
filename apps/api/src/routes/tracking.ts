@@ -11,7 +11,8 @@
 
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
-import { getDatabase, emails, events, webhooks } from "@emailed/db";
+import { getDatabase, emails, events } from "@emailed/db";
+import { enqueueWebhookDelivery } from "../lib/webhook-dispatcher.js";
 
 const tracking = new Hono();
 
@@ -69,88 +70,12 @@ async function recordEvent(
     ipAddress: extra.ipAddress ?? null,
   });
 
-  // Fire-and-forget webhook dispatch
-  dispatchWebhooks(emailRecord.accountId, eventId, eventType, {
-    emailId: emailRecord.id,
-    messageId: emailRecord.messageId,
-    ...extra,
-  }).catch((err) => {
-    console.error(`[tracking] Webhook dispatch failed: ${err}`);
+  // Enqueue webhook delivery via BullMQ (reliable, with retries and audit trail)
+  enqueueWebhookDelivery(eventId, emailRecord.accountId).catch((err) => {
+    console.error(`[tracking] Webhook enqueue failed: ${err}`);
   });
 }
 
-/**
- * Dispatch event to all matching webhooks for the account.
- */
-async function dispatchWebhooks(
-  accountId: string,
-  eventId: string,
-  eventType: string,
-  payload: Record<string, unknown>,
-): Promise<void> {
-  const db = getDatabase();
-
-  const accountWebhooks = await db
-    .select()
-    .from(webhooks)
-    .where(eq(webhooks.accountId, accountId));
-
-  for (const webhook of accountWebhooks) {
-    // Check if this webhook subscribes to this event type
-    if (
-      webhook.eventTypes &&
-      webhook.eventTypes.length > 0 &&
-      !webhook.eventTypes.includes(eventType)
-    ) {
-      continue;
-    }
-
-    if (!webhook.isActive) continue;
-
-    const body = JSON.stringify({
-      id: eventId,
-      type: eventType,
-      timestamp: new Date().toISOString(),
-      data: payload,
-    });
-
-    // HMAC signature for verification
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(webhook.secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    const signature = await crypto.subtle.sign(
-      "HMAC",
-      key,
-      encoder.encode(body),
-    );
-    const signatureHex = Array.from(new Uint8Array(signature))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-
-    try {
-      await fetch(webhook.url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Emailed-Signature": `sha256=${signatureHex}`,
-          "X-Emailed-Event": eventType,
-          "X-Emailed-Delivery": eventId,
-        },
-        body,
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch (err) {
-      console.error(
-        `[tracking] Failed to deliver webhook to ${webhook.url}: ${err}`,
-      );
-    }
-  }
-}
 
 // ─── Open Tracking Pixel ───────────────────────────────────────────────────
 

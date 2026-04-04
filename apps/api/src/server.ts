@@ -31,6 +31,8 @@ import { health } from "./routes/health.js";
 import { admin } from "./routes/admin.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
+import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
+import { initSearchIndex } from "@emailed/shared";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -162,6 +164,11 @@ console.log("  Emailed API — Starting");
 console.log(`  Port: ${port}`);
 console.log(`  Environment: ${process.env.NODE_ENV ?? "development"}`);
 console.log("=".repeat(60));
+
+// Initialize Meilisearch index on startup (non-blocking)
+initSearchIndex().catch((err) => {
+  console.warn("[api] Meilisearch init failed (search will be unavailable):", err);
+});
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 

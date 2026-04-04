@@ -257,6 +257,26 @@ export const messagesApi = {
       `/v1/messages${query ? `?${query}` : ""}`,
     );
   },
+
+  search(params: { q: string; mailbox?: string; limit?: number; offset?: number }) {
+    const qs = new URLSearchParams();
+    qs.set("q", params.q);
+    if (params.mailbox) qs.set("mailbox", params.mailbox);
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.offset) qs.set("offset", String(params.offset));
+    return apiFetch<{
+      data: Array<{
+        id: string;
+        subject: string;
+        from: EmailAddress;
+        snippet: string;
+        createdAt: string;
+      }>;
+      totalHits: number;
+      processingTimeMs: number;
+      query: string;
+    }>(`/v1/messages/search?${qs.toString()}`);
+  },
 };
 
 // ─── Domains ───────────────────────────────────────────────────────────────

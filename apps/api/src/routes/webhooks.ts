@@ -4,7 +4,13 @@ import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { CreateWebhookSchema, UpdateWebhookSchema } from "../types.js";
 import type { CreateWebhookInput, UpdateWebhookInput } from "../types.js";
-import { getDatabase, webhooks as webhooksTable } from "@emailed/db";
+import {
+  getDatabase,
+  webhooks as webhooksTable,
+  webhookDeliveries,
+  events,
+} from "@emailed/db";
+import { enqueueWebhookDeliveryForWebhook } from "../lib/webhook-dispatcher.js";
 
 const webhooks = new Hono();
 
@@ -233,7 +239,7 @@ webhooks.delete("/:id", requireScope("webhooks:manage"), async (c) => {
   return c.json({ deleted: true, id });
 });
 
-// POST /v1/webhooks/:id/test - Send test event
+// POST /v1/webhooks/:id/test - Send test event via the real dispatcher
 webhooks.post("/:id/test", requireScope("webhooks:manage"), async (c) => {
   const id = c.req.param("id");
   const auth = c.get("auth");
@@ -260,23 +266,104 @@ webhooks.post("/:id/test", requireScope("webhooks:manage"), async (c) => {
     );
   }
 
-  const testPayload = {
-    id: `evt_test_${generateId()}`,
-    type: (record.eventTypes?.[0] as string | undefined) ?? "delivered",
-    timestamp: new Date().toISOString(),
-    data: {
-      messageId: `msg_test_${generateId()}`,
-      recipient: "test@example.com",
-    },
-  };
+  // Create a real test event in the DB so the dispatcher can process it
+  const eventId = `evt_test_${generateId()}`;
+  const eventType =
+    (record.eventTypes?.[0] as string | undefined) ?? "email.delivered";
+
+  await db.insert(events).values({
+    id: eventId,
+    accountId: auth.accountId,
+    type: eventType as "email.delivered",
+    messageId: `msg_test_${generateId()}`,
+    recipient: "test@example.com",
+  });
+
+  // Enqueue delivery through the real BullMQ pipeline
+  await enqueueWebhookDeliveryForWebhook(id, eventId, auth.accountId);
 
   return c.json({
     data: {
       success: true,
-      payload: testPayload,
-      message: "Test event dispatched",
+      eventId,
+      eventType,
+      message:
+        "Test event created and enqueued for delivery via the webhook pipeline",
     },
   });
 });
+
+// GET /v1/webhooks/:id/deliveries - List recent delivery attempts
+webhooks.get(
+  "/:id/deliveries",
+  requireScope("webhooks:manage"),
+  async (c) => {
+    const id = c.req.param("id");
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    // Verify the webhook belongs to this account
+    const [record] = await db
+      .select({ id: webhooksTable.id })
+      .from(webhooksTable)
+      .where(
+        and(
+          eq(webhooksTable.id, id),
+          eq(webhooksTable.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
+
+    if (!record) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Webhook ${id} not found`,
+            code: "webhook_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    // Parse pagination params
+    const limit = Math.min(
+      parseInt(c.req.query("limit") ?? "50", 10) || 50,
+      100,
+    );
+    const offset = parseInt(c.req.query("offset") ?? "0", 10) || 0;
+
+    const rows = await db
+      .select({
+        id: webhookDeliveries.id,
+        eventId: webhookDeliveries.eventId,
+        statusCode: webhookDeliveries.statusCode,
+        responseBody: webhookDeliveries.responseBody,
+        attemptCount: webhookDeliveries.attemptCount,
+        success: webhookDeliveries.success,
+        nextRetryAt: webhookDeliveries.nextRetryAt,
+        createdAt: webhookDeliveries.createdAt,
+      })
+      .from(webhookDeliveries)
+      .where(eq(webhookDeliveries.webhookId, id))
+      .orderBy(desc(webhookDeliveries.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const data = rows.map((r) => ({
+      id: r.id,
+      eventId: r.eventId,
+      statusCode: r.statusCode != null ? parseInt(r.statusCode, 10) : null,
+      responseBody: r.responseBody,
+      attemptCount: r.attemptCount,
+      success: r.success,
+      nextRetryAt: r.nextRetryAt?.toISOString() ?? null,
+      createdAt: r.createdAt.toISOString(),
+    }));
+
+    return c.json({ data, limit, offset });
+  },
+);
 
 export { webhooks };

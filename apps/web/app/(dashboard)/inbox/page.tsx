@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
@@ -113,6 +113,9 @@ export default function InboxPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "unread" | "starred">("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchEmails = useCallback(async () => {
     try {
@@ -172,6 +175,50 @@ export default function InboxPage() {
     return true;
   });
 
+  const handleSearch = useCallback(
+    (query: string) => {
+      setSearchQuery(query);
+
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+
+      if (!query.trim()) {
+        // Clear search — reload the full list
+        setSearching(false);
+        fetchEmails();
+        return;
+      }
+
+      searchTimerRef.current = setTimeout(async () => {
+        try {
+          setSearching(true);
+          const res = await messagesApi.search({ q: query, limit: 50 });
+          const items: EmailListItem[] = res.data.map((hit) => ({
+            id: hit.id,
+            sender: {
+              name: hit.from.name ?? hit.from.email,
+              email: hit.from.email,
+            },
+            subject: hit.subject || "(no subject)",
+            preview: hit.snippet || "",
+            timestamp: formatTimestamp(hit.createdAt),
+            read: true,
+            starred: false,
+            priority: "normal" as const,
+            hasAttachments: false,
+          }));
+          setEmailItems(items);
+        } catch (err) {
+          console.error("Search failed:", err);
+        } finally {
+          setSearching(false);
+        }
+      }, 300);
+    },
+    [fetchEmails],
+  );
+
   const searchHeader = (
     <Box className="flex items-center gap-4 w-full">
       <Input
@@ -179,6 +226,10 @@ export default function InboxPage() {
         placeholder="Search emails..."
         inputSize="sm"
         className="max-w-md"
+        value={searchQuery}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+          handleSearch(e.target.value)
+        }
       />
       <Box className="flex items-center gap-2 ml-auto">
         <Button
@@ -235,7 +286,11 @@ export default function InboxPage() {
         <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
           <Box className="px-4 py-2 border-b border-border bg-surface-secondary">
             <Text variant="body-sm" muted>
-              {filteredEmails.filter((e) => !e.read).length} unread of {filteredEmails.length} emails
+              {searching
+                ? "Searching..."
+                : searchQuery.trim()
+                  ? `${filteredEmails.length} results for "${searchQuery}"`
+                  : `${filteredEmails.filter((e) => !e.read).length} unread of ${filteredEmails.length} emails`}
             </Text>
           </Box>
           {filteredEmails.length === 0 ? (

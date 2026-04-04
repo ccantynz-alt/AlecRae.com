@@ -129,3 +129,16 @@ export {
   ERROR_CODE_MAP,
 } from "./errors/index.js";
 export type { ErrorContext } from "./errors/index.js";
+
+// Search
+export {
+  initSearchIndex,
+  indexEmail,
+  searchEmails,
+  removeEmail,
+} from "./search/meilisearch.js";
+export type {
+  EmailSearchDocument,
+  EmailSearchHit,
+  EmailSearchResult,
+} from "./search/meilisearch.js";
