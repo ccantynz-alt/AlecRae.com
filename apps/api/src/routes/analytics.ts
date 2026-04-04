@@ -1,23 +1,26 @@
 import { Hono } from "hono";
+import { eq, and, gte, lte, sql, count } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateQuery, getValidatedQuery } from "../middleware/validator.js";
 import { AnalyticsQuerySchema } from "../types.js";
-import type { AnalyticsQuery, OverviewStats, DeliverabilityPoint, EngagementPoint } from "../types.js";
+import type {
+  AnalyticsQuery,
+  OverviewStats,
+  DeliverabilityPoint,
+  EngagementPoint,
+} from "../types.js";
+import { getDatabase, emails, events } from "@emailed/db";
 
 const analytics = new Hono();
 
-/**
- * Parse time range from query, defaulting to last 30 days.
- */
 function parseTimeRange(query: AnalyticsQuery): { from: Date; to: Date } {
   const to = query.to ? new Date(query.to) : new Date();
-  const from = query.from ? new Date(query.from) : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const from = query.from
+    ? new Date(query.from)
+    : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
   return { from, to };
 }
 
-/**
- * Generate time series buckets for the given range and granularity.
- */
 function generateBuckets(from: Date, to: Date, granularity: string): Date[] {
   const buckets: Date[] = [];
   const current = new Date(from);
@@ -39,28 +42,83 @@ function generateBuckets(from: Date, to: Date, granularity: string): Date[] {
   return buckets;
 }
 
-// GET /v1/analytics/overview - Aggregated stats
+// GET /v1/analytics/overview - Aggregated stats from real email data
 analytics.get(
   "/overview",
   requireScope("analytics:read"),
   validateQuery(AnalyticsQuerySchema),
   async (c) => {
     const query = getValidatedQuery<AnalyticsQuery>(c);
+    const auth = c.get("auth");
+    const db = getDatabase();
     const { from, to } = parseTimeRange(query);
 
-    // In production: query from ClickHouse / TimescaleDB aggregate tables
-    // filtered by account, time range, and optional tags.
+    const conditions = [
+      eq(emails.accountId, auth.accountId),
+      gte(emails.createdAt, from),
+      lte(emails.createdAt, to),
+    ];
+
+    // Count emails by status
+    const statusCounts = await db
+      .select({
+        status: emails.status,
+        count: count(),
+      })
+      .from(emails)
+      .where(and(...conditions))
+      .groupBy(emails.status);
+
+    const counts: Record<string, number> = {};
+    for (const row of statusCounts) {
+      counts[row.status] = row.count;
+    }
+
+    const sent =
+      (counts["sent"] ?? 0) +
+      (counts["delivered"] ?? 0) +
+      (counts["bounced"] ?? 0) +
+      (counts["complained"] ?? 0);
+    const delivered = counts["delivered"] ?? 0;
+    const bounced = counts["bounced"] ?? 0;
+    const complained = counts["complained"] ?? 0;
+
+    // Count engagement events (opens/clicks) from the events table
+    const engagementCounts = await db
+      .select({
+        type: events.type,
+        count: count(),
+      })
+      .from(events)
+      .where(
+        and(
+          eq(events.accountId, auth.accountId),
+          gte(events.timestamp, from),
+          lte(events.timestamp, to),
+          sql`${events.type} IN ('email.opened', 'email.clicked')`,
+        ),
+      )
+      .groupBy(events.type);
+
+    const engagementMap: Record<string, number> = {};
+    for (const row of engagementCounts) {
+      engagementMap[row.type] = row.count;
+    }
+
+    const opened = engagementMap["email.opened"] ?? 0;
+    const clicked = engagementMap["email.clicked"] ?? 0;
+
     const stats: OverviewStats = {
-      sent: 0,
-      delivered: 0,
-      bounced: 0,
-      complained: 0,
-      opened: 0,
-      clicked: 0,
-      deliveryRate: 0,
-      bounceRate: 0,
-      openRate: 0,
-      clickRate: 0,
+      sent,
+      delivered,
+      bounced,
+      complained,
+      opened,
+      clicked,
+      deliveryRate: sent > 0 ? delivered / sent : 0,
+      bounceRate: sent > 0 ? bounced / sent : 0,
+      openRate: delivered > 0 ? opened / delivered : 0,
+      clickRate: delivered > 0 ? clicked / delivered : 0,
     };
 
     return c.json({
@@ -81,18 +139,64 @@ analytics.get(
   validateQuery(AnalyticsQuerySchema),
   async (c) => {
     const query = getValidatedQuery<AnalyticsQuery>(c);
+    const auth = c.get("auth");
+    const db = getDatabase();
     const { from, to } = parseTimeRange(query);
     const buckets = generateBuckets(from, to, query.granularity);
 
-    // In production: query time-bucketed delivery data
-    const series: DeliverabilityPoint[] = buckets.map((ts) => ({
-      timestamp: ts.toISOString(),
-      sent: 0,
-      delivered: 0,
-      bounced: 0,
-      deferred: 0,
-      deliveryRate: 0,
-    }));
+    // Query email counts grouped by date truncated to granularity
+    const truncExpr =
+      query.granularity === "hour"
+        ? sql`date_trunc('hour', ${emails.createdAt})`
+        : query.granularity === "week"
+          ? sql`date_trunc('week', ${emails.createdAt})`
+          : query.granularity === "month"
+            ? sql`date_trunc('month', ${emails.createdAt})`
+            : sql`date_trunc('day', ${emails.createdAt})`;
+
+    const rows = await db
+      .select({
+        bucket: truncExpr.as("bucket"),
+        status: emails.status,
+        count: count(),
+      })
+      .from(emails)
+      .where(
+        and(
+          eq(emails.accountId, auth.accountId),
+          gte(emails.createdAt, from),
+          lte(emails.createdAt, to),
+        ),
+      )
+      .groupBy(sql`bucket`, emails.status);
+
+    // Build a lookup map: "bucket_iso" → { status → count }
+    const bucketMap = new Map<string, Record<string, number>>();
+    for (const row of rows) {
+      const key = String(row.bucket);
+      const existing = bucketMap.get(key) ?? {};
+      existing[row.status] = row.count;
+      bucketMap.set(key, existing);
+    }
+
+    const series: DeliverabilityPoint[] = buckets.map((ts) => {
+      const key = ts.toISOString();
+      const data = bucketMap.get(key) ?? {};
+      const sent =
+        (data["sent"] ?? 0) +
+        (data["delivered"] ?? 0) +
+        (data["bounced"] ?? 0);
+      const delivered = data["delivered"] ?? 0;
+
+      return {
+        timestamp: ts.toISOString(),
+        sent,
+        delivered,
+        bounced: data["bounced"] ?? 0,
+        deferred: data["deferred"] ?? 0,
+        deliveryRate: sent > 0 ? delivered / sent : 0,
+      };
+    });
 
     return c.json({
       data: series,
@@ -115,7 +219,8 @@ analytics.get(
     const { from, to } = parseTimeRange(query);
     const buckets = generateBuckets(from, to, query.granularity);
 
-    // In production: query time-bucketed engagement data from analytics store
+    // Engagement data (opens/clicks) will be populated once tracking pixels
+    // and click tracking are wired up. For now return the time series skeleton.
     const series: EngagementPoint[] = buckets.map((ts) => ({
       timestamp: ts.toISOString(),
       delivered: 0,
