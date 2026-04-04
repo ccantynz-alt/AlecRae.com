@@ -123,26 +123,33 @@ app.route("/t", tracking);
 app.use("/v1/messages/send", authMiddleware, sendRateLimit);
 // Search endpoint: 60 req/min per API key
 app.use("/v1/messages/search", authMiddleware, searchRateLimit);
-// Read messages: 600 req/min per API key
+// Read messages: 600 req/min per API key (base path + wildcard)
+app.use("/v1/messages", authMiddleware, readRateLimit);
 app.use("/v1/messages/*", authMiddleware, readRateLimit);
-// Domains: write-level limits (200 req/min)
+// Domains: write-level limits (200 req/min) (base path + wildcard)
+app.use("/v1/domains", authMiddleware, writeRateLimit);
 app.use("/v1/domains/*", authMiddleware, writeRateLimit);
-// Webhooks: write-level limits (200 req/min)
+// Webhooks: write-level limits (200 req/min) (base path + wildcard)
+app.use("/v1/webhooks", authMiddleware, writeRateLimit);
 app.use("/v1/webhooks/*", authMiddleware, writeRateLimit);
-// Analytics: read-level limits (600 req/min)
+// Analytics: read-level limits (600 req/min) (base path + wildcard)
+app.use("/v1/analytics", authMiddleware, readRateLimit);
 app.use("/v1/analytics/*", authMiddleware, readRateLimit);
-// Suppressions: write-level limits (200 req/min)
+// Suppressions: write-level limits (200 req/min) (base path + wildcard)
+app.use("/v1/suppressions", authMiddleware, writeRateLimit);
 app.use("/v1/suppressions/*", authMiddleware, writeRateLimit);
 // Bounces: read-level limits (600 req/min)
-app.use("/v1/bounces/*", authMiddleware, readRateLimit);
 app.use("/v1/bounces", authMiddleware, readRateLimit);
-// API keys management: write-level limits (200 req/min)
+app.use("/v1/bounces/*", authMiddleware, readRateLimit);
+// API keys management: write-level limits (200 req/min) (base path + wildcard)
+app.use("/v1/api-keys", authMiddleware, writeRateLimit);
 app.use("/v1/api-keys/*", authMiddleware, writeRateLimit);
-// Account management: write-level limits (200 req/min)
+// Account management: write-level limits (200 req/min) (base path + wildcard)
+app.use("/v1/account", authMiddleware, writeRateLimit);
 app.use("/v1/account/*", authMiddleware, writeRateLimit);
 // Templates: write-level limits (200 req/min)
-app.use("/v1/templates/*", authMiddleware, writeRateLimit);
 app.use("/v1/templates", authMiddleware, writeRateLimit);
+app.use("/v1/templates/*", authMiddleware, writeRateLimit);
 // Billing authenticated endpoints: write-level limits (200 req/min)
 app.use("/v1/billing/checkout", authMiddleware, writeRateLimit);
 app.use("/v1/billing/portal", authMiddleware, writeRateLimit);

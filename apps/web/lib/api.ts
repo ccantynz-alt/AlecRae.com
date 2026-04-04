@@ -354,6 +354,30 @@ export const webhooksApi = {
       method: "DELETE",
     });
   },
+
+  test(id: string) {
+    return apiFetch<{ data: { success: boolean; eventId: string; eventType: string; message: string } }>(
+      `/v1/webhooks/${id}/test`,
+      { method: "POST" },
+    );
+  },
+
+  update(id: string, payload: { url?: string; events?: string[]; description?: string; active?: boolean }) {
+    return apiFetch<{ data: Webhook }>(`/v1/webhooks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deliveries(id: string, params?: { limit?: number; offset?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    const query = qs.toString();
+    return apiFetch<{ data: Array<{ id: string; eventId: string; statusCode: number | null; success: boolean; attemptCount: number; createdAt: string }> }>(
+      `/v1/webhooks/${id}/deliveries${query ? `?${query}` : ""}`,
+    );
+  },
 };
 
 // ─── API Keys ──────────────────────────────────────────────────────────────
