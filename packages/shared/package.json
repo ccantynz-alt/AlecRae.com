@@ -31,7 +31,11 @@
     "meilisearch": "^0.44.0",
     "zod": "^3.23.0"
   },
+  "peerDependencies": {
+    "hono": "^4.6.0"
+  },
   "devDependencies": {
+    "hono": "^4.6.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }

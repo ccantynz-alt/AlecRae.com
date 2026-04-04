@@ -1,770 +1,758 @@
 /**
- * @emailed/reputation — AI-Driven IP Warm-up Orchestrator
+ * @emailed/reputation — Domain Warm-up Orchestrator
  *
- * Manages the gradual ramp-up of sending volume for new IP addresses.
- * Uses ISP-specific strategies and adapts in real-time based on bounce,
- * deferral, and complaint signals from each provider.
+ * Manages the gradual ramp-up of sending volume for new domains/IPs.
+ * Stores all state in PostgreSQL via the `warmup_sessions` table so
+ * that decisions survive restarts and are consistent across workers.
  *
- * The orchestrator:
- *  1. Generates a warm-up plan based on IP age and target volume
- *  2. Calculates daily sending limits with gradual ramp-up
- *  3. Applies ISP-specific schedules (Gmail, Yahoo, Outlook, etc.)
- *  4. Adapts in real-time when bounce/complaint rates exceed thresholds
- *  5. Tracks progress and produces reports
+ * Features:
+ *  - Three schedule templates: conservative (30-day), moderate (21-day), aggressive (14-day)
+ *  - `getDailyLimit(domainId)` — returns today's sending limit
+ *  - `adjustSchedule(domainId, signals)` — adapts schedule based on delivery signals
+ *  - `pauseWarmup` / `resumeWarmup` — manual controls
+ *  - Automatic schedule extension on bad signals, acceleration on good signals
  */
 
-import type {
-  IspProvider,
-  IspStrategy,
-  IspSignal,
-  WarmupSchedule,
-  WarmupPhase,
-  WarmupStatus,
-  WarmupMetrics,
-  DailySnapshot,
-} from '../types.js';
+import { eq, and } from "drizzle-orm";
+import {
+  getDatabase,
+  warmupSessions,
+  domains as domainsTable,
+} from "@emailed/db";
+import type { WarmupSession } from "@emailed/db";
 
 // ---------------------------------------------------------------------------
-// Constants
+// Schedule step: { day, dailyLimit }
 // ---------------------------------------------------------------------------
 
-/** Multiplier reduction when negative signals exceed thresholds */
-const THROTTLE_REDUCTION = 0.5;
-
-/** Multiplier increase when metrics are healthy */
-const HEALTHY_BOOST = 1.1;
-
-/** Maximum adaptive multiplier — never exceed 2x planned volume */
-const MAX_MULTIPLIER = 2.0;
-
-/** Minimum adaptive multiplier — never drop below 10% of planned volume */
-const MIN_MULTIPLIER = 0.1;
-
-/** Number of consecutive healthy days before advancing a phase early */
-const EARLY_ADVANCE_THRESHOLD = 3;
-
-/** Default warm-up plan length in days */
-const DEFAULT_PLAN_DAYS = 30;
+export interface ScheduleStep {
+  day: number;
+  dailyLimit: number;
+}
 
 // ---------------------------------------------------------------------------
-// ISP Strategy Defaults
+// Warm-up Schedule Templates
 // ---------------------------------------------------------------------------
 
-const ISP_STRATEGIES: Readonly<Record<IspProvider, IspStrategy>> = {
-  gmail: {
-    provider: 'gmail',
-    initialVolume: 50,
-    growthRate: 1.5,
-    maxDailyVolume: 100_000,
-    bounceThreshold: 0.05,
-    complaintThreshold: 0.001,
-    deferralThreshold: 0.10,
-    preferredSendingHours: [9, 10, 11, 14, 15, 16],
-    minimumDays: 30,
-  },
-  yahoo: {
-    provider: 'yahoo',
-    initialVolume: 100,
-    growthRate: 1.4,
-    maxDailyVolume: 80_000,
-    bounceThreshold: 0.06,
-    complaintThreshold: 0.002,
-    deferralThreshold: 0.12,
-    preferredSendingHours: [8, 9, 10, 13, 14, 15],
-    minimumDays: 25,
-  },
-  microsoft: {
-    provider: 'microsoft',
-    initialVolume: 75,
-    growthRate: 1.4,
-    maxDailyVolume: 90_000,
-    bounceThreshold: 0.05,
-    complaintThreshold: 0.001,
-    deferralThreshold: 0.10,
-    preferredSendingHours: [8, 9, 10, 11, 14, 15, 16],
-    minimumDays: 28,
-  },
-  apple: {
-    provider: 'apple',
-    initialVolume: 100,
-    growthRate: 1.5,
-    maxDailyVolume: 70_000,
-    bounceThreshold: 0.06,
-    complaintThreshold: 0.002,
-    deferralThreshold: 0.12,
-    preferredSendingHours: [9, 10, 11, 14, 15],
-    minimumDays: 20,
-  },
-  aol: {
-    provider: 'aol',
-    initialVolume: 150,
-    growthRate: 1.6,
-    maxDailyVolume: 50_000,
-    bounceThreshold: 0.07,
-    complaintThreshold: 0.003,
-    deferralThreshold: 0.15,
-    preferredSendingHours: [9, 10, 11, 12, 13, 14, 15],
-    minimumDays: 18,
-  },
-  comcast: {
-    provider: 'comcast',
-    initialVolume: 100,
-    growthRate: 1.5,
-    maxDailyVolume: 40_000,
-    bounceThreshold: 0.07,
-    complaintThreshold: 0.003,
-    deferralThreshold: 0.15,
-    preferredSendingHours: [8, 9, 10, 11, 14, 15, 16],
-    minimumDays: 20,
-  },
-  generic: {
-    provider: 'generic',
-    initialVolume: 200,
-    growthRate: 1.5,
-    maxDailyVolume: 60_000,
-    bounceThreshold: 0.08,
-    complaintThreshold: 0.003,
-    deferralThreshold: 0.15,
-    preferredSendingHours: [8, 9, 10, 11, 12, 13, 14, 15, 16],
-    minimumDays: 20,
-  },
-} as const;
+export const WARMUP_SCHEDULES: Record<
+  "conservative" | "moderate" | "aggressive",
+  ScheduleStep[]
+> = {
+  conservative: [
+    // 30-day ramp
+    { day: 1, dailyLimit: 50 },
+    { day: 2, dailyLimit: 100 },
+    { day: 3, dailyLimit: 200 },
+    { day: 4, dailyLimit: 400 },
+    { day: 5, dailyLimit: 800 },
+    { day: 7, dailyLimit: 1500 },
+    { day: 10, dailyLimit: 3000 },
+    { day: 14, dailyLimit: 6000 },
+    { day: 18, dailyLimit: 12000 },
+    { day: 22, dailyLimit: 25000 },
+    { day: 26, dailyLimit: 50000 },
+    { day: 30, dailyLimit: 100000 },
+  ],
+  moderate: [
+    // 21-day ramp
+    { day: 1, dailyLimit: 100 },
+    { day: 2, dailyLimit: 250 },
+    { day: 3, dailyLimit: 500 },
+    { day: 4, dailyLimit: 1000 },
+    { day: 5, dailyLimit: 2000 },
+    { day: 7, dailyLimit: 4000 },
+    { day: 9, dailyLimit: 8000 },
+    { day: 12, dailyLimit: 15000 },
+    { day: 15, dailyLimit: 30000 },
+    { day: 18, dailyLimit: 60000 },
+    { day: 21, dailyLimit: 100000 },
+  ],
+  aggressive: [
+    // 14-day ramp (only for domains with existing reputation)
+    { day: 1, dailyLimit: 200 },
+    { day: 2, dailyLimit: 500 },
+    { day: 3, dailyLimit: 1500 },
+    { day: 4, dailyLimit: 3000 },
+    { day: 5, dailyLimit: 6000 },
+    { day: 7, dailyLimit: 12000 },
+    { day: 9, dailyLimit: 25000 },
+    { day: 11, dailyLimit: 50000 },
+    { day: 14, dailyLimit: 100000 },
+  ],
+};
 
 // ---------------------------------------------------------------------------
-// Result Type
+// Public types
 // ---------------------------------------------------------------------------
 
-type Result<T, E = Error> =
-  | { ok: true; value: T }
-  | { ok: false; error: E };
+export type WarmupScheduleType = keyof typeof WARMUP_SCHEDULES;
 
-function ok<T>(value: T): Result<T, never> {
+export interface WarmupStatus {
+  sessionId: string;
+  domainId: string;
+  scheduleType: WarmupScheduleType;
+  status: "active" | "paused" | "completed" | "cancelled";
+  currentDay: number;
+  dailyLimit: number;
+  sentToday: number;
+  totalSent: number;
+  totalDelivered: number;
+  totalBounced: number;
+  totalComplaints: number;
+  bounceRate24h: number;
+  complaintRate24h: number;
+  consecutiveHealthyDays: number;
+  extensionDays: number;
+  schedule: ScheduleStep[];
+  startedAt: string;
+  pausedAt: string | null;
+}
+
+export interface WarmupSignals {
+  bounceRate: number;
+  complaintRate: number;
+  deliveredCount: number;
+  bouncedCount: number;
+  complaintCount: number;
+}
+
+// ---------------------------------------------------------------------------
+// Result helpers
+// ---------------------------------------------------------------------------
+
+type Result<T> = { ok: true; value: T } | { ok: false; error: string };
+
+function ok<T>(value: T): Result<T> {
   return { ok: true, value };
 }
 
-function err<E>(error: E): Result<never, E> {
+function fail(error: string): Result<never> {
   return { ok: false, error };
 }
 
 // ---------------------------------------------------------------------------
-// Warm-up Progress Report
-// ---------------------------------------------------------------------------
-
-export interface WarmupProgressReport {
-  ipAddress: string;
-  domain: string;
-  status: WarmupStatus;
-  currentPhase: number;
-  totalPhases: number;
-  dayNumber: number;
-  dailyLimitToday: number;
-  sentToday: number;
-  adaptiveMultiplier: number;
-  metrics: WarmupMetrics;
-  healthStatus: 'healthy' | 'warning' | 'critical';
-  healthDetails: string[];
-  estimatedCompletionDate: string;
-}
-
-// ---------------------------------------------------------------------------
-// Orchestrator Configuration
-// ---------------------------------------------------------------------------
-
-export interface WarmupOrchestratorConfig {
-  /** Override default ISP strategies */
-  strategyOverrides?: Partial<Record<IspProvider, Partial<IspStrategy>>>;
-  /** Target daily volume to reach at end of warm-up */
-  targetDailyVolume?: number;
-  /** Custom plan length in days (overrides ISP minimum) */
-  planDays?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Warm-up Orchestrator
+// WarmupOrchestrator
 // ---------------------------------------------------------------------------
 
 /**
- * AI-driven IP warm-up orchestrator.
+ * DB-backed domain warm-up orchestrator.
  *
- * Manages warm-up schedules for one or more IP addresses, adapting sending
- * volume in real-time based on ISP feedback signals. Each IP+domain+ISP
- * combination gets its own schedule with provider-specific thresholds.
+ * All state is persisted in the `warmup_sessions` table. Methods are
+ * stateless — each call reads from and writes to the database, so
+ * multiple API servers / workers can call them concurrently.
  */
 export class WarmupOrchestrator {
-  private readonly schedules: Map<string, WarmupSchedule> = new Map();
-  private readonly strategies: Record<IspProvider, IspStrategy>;
-  private readonly config: WarmupOrchestratorConfig;
-
-  /** Track consecutive healthy days per schedule for early advancement */
-  private readonly consecutiveHealthyDays: Map<string, number> = new Map();
-
-  constructor(config: WarmupOrchestratorConfig = {}) {
-    this.config = config;
-
-    // Merge strategy overrides with defaults
-    this.strategies = { ...ISP_STRATEGIES };
-    if (config.strategyOverrides) {
-      for (const [provider, overrides] of Object.entries(config.strategyOverrides)) {
-        const key = provider as IspProvider;
-        if (this.strategies[key] && overrides) {
-          this.strategies[key] = { ...this.strategies[key], ...overrides };
-        }
-      }
-    }
-  }
+  // ── Public API ─────────────────────────────────────────────────────────
 
   /**
-   * Generate a warm-up plan for a given IP, domain, and target ISP.
-   * The plan consists of a series of phases with gradually increasing
-   * daily volumes based on the ISP-specific growth rate.
+   * Start a warm-up session for a domain.
+   * Only one active/paused session per domain is allowed.
    */
-  generatePlan(
-    ipAddress: string,
-    domain: string,
-    provider: IspProvider,
-  ): Result<WarmupSchedule> {
-    const key = this.scheduleKey(ipAddress, domain, provider);
+  async startWarmup(
+    domainId: string,
+    accountId: string,
+    scheduleType: WarmupScheduleType = "conservative",
+  ): Promise<Result<WarmupStatus>> {
+    const db = getDatabase();
 
-    if (this.schedules.has(key)) {
-      return err(new Error(`Warm-up schedule already exists for ${key}`));
+    // Verify the domain exists and belongs to this account
+    const [domainRecord] = await db
+      .select({ id: domainsTable.id, domain: domainsTable.domain })
+      .from(domainsTable)
+      .where(
+        and(
+          eq(domainsTable.id, domainId),
+          eq(domainsTable.accountId, accountId),
+        ),
+      )
+      .limit(1);
+
+    if (!domainRecord) {
+      return fail("Domain not found or does not belong to this account");
     }
 
-    const strategy = this.strategies[provider];
-    const targetVolume = this.config.targetDailyVolume ?? strategy.maxDailyVolume;
-    const planDays = this.config.planDays ?? Math.max(strategy.minimumDays, DEFAULT_PLAN_DAYS);
-
-    const phases = this.buildPhases(strategy, targetVolume, planDays);
-
-    const schedule: WarmupSchedule = {
-      ipAddress,
-      domain,
-      provider,
-      phases,
-      currentPhase: 0,
-      startDate: new Date(),
-      status: 'pending',
-      adaptiveMultiplier: 1.0,
-      metrics: this.createEmptyMetrics(),
-    };
-
-    this.schedules.set(key, schedule);
-    this.consecutiveHealthyDays.set(key, 0);
-
-    return ok(schedule);
-  }
-
-  /**
-   * Start a previously generated warm-up plan.
-   * The schedule must be in "pending" status.
-   */
-  startPlan(
-    ipAddress: string,
-    domain: string,
-    provider: IspProvider,
-  ): Result<WarmupSchedule> {
-    const key = this.scheduleKey(ipAddress, domain, provider);
-    const schedule = this.schedules.get(key);
-
-    if (!schedule) {
-      return err(new Error(`No warm-up schedule found for ${key}`));
-    }
-
-    if (schedule.status !== 'pending') {
-      return err(new Error(`Cannot start schedule in status "${schedule.status}"`));
-    }
-
-    schedule.status = 'active';
-    schedule.startDate = new Date();
-
-    return ok(schedule);
-  }
-
-  /**
-   * Calculate the allowed sending limit for today, taking into account
-   * the current phase, adaptive multiplier, and ISP strategy constraints.
-   */
-  getDailyLimit(
-    ipAddress: string,
-    domain: string,
-    provider: IspProvider,
-  ): Result<number> {
-    const key = this.scheduleKey(ipAddress, domain, provider);
-    const schedule = this.schedules.get(key);
-
-    if (!schedule) {
-      return err(new Error(`No warm-up schedule found for ${key}`));
-    }
-
-    if (schedule.status !== 'active') {
-      return ok(0);
-    }
-
-    const phase = schedule.phases[schedule.currentPhase];
-    if (!phase) {
-      return ok(0);
-    }
-
-    const strategy = this.strategies[provider];
-    const adaptedVolume = Math.round(phase.dailyVolume * schedule.adaptiveMultiplier);
-
-    // Never exceed the ISP max daily volume
-    const limit = Math.min(adaptedVolume, strategy.maxDailyVolume);
-
-    return ok(limit);
-  }
-
-  /**
-   * Get the hourly sending limit for the current phase and hour.
-   * Returns 0 if sending is not recommended at this hour for the ISP.
-   */
-  getHourlyLimit(
-    ipAddress: string,
-    domain: string,
-    provider: IspProvider,
-    currentHour: number,
-  ): Result<number> {
-    const key = this.scheduleKey(ipAddress, domain, provider);
-    const schedule = this.schedules.get(key);
-
-    if (!schedule) {
-      return err(new Error(`No warm-up schedule found for ${key}`));
-    }
-
-    if (schedule.status !== 'active') {
-      return ok(0);
-    }
-
-    const strategy = this.strategies[provider];
-    const phase = schedule.phases[schedule.currentPhase];
-
-    if (!phase) {
-      return ok(0);
-    }
-
-    // If the current hour is not in the preferred sending window,
-    // allow a reduced rate (25% of normal hourly limit)
-    const isPreferredHour = strategy.preferredSendingHours.includes(currentHour);
-    const baseHourly = Math.round(phase.hourlyLimit * schedule.adaptiveMultiplier);
-
-    return ok(isPreferredHour ? baseHourly : Math.round(baseHourly * 0.25));
-  }
-
-  /**
-   * Process a signal from an ISP and adapt the warm-up schedule.
-   * Negative signals (bounces, complaints, blocks) reduce the adaptive
-   * multiplier. Positive signals (deliveries) can increase it.
-   */
-  processSignal(signal: IspSignal): Result<WarmupSchedule> {
-    const key = this.scheduleKey(signal.ipAddress, '', signal.provider);
-
-    // Find matching schedule (may match on IP + provider regardless of domain)
-    let schedule: WarmupSchedule | undefined;
-    let matchedKey: string | undefined;
-
-    for (const [k, s] of this.schedules) {
-      if (s.ipAddress === signal.ipAddress && s.provider === signal.provider && s.status === 'active') {
-        schedule = s;
-        matchedKey = k;
-        break;
-      }
-    }
-
-    if (!schedule || !matchedKey) {
-      return err(new Error(`No active warm-up schedule found for IP ${signal.ipAddress} / ${signal.provider}`));
-    }
-
-    // Update metrics
-    this.updateMetrics(schedule.metrics, signal);
-
-    // Adapt multiplier based on signal type
-    const strategy = this.strategies[signal.provider];
-
-    switch (signal.type) {
-      case 'delivery': {
-        // Positive signal — gently increase multiplier if under threshold
-        if (
-          schedule.metrics.bounceRate < strategy.bounceThreshold &&
-          schedule.metrics.complaintRate < strategy.complaintThreshold
-        ) {
-          schedule.adaptiveMultiplier = Math.min(
-            MAX_MULTIPLIER,
-            schedule.adaptiveMultiplier * HEALTHY_BOOST,
-          );
-        }
-        break;
-      }
-
-      case 'bounce': {
-        if (schedule.metrics.bounceRate > strategy.bounceThreshold) {
-          schedule.adaptiveMultiplier = Math.max(
-            MIN_MULTIPLIER,
-            schedule.adaptiveMultiplier * THROTTLE_REDUCTION,
-          );
-        }
-        break;
-      }
-
-      case 'complaint': {
-        if (schedule.metrics.complaintRate > strategy.complaintThreshold) {
-          // Complaints are severe — throttle aggressively
-          schedule.adaptiveMultiplier = Math.max(
-            MIN_MULTIPLIER,
-            schedule.adaptiveMultiplier * THROTTLE_REDUCTION * THROTTLE_REDUCTION,
-          );
-        }
-        break;
-      }
-
-      case 'deferral': {
-        if (schedule.metrics.deferralRate > strategy.deferralThreshold) {
-          schedule.adaptiveMultiplier = Math.max(
-            MIN_MULTIPLIER,
-            schedule.adaptiveMultiplier * THROTTLE_REDUCTION,
-          );
-        }
-        break;
-      }
-
-      case 'block': {
-        // Block signals are critical — pause the warm-up
-        schedule.status = 'paused';
-        schedule.adaptiveMultiplier = MIN_MULTIPLIER;
-        break;
-      }
-    }
-
-    return ok(schedule);
-  }
-
-  /**
-   * Record a daily snapshot and advance the phase if appropriate.
-   * Should be called once per day at the end of the sending window.
-   */
-  recordDailySnapshot(
-    ipAddress: string,
-    domain: string,
-    provider: IspProvider,
-  ): Result<WarmupSchedule> {
-    const key = this.scheduleKey(ipAddress, domain, provider);
-    const schedule = this.schedules.get(key);
-
-    if (!schedule) {
-      return err(new Error(`No warm-up schedule found for ${key}`));
-    }
-
-    if (schedule.status !== 'active') {
-      return err(new Error(`Schedule is not active (status: ${schedule.status})`));
-    }
-
-    // Build daily snapshot from current metrics
-    const today = new Date().toISOString().split('T')[0] ?? '';
-    const snapshot: DailySnapshot = {
-      date: today,
-      sent: schedule.metrics.totalSent,
-      delivered: schedule.metrics.totalDelivered,
-      bounced: schedule.metrics.totalBounced,
-      deferred: schedule.metrics.totalDeferred,
-      complaints: schedule.metrics.totalComplaints,
-    };
-    schedule.metrics.dailySnapshots.push(snapshot);
-
-    // Evaluate health and decide whether to advance
-    const strategy = this.strategies[provider];
-    const isHealthy =
-      schedule.metrics.bounceRate < strategy.bounceThreshold &&
-      schedule.metrics.complaintRate < strategy.complaintThreshold &&
-      schedule.metrics.deferralRate < strategy.deferralThreshold;
-
-    if (isHealthy) {
-      const healthyDays = (this.consecutiveHealthyDays.get(key) ?? 0) + 1;
-      this.consecutiveHealthyDays.set(key, healthyDays);
-
-      // Advance phase if we have had enough healthy days at current level
-      const phase = schedule.phases[schedule.currentPhase];
-      const daysSinceStart = this.daysSinceStart(schedule);
-
-      if (phase && daysSinceStart >= phase.day) {
-        this.advancePhase(schedule);
-      } else if (healthyDays >= EARLY_ADVANCE_THRESHOLD) {
-        // Early advancement for consistently good performance
-        this.advancePhase(schedule);
-        this.consecutiveHealthyDays.set(key, 0);
-      }
-    } else {
-      this.consecutiveHealthyDays.set(key, 0);
-    }
-
-    return ok(schedule);
-  }
-
-  /**
-   * Generate a progress report for a warm-up schedule.
-   */
-  getProgressReport(
-    ipAddress: string,
-    domain: string,
-    provider: IspProvider,
-  ): Result<WarmupProgressReport> {
-    const key = this.scheduleKey(ipAddress, domain, provider);
-    const schedule = this.schedules.get(key);
-
-    if (!schedule) {
-      return err(new Error(`No warm-up schedule found for ${key}`));
-    }
-
-    const strategy = this.strategies[provider];
-    const { healthStatus, healthDetails } = this.evaluateHealth(schedule, strategy);
-
-    const dailyLimitResult = this.getDailyLimit(ipAddress, domain, provider);
-    const dailyLimit = dailyLimitResult.ok ? dailyLimitResult.value : 0;
-
-    const dayNumber = this.daysSinceStart(schedule);
-    const remainingPhases = schedule.phases.length - schedule.currentPhase;
-    const estimatedDaysRemaining = remainingPhases > 0
-      ? schedule.phases.slice(schedule.currentPhase).reduce((sum, p, i) => {
-          const nextPhase = schedule.phases[schedule.currentPhase + i + 1];
-          return sum + (nextPhase ? nextPhase.day - p.day : 1);
-        }, 0)
-      : 0;
-
-    const completionDate = new Date();
-    completionDate.setDate(completionDate.getDate() + estimatedDaysRemaining);
-
-    const report: WarmupProgressReport = {
-      ipAddress,
-      domain,
-      status: schedule.status,
-      currentPhase: schedule.currentPhase,
-      totalPhases: schedule.phases.length,
-      dayNumber,
-      dailyLimitToday: dailyLimit,
-      sentToday: schedule.metrics.totalSent,
-      adaptiveMultiplier: schedule.adaptiveMultiplier,
-      metrics: schedule.metrics,
-      healthStatus,
-      healthDetails,
-      estimatedCompletionDate: completionDate.toISOString().split('T')[0] ?? '',
-    };
-
-    return ok(report);
-  }
-
-  /** Pause an active warm-up schedule */
-  pause(
-    ipAddress: string,
-    domain: string,
-    provider: IspProvider,
-  ): Result<WarmupSchedule> {
-    const key = this.scheduleKey(ipAddress, domain, provider);
-    const schedule = this.schedules.get(key);
-
-    if (!schedule) {
-      return err(new Error(`No warm-up schedule found for ${key}`));
-    }
-
-    if (schedule.status !== 'active') {
-      return err(new Error(`Cannot pause schedule in status "${schedule.status}"`));
-    }
-
-    schedule.status = 'paused';
-    return ok(schedule);
-  }
-
-  /** Resume a paused warm-up schedule */
-  resume(
-    ipAddress: string,
-    domain: string,
-    provider: IspProvider,
-  ): Result<WarmupSchedule> {
-    const key = this.scheduleKey(ipAddress, domain, provider);
-    const schedule = this.schedules.get(key);
-
-    if (!schedule) {
-      return err(new Error(`No warm-up schedule found for ${key}`));
-    }
-
-    if (schedule.status !== 'paused') {
-      return err(new Error(`Cannot resume schedule in status "${schedule.status}"`));
-    }
-
-    // Reset multiplier to a safe level on resume
-    schedule.adaptiveMultiplier = Math.max(MIN_MULTIPLIER, schedule.adaptiveMultiplier);
-    schedule.status = 'active';
-    return ok(schedule);
-  }
-
-  /** Get all active warm-up schedules */
-  getActiveSchedules(): WarmupSchedule[] {
-    return [...this.schedules.values()].filter((s) => s.status === 'active');
-  }
-
-  /** Get the ISP strategy for a given provider */
-  getStrategy(provider: IspProvider): IspStrategy {
-    return this.strategies[provider];
-  }
-
-  // ─── Internal ───
-
-  /**
-   * Build warm-up phases from an ISP strategy.
-   * Each phase represents a day with a target volume.
-   */
-  private buildPhases(
-    strategy: IspStrategy,
-    targetVolume: number,
-    totalDays: number,
-  ): WarmupPhase[] {
-    const phases: WarmupPhase[] = [];
-    let currentVolume = strategy.initialVolume;
-    const sendingHoursPerDay = strategy.preferredSendingHours.length || 8;
-
-    for (let day = 1; day <= totalDays; day++) {
-      const dailyVolume = Math.min(Math.round(currentVolume), targetVolume);
-      const hourlyLimit = Math.ceil(dailyVolume / sendingHoursPerDay);
-
-      let description: string;
-      if (day <= 3) {
-        description = `Initial warm-up (day ${day}) — establishing baseline`;
-      } else if (dailyVolume < targetVolume * 0.25) {
-        description = `Early ramp-up — ${dailyVolume.toLocaleString()} emails/day`;
-      } else if (dailyVolume < targetVolume * 0.75) {
-        description = `Mid ramp-up — ${dailyVolume.toLocaleString()} emails/day`;
-      } else if (dailyVolume < targetVolume) {
-        description = `Final ramp-up — approaching target volume`;
-      } else {
-        description = `Target volume reached — ${targetVolume.toLocaleString()} emails/day`;
-      }
-
-      phases.push({ day, dailyVolume, hourlyLimit, description });
-
-      // Apply growth rate for next day
-      currentVolume = currentVolume * strategy.growthRate;
-    }
-
-    return phases;
-  }
-
-  /** Advance to the next warm-up phase, or complete if at the end */
-  private advancePhase(schedule: WarmupSchedule): void {
-    if (schedule.currentPhase < schedule.phases.length - 1) {
-      schedule.currentPhase++;
-    } else {
-      schedule.status = 'completed';
-    }
-  }
-
-  /** Calculate days since warm-up start */
-  private daysSinceStart(schedule: WarmupSchedule): number {
-    const now = Date.now();
-    const start = schedule.startDate.getTime();
-    return Math.floor((now - start) / (24 * 60 * 60 * 1000));
-  }
-
-  /** Update aggregate metrics from an ISP signal */
-  private updateMetrics(metrics: WarmupMetrics, signal: IspSignal): void {
-    switch (signal.type) {
-      case 'delivery':
-        metrics.totalSent++;
-        metrics.totalDelivered++;
-        break;
-      case 'bounce':
-        metrics.totalSent++;
-        metrics.totalBounced++;
-        break;
-      case 'deferral':
-        metrics.totalSent++;
-        metrics.totalDeferred++;
-        break;
-      case 'complaint':
-        metrics.totalComplaints++;
-        break;
-      case 'block':
-        metrics.totalBounced++;
-        break;
-    }
-
-    // Recompute rates
-    if (metrics.totalSent > 0) {
-      metrics.deliveryRate = metrics.totalDelivered / metrics.totalSent;
-      metrics.bounceRate = metrics.totalBounced / metrics.totalSent;
-      metrics.deferralRate = metrics.totalDeferred / metrics.totalSent;
-    }
-    if (metrics.totalDelivered > 0) {
-      metrics.complaintRate = metrics.totalComplaints / metrics.totalDelivered;
-    }
-  }
-
-  /** Evaluate the health of a warm-up schedule */
-  private evaluateHealth(
-    schedule: WarmupSchedule,
-    strategy: IspStrategy,
-  ): { healthStatus: 'healthy' | 'warning' | 'critical'; healthDetails: string[] } {
-    const details: string[] = [];
-    let status: 'healthy' | 'warning' | 'critical' = 'healthy';
-
-    if (schedule.metrics.bounceRate > strategy.bounceThreshold) {
-      status = 'critical';
-      details.push(
-        `Bounce rate ${(schedule.metrics.bounceRate * 100).toFixed(2)}% exceeds threshold ${(strategy.bounceThreshold * 100).toFixed(2)}%`,
-      );
-    } else if (schedule.metrics.bounceRate > strategy.bounceThreshold * 0.75) {
-      if (status === 'healthy') status = 'warning';
-      details.push(
-        `Bounce rate ${(schedule.metrics.bounceRate * 100).toFixed(2)}% approaching threshold`,
+    // Check for existing active/paused session
+    const [existing] = await db
+      .select({ id: warmupSessions.id, status: warmupSessions.status })
+      .from(warmupSessions)
+      .where(
+        and(
+          eq(warmupSessions.domainId, domainId),
+          eq(warmupSessions.status, "active"),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      return fail(
+        `Domain already has an active warm-up session (${existing.id}). Pause or cancel it first.`,
       );
     }
 
-    if (schedule.metrics.complaintRate > strategy.complaintThreshold) {
-      status = 'critical';
-      details.push(
-        `Complaint rate ${(schedule.metrics.complaintRate * 100).toFixed(3)}% exceeds threshold ${(strategy.complaintThreshold * 100).toFixed(3)}%`,
-      );
-    } else if (schedule.metrics.complaintRate > strategy.complaintThreshold * 0.75) {
-      if (status === 'healthy') status = 'warning';
-      details.push(
-        `Complaint rate ${(schedule.metrics.complaintRate * 100).toFixed(3)}% approaching threshold`,
-      );
-    }
+    const [existingPaused] = await db
+      .select({ id: warmupSessions.id })
+      .from(warmupSessions)
+      .where(
+        and(
+          eq(warmupSessions.domainId, domainId),
+          eq(warmupSessions.status, "paused"),
+        ),
+      )
+      .limit(1);
 
-    if (schedule.metrics.deferralRate > strategy.deferralThreshold) {
-      if (status !== 'critical') status = 'warning';
-      details.push(
-        `Deferral rate ${(schedule.metrics.deferralRate * 100).toFixed(2)}% exceeds threshold`,
+    if (existingPaused) {
+      return fail(
+        `Domain has a paused warm-up session (${existingPaused.id}). Resume or cancel it first.`,
       );
     }
 
-    if (schedule.adaptiveMultiplier < 0.5) {
-      if (status === 'healthy') status = 'warning';
-      details.push(
-        `Adaptive multiplier reduced to ${schedule.adaptiveMultiplier.toFixed(2)}x`,
-      );
-    }
+    // Create a new session
+    const schedule = [...WARMUP_SCHEDULES[scheduleType]];
+    const id = crypto.randomUUID().replace(/-/g, "");
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0]!;
 
-    if (details.length === 0) {
-      details.push('All metrics within acceptable thresholds');
-    }
-
-    return { healthStatus: status, healthDetails: details };
-  }
-
-  /** Create empty warm-up metrics */
-  private createEmptyMetrics(): WarmupMetrics {
-    return {
+    await db.insert(warmupSessions).values({
+      id,
+      accountId,
+      domainId,
+      scheduleType,
+      status: "active",
+      startedAt: now,
+      currentDay: 1,
+      sentToday: 0,
+      sentTodayDate: todayStr,
+      extensionDays: 0,
+      schedule,
       totalSent: 0,
       totalDelivered: 0,
       totalBounced: 0,
-      totalDeferred: 0,
       totalComplaints: 0,
-      deliveryRate: 0,
-      bounceRate: 0,
-      complaintRate: 0,
-      deferralRate: 0,
-      dailySnapshots: [],
-    };
+      bounceRate24h: 0,
+      complaintRate24h: 0,
+      consecutiveHealthyDays: 0,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return ok(this.toStatus(
+      await this.getSession(id),
+    ));
   }
 
-  /** Generate a unique key for a warm-up schedule */
-  private scheduleKey(ipAddress: string, domain: string, provider: IspProvider): string {
-    return `${ipAddress}::${domain}::${provider}`;
+  /**
+   * Get the current daily sending limit for a domain.
+   * Returns null if no active warm-up session exists (domain is not in warm-up).
+   * Returns 0 if the warm-up is paused.
+   */
+  async getDailyLimit(domainId: string): Promise<number | null> {
+    const session = await this.getActiveSession(domainId);
+    if (!session) return null;
+
+    if (session.status === "paused") return 0;
+    if (session.status !== "active") return null;
+
+    // Reset sentToday if the date has rolled over
+    await this.maybeResetDailyCounter(session);
+
+    return this.computeDailyLimit(session);
   }
+
+  /**
+   * Check whether a domain can send another email.
+   * Returns:
+   *  - { allowed: true } if not in warm-up or under limit
+   *  - { allowed: false, reason, retryAfter } if over limit
+   */
+  async canSend(domainId: string): Promise<{
+    allowed: boolean;
+    reason?: string;
+    retryAfter?: Date;
+  }> {
+    const session = await this.getActiveSession(domainId);
+
+    // No active warm-up — domain is not rate-limited by warm-up
+    if (!session) return { allowed: true };
+
+    if (session.status === "paused") {
+      return {
+        allowed: false,
+        reason: "Warm-up is paused due to delivery issues",
+        retryAfter: undefined,
+      };
+    }
+
+    if (session.status !== "active") return { allowed: true };
+
+    // Reset counter if needed
+    await this.maybeResetDailyCounter(session);
+
+    const limit = this.computeDailyLimit(session);
+    if (session.sentToday >= limit) {
+      // Next day at midnight UTC
+      const tomorrow = new Date();
+      tomorrow.setUTCHours(24, 0, 0, 0);
+      return {
+        allowed: false,
+        reason: `Warm-up daily limit reached (${session.sentToday}/${limit})`,
+        retryAfter: tomorrow,
+      };
+    }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Increment the sent counter for a domain's warm-up session.
+   * Call this after successfully queuing an email.
+   */
+  async recordSend(domainId: string): Promise<void> {
+    const session = await this.getActiveSession(domainId);
+    if (!session || session.status !== "active") return;
+
+    await this.maybeResetDailyCounter(session);
+
+    const db = getDatabase();
+    await db
+      .update(warmupSessions)
+      .set({
+        sentToday: session.sentToday + 1,
+        totalSent: session.totalSent + 1,
+        updatedAt: new Date(),
+      })
+      .where(eq(warmupSessions.id, session.id));
+  }
+
+  /**
+   * Get the current warm-up status for a domain.
+   */
+  async checkWarmupStatus(domainId: string): Promise<Result<WarmupStatus>> {
+    const session = await this.getActiveSession(domainId);
+    if (!session) {
+      return fail("No active or paused warm-up session for this domain");
+    }
+
+    await this.maybeResetDailyCounter(session);
+    await this.maybeAdvanceDay(session);
+
+    return ok(this.toStatus(session));
+  }
+
+  /**
+   * Adjust the warm-up schedule based on delivery signals.
+   *
+   * Rules:
+   *  - bounce rate >5%: extend schedule by 2 days
+   *  - bounce rate >10%: pause warm-up for 24h
+   *  - complaint rate >0.1%: pause warm-up
+   *  - all signals good after 3 consecutive healthy days: optionally accelerate
+   */
+  async adjustSchedule(
+    domainId: string,
+    signals: WarmupSignals,
+  ): Promise<Result<WarmupStatus>> {
+    const session = await this.getActiveSession(domainId);
+    if (!session) {
+      return fail("No active warm-up session for this domain");
+    }
+
+    if (session.status !== "active") {
+      return fail(`Cannot adjust schedule — session is ${session.status}`);
+    }
+
+    const db = getDatabase();
+    const updates: Partial<WarmupSession> = {
+      bounceRate24h: signals.bounceRate,
+      complaintRate24h: signals.complaintRate,
+      totalDelivered: session.totalDelivered + signals.deliveredCount,
+      totalBounced: session.totalBounced + signals.bouncedCount,
+      totalComplaints: session.totalComplaints + signals.complaintCount,
+      updatedAt: new Date(),
+    };
+
+    // Complaint rate >0.1% — pause immediately
+    if (signals.complaintRate > 0.001) {
+      updates.status = "paused";
+      updates.pausedAt = new Date();
+      updates.consecutiveHealthyDays = 0;
+      await db
+        .update(warmupSessions)
+        .set(updates)
+        .where(eq(warmupSessions.id, session.id));
+
+      const updated = await this.getSession(session.id);
+      return ok(this.toStatus(updated));
+    }
+
+    // Bounce rate >10% — pause warm-up
+    if (signals.bounceRate > 0.10) {
+      updates.status = "paused";
+      updates.pausedAt = new Date();
+      updates.consecutiveHealthyDays = 0;
+      await db
+        .update(warmupSessions)
+        .set(updates)
+        .where(eq(warmupSessions.id, session.id));
+
+      const updated = await this.getSession(session.id);
+      return ok(this.toStatus(updated));
+    }
+
+    // Bounce rate >5% — extend schedule by 2 days
+    if (signals.bounceRate > 0.05) {
+      const schedule = session.schedule as ScheduleStep[];
+      const extended = this.extendSchedule(schedule, 2);
+      updates.schedule = extended;
+      updates.extensionDays = session.extensionDays + 2;
+      updates.consecutiveHealthyDays = 0;
+      await db
+        .update(warmupSessions)
+        .set(updates)
+        .where(eq(warmupSessions.id, session.id));
+
+      const updated = await this.getSession(session.id);
+      return ok(this.toStatus(updated));
+    }
+
+    // All signals healthy
+    const newHealthyDays = session.consecutiveHealthyDays + 1;
+    updates.consecutiveHealthyDays = newHealthyDays;
+
+    // After 3 consecutive healthy days — accelerate by removing 1 day
+    if (newHealthyDays >= 3) {
+      const schedule = session.schedule as ScheduleStep[];
+      if (schedule.length > 2) {
+        const compressed = this.compressSchedule(schedule, 1);
+        updates.schedule = compressed;
+        updates.consecutiveHealthyDays = 0; // reset counter
+      }
+    }
+
+    await db
+      .update(warmupSessions)
+      .set(updates)
+      .where(eq(warmupSessions.id, session.id));
+
+    const updated = await this.getSession(session.id);
+    return ok(this.toStatus(updated));
+  }
+
+  /**
+   * Pause the warm-up for a domain.
+   */
+  async pauseWarmup(domainId: string): Promise<Result<WarmupStatus>> {
+    const session = await this.getActiveSession(domainId);
+    if (!session) {
+      return fail("No active warm-up session for this domain");
+    }
+
+    if (session.status !== "active") {
+      return fail(`Cannot pause — session is already ${session.status}`);
+    }
+
+    const db = getDatabase();
+    await db
+      .update(warmupSessions)
+      .set({
+        status: "paused",
+        pausedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(warmupSessions.id, session.id));
+
+    const updated = await this.getSession(session.id);
+    return ok(this.toStatus(updated));
+  }
+
+  /**
+   * Resume a paused warm-up session.
+   */
+  async resumeWarmup(domainId: string): Promise<Result<WarmupStatus>> {
+    const [session] = await getDatabase()
+      .select()
+      .from(warmupSessions)
+      .where(
+        and(
+          eq(warmupSessions.domainId, domainId),
+          eq(warmupSessions.status, "paused"),
+        ),
+      )
+      .limit(1);
+
+    if (!session) {
+      return fail("No paused warm-up session for this domain");
+    }
+
+    const db = getDatabase();
+    await db
+      .update(warmupSessions)
+      .set({
+        status: "active",
+        pausedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(warmupSessions.id, session.id));
+
+    const updated = await this.getSession(session.id);
+    return ok(this.toStatus(updated));
+  }
+
+  /**
+   * Cancel a warm-up session permanently.
+   */
+  async cancelWarmup(domainId: string): Promise<Result<{ cancelled: true }>> {
+    const session = await this.getActiveSession(domainId);
+    if (!session) {
+      return fail("No active or paused warm-up session for this domain");
+    }
+
+    const db = getDatabase();
+    await db
+      .update(warmupSessions)
+      .set({
+        status: "cancelled",
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(warmupSessions.id, session.id));
+
+    return ok({ cancelled: true });
+  }
+
+  // ── Internal helpers ───────────────────────────────────────────────────
+
+  /**
+   * Fetch a session by ID.
+   */
+  private async getSession(id: string): Promise<WarmupSession> {
+    const [session] = await getDatabase()
+      .select()
+      .from(warmupSessions)
+      .where(eq(warmupSessions.id, id))
+      .limit(1);
+
+    return session!;
+  }
+
+  /**
+   * Get the active or paused session for a domain.
+   */
+  private async getActiveSession(
+    domainId: string,
+  ): Promise<WarmupSession | null> {
+    const db = getDatabase();
+
+    // Check active first
+    const [active] = await db
+      .select()
+      .from(warmupSessions)
+      .where(
+        and(
+          eq(warmupSessions.domainId, domainId),
+          eq(warmupSessions.status, "active"),
+        ),
+      )
+      .limit(1);
+
+    if (active) return active;
+
+    // Check paused
+    const [paused] = await db
+      .select()
+      .from(warmupSessions)
+      .where(
+        and(
+          eq(warmupSessions.domainId, domainId),
+          eq(warmupSessions.status, "paused"),
+        ),
+      )
+      .limit(1);
+
+    return paused ?? null;
+  }
+
+  /**
+   * Compute today's daily limit from the schedule and current day.
+   */
+  private computeDailyLimit(session: WarmupSession): number {
+    const schedule = session.schedule as ScheduleStep[];
+    const day = session.currentDay;
+
+    // Find the applicable step: the last step where step.day <= currentDay
+    let limit = schedule[0]?.dailyLimit ?? 50;
+    for (const step of schedule) {
+      if (step.day <= day) {
+        limit = step.dailyLimit;
+      } else {
+        break;
+      }
+    }
+
+    return limit;
+  }
+
+  /**
+   * Reset the daily counter if the date has changed (UTC).
+   */
+  private async maybeResetDailyCounter(
+    session: WarmupSession,
+  ): Promise<void> {
+    const todayStr = new Date().toISOString().split("T")[0]!;
+    if (session.sentTodayDate === todayStr) return;
+
+    const db = getDatabase();
+    await db
+      .update(warmupSessions)
+      .set({
+        sentToday: 0,
+        sentTodayDate: todayStr,
+        updatedAt: new Date(),
+      })
+      .where(eq(warmupSessions.id, session.id));
+
+    // Update the in-memory copy so subsequent code sees the reset
+    session.sentToday = 0;
+    session.sentTodayDate = todayStr;
+  }
+
+  /**
+   * Advance the day counter based on how many days have elapsed since start.
+   * Also completes the warm-up if we've passed the last day in the schedule.
+   */
+  private async maybeAdvanceDay(session: WarmupSession): Promise<void> {
+    if (session.status !== "active") return;
+
+    const startDate = new Date(session.startedAt);
+    const now = new Date();
+    const elapsedMs = now.getTime() - startDate.getTime();
+    const elapsedDays = Math.floor(elapsedMs / (24 * 60 * 60 * 1000)) + 1; // day 1 on start day
+
+    if (elapsedDays === session.currentDay) return;
+
+    const schedule = session.schedule as ScheduleStep[];
+    const lastDay = schedule[schedule.length - 1]?.day ?? 30;
+
+    const db = getDatabase();
+
+    if (elapsedDays > lastDay) {
+      // Warm-up is complete
+      await db
+        .update(warmupSessions)
+        .set({
+          status: "completed",
+          currentDay: elapsedDays,
+          completedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(warmupSessions.id, session.id));
+
+      session.status = "completed";
+      session.currentDay = elapsedDays;
+    } else {
+      await db
+        .update(warmupSessions)
+        .set({
+          currentDay: elapsedDays,
+          updatedAt: now,
+        })
+        .where(eq(warmupSessions.id, session.id));
+
+      session.currentDay = elapsedDays;
+    }
+  }
+
+  /**
+   * Extend a schedule by adding extra days at the end.
+   * Shifts all steps after the current position by `extraDays`.
+   */
+  private extendSchedule(
+    schedule: ScheduleStep[],
+    extraDays: number,
+  ): ScheduleStep[] {
+    if (schedule.length < 2) return schedule;
+
+    // Add interpolated steps between the last two steps
+    const last = schedule[schedule.length - 1]!;
+    const secondLast = schedule[schedule.length - 2]!;
+
+    const newSteps = [...schedule];
+    // Shift the last step out by extraDays
+    newSteps[newSteps.length - 1] = {
+      day: last.day + extraDays,
+      dailyLimit: last.dailyLimit,
+    };
+
+    // Insert an intermediate step
+    const midDay = secondLast.day + Math.floor((last.day + extraDays - secondLast.day) / 2);
+    const midLimit = Math.floor((secondLast.dailyLimit + last.dailyLimit) / 2);
+
+    // Only insert if the mid day is different from existing steps
+    const midExists = newSteps.some((s) => s.day === midDay);
+    if (!midExists && midDay > secondLast.day && midDay < last.day + extraDays) {
+      newSteps.splice(newSteps.length - 1, 0, { day: midDay, dailyLimit: midLimit });
+    }
+
+    return newSteps;
+  }
+
+  /**
+   * Compress a schedule by removing the last N intermediate days.
+   */
+  private compressSchedule(
+    schedule: ScheduleStep[],
+    removeDays: number,
+  ): ScheduleStep[] {
+    if (schedule.length <= 2) return schedule;
+
+    const result = [...schedule];
+    // Shift all steps from index 1 onward earlier by removeDays
+    for (let i = 1; i < result.length; i++) {
+      result[i] = {
+        ...result[i]!,
+        day: Math.max(result[i]!.day - removeDays, result[i - 1]!.day + 1),
+      };
+    }
+
+    return result;
+  }
+
+  /**
+   * Map a DB session row to the public WarmupStatus shape.
+   */
+  private toStatus(session: WarmupSession): WarmupStatus {
+    const schedule = session.schedule as ScheduleStep[];
+    return {
+      sessionId: session.id,
+      domainId: session.domainId,
+      scheduleType: session.scheduleType as WarmupScheduleType,
+      status: session.status as WarmupStatus["status"],
+      currentDay: session.currentDay,
+      dailyLimit: this.computeDailyLimit(session),
+      sentToday: session.sentToday,
+      totalSent: session.totalSent,
+      totalDelivered: session.totalDelivered,
+      totalBounced: session.totalBounced,
+      totalComplaints: session.totalComplaints,
+      bounceRate24h: session.bounceRate24h,
+      complaintRate24h: session.complaintRate24h,
+      consecutiveHealthyDays: session.consecutiveHealthyDays,
+      extensionDays: session.extensionDays,
+      schedule,
+      startedAt: session.startedAt.toISOString(),
+      pausedAt: session.pausedAt?.toISOString() ?? null,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Singleton
+// ---------------------------------------------------------------------------
+
+let _orchestrator: WarmupOrchestrator | null = null;
+
+export function getWarmupOrchestrator(): WarmupOrchestrator {
+  if (!_orchestrator) {
+    _orchestrator = new WarmupOrchestrator();
+  }
+  return _orchestrator;
 }

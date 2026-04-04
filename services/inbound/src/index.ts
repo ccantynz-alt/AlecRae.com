@@ -5,6 +5,15 @@ import { MailboxRouter } from "./routing/router.js";
 import { InMemoryEmailStore } from "./storage/store.js";
 import { PostgresEmailStore } from "./storage/postgres-store.js";
 import { createHttpInbound } from "./http-inbound.js";
+import {
+  initTelemetry,
+  shutdownTelemetry,
+  getTracer,
+  recordEmailReceived,
+  recordEmailFilterDuration,
+  recordActiveConnection,
+  SpanKind,
+} from "@emailed/shared";
 import type { SmtpSession, SmtpEnvelope } from "./types.js";
 
 /**
@@ -78,12 +87,18 @@ async function handleInboundMessage(
 
   // 2. Run the filter pipeline (pass sender IP for SPF validation, raw data for DKIM)
   const { rawHeaders, rawBody } = splitRawMessage(rawData);
+  const filterStart = performance.now();
   const verdict = await pipeline.process(envelope, parsed, session.remoteAddress, rawHeaders, rawBody);
+  const filterDurationMs = performance.now() - filterStart;
+  recordEmailFilterDuration("full-pipeline", filterDurationMs);
   console.log(
     `[Inbound] Filter verdict for ${parsed.messageId}: ${verdict.action} (score: ${verdict.score})`,
   );
 
   if (verdict.action === "reject") {
+    // Extract domain from sender for metrics
+    const senderDomain = (envelope.mailFrom ?? "").split("@")[1] ?? "unknown";
+    recordEmailReceived(senderDomain, "rejected");
     throw new Error(`Message rejected: ${verdict.reason}`);
   }
 
@@ -112,6 +127,11 @@ async function handleInboundMessage(
   }
 
   const elapsed = Date.now() - startTime;
+
+  // Record telemetry
+  const senderDomain = (envelope.mailFrom ?? "").split("@")[1] ?? "unknown";
+  recordEmailReceived(senderDomain, verdict.action === "quarantine" ? "quarantined" : "accepted");
+
   console.log(
     `[Inbound] Processed ${parsed.messageId}: ${deliveryCount} deliveries in ${elapsed}ms`,
   );
@@ -143,6 +163,12 @@ let httpServer: ReturnType<typeof Bun.serve> | null = null;
 
 async function main(): Promise<void> {
   console.log(`[Inbound] Starting inbound email processing service`);
+
+  // Initialize OpenTelemetry
+  await initTelemetry("emailed-inbound").catch((err) => {
+    console.warn("[Inbound] OpenTelemetry init failed:", err);
+  });
+
   console.log(`[Inbound] Store backend: ${process.env["DATABASE_URL"] ? "PostgreSQL" : "in-memory"}`);
 
   if (enableSmtp) {
@@ -166,19 +192,17 @@ async function main(): Promise<void> {
 }
 
 // Handle graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("[Inbound] Shutting down...");
+async function shutdown(signal: string): Promise<void> {
+  console.log(`[Inbound] Received ${signal} — shutting down...`);
   if (enableSmtp) await receiver.stop();
   if (httpServer) httpServer.stop();
+  await shutdownTelemetry().catch(() => {});
+  console.log("[Inbound] Shutdown complete");
   process.exit(0);
-});
+}
 
-process.on("SIGTERM", async () => {
-  console.log("[Inbound] Shutting down...");
-  if (enableSmtp) await receiver.stop();
-  if (httpServer) httpServer.stop();
-  process.exit(0);
-});
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
 
 main().catch((err) => {
   console.error("[Inbound] Fatal error:", err);

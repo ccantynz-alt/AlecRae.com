@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { eq, and, desc, ilike, gte } from "drizzle-orm";
+import { initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@emailed/shared";
 import { JmapHandler } from "./server/handler.js";
 import { MailboxOperations } from "./mailbox/operations.js";
 import { ThreadingEngine } from "./thread/engine.js";
@@ -410,6 +411,9 @@ handler.registerMethod("Thread/get", async (args, ctx) => {
 
 const app = new Hono();
 
+// OpenTelemetry tracing and metrics
+app.use("*", telemetryMiddleware());
+
 app.use("*", cors());
 
 // JMAP Session endpoint (RFC 8620 Section 2)
@@ -544,6 +548,22 @@ app.onError((err, c) => {
 const port = parseInt(process.env.PORT ?? "3001", 10);
 
 console.log(`Emailed JMAP server starting on port ${port}`);
+
+// Initialize OpenTelemetry
+initTelemetry("emailed-jmap").catch((err) => {
+  console.warn("[jmap] OpenTelemetry init failed:", err);
+});
+
+// Graceful shutdown
+async function shutdown(signal: string): Promise<void> {
+  console.log(`[jmap] Received ${signal} — shutting down...`);
+  await shutdownTelemetry().catch(() => {});
+  console.log("[jmap] Shutdown complete");
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 export default {
   port,

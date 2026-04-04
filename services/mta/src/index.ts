@@ -40,6 +40,11 @@ async function start(): Promise<void> {
   console.log("  Emailed MTA — Starting");
   console.log("=".repeat(60));
 
+  // ── 0. Initialize OpenTelemetry ──────────────────────────────────────
+  await initTelemetry("emailed-mta").catch((err) => {
+    console.warn("[mta] OpenTelemetry init failed:", err);
+  });
+
   // ── 1. Connect to Postgres ──────────────────────────────────────────
   console.log("[mta] Connecting to Postgres...");
   try {
@@ -192,6 +197,10 @@ async function shutdown(signal: string): Promise<void> {
       redis = null;
       console.log("[mta] Redis disconnected");
     }
+
+    console.log("[mta] Flushing telemetry...");
+    await shutdownTelemetry();
+    console.log("[mta] Telemetry shut down");
 
     console.log("[mta] Closing Postgres connection pool...");
     await closeConnection();

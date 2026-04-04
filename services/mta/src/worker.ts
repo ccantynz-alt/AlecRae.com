@@ -20,6 +20,7 @@ import { signMessage, addSignatureToMessage } from "./dkim/signer.js";
 import { SmtpClient } from "./smtp/client.js";
 import { RelayClient, relayConfigFromEnv, type RelaySendResult } from "./relay/relay.js";
 import { DeliveryOptimizer } from "./delivery/optimizer.js";
+import { getTracer, recordEmailSent, recordEmailSendDuration, recordActiveConnection, SpanKind } from "@emailed/shared";
 import type { QueuedEmail, DkimSignOptions } from "./types.js";
 
 // ─── Job payload as stored in Redis ─────────────────────────────────────────
@@ -160,11 +161,15 @@ export class MtaWorker {
     const { email } = job.data;
     const db = getDatabase();
     const attemptNumber = job.attemptsMade;
+    const sendStart = performance.now();
+    const tracer = getTracer("mta-worker");
 
     console.log(
       `[mta-worker] Processing job ${job.id} (messageId=${email.messageId}, ` +
         `attempt=${attemptNumber + 1}, recipients=${email.to.length})`,
     );
+
+    recordActiveConnection("mta-worker", 1);
 
     // ── 1. Update email status to processing ────────────────────────────
     await db
@@ -554,12 +559,19 @@ export class MtaWorker {
 
     // ── 5. Update overall email status ──────────────────────────────────
     const now = new Date();
+    const sendDurationMs = performance.now() - sendStart;
+
+    // Record telemetry for the send operation
+    recordActiveConnection("mta-worker", -1);
+    recordEmailSendDuration(email.domain, sendDurationMs);
 
     if (allBounced && email.to.length > 0) {
       await db
         .update(emails)
         .set({ status: "bounced", updatedAt: now })
         .where(eq(emails.id, email.id));
+
+      recordEmailSent(email.domain, "bounced");
 
       // Record bounce event
       await this.recordDeliveryEvent(db, email, "email.bounced").catch(() => {});
@@ -573,6 +585,8 @@ export class MtaWorker {
         })
         .where(eq(emails.id, email.id));
 
+      recordEmailSent(email.domain, "delivered");
+
       // Record delivery event
       await this.recordDeliveryEvent(db, email, "email.delivered").catch(() => {});
     } else if (anyDeferred) {
@@ -580,6 +594,8 @@ export class MtaWorker {
         .update(emails)
         .set({ status: "deferred", updatedAt: now })
         .where(eq(emails.id, email.id));
+
+      recordEmailSent(email.domain, "deferred");
 
       // Record deferred event
       await this.recordDeliveryEvent(db, email, "email.deferred").catch(() => {});
@@ -594,6 +610,8 @@ export class MtaWorker {
         .update(emails)
         .set({ status: "failed", updatedAt: now })
         .where(eq(emails.id, email.id));
+
+      recordEmailSent(email.domain, "failed");
     }
   }
 

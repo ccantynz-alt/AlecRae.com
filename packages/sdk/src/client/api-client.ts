@@ -66,6 +66,7 @@ function resolveConfig(config: ClientConfig): ResolvedConfig {
     timeout: config.timeout ?? DEFAULT_TIMEOUT,
     maxRetries: config.maxRetries ?? DEFAULT_MAX_RETRIES,
     headers: config.headers ?? {},
+    debug: config.debug ?? false,
   };
 }
 
@@ -185,6 +186,13 @@ export class ApiClient {
       }
 
       try {
+        if (this.config.debug) {
+          console.log(`[emailed-sdk] ${options.method} ${url}${attempt > 0 ? ` (retry ${attempt})` : ""}`);
+          if (options.body !== undefined) {
+            console.log(`[emailed-sdk] Request body:`, JSON.stringify(options.body, null, 2));
+          }
+        }
+
         const response = await fetch(url, {
           method: options.method,
           headers,
@@ -202,6 +210,10 @@ export class ApiClient {
           response.headers.forEach((value, key) => {
             responseHeaders[key] = value;
           });
+
+          if (this.config.debug) {
+            console.log(`[emailed-sdk] Response ${response.status}:`, JSON.stringify(data, null, 2));
+          }
 
           return {
             data,

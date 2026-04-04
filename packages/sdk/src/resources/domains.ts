@@ -7,6 +7,8 @@ import type {
   SdkDomain,
   AddDomainParams,
   DomainDnsRecords,
+  DomainDnsResponse,
+  DomainHealth,
   PaginatedList,
   PaginationParams,
 } from "../types.js";
@@ -103,6 +105,33 @@ export class Domains {
   async remove(domainId: string): Promise<ApiResponse<{ deleted: boolean }>> {
     return this.client.delete<{ deleted: boolean }>(
       `${BASE_PATH}/${encodeURIComponent(domainId)}`,
+    );
+  }
+
+  /**
+   * Get the DNS records with verification status for a domain.
+   *
+   * @param domainId  The domain identifier
+   * @returns DNS records with per-record verification status
+   */
+  async getDns(domainId: string): Promise<ApiResponse<DomainDnsResponse>> {
+    return this.client.get<DomainDnsResponse>(
+      `${BASE_PATH}/${encodeURIComponent(domainId)}/dns`,
+    );
+  }
+
+  /**
+   * Get a health report for a domain.
+   *
+   * Returns a score, DKIM key age, SPF lookup count, and actionable
+   * recommendations for improving deliverability.
+   *
+   * @param domainId  The domain identifier
+   * @returns Domain health report
+   */
+  async getHealth(domainId: string): Promise<ApiResponse<DomainHealth>> {
+    return this.client.get<DomainHealth>(
+      `${BASE_PATH}/${encodeURIComponent(domainId)}/health`,
     );
   }
 }

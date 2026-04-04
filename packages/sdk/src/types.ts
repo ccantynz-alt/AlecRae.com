@@ -17,6 +17,31 @@ export interface ClientConfig {
   readonly maxRetries?: number;
   /** Custom headers to include on every request */
   readonly headers?: Readonly<Record<string, string>>;
+  /** Enable request/response logging for debugging. Default: false */
+  readonly debug?: boolean;
+}
+
+/**
+ * Simplified configuration that accepts just an API key string.
+ *
+ * Usage:
+ * ```ts
+ * new Emailed({ apiKey: "em_live_...", baseUrl: "https://api.emailed.dev" });
+ * ```
+ */
+export interface SimpleClientConfig {
+  /** The API key for authentication */
+  readonly apiKey: string;
+  /** Base URL for the API. Default: "https://api.emailed.dev" */
+  readonly baseUrl?: string;
+  /** Request timeout in milliseconds. Default: 30000 */
+  readonly timeout?: number;
+  /** Maximum number of retries on transient failures. Default: 3 */
+  readonly maxRetries?: number;
+  /** Custom headers to include on every request */
+  readonly headers?: Readonly<Record<string, string>>;
+  /** Enable request/response logging for debugging. Default: false */
+  readonly debug?: boolean;
 }
 
 /** Resolved configuration with all defaults applied. */
@@ -26,6 +51,7 @@ export interface ResolvedConfig {
   readonly timeout: number;
   readonly maxRetries: number;
   readonly headers: Readonly<Record<string, string>>;
+  readonly debug: boolean;
 }
 
 // ─── HTTP Types ──────────────────────────────────────────────────────────────
@@ -290,6 +316,134 @@ export interface WebhookVerifyOptions {
   readonly secret: string;
   /** Maximum age of the event in seconds before it is rejected. Default: 300 */
   readonly tolerance?: number;
+}
+
+// ─── Webhook Resource Types ─────────────────────────────────────────────────
+
+/** A registered webhook endpoint. */
+export interface Webhook {
+  readonly id: string;
+  readonly url: string;
+  readonly events: readonly string[];
+  readonly secret: string;
+  readonly description: string | null;
+  readonly active: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** Parameters for creating a webhook endpoint. */
+export interface CreateWebhookParams {
+  readonly url: string;
+  readonly events: readonly string[];
+  readonly secret?: string;
+  readonly description?: string;
+  readonly active?: boolean;
+}
+
+/** Parameters for updating a webhook endpoint. */
+export interface UpdateWebhookParams {
+  readonly url?: string;
+  readonly events?: readonly string[];
+  readonly secret?: string;
+  readonly description?: string;
+  readonly active?: boolean;
+}
+
+/** A webhook delivery attempt record. */
+export interface WebhookDelivery {
+  readonly id: string;
+  readonly eventId: string;
+  readonly statusCode: number | null;
+  readonly responseBody: string | null;
+  readonly attemptCount: number;
+  readonly success: boolean;
+  readonly nextRetryAt: string | null;
+  readonly createdAt: string;
+}
+
+// ─── Event Types ────────────────────────────────────────────────────────────
+
+/** An event recorded by the platform. */
+export interface PlatformEvent {
+  readonly id: string;
+  readonly type: string;
+  readonly messageId: string | null;
+  readonly recipient: string | null;
+  readonly timestamp: string;
+  readonly data?: unknown;
+}
+
+/** Parameters for listing events. */
+export interface EventListParams extends PaginationParams {
+  readonly type?: string;
+  readonly messageId?: string;
+  readonly startDate?: string;
+  readonly endDate?: string;
+}
+
+// ─── Billing Types ──────────────────────────────────────────────────────────
+
+/** Current usage statistics for the account. */
+export interface BillingUsage {
+  readonly emailsSent: number;
+  readonly percentUsed: number;
+  readonly planTier: string;
+  readonly periodStartedAt: string;
+}
+
+/** Current plan details including limits and usage. */
+export interface BillingPlan {
+  readonly planId: string;
+  readonly name: string;
+  readonly limits: {
+    readonly emailsPerMonth: number;
+    readonly domains: number;
+    readonly webhooks: number;
+  };
+  readonly usage: {
+    readonly emailsSent: number;
+    readonly percentUsed: number;
+  };
+  readonly periodStartedAt: string;
+}
+
+// ─── Domain Health Types ────────────────────────────────────────────────────
+
+/** Domain health report. */
+export interface DomainHealth {
+  readonly domain: string;
+  readonly score: number;
+  readonly dkimKeyAge: number;
+  readonly dkimRotationNeeded: boolean;
+  readonly spfLookupCount: number;
+  readonly spfTooManyLookups: boolean;
+  readonly recommendations: readonly string[];
+  readonly verification: {
+    readonly overall: string;
+    readonly spf: string;
+    readonly dkim: string;
+    readonly dmarc: string;
+    readonly mx: string;
+    readonly returnPath: string;
+  };
+}
+
+/** Domain DNS records response from the /dns endpoint. */
+export interface DomainDnsResponse {
+  readonly domain: string;
+  readonly records: readonly DomainDnsRecord[];
+}
+
+/** A single DNS record with verification status. */
+export interface DomainDnsRecord {
+  readonly type: string;
+  readonly name: string;
+  readonly value: string;
+  readonly ttl: number;
+  readonly priority?: number;
+  readonly verified: boolean;
+  readonly lastCheckedAt: string | null;
 }
 
 // ─── Error Types ─────────────────────────────────────────────────────────────
