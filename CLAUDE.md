@@ -18,7 +18,7 @@
 ## LIVE STATUS — READ THIS FIRST
 
 **Last updated: 2026-04-04**
-**Overall: ~85% complete. Core email sending/receiving works. Billing UI and polish remain.**
+**Overall: ~95% complete. All core features done. Bounces page + SDK docs in progress.**
 
 ### Backend Services (API + Workers)
 | Service | Status | Notes |
@@ -44,8 +44,8 @@
 | Page | Status | Notes |
 |------|--------|-------|
 | Landing page `/` | ✅ DONE | Hero, features, CTAs |
-| Login `/login` | ⚠️ FIX NEEDED | Passkey buttons non-functional — need removal |
-| Register `/register` | ⚠️ FIX NEEDED | Same passkey issue |
+| Login `/login` | ✅ DONE | Email/password auth, passkeys removed |
+| Register `/register` | ✅ DONE | Email/password registration |
 | Inbox `/inbox` | ✅ DONE | Real data, search, reply/forward |
 | Compose `/compose` | ✅ DONE | Send via API, reply/forward prefill |
 | Domains `/domains` | ✅ DONE | Add, verify, DNS records, health |
@@ -54,9 +54,9 @@
 | Analytics `/analytics` | ✅ DONE | Overview, time series, domain breakdown |
 | Settings `/settings` | ✅ DONE | Profile, account |
 | API Keys `/api-keys` | ✅ DONE | Create, revoke, copy |
-| **Billing `/billing`** | ❌ MISSING | **Stripe API exists but NO UI. BLOCKING.** |
-| **Suppressions `/suppressions`** | ❌ MISSING | API exists, no dashboard page |
-| **Bounces `/bounces`** | ❌ MISSING | API exists, no dashboard page |
+| Billing `/billing` | ✅ DONE | Plan cards, usage meter, Stripe checkout + portal |
+| Suppressions `/suppressions` | ✅ DONE | List, add, remove, import, search |
+| Bounces `/bounces` | ⏳ BUILDING | Agent working on it now |
 
 ### Admin Dashboard (apps/admin, port 3002)
 | Page | Status |
@@ -87,7 +87,7 @@
 | Client + resources | ✅ Messages, Domains, Webhooks, Events, Billing, Contacts, Analytics |
 | Webhook verification | ✅ HMAC-SHA256 |
 | Examples | ✅ send-email, webhook-handler, domain-setup |
-| **README.md** | ❌ MISSING | **No SDK documentation** |
+| README.md | ⏳ BUILDING | Agent working on it now |
 | package.json (npm ready) | ✅ exports, types, files configured |
 
 ### Packages
