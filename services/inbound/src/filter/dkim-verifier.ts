@@ -336,7 +336,7 @@ function parseDkimSignature(rawHeader: string): DkimSignatureFields {
   const b = (tags.get("b") ?? "").replace(/\s+/g, "");
   const bh = (tags.get("bh") ?? "").replace(/\s+/g, "");
 
-  return {
+  const result: DkimSignatureFields = {
     v: tags.get("v")!,
     a: tags.get("a")!,
     b,
@@ -345,10 +345,16 @@ function parseDkimSignature(rawHeader: string): DkimSignatureFields {
     d: tags.get("d")!,
     h: tags.get("h")!,
     s: tags.get("s")!,
-    l: tags.get("l"),
-    t: tags.get("t"),
-    x: tags.get("x"),
   };
+
+  const l = tags.get("l");
+  if (l !== undefined) result.l = l;
+  const t = tags.get("t");
+  if (t !== undefined) result.t = t;
+  const x = tags.get("x");
+  if (x !== undefined) result.x = x;
+
+  return result;
 }
 
 /**

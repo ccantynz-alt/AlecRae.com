@@ -16,6 +16,28 @@ import { MailboxRouter } from "./routing/router.js";
 import type { EmailStore } from "./storage/store.js";
 import type { SmtpSession, SmtpEnvelope } from "./types.js";
 
+/**
+ * Split raw email bytes into header block (string) and body (Uint8Array).
+ */
+function splitRawMessage(rawData: Uint8Array): { rawHeaders: string; rawBody: Uint8Array } {
+  for (let i = 0; i < rawData.length - 1; i++) {
+    if (rawData[i] === 0x0d && rawData[i + 1] === 0x0a &&
+        i + 3 < rawData.length && rawData[i + 2] === 0x0d && rawData[i + 3] === 0x0a) {
+      return {
+        rawHeaders: new TextDecoder().decode(rawData.subarray(0, i)),
+        rawBody: rawData.subarray(i + 4),
+      };
+    }
+    if (rawData[i] === 0x0a && rawData[i + 1] === 0x0a) {
+      return {
+        rawHeaders: new TextDecoder().decode(rawData.subarray(0, i)),
+        rawBody: rawData.subarray(i + 2),
+      };
+    }
+  }
+  return { rawHeaders: new TextDecoder().decode(rawData), rawBody: new Uint8Array(0) };
+}
+
 interface HttpInboundConfig {
   /** Shared parser instance */
   parser: MimeParser;
@@ -114,8 +136,9 @@ export function createHttpInbound(config: HttpInboundConfig): Hono {
         `[HTTP-Inbound] Received message ${parsed.messageId} from ${envelopeFrom} (${rawData.length} bytes)`,
       );
 
-      // 3. Run the filter pipeline
-      const verdict = await pipeline.process(envelope, parsed, senderIp);
+      // 3. Run the filter pipeline (with raw headers/body for DKIM verification)
+      const { rawHeaders: hdrs, rawBody: bdy } = splitRawMessage(rawData);
+      const verdict = await pipeline.process(envelope, parsed, senderIp, hdrs, bdy);
       console.log(
         `[HTTP-Inbound] Filter verdict for ${parsed.messageId}: ${verdict.action} (score: ${verdict.score})`,
       );
@@ -219,7 +242,8 @@ export function createHttpInbound(config: HttpInboundConfig): Hono {
         const envelope: SmtpEnvelope = { mailFrom: envelopeFrom, rcptTo: envelopeTo };
         const senderIp = msg.senderIp ?? "0.0.0.0";
 
-        const verdict = await pipeline.process(envelope, parsed, senderIp);
+        const { rawHeaders: hdrs2, rawBody: bdy2 } = splitRawMessage(rawData);
+        const verdict = await pipeline.process(envelope, parsed, senderIp, hdrs2, bdy2);
         if (verdict.action === "reject") {
           results.push({ messageId: parsed.messageId, status: "rejected", error: verdict.reason ?? "Rejected" });
           continue;

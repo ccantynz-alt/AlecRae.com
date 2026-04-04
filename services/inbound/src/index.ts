@@ -18,6 +18,44 @@ import type { SmtpSession, SmtpEnvelope } from "./types.js";
  *     other HTTP-based forwarders POST raw MIME to /inbound/webhook
  */
 
+/**
+ * Split raw email bytes into the header block (as string) and body (as Uint8Array).
+ * Headers and body are separated by a blank line (CRLF CRLF or LF LF).
+ */
+function splitRawMessage(rawData: Uint8Array): { rawHeaders: string; rawBody: Uint8Array } {
+  const bytes = rawData;
+  // Search for CRLFCRLF (\r\n\r\n) or LFLF (\n\n)
+  let splitIndex = -1;
+  let separatorLength = 0;
+
+  for (let i = 0; i < bytes.length - 1; i++) {
+    if (bytes[i] === 0x0d && bytes[i + 1] === 0x0a &&
+        i + 3 < bytes.length && bytes[i + 2] === 0x0d && bytes[i + 3] === 0x0a) {
+      splitIndex = i;
+      separatorLength = 4;
+      break;
+    }
+    if (bytes[i] === 0x0a && bytes[i + 1] === 0x0a) {
+      splitIndex = i;
+      separatorLength = 2;
+      break;
+    }
+  }
+
+  if (splitIndex === -1) {
+    // No body found — entire message is headers
+    return {
+      rawHeaders: new TextDecoder().decode(bytes),
+      rawBody: new Uint8Array(0),
+    };
+  }
+
+  return {
+    rawHeaders: new TextDecoder().decode(bytes.subarray(0, splitIndex)),
+    rawBody: bytes.subarray(splitIndex + separatorLength),
+  };
+}
+
 const parser = new MimeParser();
 const pipeline = new FilterPipeline();
 const router = new MailboxRouter();
@@ -38,8 +76,9 @@ async function handleInboundMessage(
     `[Inbound] Parsed message ${parsed.messageId} from ${envelope.mailFrom} (${rawData.length} bytes)`,
   );
 
-  // 2. Run the filter pipeline (pass sender IP for SPF validation)
-  const verdict = await pipeline.process(envelope, parsed, session.remoteAddress);
+  // 2. Run the filter pipeline (pass sender IP for SPF validation, raw data for DKIM)
+  const { rawHeaders, rawBody } = splitRawMessage(rawData);
+  const verdict = await pipeline.process(envelope, parsed, session.remoteAddress, rawHeaders, rawBody);
   console.log(
     `[Inbound] Filter verdict for ${parsed.messageId}: ${verdict.action} (score: ${verdict.score})`,
   );

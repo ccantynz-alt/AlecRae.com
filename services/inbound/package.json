@@ -18,6 +18,7 @@
     "@emailed/shared": "workspace:*",
     "@emailed/db": "workspace:*",
     "@emailed/mta": "workspace:*",
+    "@emailed/ai-engine": "workspace:*",
     "@emailed/email-parser": "workspace:*",
     "drizzle-orm": "^0.36.0",
     "hono": "^4.6.0",

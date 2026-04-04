@@ -1,6 +1,10 @@
 import { checkSpf } from "@emailed/mta/src/spf/validator.js";
 import { evaluateDmarc, determineAction } from "@emailed/mta/src/dmarc/enforcer.js";
+import { verifyDkim } from "./dkim-verifier.js";
+import type { DkimVerifyResult } from "./dkim-verifier.js";
 import type { ParsedEmail, AuthenticationResult, FilterVerdict, SmtpEnvelope } from "../types.js";
+import { classifyEmail, isAIAvailable } from "@emailed/ai-engine/classifier";
+import type { EmailClassificationInput } from "@emailed/ai-engine/classifier";
 
 // --- Filter Stage Interface ---
 
@@ -8,6 +12,8 @@ interface FilterContext {
   envelope: SmtpEnvelope;
   email: ParsedEmail;
   senderIp: string;
+  rawHeaders: string;
+  rawBody: Uint8Array;
   verdict: FilterVerdict;
   metadata: Map<string, unknown>;
 }
@@ -61,29 +67,46 @@ async function authenticationCheck(ctx: FilterContext): Promise<FilterContext> {
     ctx.verdict.flags.add("spf_softfail");
   }
 
-  // ── DKIM: parse signature headers (cryptographic verification is TODO) ──
-  const dkimSignature = email.headers.find((h) => h.key === "dkim-signature");
-  let dkimDomain: string | undefined;
-  let dkimSelector: string | undefined;
-  let dkimStatus: AuthenticationResult["result"] = "none" as AuthenticationResult["result"];
-
-  if (dkimSignature) {
-    const domainMatch = dkimSignature.value.match(/d=([^\s;]+)/);
-    const selectorMatch = dkimSignature.value.match(/s=([^\s;]+)/);
-    dkimDomain = domainMatch?.[1];
-    dkimSelector = selectorMatch?.[1];
-    // TODO: full DKIM cryptographic verification (DNS key fetch + signature check)
-    // For now, mark as neutral since we can't verify the signature without a verifier
-    dkimStatus = "neutral" as AuthenticationResult["result"];
+  // ── DKIM: full cryptographic verification via RFC 6376 ──────────────
+  let dkimResults: DkimVerifyResult[];
+  try {
+    dkimResults = await verifyDkim(ctx.rawHeaders, ctx.rawBody);
+  } catch {
+    dkimResults = [{
+      status: "temperror",
+      domain: "",
+      selector: "",
+      details: "DKIM verification threw an unexpected error",
+    }];
   }
 
-  ctx.verdict.authResults.push({
-    method: "dkim",
-    result: dkimStatus,
-    domain: dkimDomain,
-    selector: dkimSelector,
-    details: dkimSignature ? "DKIM signature present (verification pending)" : "No DKIM signature found",
-  });
+  // The best result is first (sorted by verifyDkim)
+  const bestDkim = dkimResults[0]!;
+  const dkimDomain: string | undefined = bestDkim.domain || undefined;
+  const dkimSelector: string | undefined = bestDkim.selector || undefined;
+  const dkimStatus: AuthenticationResult["result"] = bestDkim.status === "none"
+    ? "none"
+    : bestDkim.status as AuthenticationResult["result"];
+
+  // Push a result for each DKIM signature verified
+  for (const dkimResult of dkimResults) {
+    ctx.verdict.authResults.push({
+      method: "dkim",
+      result: dkimResult.status === "none" ? "none" : dkimResult.status as AuthenticationResult["result"],
+      domain: dkimResult.domain || undefined,
+      selector: dkimResult.selector || undefined,
+      details: dkimResult.details,
+    });
+  }
+
+  // Add spam score for DKIM failures
+  if (dkimStatus === "fail") {
+    ctx.verdict.score = (ctx.verdict.score ?? 0) + 2;
+    ctx.verdict.flags.add("dkim_fail");
+  } else if (dkimStatus === "permerror") {
+    ctx.verdict.score = (ctx.verdict.score ?? 0) + 1;
+    ctx.verdict.flags.add("dkim_permerror");
+  }
 
   // ── DMARC: real DNS-based policy evaluation via RFC 7489 ─────────────
   const fromDomain = email.from[0]?.address.split("@")[1];
@@ -400,13 +423,23 @@ export class FilterPipeline {
 
   /**
    * Run the full filter pipeline on an email.
-   * @param senderIp - The IP address of the sending SMTP server (for SPF checks)
+   * @param senderIp  - The IP address of the sending SMTP server (for SPF checks)
+   * @param rawHeaders - The raw header block of the email (for DKIM verification)
+   * @param rawBody    - The raw body of the email (for DKIM verification)
    */
-  async process(envelope: SmtpEnvelope, email: ParsedEmail, senderIp: string = ""): Promise<FilterVerdict> {
+  async process(
+    envelope: SmtpEnvelope,
+    email: ParsedEmail,
+    senderIp: string = "",
+    rawHeaders: string = "",
+    rawBody: Uint8Array = new Uint8Array(0),
+  ): Promise<FilterVerdict> {
     let ctx: FilterContext = {
       envelope,
       email,
       senderIp,
+      rawHeaders,
+      rawBody,
       verdict: {
         action: "accept",
         score: 0,

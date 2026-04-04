@@ -29,6 +29,7 @@ import { account } from "./routes/account.js";
 import { auth } from "./routes/auth.js";
 import { health } from "./routes/health.js";
 import { admin } from "./routes/admin.js";
+import { billing } from "./routes/billing.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
@@ -106,6 +107,11 @@ app.use("/v1/analytics/*", authMiddleware, rateLimiter);
 app.use("/v1/suppressions/*", authMiddleware, rateLimiter);
 app.use("/v1/api-keys/*", authMiddleware, rateLimiter);
 app.use("/v1/account/*", authMiddleware, rateLimiter);
+app.use("/v1/billing/checkout", authMiddleware, rateLimiter);
+app.use("/v1/billing/portal", authMiddleware, rateLimiter);
+app.use("/v1/billing/usage", authMiddleware, rateLimiter);
+app.use("/v1/billing/plan", authMiddleware, rateLimiter);
+// Note: /v1/billing/webhook is NOT behind auth — Stripe verifies via signature
 
 // Mount route handlers
 app.route("/v1/messages", messages);
@@ -115,6 +121,7 @@ app.route("/v1/analytics", analytics);
 app.route("/v1/suppressions", suppressions);
 app.route("/v1/api-keys", apiKeysRouter);
 app.route("/v1/account", account);
+app.route("/v1/billing", billing);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────
 
@@ -170,6 +177,9 @@ initSearchIndex().catch((err) => {
   console.warn("[api] Meilisearch init failed (search will be unavailable):", err);
 });
 
+// Start the webhook delivery worker (BullMQ consumer)
+startWebhookWorker();
+
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 
 let isShuttingDown = false;
@@ -186,6 +196,10 @@ async function shutdown(signal: string): Promise<void> {
   }, 15_000);
 
   try {
+    // Close the webhook delivery worker
+    await stopWebhookWorker();
+    console.log("[api] Webhook worker stopped");
+
     // Close the BullMQ send queue
     await closeSendQueue();
     console.log("[api] Send queue closed");
