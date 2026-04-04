@@ -4,38 +4,46 @@
   "private": true,
   "description": "Core AI/ML engine for the Emailed platform — spam detection, reputation scoring, content analysis, and intelligent email assistance",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "exports": {
     ".": {
+      "bun": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./spam": {
+      "bun": "./src/spam/classifier.ts",
       "types": "./dist/spam/classifier.d.ts",
       "import": "./dist/spam/classifier.js"
     },
     "./reputation": {
+      "bun": "./src/reputation/scorer.ts",
       "types": "./dist/reputation/scorer.d.ts",
       "import": "./dist/reputation/scorer.js"
     },
     "./content": {
+      "bun": "./src/content/analyzer.ts",
       "types": "./dist/content/analyzer.d.ts",
       "import": "./dist/content/analyzer.js"
     },
     "./compose": {
+      "bun": "./src/compose/assistant.ts",
       "types": "./dist/compose/assistant.d.ts",
       "import": "./dist/compose/assistant.js"
     },
     "./priority": {
+      "bun": "./src/priority/ranker.ts",
       "types": "./dist/priority/ranker.d.ts",
       "import": "./dist/priority/ranker.js"
     },
     "./relationships": {
+      "bun": "./src/relationships/graph.ts",
       "types": "./dist/relationships/graph.d.ts",
       "import": "./dist/relationships/graph.js"
     },
     "./classifier": {
+      "bun": "./src/classifier.ts",
       "types": "./dist/classifier.d.ts",
       "import": "./dist/classifier.js"
     }
