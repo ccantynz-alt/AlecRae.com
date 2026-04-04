@@ -16,7 +16,15 @@
     "declarationMap": true,
     "sourceMap": true,
     "isolatedModules": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "@emailed/shared": ["./packages/shared/src/index.ts"],
+      "@emailed/db": ["./packages/db/src/index.ts"],
+      "@emailed/ui": ["./packages/ui/src/index.ts"],
+      "@emailed/crypto": ["./packages/crypto/src/index.ts"],
+      "@emailed/sdk": ["./packages/sdk/src/index.ts"],
+      "@emailed/email-parser": ["./packages/email-parser/src/index.ts"]
+    }
   },
   "exclude": ["node_modules", "dist", ".next", "coverage"]
 }

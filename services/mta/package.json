@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Mail Transfer Agent - Custom SMTP server and outbound delivery engine",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -15,6 +16,10 @@
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
+    "@emailed/shared": "workspace:*",
+    "@emailed/db": "workspace:*",
+    "@emailed/crypto": "workspace:*",
+    "@emailed/email-parser": "workspace:*",
     "bullmq": "^5.0.0",
     "ioredis": "^5.4.0"
   },

@@ -46,6 +46,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@emailed/shared": "workspace:*",
+    "@emailed/db": "workspace:*",
     "@anthropic-ai/sdk": "^0.30.0",
     "ioredis": "^5.4.0",
     "pino": "^9.0.0",
