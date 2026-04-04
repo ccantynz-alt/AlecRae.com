@@ -51,6 +51,7 @@ export class MtaWorker {
   private readonly config: WorkerConfig;
   private readonly optimizer: DeliveryOptimizer;
   private shuttingDown = false;
+  private maintenanceInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config?: Partial<WorkerConfig>) {
     this.config = { ...DEFAULT_WORKER_CONFIG, ...config };
@@ -97,6 +98,12 @@ export class MtaWorker {
       console.error(`[mta-worker] Worker error: ${error.message}`);
     });
 
+    // Start maintenance interval: reset throttle counters and prune stale state
+    this.maintenanceInterval = setInterval(() => {
+      this.optimizer.resetHourlyCounters();
+      this.optimizer.pruneStaleState();
+    }, 60 * 60 * 1000); // Every hour
+
     console.log("[mta-worker] Worker started and listening for jobs");
   }
 
@@ -108,6 +115,11 @@ export class MtaWorker {
     this.shuttingDown = true;
 
     console.log("[mta-worker] Shutting down worker...");
+
+    if (this.maintenanceInterval) {
+      clearInterval(this.maintenanceInterval);
+      this.maintenanceInterval = null;
+    }
 
     if (this.worker) {
       await this.worker.close();
@@ -209,15 +221,38 @@ export class MtaWorker {
       }
     }
 
-    // ── 4. Deliver to each recipient ────────────────────────────────────
-    //   We track per-recipient outcomes. If ALL recipients bounce, the
-    //   email is marked bounced. If any are deferred, we throw so BullMQ
-    //   retries the entire job.
+    // ── 4. Deliver to each recipient via the Delivery Optimizer ────────
+    //   The optimizer handles MX resolution, ISP throttling, connection
+    //   pooling, and retry timing. We track per-recipient outcomes.
 
     let anyDeferred = false;
     let allBounced = true;
     let anyDelivered = false;
     const errors: string[] = [];
+
+    // Transport callback: uses SmtpClient to deliver to a specific MX host
+    const transport = async (
+      host: string,
+      port: number,
+      from: string,
+      to: string,
+      data: string,
+    ): Promise<{ code: number; message: string }> => {
+      const client = new SmtpClient({
+        localHostname: this.config.localHostname,
+        opportunisticTls: true,
+        requireTls: false,
+      });
+
+      const result = await client.attemptDelivery(host, from, to, data);
+      if (result.ok) {
+        return { code: 250, message: result.value.response };
+      }
+      // Parse response code from error message
+      const codeMatch = result.error.message.match(/\b([45]\d{2})\b/);
+      const code = codeMatch ? parseInt(codeMatch[1]!, 10) : 450;
+      throw Object.assign(new Error(result.error.message), { code });
+    };
 
     for (const recipient of email.to) {
       // Skip suppressed recipients
@@ -241,24 +276,22 @@ export class MtaWorker {
 
         continue;
       }
-      const client = new SmtpClient({
-        localHostname: this.config.localHostname,
-        opportunisticTls: true,
-        requireTls: false,
-      });
 
-      try {
-        // Use the SmtpClient's built-in MX resolution and delivery
-        const result = await client.sendMail(
-          email.from,
-          recipient,
-          signedMessage,
-        );
+      const optimizerResult = await this.optimizer.deliverMessage(
+        email.id,
+        recipient,
+        signedMessage,
+        email.from,
+        transport,
+        attemptNumber,
+      );
 
-        const now = new Date();
+      const now = new Date();
 
-        if (result.ok) {
-          // ── Delivered ──────────────────────────────────────────────
+      if (optimizerResult.ok) {
+        const { attempt } = optimizerResult.value;
+
+        if (attempt.status === "delivered") {
           allBounced = false;
           anyDelivered = true;
 
@@ -266,9 +299,9 @@ export class MtaWorker {
             .update(deliveryResults)
             .set({
               status: "delivered",
-              remoteResponse: result.value.response,
-              remoteResponseCode: 250,
-              mxHost: result.value.host,
+              remoteResponse: `Delivered via ${attempt.mxHost}`,
+              remoteResponseCode: attempt.lastStatusCode ?? 250,
+              mxHost: attempt.mxHost,
               attemptCount: attemptNumber + 1,
               lastAttemptAt: now,
               deliveredAt: now,
@@ -282,84 +315,75 @@ export class MtaWorker {
             );
 
           console.log(
-            `[mta-worker] Delivered to ${recipient} via ${result.value.host}`,
+            `[mta-worker] Delivered to ${recipient} via ${attempt.mxHost}`,
           );
-        } else {
-          // ── Failed — determine if bounce or deferral ──────────────
-          const errorMsg = result.error.message;
-          const isPermanent =
-            errorMsg.includes("5") && /\b5\d{2}\b/.test(errorMsg);
-
-          if (isPermanent) {
-            // Permanent failure — bounce
-            await db
-              .update(deliveryResults)
-              .set({
-                status: "bounced",
-                remoteResponse: errorMsg,
-                attemptCount: attemptNumber + 1,
-                lastAttemptAt: now,
-                ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
-              })
-              .where(
-                and(
-                  eq(deliveryResults.emailId, email.id),
-                  eq(deliveryResults.recipientAddress, recipient),
-                ),
-              );
-
-            // Auto-suppress the recipient on hard bounce
-            if (domainRecord) {
-              const suppressId = crypto.randomUUID().replace(/-/g, "");
-              await db
-                .insert(suppressionLists)
-                .values({
-                  id: suppressId,
-                  email: recipient.toLowerCase(),
-                  domainId: domainRecord.id,
-                  reason: "bounce",
-                })
-                .onConflictDoNothing()
-                .catch(() => {});
-
-              console.log(
-                `[mta-worker] Auto-suppressed ${recipient} (hard bounce)`,
-              );
-            }
-
-            console.warn(
-              `[mta-worker] Permanent failure for ${recipient}: ${errorMsg}`,
+        } else if (attempt.status === "bounced") {
+          await db
+            .update(deliveryResults)
+            .set({
+              status: "bounced",
+              remoteResponse: attempt.lastError ?? "Permanent failure",
+              attemptCount: attemptNumber + 1,
+              lastAttemptAt: now,
+              ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
+            })
+            .where(
+              and(
+                eq(deliveryResults.emailId, email.id),
+                eq(deliveryResults.recipientAddress, recipient),
+              ),
             );
-          } else {
-            // Transient failure — defer
-            allBounced = false;
-            anyDeferred = true;
 
+          // Auto-suppress the recipient on hard bounce
+          if (domainRecord) {
+            const suppressId = crypto.randomUUID().replace(/-/g, "");
             await db
-              .update(deliveryResults)
-              .set({
-                status: "deferred",
-                remoteResponse: errorMsg,
-                attemptCount: attemptNumber + 1,
-                lastAttemptAt: now,
-                ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
+              .insert(suppressionLists)
+              .values({
+                id: suppressId,
+                email: recipient.toLowerCase(),
+                domainId: domainRecord.id,
+                reason: "bounce",
               })
-              .where(
-                and(
-                  eq(deliveryResults.emailId, email.id),
-                  eq(deliveryResults.recipientAddress, recipient),
-                ),
-              );
+              .onConflictDoNothing()
+              .catch(() => {});
 
-            errors.push(`${recipient}: ${errorMsg}`);
-            console.warn(
-              `[mta-worker] Deferred for ${recipient}: ${errorMsg}`,
+            console.log(
+              `[mta-worker] Auto-suppressed ${recipient} (hard bounce)`,
             );
           }
+
+          console.warn(
+            `[mta-worker] Bounced for ${recipient}: ${attempt.lastError}`,
+          );
+        } else if (attempt.status === "deferred") {
+          allBounced = false;
+          anyDeferred = true;
+
+          await db
+            .update(deliveryResults)
+            .set({
+              status: "deferred",
+              remoteResponse: attempt.lastError ?? "Deferred",
+              attemptCount: attemptNumber + 1,
+              lastAttemptAt: now,
+              ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
+            })
+            .where(
+              and(
+                eq(deliveryResults.emailId, email.id),
+                eq(deliveryResults.recipientAddress, recipient),
+              ),
+            );
+
+          errors.push(`${recipient}: ${attempt.lastError ?? "deferred"}`);
+          console.warn(
+            `[mta-worker] Deferred for ${recipient}: ${attempt.lastError}`,
+          );
         }
-      } catch (error: unknown) {
-        const errorMsg =
-          error instanceof Error ? error.message : String(error);
+      } else {
+        // Optimizer returned an error result — treat as deferred
+        const errorMsg = optimizerResult.error.message;
         allBounced = false;
         anyDeferred = true;
 
@@ -369,10 +393,8 @@ export class MtaWorker {
             status: "deferred",
             remoteResponse: errorMsg,
             attemptCount: attemptNumber + 1,
-            lastAttemptAt: new Date(),
-            ...(attemptNumber === 0
-              ? { firstAttemptAt: new Date() }
-              : {}),
+            lastAttemptAt: now,
+            ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
           })
           .where(
             and(
@@ -383,7 +405,7 @@ export class MtaWorker {
 
         errors.push(`${recipient}: ${errorMsg}`);
         console.error(
-          `[mta-worker] Exception delivering to ${recipient}: ${errorMsg}`,
+          `[mta-worker] Optimizer error for ${recipient}: ${errorMsg}`,
         );
       }
     }
