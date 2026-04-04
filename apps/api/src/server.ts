@@ -23,6 +23,8 @@ import { domains } from "./routes/domains.js";
 import { webhooks } from "./routes/webhooks.js";
 import { analytics } from "./routes/analytics.js";
 import { suppressions } from "./routes/suppressions.js";
+import { tracking } from "./routes/tracking.js";
+import { apiKeysRouter } from "./routes/api-keys.js";
 import { health } from "./routes/health.js";
 import { closeConnection } from "@emailed/db";
 
@@ -82,6 +84,9 @@ app.get("/health", (c) => {
 // Deep health check with dependency verification (also no auth)
 app.route("/v1/health", health);
 
+// Tracking endpoints (no auth — embedded in emails)
+app.route("/t", tracking);
+
 // ─── Authenticated routes ──────────────────────────────────────────────────
 
 app.use("/v1/*", authMiddleware);
@@ -93,6 +98,7 @@ app.route("/v1/domains", domains);
 app.route("/v1/webhooks", webhooks);
 app.route("/v1/analytics", analytics);
 app.route("/v1/suppressions", suppressions);
+app.route("/v1/api-keys", apiKeysRouter);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────
 
