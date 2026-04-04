@@ -3,6 +3,7 @@ import { MimeParser } from "./parser/mime-parser.js";
 import { FilterPipeline } from "./filter/pipeline.js";
 import { MailboxRouter } from "./routing/router.js";
 import { InMemoryEmailStore } from "./storage/store.js";
+import { PostgresEmailStore } from "./storage/postgres-store.js";
 import type { SmtpSession, SmtpEnvelope } from "./types.js";
 
 /**
@@ -14,7 +15,9 @@ import type { SmtpSession, SmtpEnvelope } from "./types.js";
 const parser = new MimeParser();
 const pipeline = new FilterPipeline();
 const router = new MailboxRouter();
-const store = new InMemoryEmailStore();
+const store = process.env["DATABASE_URL"]
+  ? new PostgresEmailStore()
+  : new InMemoryEmailStore();
 
 async function handleInboundMessage(
   session: SmtpSession,
