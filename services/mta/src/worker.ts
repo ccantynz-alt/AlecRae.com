@@ -18,6 +18,7 @@ import { eq, and } from "drizzle-orm";
 import { getDatabase, emails, deliveryResults, domains, suppressionLists, events } from "@emailed/db";
 import { signMessage, addSignatureToMessage } from "./dkim/signer.js";
 import { SmtpClient } from "./smtp/client.js";
+import { RelayClient, relayConfigFromEnv, type RelaySendResult } from "./relay/relay.js";
 import { DeliveryOptimizer } from "./delivery/optimizer.js";
 import type { QueuedEmail, DkimSignOptions } from "./types.js";
 
@@ -35,6 +36,8 @@ export interface WorkerConfig {
   queueName: string;
   concurrency: number;
   localHostname: string;
+  /** When true, use the relay client (SES/MailChannels/SMTP relay) instead of direct MX delivery. */
+  useRelay: boolean;
 }
 
 const DEFAULT_WORKER_CONFIG: WorkerConfig = {
@@ -42,6 +45,7 @@ const DEFAULT_WORKER_CONFIG: WorkerConfig = {
   queueName: process.env["MTA_QUEUE_NAME"] ?? "emailed:outbound",
   concurrency: parseInt(process.env["MTA_WORKER_CONCURRENCY"] ?? "10", 10),
   localHostname: process.env["MTA_HOSTNAME"] ?? "mail.emailed.dev",
+  useRelay: !!process.env["RELAY_PROVIDER"],
 };
 
 // ─── MtaWorker ──────────────────────────────────────────────────────────────
@@ -50,12 +54,27 @@ export class MtaWorker {
   private worker: Worker<EmailJobData> | null = null;
   private readonly config: WorkerConfig;
   private readonly optimizer: DeliveryOptimizer;
+  private readonly relayClient: RelayClient | null;
   private shuttingDown = false;
   private maintenanceInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config?: Partial<WorkerConfig>) {
     this.config = { ...DEFAULT_WORKER_CONFIG, ...config };
     this.optimizer = new DeliveryOptimizer();
+
+    // Initialise relay client if configured
+    if (this.config.useRelay) {
+      try {
+        this.relayClient = new RelayClient(relayConfigFromEnv());
+        console.log(`[mta-worker] Relay client initialised (provider: ${this.relayClient.provider})`);
+      } catch (error) {
+        console.error(`[mta-worker] Failed to initialise relay client: ${error}`);
+        console.warn("[mta-worker] Falling back to direct MX delivery");
+        this.relayClient = null;
+      }
+    } else {
+      this.relayClient = null;
+    }
   }
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
@@ -221,14 +240,136 @@ export class MtaWorker {
       }
     }
 
-    // ── 4. Deliver to each recipient via the Delivery Optimizer ────────
-    //   The optimizer handles MX resolution, ISP throttling, connection
-    //   pooling, and retry timing. We track per-recipient outcomes.
+    // ── 4. Deliver to each recipient ──────────────────────────────────
+    //   When a relay is configured, bypass the delivery optimizer and send
+    //   directly through the relay (SES / MailChannels / SMTP relay).
+    //   Otherwise, fall back to direct MX delivery via the optimizer.
 
     let anyDeferred = false;
     let allBounced = true;
     let anyDelivered = false;
     const errors: string[] = [];
+
+    // ── 4a. Relay path: send through the configured relay provider ──
+    if (this.relayClient) {
+      // Filter out suppressed recipients first
+      const activeRecipients: string[] = [];
+      for (const recipient of email.to) {
+        if (suppressedSet.has(recipient.toLowerCase())) {
+          console.log(`[mta-worker] Skipping suppressed recipient: ${recipient}`);
+          await db
+            .update(deliveryResults)
+            .set({
+              status: "dropped",
+              remoteResponse: "Recipient is on the suppression list",
+              attemptCount: 1,
+              lastAttemptAt: new Date(),
+            })
+            .where(
+              and(
+                eq(deliveryResults.emailId, email.id),
+                eq(deliveryResults.recipientAddress, recipient),
+              ),
+            );
+        } else {
+          activeRecipients.push(recipient);
+        }
+      }
+
+      if (activeRecipients.length > 0) {
+        const relayResult = await this.relayClient.send(
+          email.from,
+          activeRecipients,
+          signedMessage,
+        );
+
+        const now = new Date();
+
+        if (relayResult.success) {
+          allBounced = false;
+          anyDelivered = true;
+
+          for (const recipient of activeRecipients) {
+            await db
+              .update(deliveryResults)
+              .set({
+                status: "delivered",
+                remoteResponse: relayResult.response ?? `Delivered via ${this.relayClient.provider} relay`,
+                mxHost: `relay:${this.relayClient.provider}`,
+                attemptCount: attemptNumber + 1,
+                lastAttemptAt: now,
+                deliveredAt: now,
+                ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
+              })
+              .where(
+                and(
+                  eq(deliveryResults.emailId, email.id),
+                  eq(deliveryResults.recipientAddress, recipient),
+                ),
+              );
+
+            console.log(
+              `[mta-worker] Delivered to ${recipient} via ${this.relayClient.provider} relay` +
+                (relayResult.messageId ? ` (id=${relayResult.messageId})` : ""),
+            );
+          }
+        } else {
+          // Relay failure — check if it looks permanent (5xx) or transient
+          const isPermanent = relayResult.error?.match(/\b5\d{2}\b/) != null;
+
+          if (isPermanent) {
+            for (const recipient of activeRecipients) {
+              await db
+                .update(deliveryResults)
+                .set({
+                  status: "bounced",
+                  remoteResponse: relayResult.error ?? "Permanent relay failure",
+                  mxHost: `relay:${this.relayClient.provider}`,
+                  attemptCount: attemptNumber + 1,
+                  lastAttemptAt: now,
+                  ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
+                })
+                .where(
+                  and(
+                    eq(deliveryResults.emailId, email.id),
+                    eq(deliveryResults.recipientAddress, recipient),
+                  ),
+                );
+            }
+            // allBounced stays true
+          } else {
+            // Transient failure — defer for retry
+            allBounced = false;
+            anyDeferred = true;
+            const errorMsg = relayResult.error ?? "Relay delivery failed";
+
+            for (const recipient of activeRecipients) {
+              await db
+                .update(deliveryResults)
+                .set({
+                  status: "deferred",
+                  remoteResponse: errorMsg,
+                  mxHost: `relay:${this.relayClient.provider}`,
+                  attemptCount: attemptNumber + 1,
+                  lastAttemptAt: now,
+                  ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
+                })
+                .where(
+                  and(
+                    eq(deliveryResults.emailId, email.id),
+                    eq(deliveryResults.recipientAddress, recipient),
+                  ),
+                );
+            }
+
+            errors.push(`relay(${this.relayClient.provider}): ${errorMsg}`);
+          }
+        }
+      }
+
+      // Skip the direct-delivery path below — jump to status update
+    } else {
+      // ── 4b. Direct MX delivery path (no relay configured) ───────────
 
     // Transport callback: uses SmtpClient to deliver to a specific MX host
     const transport = async (
@@ -409,6 +550,7 @@ export class MtaWorker {
         );
       }
     }
+    } // end else (direct MX delivery path)
 
     // ── 5. Update overall email status ──────────────────────────────────
     const now = new Date();

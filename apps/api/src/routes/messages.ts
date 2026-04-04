@@ -9,7 +9,6 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { Queue } from "bullmq";
 import { eq, desc, and, lt, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
@@ -25,28 +24,7 @@ import type {
   PaginatedResponse,
 } from "../types.js";
 import { getDatabase, emails, deliveryResults, domains, accounts } from "@emailed/db";
-
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-const QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "emailed:outbound";
-const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
-
-// ─── Lazy-initialised shared BullMQ queue (sender-side, no worker) ─────────
-
-let sendQueue: Queue | null = null;
-
-function getSendQueue(): Queue {
-  if (!sendQueue) {
-    sendQueue = new Queue(QUEUE_NAME, {
-      connection: { url: REDIS_URL },
-      defaultJobOptions: {
-        removeOnComplete: true,
-        removeOnFail: false,
-      },
-    });
-  }
-  return sendQueue;
-}
+import { getSendQueue } from "../lib/queue.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

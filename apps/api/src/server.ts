@@ -28,7 +28,9 @@ import { apiKeysRouter } from "./routes/api-keys.js";
 import { account } from "./routes/account.js";
 import { auth } from "./routes/auth.js";
 import { health } from "./routes/health.js";
+import { admin } from "./routes/admin.js";
 import { closeConnection } from "@emailed/db";
+import { closeSendQueue } from "./lib/queue.js";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -177,6 +179,10 @@ async function shutdown(signal: string): Promise<void> {
   }, 15_000);
 
   try {
+    // Close the BullMQ send queue
+    await closeSendQueue();
+    console.log("[api] Send queue closed");
+
     // Close the database connection pool
     await closeConnection();
     console.log("[api] Database connections closed");

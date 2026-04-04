@@ -107,15 +107,28 @@ export interface StoredEmail {
   mailboxId: string;
   messageId: string;
   threadId?: string;
-  from: EmailAddress[];
+  from: EmailAddress | EmailAddress[];
   to: EmailAddress[];
   cc: EmailAddress[];
+  bcc?: EmailAddress[];
+  replyTo?: EmailAddress | EmailAddress[];
   subject: string;
   snippet: string;
-  hasAttachments: boolean;
+  textBody?: string;
+  htmlBody?: string;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    contentType: string;
+    size: number;
+    contentId?: string;
+  }>;
+  hasAttachments?: boolean;
   size: number;
   flags: Set<string>;
   labels: string[];
+  headers?: Record<string, string> | MimeHeader[];
+  filterVerdict?: FilterVerdict;
   receivedAt: Date;
   internalDate: Date;
 }

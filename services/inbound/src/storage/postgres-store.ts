@@ -3,7 +3,7 @@
  * Implements the EmailStore interface using @emailed/db (Drizzle ORM).
  */
 
-import { eq, and, desc, gte, lte, sql } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { getDatabase, emails, attachments } from "@emailed/db";
 import type {
   ParsedEmail,
@@ -45,14 +45,22 @@ export class PostgresEmailStore implements EmailStore {
     if (verdict.action === "quarantine") mailboxId = "spam";
     if (verdict.action === "reject") mailboxId = "rejected";
 
+    // Extract the primary from address
+    const fromAddr = Array.isArray(email.from) ? email.from[0] : email.from;
+    const fromAddress = fromAddr?.address ?? "unknown@unknown";
+    const fromName = fromAddr?.name ?? null;
+
+    // Derive domainId from the recipient's resolved address domain
+    const recipientDomain = recipient.resolvedAddress.split("@")[1] ?? "unknown";
+
     // Persist to the emails table
     await db.insert(emails).values({
       id,
       accountId: recipient.accountId,
-      domainId: (recipient as Record<string, unknown>)["domainId"] as string ?? "unknown",
+      domainId: recipientDomain,
       messageId: email.messageId ?? `<${id}@inbound>`,
-      fromAddress: email.from?.address ?? "unknown@unknown",
-      fromName: email.from?.name ?? null,
+      fromAddress,
+      fromName,
       toAddresses: email.to.map((a) => ({
         address: a.address,
         name: a.name,
@@ -62,8 +70,10 @@ export class PostgresEmailStore implements EmailStore {
         name: a.name,
       })) ?? null,
       subject: email.subject ?? "(no subject)",
-      textBody: email.textBody ?? null,
-      htmlBody: email.htmlBody ?? null,
+      textBody: email.text ?? null,
+      htmlBody: email.html ?? null,
+      inReplyTo: email.inReplyTo ?? null,
+      references: email.references.length > 0 ? email.references : null,
       status: "delivered",
       tags: [mailboxId],
       metadata: {
@@ -98,15 +108,15 @@ export class PostgresEmailStore implements EmailStore {
       mailboxId,
       messageId: email.messageId ?? `<${id}@inbound>`,
       threadId: id,
-      from: email.from ?? { address: "unknown@unknown" },
+      from: fromAddr ?? { address: "unknown@unknown" },
       to: email.to,
       cc: email.cc ?? [],
       bcc: [],
       replyTo: email.replyTo,
       subject: email.subject ?? "(no subject)",
-      snippet: generateSnippet(email.textBody, email.htmlBody),
-      textBody: email.textBody,
-      htmlBody: email.htmlBody,
+      snippet: generateSnippet(email.text, email.html),
+      textBody: email.text,
+      htmlBody: email.html,
       attachments: (email.attachments ?? []).map((att) => ({
         id: generateId(),
         filename: att.filename ?? "unnamed",
@@ -114,12 +124,13 @@ export class PostgresEmailStore implements EmailStore {
         size: att.size ?? 0,
         contentId: att.contentId,
       })),
-      size: (email.textBody?.length ?? 0) + (email.htmlBody?.length ?? 0),
+      hasAttachments: (email.attachments ?? []).length > 0,
+      size: email.rawSize ?? (email.text?.length ?? 0) + (email.html?.length ?? 0),
       receivedAt: now,
       internalDate: email.date ?? now,
       flags: new Set(["\\Recent"]),
       labels: [mailboxId],
-      headers: email.headers ?? {},
+      headers: email.headers ?? [],
       filterVerdict: verdict,
     };
 
@@ -139,28 +150,7 @@ export class PostgresEmailStore implements EmailStore {
 
     if (!row) return null;
 
-    return {
-      id: row.id,
-      accountId: row.accountId,
-      mailboxId: (row.tags as string[])?.[0] ?? "inbox",
-      messageId: row.messageId,
-      threadId: row.id,
-      from: { address: row.fromAddress, name: row.fromName ?? undefined },
-      to: (row.toAddresses as Array<{ address: string; name?: string }>) ?? [],
-      cc: (row.ccAddresses as Array<{ address: string; name?: string }>) ?? [],
-      bcc: [],
-      subject: row.subject,
-      snippet: (row.textBody ?? row.htmlBody ?? "").slice(0, 200),
-      textBody: row.textBody ?? undefined,
-      htmlBody: row.htmlBody ?? undefined,
-      attachments: [],
-      size: (row.textBody?.length ?? 0) + (row.htmlBody?.length ?? 0),
-      receivedAt: row.createdAt,
-      internalDate: row.createdAt,
-      flags: new Set<string>(),
-      labels: (row.tags as string[]) ?? [],
-      headers: (row.customHeaders as Record<string, string>) ?? {},
-    };
+    return this.rowToStoredEmail(row);
   }
 
   async getByMessageId(
@@ -195,34 +185,7 @@ export class PostgresEmailStore implements EmailStore {
       .orderBy(desc(emails.createdAt))
       .limit(limit);
 
-    const mapped = rows.map((row) => ({
-      id: row.id,
-      accountId: row.accountId,
-      mailboxId: (row.tags as string[])?.[0] ?? "inbox",
-      messageId: row.messageId,
-      threadId: row.id,
-      from: { address: row.fromAddress, name: row.fromName ?? undefined },
-      to: (row.toAddresses as Array<{ address: string; name?: string }>) ?? [],
-      cc: (row.ccAddresses as Array<{ address: string; name?: string }>) ?? [],
-      bcc: [] as Array<{ address: string; name?: string }>,
-      subject: row.subject,
-      snippet: (row.textBody ?? row.htmlBody ?? "").slice(0, 200),
-      textBody: row.textBody ?? undefined,
-      htmlBody: row.htmlBody ?? undefined,
-      attachments: [] as Array<{
-        id: string;
-        filename: string;
-        contentType: string;
-        size: number;
-        contentId?: string;
-      }>,
-      size: (row.textBody?.length ?? 0) + (row.htmlBody?.length ?? 0),
-      receivedAt: row.createdAt,
-      internalDate: row.createdAt,
-      flags: new Set<string>(),
-      labels: (row.tags as string[]) ?? [],
-      headers: (row.customHeaders as Record<string, string>) ?? {},
-    }));
+    const mapped = rows.map((row) => this.rowToStoredEmail(row));
 
     return { emails: mapped, total: mapped.length };
   }
@@ -255,6 +218,46 @@ export class PostgresEmailStore implements EmailStore {
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, accountId)));
+  }
+
+  private rowToStoredEmail(row: {
+    id: string;
+    accountId: string;
+    messageId: string;
+    fromAddress: string;
+    fromName: string | null;
+    toAddresses: unknown;
+    ccAddresses: unknown;
+    subject: string;
+    textBody: string | null;
+    htmlBody: string | null;
+    tags: unknown;
+    customHeaders: unknown;
+    createdAt: Date;
+  }): StoredEmail {
+    return {
+      id: row.id,
+      accountId: row.accountId,
+      mailboxId: (row.tags as string[])?.[0] ?? "inbox",
+      messageId: row.messageId,
+      threadId: row.id,
+      from: { address: row.fromAddress, name: row.fromName ?? undefined },
+      to: (row.toAddresses as Array<{ address: string; name?: string }>) ?? [],
+      cc: (row.ccAddresses as Array<{ address: string; name?: string }>) ?? [],
+      bcc: [],
+      subject: row.subject,
+      snippet: (row.textBody ?? row.htmlBody ?? "").slice(0, 200),
+      textBody: row.textBody ?? undefined,
+      htmlBody: row.htmlBody ?? undefined,
+      attachments: [],
+      hasAttachments: false,
+      size: (row.textBody?.length ?? 0) + (row.htmlBody?.length ?? 0),
+      receivedAt: row.createdAt,
+      internalDate: row.createdAt,
+      flags: new Set<string>(),
+      labels: (row.tags as string[]) ?? [],
+      headers: (row.customHeaders as Record<string, string>) ?? {},
+    };
   }
 
   async delete(accountId: string, emailId: string): Promise<boolean> {
