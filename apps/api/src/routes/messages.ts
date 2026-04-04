@@ -26,6 +26,7 @@ import type {
 import { getDatabase, emails, deliveryResults, domains, accounts } from "@emailed/db";
 import { getSendQueue } from "../lib/queue.js";
 import { indexEmail, searchEmails } from "@emailed/shared";
+import { usageEnforcement } from "../middleware/usage.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -372,7 +373,7 @@ async function handleSend(c: Context) {
 
 const messages = new Hono();
 
-const sendMiddleware = [requireScope("messages:send"), validateBody(SendMessageSchema)] as const;
+const sendMiddleware = [requireScope("messages:send"), usageEnforcement, validateBody(SendMessageSchema)] as const;
 
 // POST /v1/messages/send — Send an email (production pipeline)
 messages.post("/send", ...sendMiddleware, handleSend);

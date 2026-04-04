@@ -238,6 +238,82 @@ async function spamFilter(ctx: FilterContext): Promise<FilterContext> {
   return ctx;
 }
 
+// --- AI Classification Stage ---
+// Runs after rule-based spam filter for ambiguous scores (between 3 and 7).
+// Gracefully skips when ANTHROPIC_API_KEY is not configured.
+
+async function aiClassification(ctx: FilterContext): Promise<FilterContext> {
+  // Skip if already rejected or if AI is not available
+  if (ctx.verdict.action === "reject") return ctx;
+  if (!isAIAvailable()) return ctx;
+
+  const score = ctx.verdict.score ?? 0;
+
+  // Only invoke AI for ambiguous rule-based scores (3-7 range).
+  // Clear spam (>=8) and clean mail (<3) don't need expensive AI analysis.
+  if (score < 3 || score > 7) return ctx;
+
+  const { email } = ctx;
+
+  const input: EmailClassificationInput = {
+    from: email.from[0]?.address ?? "",
+    to: email.to[0]?.address ?? "",
+    subject: email.subject,
+    textBody: email.text,
+    htmlBody: email.html,
+    headers: email.headers.map((h) => ({ key: h.key, value: h.value })),
+  };
+
+  try {
+    const result = await classifyEmail(input);
+    if (!result.ok) return ctx;
+
+    const classification = result.value;
+
+    // Store AI classification metadata for auditing
+    ctx.metadata.set("ai_classification", classification);
+
+    // Add AI spam score contribution (weighted at 50% of AI score)
+    ctx.verdict.score = score + classification.spamScore * 0.5;
+
+    // Add AI classification flags
+    for (const category of classification.categories) {
+      ctx.verdict.flags.add(`ai:${category}`);
+    }
+    ctx.verdict.flags.add(
+      `ai_source:${classification.source}`,
+    );
+    ctx.verdict.flags.add(
+      `ai_confidence:${classification.confidence.toFixed(2)}`,
+    );
+
+    // High-confidence AI spam detection: quarantine
+    if (
+      classification.categories.includes("spam") &&
+      classification.confidence > 0.9
+    ) {
+      ctx.verdict.action = "quarantine";
+      ctx.verdict.reason = `AI classified as spam with ${(classification.confidence * 100).toFixed(0)}% confidence: ${classification.reasoning}`;
+      ctx.verdict.flags.add("ai_quarantine");
+    }
+
+    // High-confidence AI phishing detection: reject
+    if (
+      classification.categories.includes("phishing") &&
+      classification.confidence > 0.8
+    ) {
+      ctx.verdict.action = "reject";
+      ctx.verdict.reason = `AI classified as phishing with ${(classification.confidence * 100).toFixed(0)}% confidence: ${classification.reasoning}`;
+      ctx.verdict.flags.add("ai_phishing_reject");
+    }
+  } catch {
+    // AI classification failed — continue without it (graceful degradation)
+    ctx.verdict.flags.add("ai_classification_error");
+  }
+
+  return ctx;
+}
+
 // --- Phishing Filter Stage ---
 
 async function phishingFilter(ctx: FilterContext): Promise<FilterContext> {
@@ -393,6 +469,7 @@ export class FilterPipeline {
     this.stages = [
       { name: "authentication", handler: authenticationCheck },
       { name: "spam", handler: spamFilter },
+      { name: "aiClassification", handler: aiClassification },
       { name: "phishing", handler: phishingFilter },
       { name: "content", handler: contentFilter },
       { name: "malware", handler: malwareScan },
