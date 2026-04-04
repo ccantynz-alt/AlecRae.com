@@ -308,6 +308,25 @@ export class MtaWorker {
                 ),
               );
 
+            // Auto-suppress the recipient on hard bounce
+            if (domainRecord) {
+              const suppressId = crypto.randomUUID().replace(/-/g, "");
+              await db
+                .insert(suppressionLists)
+                .values({
+                  id: suppressId,
+                  email: recipient.toLowerCase(),
+                  domainId: domainRecord.id,
+                  reason: "bounce",
+                })
+                .onConflictDoNothing()
+                .catch(() => {});
+
+              console.log(
+                `[mta-worker] Auto-suppressed ${recipient} (hard bounce)`,
+              );
+            }
+
             console.warn(
               `[mta-worker] Permanent failure for ${recipient}: ${errorMsg}`,
             );

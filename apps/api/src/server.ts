@@ -25,6 +25,7 @@ import { analytics } from "./routes/analytics.js";
 import { suppressions } from "./routes/suppressions.js";
 import { tracking } from "./routes/tracking.js";
 import { apiKeysRouter } from "./routes/api-keys.js";
+import { account } from "./routes/account.js";
 import { health } from "./routes/health.js";
 import { closeConnection } from "@emailed/db";
 
@@ -99,6 +100,7 @@ app.route("/v1/webhooks", webhooks);
 app.route("/v1/analytics", analytics);
 app.route("/v1/suppressions", suppressions);
 app.route("/v1/api-keys", apiKeysRouter);
+app.route("/v1/account", account);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────
 

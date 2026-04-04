@@ -67,6 +67,31 @@ function domainOf(address: string): string {
   return idx === -1 ? address : address.slice(idx + 1).toLowerCase();
 }
 
+const API_BASE_URL = process.env["API_URL"] ?? "http://localhost:3001";
+
+/**
+ * Inject open-tracking pixel and rewrite links for click tracking.
+ */
+function injectTracking(html: string, emailId: string): string {
+  // Inject open-tracking pixel before </body> or at end
+  const pixel = `<img src="${API_BASE_URL}/t/${emailId}/open.gif" width="1" height="1" alt="" style="display:none" />`;
+  const tracked = html.includes("</body>")
+    ? html.replace("</body>", `${pixel}</body>`)
+    : html + pixel;
+
+  // Rewrite <a href="..."> links for click tracking (skip mailto: and tel:)
+  return tracked.replace(
+    /<a\s([^>]*?)href=["']([^"']+)["']/gi,
+    (_match, prefix: string, url: string) => {
+      if (url.startsWith("mailto:") || url.startsWith("tel:") || url.startsWith("#")) {
+        return `<a ${prefix}href="${url}"`;
+      }
+      const trackedUrl = `${API_BASE_URL}/t/${emailId}/click?url=${encodeURIComponent(url)}`;
+      return `<a ${prefix}href="${trackedUrl}"`;
+    },
+  );
+}
+
 /**
  * Build an RFC 5322 raw message from the API input.
  * Produces headers + body separated by a blank line.
@@ -74,6 +99,7 @@ function domainOf(address: string): string {
 function buildRawMessage(
   input: SendMessageInput,
   messageId: string,
+  emailId?: string,
 ): string {
   const lines: string[] = [];
 
@@ -137,8 +163,10 @@ function buildRawMessage(
     }
   }
 
-  // Content type + body
-  if (input.html && input.text) {
+  // Content type + body (with tracking pixel injection for HTML)
+  const trackedHtml = input.html && emailId ? injectTracking(input.html, emailId) : input.html;
+
+  if (trackedHtml && input.text) {
     const boundary = `----=_Part_${generateId().slice(0, 16)}`;
     lines.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
     lines.push("");
@@ -151,13 +179,13 @@ function buildRawMessage(
     lines.push("Content-Type: text/html; charset=utf-8");
     lines.push("Content-Transfer-Encoding: quoted-printable");
     lines.push("");
-    lines.push(input.html);
+    lines.push(trackedHtml);
     lines.push(`--${boundary}--`);
-  } else if (input.html) {
+  } else if (trackedHtml) {
     lines.push("Content-Type: text/html; charset=utf-8");
     lines.push("Content-Transfer-Encoding: quoted-printable");
     lines.push("");
-    lines.push(input.html);
+    lines.push(trackedHtml);
   } else {
     lines.push("Content-Type: text/plain; charset=utf-8");
     lines.push("Content-Transfer-Encoding: quoted-printable");
@@ -219,7 +247,7 @@ async function handleSend(c: Context) {
   }
 
   // ── 2. Build the raw RFC-5322 message ─────────────────────────────
-  const rawMessage = buildRawMessage(input, messageId);
+  const rawMessage = buildRawMessage(input, messageId, id);
 
   // ── 3. Collect all recipient addresses (to + cc + bcc) ────────────
   const allRecipients = [
