@@ -14,11 +14,11 @@ import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { AddDomainSchema } from "../types.js";
 import type { AddDomainInput } from "../types.js";
-import { getDatabase } from "@emailed/db/client/connection.js";
 import {
+  getDatabase,
   domains as domainsTable,
   dnsRecords as dnsRecordsTable,
-} from "@emailed/db/schema/domains.js";
+} from "@emailed/db";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
