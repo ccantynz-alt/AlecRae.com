@@ -5,7 +5,7 @@ import { JmapHandler } from "./server/handler.js";
 import { MailboxOperations } from "./mailbox/operations.js";
 import { ThreadingEngine } from "./thread/engine.js";
 import { PushNotificationService } from "./push/notifications.js";
-import { getDatabase, emails } from "@emailed/db";
+import { getDatabase, emails, users } from "@emailed/db";
 import type {
   JmapRequest,
   JmapId,
@@ -15,6 +15,48 @@ import type {
   QueryArgs,
   Mailbox,
 } from "./types.js";
+
+// --- Authentication Helper ---
+
+interface AuthResult {
+  accountId: string;
+  username: string;
+}
+
+async function authenticateRequest(authHeader: string | undefined): Promise<AuthResult | null> {
+  if (!authHeader?.startsWith("Bearer ")) return null;
+
+  const token = authHeader.slice(7);
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+
+    const payload = JSON.parse(atob(parts[1]!));
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+
+    const accountId = payload.sub as string;
+    const userId = payload.userId as string;
+    const email = payload.email as string;
+
+    if (!accountId || !userId) return null;
+
+    // Optionally validate user still exists in DB
+    if (process.env["DATABASE_URL"]) {
+      const db = getDatabase();
+      const [user] = await db
+        .select({ id: users.id, email: users.email })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (!user) return null;
+      return { accountId, username: user.email };
+    }
+
+    return { accountId, username: email ?? "unknown" };
+  } catch {
+    return null;
+  }
+}
 
 // --- Initialize Components ---
 
@@ -213,16 +255,22 @@ const app = new Hono();
 app.use("*", cors());
 
 // JMAP Session endpoint (RFC 8620 Section 2)
-app.get("/.well-known/jmap", (c) => {
-  // In production: extract account from authentication
-  const accountId = "default_account";
-  const username = "user@example.com";
-  const session = handler.getSession(username, accountId);
+app.get("/.well-known/jmap", async (c) => {
+  const auth = await authenticateRequest(c.req.header("Authorization"));
+  if (!auth) {
+    return c.json({ type: "urn:ietf:params:jmap:error:unauthorized", detail: "Authentication required" }, 401);
+  }
+  const session = handler.getSession(auth.username, auth.accountId);
   return c.json(session);
 });
 
 // JMAP API endpoint (RFC 8620 Section 3)
 app.post("/jmap", async (c) => {
+  const auth = await authenticateRequest(c.req.header("Authorization"));
+  if (!auth) {
+    return c.json({ type: "urn:ietf:params:jmap:error:unauthorized", detail: "Authentication required" }, 401);
+  }
+
   let request: JmapRequest;
   try {
     request = await c.req.json<JmapRequest>();
@@ -248,21 +296,22 @@ app.post("/jmap", async (c) => {
     );
   }
 
-  // In production: extract account from authentication
-  const accountId = "default_account";
-  const username = "user@example.com";
-
-  const response = await handler.processRequest(request, accountId, username);
+  const response = await handler.processRequest(request, auth.accountId, auth.username);
   return c.json(response);
 });
 
 // EventSource endpoint (RFC 8620 Section 7.3)
-app.get("/jmap/eventsource", (c) => {
+app.get("/jmap/eventsource", async (c) => {
+  const auth = await authenticateRequest(c.req.header("Authorization"));
+  if (!auth) {
+    return c.json({ type: "urn:ietf:params:jmap:error:unauthorized", detail: "Authentication required" }, 401);
+  }
+
   const types = c.req.query("types")?.split(",").filter(Boolean);
   const closeAfter = c.req.query("closeafter") as "state" | "no" | undefined;
   const ping = parseInt(c.req.query("ping") ?? "0", 10);
 
-  const accountId = "default_account";
+  const accountId = auth.accountId;
   const clientId = `sse_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   const client = pushService.registerEventSource(clientId, accountId, {
