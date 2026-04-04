@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { eq, and, desc, ilike } from "drizzle-orm";
 import { JmapHandler } from "./server/handler.js";
 import { MailboxOperations } from "./mailbox/operations.js";
 import { ThreadingEngine } from "./thread/engine.js";
 import { PushNotificationService } from "./push/notifications.js";
+import { getDatabase, emails } from "@emailed/db";
 import type {
   JmapRequest,
   JmapId,
@@ -67,6 +69,108 @@ handler.registerMethod("Mailbox/query", async (args, ctx) => {
     calculateTotal: args.calculateTotal as boolean | undefined,
   };
   return await mailboxOps.query(queryArgs) as unknown as Record<string, unknown>;
+});
+
+// --- Email Methods (DB-backed) ---
+
+handler.registerMethod("Email/get", async (args, ctx) => {
+  const accountId = (args.accountId as JmapId) ?? ctx.accountId;
+  const ids = args.ids as JmapId[] | null;
+  const properties = args.properties as string[] | undefined;
+  const db = getDatabase();
+
+  let rows;
+  if (ids) {
+    rows = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.accountId, accountId)));
+    rows = rows.filter((r) => ids.includes(r.id));
+  } else {
+    rows = await db
+      .select()
+      .from(emails)
+      .where(eq(emails.accountId, accountId))
+      .orderBy(desc(emails.createdAt))
+      .limit(50);
+  }
+
+  const notFound = ids
+    ? ids.filter((id) => !rows.some((r) => r.id === id))
+    : [];
+
+  const list = rows.map((row) => {
+    const email: Record<string, unknown> = {
+      id: row.id,
+      blobId: row.id,
+      threadId: row.id,
+      mailboxIds: { inbox: true },
+      from: [{ name: row.fromName ?? row.fromAddress, email: row.fromAddress }],
+      to: (row.toAddresses as Array<{ address: string; name?: string }>)?.map(
+        (a) => ({ name: a.name ?? a.address, email: a.address }),
+      ) ?? [],
+      cc: (row.ccAddresses as Array<{ address: string; name?: string }>)?.map(
+        (a) => ({ name: a.name ?? a.address, email: a.address }),
+      ) ?? null,
+      subject: row.subject,
+      receivedAt: row.createdAt.toISOString(),
+      sentAt: row.sentAt?.toISOString() ?? row.createdAt.toISOString(),
+      size: (row.textBody?.length ?? 0) + (row.htmlBody?.length ?? 0),
+      preview: (row.textBody ?? row.htmlBody ?? "").slice(0, 256).replace(/<[^>]+>/g, ""),
+      textBody: row.textBody ? [{ partId: "1", type: "text/plain" }] : null,
+      htmlBody: row.htmlBody ? [{ partId: "2", type: "text/html" }] : null,
+      bodyValues: {
+        ...(row.textBody ? { "1": { value: row.textBody, isEncodingProblem: false, isTruncated: false } } : {}),
+        ...(row.htmlBody ? { "2": { value: row.htmlBody, isEncodingProblem: false, isTruncated: false } } : {}),
+      },
+      keywords: {},
+      messageId: [row.messageId],
+      hasAttachment: false,
+    };
+
+    // Filter to requested properties
+    if (properties) {
+      const filtered: Record<string, unknown> = { id: email["id"] };
+      for (const prop of properties) {
+        if (prop in email) filtered[prop] = email[prop];
+      }
+      return filtered;
+    }
+
+    return email;
+  });
+
+  return {
+    accountId,
+    state: handler.getState(),
+    list,
+    notFound,
+  };
+});
+
+handler.registerMethod("Email/query", async (args, ctx) => {
+  const accountId = (args.accountId as JmapId) ?? ctx.accountId;
+  const filter = args.filter as Record<string, unknown> | undefined;
+  const limit = (args.limit as number | undefined) ?? 50;
+  const position = (args.position as number | undefined) ?? 0;
+  const db = getDatabase();
+
+  const rows = await db
+    .select({ id: emails.id })
+    .from(emails)
+    .where(eq(emails.accountId, accountId))
+    .orderBy(desc(emails.createdAt))
+    .limit(limit)
+    .offset(position);
+
+  return {
+    accountId,
+    queryState: handler.getState(),
+    canCalculateChanges: false,
+    position,
+    ids: rows.map((r) => r.id),
+    total: rows.length,
+  };
 });
 
 handler.registerMethod("Thread/get", async (args, ctx) => {
