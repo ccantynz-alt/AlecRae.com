@@ -659,7 +659,7 @@ export class MtaWorker {
     if (accountWebhooks.length === 0) return;
 
     // Lazily create a queue instance for the webhook queue
-    const webhookQueue = new Queue("emailed:webhooks", {
+    const webhookQueue = new Queue("emailed-webhooks", {
       connection: { url: this.config.redisUrl },
       defaultJobOptions: {
         removeOnComplete: 100,
