@@ -19,6 +19,8 @@ const navigationSections: SidebarSection[] = [
       { id: "templates", label: "Templates", href: "/templates" },
       { id: "webhooks", label: "Webhooks", href: "/webhooks" },
       { id: "api-keys", label: "API Keys", href: "/api-keys" },
+      { id: "suppressions", label: "Suppressions", href: "/suppressions" },
+      { id: "bounces", label: "Bounces", href: "/bounces" },
       { id: "analytics", label: "Analytics", href: "/analytics" },
       { id: "billing", label: "Billing", href: "/billing" },
       { id: "settings", label: "Settings", href: "/settings" },

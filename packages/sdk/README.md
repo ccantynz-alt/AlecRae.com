@@ -823,9 +823,8 @@ Full runnable examples are in the [`examples/`](./examples) directory:
 | [`send-email.ts`](./examples/send-email.ts) | Send plain-text and HTML emails, list, search |
 | [`domain-setup.ts`](./examples/domain-setup.ts) | Register a domain, configure DNS, verify, health check |
 | [`webhook-handler.ts`](./examples/webhook-handler.ts) | Receive and verify webhooks (Hono example) |
-| [`manage-domains.ts`](./examples/manage-domains.ts) | Full domain lifecycle management |
-| [`templates.ts`](./examples/templates.ts) | Create, preview, and send with templates |
-| [`suppressions.ts`](./examples/suppressions.ts) | Manage the suppression list |
+| [`analytics-report.ts`](./examples/analytics-report.ts) | Fetch delivery and engagement analytics |
+| [`contacts-management.ts`](./examples/contacts-management.ts) | Create, list, update, and unsubscribe contacts |
 
 Run any example:
 
