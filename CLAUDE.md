@@ -55,13 +55,13 @@
 - [x] Monitoring and alerting (OpenTelemetry traces + metrics + middleware)
 - [x] Rate limiting on all public endpoints (Redis sliding window + fallback)
 - [ ] IMAP4rev2 bridge for legacy clients (in progress — parser + formatter done)
-- [ ] Docker/Kubernetes deployment configs
+- [x] Docker/Kubernetes deployment configs
 - [ ] CI/CD pipeline (GitHub Actions)
-- [ ] API documentation (OpenAPI specs)
+- [x] API documentation (OpenAPI specs)
 - [ ] End-to-end integration tests
-- [ ] Suppression list management API
-- [ ] Email template system (stored templates with variable substitution)
-- [ ] Bounce/complaint feedback loop processing
+- [x] Suppression list management API
+- [x] Email template system (stored templates with variable substitution)
+- [x] Bounce/complaint feedback loop processing
 - [ ] Communication Intelligence Graph (relationship tracking)
 - [ ] Voice Synthesis Engine (writing style learning)
 
