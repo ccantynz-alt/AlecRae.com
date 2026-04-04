@@ -1,0 +1,111 @@
+# ─── Consolidated Ingress for all HTTP services ─────────────────────────────
+# Individual service ingresses exist in their deployment files for api and web.
+# This file provides the admin ingress and a catch-all redirect.
+# ─────────────────────────────────────────────────────────────────────────────
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admin
+  namespace: emailed
+  labels:
+    app.kubernetes.io/name: admin
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: emailed-platform
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    # Restrict admin access to VPN/internal IPs (customize for your network)
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - admin.emailed.dev
+      secretName: admin-tls
+  rules:
+    - host: admin.emailed.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin
+                port:
+                  name: http
+
+---
+# JMAP HTTP endpoint (public, for mail clients)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jmap
+  namespace: emailed
+  labels:
+    app.kubernetes.io/name: jmap
+    app.kubernetes.io/component: mail
+    app.kubernetes.io/part-of: emailed-platform
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # JMAP uses long-polling for push, so increase timeouts
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - jmap.emailed.dev
+      secretName: jmap-http-tls
+  rules:
+    - host: jmap.emailed.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jmap
+                port:
+                  name: http
+
+---
+# Root domain redirect to app
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: root-redirect
+  namespace: emailed
+  labels:
+    app.kubernetes.io/part-of: emailed-platform
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/temporal-redirect: "https://app.emailed.dev"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - emailed.dev
+      secretName: root-tls
+  rules:
+    - host: emailed.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  name: http

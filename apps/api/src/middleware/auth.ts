@@ -49,6 +49,7 @@ function permissionsToScopes(
     viewAnalytics: boolean;
     manageAccount: boolean;
     manageTeamMembers: boolean;
+    manageTemplates?: boolean;
   },
 ): string[] {
   const scopes: string[] = [];
@@ -60,6 +61,8 @@ function permissionsToScopes(
   if (permissions.viewAnalytics) scopes.push("analytics:read");
   if (permissions.manageAccount) scopes.push("account:manage");
   if (permissions.manageTeamMembers) scopes.push("team:manage");
+  // templates:manage — derived from explicit flag or falls back to sendEmail
+  if (permissions.manageTemplates ?? permissions.sendEmail) scopes.push("templates:manage");
   return scopes;
 }
 
@@ -138,6 +141,7 @@ async function resolveApiKeyFromDb(
             viewAnalytics: boolean;
             manageAccount: boolean;
             manageTeamMembers: boolean;
+            manageTemplates?: boolean;
           },
         )
       : [];
@@ -188,6 +192,7 @@ async function resolveApiKeyDev(rawKey: string): Promise<AuthContext | null> {
         "domains:manage",
         "webhooks:manage",
         "analytics:read",
+        "templates:manage",
       ],
     };
   }

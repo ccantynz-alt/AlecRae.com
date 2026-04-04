@@ -11,6 +11,9 @@ data:
   API_INTERNAL_URL: "http://api.emailed.svc.cluster.local"
   CLICKHOUSE_URL: "http://clickhouse.emailed.svc.cluster.local:8123"
   MEILI_URL: "http://meilisearch.emailed.svc.cluster.local:7700"
+  JMAP_URL: "http://jmap.emailed.svc.cluster.local:8080"
+  REPUTATION_URL: "http://reputation.emailed.svc.cluster.local"
+  INBOUND_URL: "http://inbound.emailed.svc.cluster.local:8025"
   S3_ENDPOINT: "https://s3.amazonaws.com"
 
   # ─── Public URLs ───────────────────────────────────────────────────────────

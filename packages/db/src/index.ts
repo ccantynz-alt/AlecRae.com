@@ -83,6 +83,13 @@ export {
   warmupSessionsRelations,
 } from "./schema/warmup.js";
 
+// Schema - Templates
+export {
+  templates,
+  templatesRelations,
+} from "./schema/templates.js";
+export type { TemplateVariable } from "./schema/templates.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -99,6 +106,7 @@ import type {
 } from "./schema/events.js";
 import type { suppressionLists } from "./schema/suppressions.js";
 import type { warmupSessions } from "./schema/warmup.js";
+import type { templates } from "./schema/templates.js";
 
 // Select types (what you get back from queries)
 export type Account = InferSelectModel<typeof accounts>;
@@ -131,3 +139,5 @@ export type SuppressionList = InferSelectModel<typeof suppressionLists>;
 export type NewSuppressionList = InferInsertModel<typeof suppressionLists>;
 export type WarmupSession = InferSelectModel<typeof warmupSessions>;
 export type NewWarmupSession = InferInsertModel<typeof warmupSessions>;
+export type Template = InferSelectModel<typeof templates>;
+export type NewTemplate = InferInsertModel<typeof templates>;
