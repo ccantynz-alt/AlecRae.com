@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Box,
   PageLayout,
@@ -7,42 +8,49 @@ import {
   AnalyticsChart,
   type ChartDataPoint,
 } from "@emailed/ui";
+import { analyticsApi, type OverviewStats } from "../../../lib/api";
 
-const deliverabilityData: ChartDataPoint[] = [
-  { label: "Mon", value: 98.2 },
-  { label: "Tue", value: 97.8 },
-  { label: "Wed", value: 99.1 },
-  { label: "Thu", value: 98.5 },
-  { label: "Fri", value: 97.9 },
-  { label: "Sat", value: 99.4 },
-  { label: "Sun", value: 98.8 },
-];
-
-const engagementData: ChartDataPoint[] = [
-  { label: "Week 1", value: 42 },
-  { label: "Week 2", value: 38 },
-  { label: "Week 3", value: 51 },
-  { label: "Week 4", value: 47 },
-];
-
-const volumeData: ChartDataPoint[] = [
-  { label: "Jan", value: 12400 },
-  { label: "Feb", value: 15200 },
-  { label: "Mar", value: 18900 },
-  { label: "Apr", value: 14300 },
-];
-
-const bounceData: ChartDataPoint[] = [
-  { label: "Mon", value: 1.2 },
-  { label: "Tue", value: 0.8 },
-  { label: "Wed", value: 0.5 },
-  { label: "Thu", value: 1.1 },
-  { label: "Fri", value: 0.9 },
-  { label: "Sat", value: 0.3 },
-  { label: "Sun", value: 0.6 },
+// Fallback data for when API is not connected
+const fallbackDeliverability: ChartDataPoint[] = [
+  { label: "Mon", value: 0 },
+  { label: "Tue", value: 0 },
+  { label: "Wed", value: 0 },
+  { label: "Thu", value: 0 },
+  { label: "Fri", value: 0 },
+  { label: "Sat", value: 0 },
+  { label: "Sun", value: 0 },
 ];
 
 export default function AnalyticsPage() {
+  const [stats, setStats] = useState<OverviewStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    analyticsApi
+      .overview()
+      .then((res) => setStats(res.data))
+      .catch(() => {
+        // API not available — show zeroes
+        setStats({
+          sent: 0,
+          delivered: 0,
+          bounced: 0,
+          complained: 0,
+          opened: 0,
+          clicked: 0,
+          deliveryRate: 0,
+          bounceRate: 0,
+          openRate: 0,
+          clickRate: 0,
+        });
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const deliveryRate = stats ? (stats.deliveryRate * 100).toFixed(1) : "0";
+  const openRate = stats ? (stats.openRate * 100).toFixed(1) : "0";
+  const bounceRate = stats ? (stats.bounceRate * 100).toFixed(1) : "0";
+
   return (
     <PageLayout
       title="Analytics"
@@ -51,31 +59,31 @@ export default function AnalyticsPage() {
       <Box className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard
           label="Deliverability Rate"
-          value="98.6%"
-          changePercent={0.4}
+          value={loading ? "..." : `${deliveryRate}%`}
+          changePercent={0}
           trend="up"
-          description="vs last week"
+          description="last 30 days"
         />
         <StatCard
           label="Open Rate"
-          value="47.2%"
-          changePercent={3.1}
+          value={loading ? "..." : `${openRate}%`}
+          changePercent={0}
           trend="up"
-          description="vs last week"
+          description="last 30 days"
         />
         <StatCard
           label="Bounce Rate"
-          value="0.8%"
-          changePercent={0.2}
+          value={loading ? "..." : `${bounceRate}%`}
+          changePercent={0}
           trend="down"
-          description="vs last week"
+          description="last 30 days"
         />
         <StatCard
-          label="Sender Score"
-          value="94"
-          changePercent={2}
+          label="Emails Sent"
+          value={loading ? "..." : String(stats?.sent ?? 0)}
+          changePercent={0}
           trend="up"
-          description="out of 100"
+          description="last 30 days"
         />
       </Box>
 
@@ -83,7 +91,7 @@ export default function AnalyticsPage() {
         <AnalyticsChart
           title="Deliverability Rate"
           description="Percentage of emails successfully delivered over the past week"
-          data={deliverabilityData}
+          data={fallbackDeliverability}
           chartType="area"
           height={220}
           formatValue={(v) => `${v}%`}
@@ -91,15 +99,15 @@ export default function AnalyticsPage() {
         <AnalyticsChart
           title="Engagement Rate"
           description="Open and click-through rates by week"
-          data={engagementData}
+          data={fallbackDeliverability}
           chartType="bar"
           height={220}
           formatValue={(v) => `${v}%`}
         />
         <AnalyticsChart
           title="Send Volume"
-          description="Total emails sent per month"
-          data={volumeData}
+          description="Total emails sent per period"
+          data={fallbackDeliverability}
           chartType="bar"
           height={220}
           formatValue={(v) => v.toLocaleString()}
@@ -107,7 +115,7 @@ export default function AnalyticsPage() {
         <AnalyticsChart
           title="Bounce Rate"
           description="Hard and soft bounces over the past week"
-          data={bounceData}
+          data={fallbackDeliverability}
           chartType="line"
           height={220}
           formatValue={(v) => `${v}%`}

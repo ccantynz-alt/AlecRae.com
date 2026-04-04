@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { PageLayout, ComposeEditor, type AISuggestion } from "@emailed/ui";
+import { messagesApi } from "../../../lib/api";
 
 const sampleSuggestions: AISuggestion[] = [
   {
@@ -24,22 +26,50 @@ const sampleSuggestions: AISuggestion[] = [
 ];
 
 export default function ComposePage() {
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
   return (
     <PageLayout title="Compose" fullWidth>
+      {status && (
+        <div className={`mb-4 p-3 rounded text-sm ${
+          status.startsWith("Error") ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
+        }`}>
+          {status}
+        </div>
+      )}
       <ComposeEditor
         suggestions={sampleSuggestions}
         showAIPanel={true}
-        onSend={(data) => {
-          // handle send
+        onSend={async (data) => {
+          if (sending) return;
+          setSending(true);
+          setStatus(null);
+
+          try {
+            const result = await messagesApi.send({
+              from: { email: data.from },
+              to: data.to.split(",").map((e: string) => ({ email: e.trim() })),
+              cc: data.cc ? data.cc.split(",").map((e: string) => ({ email: e.trim() })) : undefined,
+              subject: data.subject,
+              html: data.body,
+              text: data.body.replace(/<[^>]*>/g, ""),
+            });
+            setStatus(`Email queued successfully (ID: ${result.id})`);
+          } catch (err) {
+            setStatus(`Error: ${err instanceof Error ? err.message : "Failed to send"}`);
+          } finally {
+            setSending(false);
+          }
         }}
         onSaveDraft={() => {
-          // handle draft save
+          setStatus("Draft saved locally");
         }}
         onDiscard={() => {
-          // handle discard
+          setStatus(null);
         }}
         onApplySuggestion={(suggestion) => {
-          // apply AI suggestion
+          // AI suggestion application
         }}
         className="flex-1"
       />
