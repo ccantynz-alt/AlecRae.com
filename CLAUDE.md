@@ -15,6 +15,47 @@
 
 **Current priority: Wire up the sending pipeline so `POST /v1/messages/send` actually delivers email. This is the critical path to production.**
 
+## CONTINUOUS BUILD LOOP — MANDATORY
+
+**This is a loop. Never exit it. After every task, circle back here.**
+
+1. **CHECK THE ROADMAP** — Review the Architecture section and service list below. Identify what's missing, stubbed, or incomplete.
+2. **BUILD THE NEXT HIGHEST-IMPACT ITEM** — Pick it and build it. No gaps, no stubs, no broken links.
+3. **VERIFY QUALITY** — Every piece of work must be:
+   - Fully functional (no placeholder code, no hardcoded sample data, no TODO stubs in production paths)
+   - Properly wired (imports resolve, types align, DB schemas match, API contracts consistent)
+   - Error-handled (graceful failures, not silent drops)
+   - Tested or testable (exports clean interfaces, no hidden coupling)
+4. **COMMIT AND PUSH** — Immediately. Never let work sit uncommitted.
+5. **RETURN TO STEP 1** — Do not stop. Do not idle. Do not wait for instructions.
+
+### Quality Standard: 80-90% Ahead of Competition
+- Every feature must be production-grade, not demo-grade.
+- No broken links, no dead endpoints, no orphaned code.
+- No misleading interfaces — if a button exists, it works. If an API endpoint is listed, it responds correctly.
+- No fake data in production paths. Sample data is for tests and seeds only.
+- The codebase must be honest: what it claims to do, it actually does.
+- If something can't be fully built yet (e.g., needs external credentials), build everything around it and make the integration point clean and obvious.
+
+### Build Checklist (circle back to this every iteration):
+- [ ] Sending pipeline: API → queue → MTA → relay → delivery ✅
+- [ ] Inbound pipeline: SMTP/HTTP → parse → filter → route → store ✅
+- [ ] SPF/DMARC/DKIM validation on inbound ✅ (DKIM verification in progress)
+- [ ] Webhook delivery with retries and audit trail (in progress)
+- [ ] Full-text search via Meilisearch (in progress)
+- [ ] Admin dashboard wired to real API data ✅
+- [ ] Database migrations and seed for Neon Postgres ✅
+- [ ] Managed relay support (SES/MailChannels/SMTP) ✅
+- [ ] JMAP service with auth and full Email methods ✅
+- [ ] Stripe billing integration
+- [ ] AI spam/content classification (Claude API integration)
+- [ ] IP warm-up orchestrator
+- [ ] Domain auto-configuration (SPF/DKIM/DMARC DNS automation)
+- [ ] SDK published with working examples
+- [ ] Monitoring and alerting (OpenTelemetry)
+- [ ] Rate limiting on all public endpoints
+- [ ] IMAP4rev2 bridge for legacy clients
+
 ## Vision
 
 Emailed is the most advanced AI-native email infrastructure platform ever built. It competes directly with Mailgun, Google Workspace, Outlook 365, and SendGrid — but surpasses all of them through deep AI integration at every layer. AI controls filtering, reputation, support, abuse detection, deliverability optimization, and operations. This is not email with AI bolted on — this is AI that does email.
