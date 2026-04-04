@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import { Box, Text, Button, Input, Card, CardContent } from "@emailed/ui";
+import { authApi } from "../../../lib/api";
 
 export default function LoginPage() {
   return (
@@ -70,19 +74,51 @@ function Divider() {
 Divider.displayName = "Divider";
 
 function EmailLogin() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await authApi.login(email, password);
+      // Redirect to dashboard
+      window.location.href = "/inbox";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Box as="form" className="space-y-4">
+    <Box as="form" className="space-y-4" onSubmit={handleSubmit}>
+      {error && (
+        <div className="p-3 rounded bg-red-100 text-red-800 text-sm">
+          {error}
+        </div>
+      )}
       <Input
         label="Email address"
         variant="email"
         placeholder="you@example.com"
         autoComplete="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
       />
       <Input
         label="Password"
         variant="password"
         placeholder="Enter your password"
         autoComplete="current-password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
       />
       <Box className="flex items-center justify-between">
         <Box className="flex items-center gap-2">
@@ -97,8 +133,14 @@ function EmailLogin() {
           </Text>
         </Box>
       </Box>
-      <Button variant="secondary" size="lg" className="w-full" type="submit">
-        Sign in with Email
+      <Button
+        variant="secondary"
+        size="lg"
+        className="w-full"
+        type="submit"
+        disabled={loading || !email || !password}
+      >
+        {loading ? "Signing in..." : "Sign in with Email"}
       </Button>
     </Box>
   );

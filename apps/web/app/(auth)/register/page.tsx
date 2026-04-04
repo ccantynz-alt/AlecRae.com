@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import { Box, Text, Button, Input, Card, CardContent } from "@emailed/ui";
+import { authApi } from "../../../lib/api";
 
 export default function RegisterPage() {
   return (
@@ -37,7 +41,10 @@ export default function RegisterPage() {
 
         <Box className="text-center mt-4">
           <Text variant="caption" muted>
-            By creating an account, you agree to our Terms of Service and Privacy Policy.
+            By creating an account, you agree to our{" "}
+            <a href="/terms" className="text-brand-600 hover:underline">Terms of Service</a>
+            {" "}and{" "}
+            <a href="/privacy" className="text-brand-600 hover:underline">Privacy Policy</a>.
           </Text>
         </Box>
       </Box>
@@ -76,20 +83,59 @@ function RegistrationDivider() {
 RegistrationDivider.displayName = "RegistrationDivider";
 
 function EmailRegistration() {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!firstName || !email || !password) return;
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const name = lastName ? `${firstName} ${lastName}` : firstName;
+      await authApi.register({ email, password, name });
+      window.location.href = "/inbox";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Box as="form" className="space-y-4">
+    <Box as="form" className="space-y-4" onSubmit={handleSubmit}>
+      {error && (
+        <div className="p-3 rounded bg-red-100 text-red-800 text-sm">
+          {error}
+        </div>
+      )}
       <Box className="grid grid-cols-2 gap-4">
         <Input
           label="First name"
           variant="text"
           placeholder="Jane"
           autoComplete="given-name"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
         />
         <Input
           label="Last name"
           variant="text"
           placeholder="Doe"
           autoComplete="family-name"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
         />
       </Box>
       <Input
@@ -97,16 +143,26 @@ function EmailRegistration() {
         variant="email"
         placeholder="you@example.com"
         autoComplete="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
       />
       <Input
         label="Password"
         variant="password"
         placeholder="Create a strong password"
         autoComplete="new-password"
-        hint="Must be at least 12 characters with a mix of letters, numbers, and symbols."
+        hint="Must be at least 8 characters."
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
       />
-      <Button variant="secondary" size="lg" className="w-full" type="submit">
-        Create Account
+      <Button
+        variant="secondary"
+        size="lg"
+        className="w-full"
+        type="submit"
+        disabled={loading || !firstName || !email || !password}
+      >
+        {loading ? "Creating account..." : "Create Account"}
       </Button>
     </Box>
   );
