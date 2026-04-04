@@ -10,13 +10,12 @@
  *   DELETE /v1/domains/:id         — delete domain
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   createTestApp,
   jsonRequest,
-  mockDb,
+  mockQuery,
   DEFAULT_AUTH,
-  TEST_ACCOUNT_ID,
 } from "./setup.js";
 import { domains } from "../src/routes/domains.js";
 
@@ -30,8 +29,8 @@ function buildApp(auth = DEFAULT_AUTH) {
 
 describe("POST /v1/domains", () => {
   it("should create a new domain and return 201 with DNS records", async () => {
-    // Mock: no existing domain
-    mockDb.limit.mockResolvedValueOnce([]);
+    // Query: no existing domain
+    mockQuery([]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/domains", {
@@ -49,8 +48,7 @@ describe("POST /v1/domains", () => {
   });
 
   it("should return 409 when domain already exists", async () => {
-    // Mock: existing domain found
-    mockDb.limit.mockResolvedValueOnce([{ id: "dom_existing" }]);
+    mockQuery([{ id: "dom_existing" }]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/domains", {
@@ -100,7 +98,7 @@ describe("POST /v1/domains", () => {
 
 describe("GET /v1/domains", () => {
   it("should return empty list when no domains exist", async () => {
-    mockDb.orderBy.mockResolvedValueOnce([]);
+    mockQuery([]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/domains");
@@ -112,7 +110,7 @@ describe("GET /v1/domains", () => {
 
   it("should return list of domains", async () => {
     const now = new Date();
-    mockDb.orderBy.mockResolvedValueOnce([
+    mockQuery([
       {
         id: "dom_1",
         domain: "example.com",
@@ -158,8 +156,8 @@ describe("GET /v1/domains", () => {
 describe("GET /v1/domains/:id", () => {
   it("should return domain with DNS records", async () => {
     const now = new Date();
-    // First call: domain record
-    mockDb.limit.mockResolvedValueOnce([
+    // Query 1: domain record
+    mockQuery([
       {
         id: "dom_1",
         domain: "example.com",
@@ -176,8 +174,8 @@ describe("GET /v1/domains/:id", () => {
         verifiedAt: now,
       },
     ]);
-    // Second call: DNS records
-    mockDb.where.mockResolvedValueOnce([
+    // Query 2: DNS records
+    mockQuery([
       {
         type: "TXT",
         name: "example.com",
@@ -201,7 +199,7 @@ describe("GET /v1/domains/:id", () => {
   });
 
   it("should return 404 for non-existent domain", async () => {
-    mockDb.limit.mockResolvedValueOnce([]);
+    mockQuery([]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/domains/nonexistent");
@@ -216,11 +214,10 @@ describe("GET /v1/domains/:id", () => {
 
 describe("POST /v1/domains/:id/verify", () => {
   it("should trigger verification and return updated status", async () => {
-    const now = new Date();
-    // First: ownership check
-    mockDb.limit.mockResolvedValueOnce([{ id: "dom_1" }]);
-    // Second: updated domain record
-    mockDb.limit.mockResolvedValueOnce([
+    // Query 1: ownership check
+    mockQuery([{ id: "dom_1" }]);
+    // Query 2: updated domain record
+    mockQuery([
       {
         id: "dom_1",
         domain: "example.com",
@@ -234,8 +231,8 @@ describe("POST /v1/domains/:id/verify", () => {
         verificationAttempts: 1,
       },
     ]);
-    // Third: DNS records
-    mockDb.where.mockResolvedValueOnce([]);
+    // Query 3: DNS records
+    mockQuery([]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/domains/dom_1/verify", {
@@ -250,7 +247,7 @@ describe("POST /v1/domains/:id/verify", () => {
   });
 
   it("should return 404 when domain does not exist", async () => {
-    mockDb.limit.mockResolvedValueOnce([]);
+    mockQuery([]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/domains/nonexistent/verify", {
@@ -265,13 +262,10 @@ describe("POST /v1/domains/:id/verify", () => {
 
 describe("GET /v1/domains/:id/dns", () => {
   it("should return DNS records for the domain", async () => {
-    const now = new Date();
-    // Ownership check
-    mockDb.limit.mockResolvedValueOnce([
-      { id: "dom_1", domain: "example.com" },
-    ]);
-    // DNS records
-    mockDb.where.mockResolvedValueOnce([
+    // Query 1: ownership check
+    mockQuery([{ id: "dom_1", domain: "example.com" }]);
+    // Query 2: DNS records
+    mockQuery([
       {
         type: "TXT",
         name: "example.com",
@@ -302,7 +296,7 @@ describe("GET /v1/domains/:id/dns", () => {
   });
 
   it("should return 404 when domain does not belong to account", async () => {
-    mockDb.limit.mockResolvedValueOnce([]);
+    mockQuery([]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/domains/other_dom/dns");
@@ -315,7 +309,7 @@ describe("GET /v1/domains/:id/dns", () => {
 
 describe("DELETE /v1/domains/:id", () => {
   it("should delete domain and return success", async () => {
-    mockDb.limit.mockResolvedValueOnce([{ id: "dom_1" }]);
+    mockQuery([{ id: "dom_1" }]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/domains/dom_1", {
@@ -329,7 +323,7 @@ describe("DELETE /v1/domains/:id", () => {
   });
 
   it("should return 404 when deleting non-existent domain", async () => {
-    mockDb.limit.mockResolvedValueOnce([]);
+    mockQuery([]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/domains/nonexistent", {

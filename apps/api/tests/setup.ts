@@ -19,21 +19,28 @@ import type { AuthContext } from "../src/middleware/auth.js";
 export function createMockDb() {
   const db: Record<string, any> = {};
 
-  // Every method returns `db` for chaining, except terminal methods
+  // Every chain method returns `db` for chaining. The db object is "thenable"
+  // so `await db.select().from().where()...` always resolves via `.then()`.
+  // Use `mockDb.then.mockImplementationOnce((r) => r(data))` to control
+  // what each sequential `await db...` resolves to in a route handler.
   db.select = vi.fn().mockReturnValue(db);
   db.from = vi.fn().mockReturnValue(db);
   db.where = vi.fn().mockReturnValue(db);
-  db.limit = vi.fn().mockResolvedValue([]);
+  db.limit = vi.fn().mockReturnValue(db);
   db.offset = vi.fn().mockReturnValue(db);
   db.orderBy = vi.fn().mockReturnValue(db);
   db.groupBy = vi.fn().mockReturnValue(db);
   db.insert = vi.fn().mockReturnValue(db);
   db.values = vi.fn().mockReturnValue(db);
-  db.onConflictDoNothing = vi.fn().mockResolvedValue(undefined);
+  db.onConflictDoNothing = vi.fn().mockReturnValue(db);
   db.update = vi.fn().mockReturnValue(db);
   db.set = vi.fn().mockReturnValue(db);
   db.delete = vi.fn().mockReturnValue(db);
   db.catch = vi.fn().mockReturnValue(db);
+
+  // Thenable: every `await db.chain...` resolves to [] by default.
+  // Override with mockImplementationOnce to return specific data per query.
+  db.then = vi.fn().mockImplementation((resolve: any) => resolve([]));
 
   return db;
 }
@@ -347,17 +354,32 @@ export function resetMockDb() {
   mockDb.select.mockReturnValue(mockDb);
   mockDb.from.mockReturnValue(mockDb);
   mockDb.where.mockReturnValue(mockDb);
-  mockDb.limit.mockResolvedValue([]);
+  mockDb.limit.mockReturnValue(mockDb);
   mockDb.offset.mockReturnValue(mockDb);
   mockDb.orderBy.mockReturnValue(mockDb);
   mockDb.groupBy.mockReturnValue(mockDb);
   mockDb.insert.mockReturnValue(mockDb);
   mockDb.values.mockReturnValue(mockDb);
-  mockDb.onConflictDoNothing.mockResolvedValue(undefined);
+  mockDb.onConflictDoNothing.mockReturnValue(mockDb);
   mockDb.update.mockReturnValue(mockDb);
   mockDb.set.mockReturnValue(mockDb);
   mockDb.delete.mockReturnValue(mockDb);
   mockDb.catch.mockReturnValue(mockDb);
+  mockDb.then.mockImplementation((resolve: any) => resolve([]));
+}
+
+/**
+ * Helper to set up sequential query results for a route handler
+ * that makes multiple DB queries. Each call to `mockQuery(data)`
+ * adds the data as the next `await db.chain...` result.
+ *
+ * Usage:
+ *   mockQuery([domainRecord]);       // first await
+ *   mockQuery(deliveryResults);      // second await
+ *   mockQuery([]);                   // third await (empty)
+ */
+export function mockQuery(data: unknown) {
+  mockDb.then.mockImplementationOnce((resolve: any) => resolve(data));
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ import { ok, err } from "../types.js";
  */
 export function extractBoundary(contentType: string): string | null {
   const match = contentType.match(/boundary\s*=\s*"?([^"\s;]+)"?/i);
-  return match ? match[1] : null;
+  return match ? (match[1] ?? null) : null;
 }
 
 /**
@@ -61,7 +61,7 @@ export function parseMimePartHeaders(
 
   const headerBlock = part.slice(0, splitIdx);
   const separatorMatch = part.slice(splitIdx).match(/^(\r?\n\r?\n)/);
-  const separatorLen = separatorMatch ? separatorMatch[1].length : 2;
+  const separatorLen = separatorMatch?.[1] ? separatorMatch[1].length : 2;
   const body = part.slice(splitIdx + separatorLen);
 
   const headers: Record<string, string> = {};

@@ -37,7 +37,7 @@ warmup.post(
   requireScope("domains:manage"),
   validateBody(StartWarmupSchema),
   async (c) => {
-    const domainId = c.req.param("id");
+    const domainId = c.req.param("id")!;
     const input = getValidatedBody<StartWarmupInput>(c);
     const auth = c.get("auth");
 
@@ -76,7 +76,7 @@ warmup.get(
   "/status",
   requireScope("domains:manage"),
   async (c) => {
-    const domainId = c.req.param("id");
+    const domainId = c.req.param("id")!;
 
     const orchestrator = getWarmupOrchestrator();
     const result = await orchestrator.checkWarmupStatus(domainId);
@@ -103,7 +103,7 @@ warmup.post(
   "/pause",
   requireScope("domains:manage"),
   async (c) => {
-    const domainId = c.req.param("id");
+    const domainId = c.req.param("id")!;
 
     const orchestrator = getWarmupOrchestrator();
     const result = await orchestrator.pauseWarmup(domainId);
@@ -133,7 +133,7 @@ warmup.post(
   "/resume",
   requireScope("domains:manage"),
   async (c) => {
-    const domainId = c.req.param("id");
+    const domainId = c.req.param("id")!;
 
     const orchestrator = getWarmupOrchestrator();
     const result = await orchestrator.resumeWarmup(domainId);
@@ -163,7 +163,7 @@ warmup.post(
   "/cancel",
   requireScope("domains:manage"),
   async (c) => {
-    const domainId = c.req.param("id");
+    const domainId = c.req.param("id")!;
 
     const orchestrator = getWarmupOrchestrator();
     const result = await orchestrator.cancelWarmup(domainId);
@@ -193,7 +193,7 @@ warmup.get(
   "/report",
   requireScope("domains:manage"),
   async (c) => {
-    const domainId = c.req.param("id");
+    const domainId = c.req.param("id")!;
 
     const monitor = getWarmupMonitor();
     const report = await monitor.generateReport(domainId);

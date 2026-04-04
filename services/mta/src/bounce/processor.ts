@@ -106,7 +106,7 @@ export function parseDsn(raw: string): Result<DsnMessage> {
     const statusBlockMatch = raw.match(
       /content-type:\s*message\/delivery-status[\s\S]*?\n\n([\s\S]*?)(?:\n--|\n\nContent-Type:|\n\n$)/i,
     );
-    const statusBlock = statusBlockMatch ? statusBlockMatch[1] : raw;
+    const statusBlock = statusBlockMatch?.[1] ?? raw;
 
     // Split into groups: per-message fields come first, then one group
     // per recipient, separated by blank lines.
@@ -528,7 +528,7 @@ function matches(text: string, keywords: string[]): boolean {
 function parseBounceHeuristic(raw: string): Result<BounceInfo[]> {
   // Try to find an SMTP status code
   const codeMatch = raw.match(/\b([245]\d{2})\b/);
-  const statusCode = codeMatch ? parseInt(codeMatch[1], 10) : 0;
+  const statusCode = codeMatch?.[1] ? parseInt(codeMatch[1], 10) : 0;
 
   // Try to find an email address
   const emailMatch = raw.match(/[\w.+-]+@[\w.-]+\.\w{2,}/);

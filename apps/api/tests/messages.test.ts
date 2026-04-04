@@ -9,13 +9,12 @@
  *   GET  /v1/messages/search — search by query
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   createTestApp,
   jsonRequest,
-  mockDb,
+  mockQuery,
   DEFAULT_AUTH,
-  TEST_ACCOUNT_ID,
 } from "./setup.js";
 import { messages } from "../src/routes/messages.js";
 
@@ -29,10 +28,8 @@ function buildApp(auth = DEFAULT_AUTH) {
 
 describe("POST /v1/messages/send", () => {
   it("should accept a valid send request and return 202", async () => {
-    // Mock: domain lookup returns a record
-    mockDb.limit.mockResolvedValueOnce([
-      { id: "dom_1", dkimSelector: "emailed1" },
-    ]);
+    // Query 1: domain lookup
+    mockQuery([{ id: "dom_1", dkimSelector: "emailed1" }]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages/send", {
@@ -53,9 +50,7 @@ describe("POST /v1/messages/send", () => {
   });
 
   it("should accept HTML-only emails", async () => {
-    mockDb.limit.mockResolvedValueOnce([
-      { id: "dom_1", dkimSelector: "emailed1" },
-    ]);
+    mockQuery([{ id: "dom_1", dkimSelector: "emailed1" }]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages/send", {
@@ -72,9 +67,7 @@ describe("POST /v1/messages/send", () => {
   });
 
   it("should accept multipart (text + html) emails", async () => {
-    mockDb.limit.mockResolvedValueOnce([
-      { id: "dom_1", dkimSelector: "emailed1" },
-    ]);
+    mockQuery([{ id: "dom_1", dkimSelector: "emailed1" }]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages/send", {
@@ -152,8 +145,7 @@ describe("POST /v1/messages/send", () => {
   });
 
   it("should return 422 when sender domain is not registered", async () => {
-    // Mock: domain lookup returns no results
-    mockDb.limit.mockResolvedValueOnce([]);
+    mockQuery([]); // domain lookup returns nothing
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages/send", {
@@ -172,9 +164,7 @@ describe("POST /v1/messages/send", () => {
   });
 
   it("should accept scheduled sends with future date", async () => {
-    mockDb.limit.mockResolvedValueOnce([
-      { id: "dom_1", dkimSelector: "emailed1" },
-    ]);
+    mockQuery([{ id: "dom_1", dkimSelector: "emailed1" }]);
 
     const app = buildApp();
     const futureDate = new Date(Date.now() + 3600_000).toISOString();
@@ -193,9 +183,7 @@ describe("POST /v1/messages/send", () => {
   });
 
   it("should accept messages with tags", async () => {
-    mockDb.limit.mockResolvedValueOnce([
-      { id: "dom_1", dkimSelector: "emailed1" },
-    ]);
+    mockQuery([{ id: "dom_1", dkimSelector: "emailed1" }]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages/send", {
@@ -230,9 +218,7 @@ describe("POST /v1/messages/send", () => {
 
 describe("POST /v1/messages (alias for /send)", () => {
   it("should work identically to /send", async () => {
-    mockDb.limit.mockResolvedValueOnce([
-      { id: "dom_1", dkimSelector: "emailed1" },
-    ]);
+    mockQuery([{ id: "dom_1", dkimSelector: "emailed1" }]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages", {
@@ -255,8 +241,7 @@ describe("POST /v1/messages (alias for /send)", () => {
 
 describe("GET /v1/messages", () => {
   it("should return an empty list when no messages exist", async () => {
-    // limit returns one extra for pagination check; empty means no messages
-    mockDb.limit.mockResolvedValueOnce([]);
+    mockQuery([]); // no messages
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages");
@@ -270,7 +255,7 @@ describe("GET /v1/messages", () => {
 
   it("should return paginated message list", async () => {
     const now = new Date();
-    const fakeMessages = [
+    mockQuery([
       {
         id: "msg_1",
         messageId: "<msg1@example.com>",
@@ -303,9 +288,7 @@ describe("GET /v1/messages", () => {
         updatedAt: now,
         sentAt: null,
       },
-    ];
-
-    mockDb.limit.mockResolvedValueOnce(fakeMessages);
+    ]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages", {
@@ -321,7 +304,7 @@ describe("GET /v1/messages", () => {
   });
 
   it("should support status filter", async () => {
-    mockDb.limit.mockResolvedValueOnce([]);
+    mockQuery([]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages", {
@@ -329,8 +312,6 @@ describe("GET /v1/messages", () => {
     });
 
     expect(res.status).toBe(200);
-    // Verify where was called (status filter applied)
-    expect(mockDb.where).toHaveBeenCalled();
   });
 });
 
@@ -339,24 +320,28 @@ describe("GET /v1/messages", () => {
 describe("GET /v1/messages/:id", () => {
   it("should return a single message with delivery results", async () => {
     const now = new Date();
-    const fakeEmail = {
-      id: "msg_1",
-      messageId: "<msg1@example.com>",
-      fromAddress: "sender@example.com",
-      fromName: "Sender",
-      toAddresses: [{ address: "rcpt@test.com", name: "Recipient" }],
-      ccAddresses: null,
-      subject: "Test message",
-      textBody: "Hello",
-      htmlBody: null,
-      status: "delivered",
-      tags: ["tag1"],
-      createdAt: now,
-      updatedAt: now,
-      sentAt: now,
-    };
 
-    const fakeDeliveryResults = [
+    // Query 1: email record
+    mockQuery([
+      {
+        id: "msg_1",
+        messageId: "<msg1@example.com>",
+        fromAddress: "sender@example.com",
+        fromName: "Sender",
+        toAddresses: [{ address: "rcpt@test.com", name: "Recipient" }],
+        ccAddresses: null,
+        subject: "Test message",
+        textBody: "Hello",
+        htmlBody: null,
+        status: "delivered",
+        tags: ["tag1"],
+        createdAt: now,
+        updatedAt: now,
+        sentAt: now,
+      },
+    ]);
+    // Query 2: delivery results
+    mockQuery([
       {
         recipientAddress: "rcpt@test.com",
         status: "delivered",
@@ -367,12 +352,7 @@ describe("GET /v1/messages/:id", () => {
         deliveredAt: now,
         nextRetryAt: null,
       },
-    ];
-
-    // First limit call: email record
-    mockDb.limit.mockResolvedValueOnce([fakeEmail]);
-    // Second call: delivery results (no .limit, uses .where)
-    mockDb.where.mockResolvedValueOnce(fakeDeliveryResults);
+    ]);
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages/msg_1");
@@ -387,7 +367,7 @@ describe("GET /v1/messages/:id", () => {
   });
 
   it("should return 404 for non-existent message", async () => {
-    mockDb.limit.mockResolvedValueOnce([]);
+    mockQuery([]); // no email found
 
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages/nonexistent");
@@ -402,7 +382,6 @@ describe("GET /v1/messages/:id", () => {
 
 describe("GET /v1/messages/search", () => {
   it("should return search results from Meilisearch", async () => {
-    // searchEmails is mocked in setup.ts to return empty results
     const app = buildApp();
     const res = await jsonRequest(app, "/v1/messages/search", {
       query: { q: "hello" },

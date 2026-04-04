@@ -168,9 +168,9 @@ export class EmailQueueManager {
         },
         removeOnComplete: true,
         removeOnFail: false,
-        group: {
-          id: emailWithId.domain || domainOf(emailWithId.to[0] ?? ""),
-        } as Record<string, unknown>,
+      } as Record<string, unknown>;
+      (jobOpts as Record<string, unknown>)["group"] = {
+        id: emailWithId.domain || domainOf(emailWithId.to[0] ?? ""),
       };
 
       if (delay !== undefined && delay > 0) {

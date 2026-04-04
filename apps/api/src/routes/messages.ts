@@ -500,6 +500,7 @@ messages.get(
       .from(deliveryResults)
       .where(eq(deliveryResults.emailId, id));
 
+    const mapAddr = (a: { address: string; name?: string }) => ({ email: a.address, name: a.name });
     return c.json({
       data: {
         id: emailRecord.id,
@@ -508,8 +509,8 @@ messages.get(
           email: emailRecord.fromAddress,
           name: emailRecord.fromName,
         },
-        to: emailRecord.toAddresses,
-        cc: emailRecord.ccAddresses,
+        to: (emailRecord.toAddresses ?? []).map(mapAddr),
+        cc: (emailRecord.ccAddresses ?? []).map(mapAddr),
         subject: emailRecord.subject,
         textBody: emailRecord.textBody,
         htmlBody: emailRecord.htmlBody,
@@ -605,12 +606,13 @@ messages.get(
         ? page[page.length - 1]!.createdAt.toISOString()
         : null;
 
+    const mapAddr = (a: { address: string; name?: string }) => ({ email: a.address, name: a.name });
     const data = page.map((row) => ({
       id: row.id,
       messageId: row.messageId,
       from: { email: row.fromAddress, name: row.fromName },
-      to: row.toAddresses,
-      cc: row.ccAddresses,
+      to: (row.toAddresses ?? []).map(mapAddr),
+      cc: (row.ccAddresses ?? []).map(mapAddr),
       subject: row.subject,
       preview: (row.textBody ?? row.htmlBody ?? "").slice(0, 256).replace(/<[^>]+>/g, ""),
       status: row.status,

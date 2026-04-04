@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageLayout, ComposeEditor, type ComposeData, type AISuggestion } from "@emailed/ui";
 import { messagesApi, authApi } from "../../../lib/api";
@@ -27,6 +27,14 @@ const sampleSuggestions: AISuggestion[] = [
 ];
 
 export default function ComposePage() {
+  return (
+    <Suspense fallback={<PageLayout title="Compose" fullWidth><div className="p-8 text-center text-gray-500">Loading...</div></PageLayout>}>
+      <ComposePageInner />
+    </Suspense>
+  );
+}
+
+function ComposePageInner() {
   const searchParams = useSearchParams();
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);

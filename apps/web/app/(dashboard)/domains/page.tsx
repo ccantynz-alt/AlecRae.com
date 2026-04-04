@@ -112,11 +112,11 @@ export default function DomainsPage() {
         />
       )}
       {loading ? (
-        <Text variant="body" muted>Loading domains...</Text>
+        <Text variant="body-md" muted>Loading domains...</Text>
       ) : domains.length === 0 ? (
         <Card>
           <CardContent>
-            <Text variant="body" muted>
+            <Text variant="body-md" muted>
               No domains configured. Add a domain to start sending emails.
             </Text>
           </CardContent>

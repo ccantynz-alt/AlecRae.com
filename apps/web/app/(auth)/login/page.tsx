@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { Box, Text, Button, Input, Card, CardContent } from "@emailed/ui";
 import { authApi } from "../../../lib/api";
@@ -24,7 +24,9 @@ export default function LoginPage() {
             <Box className="space-y-6">
               <PasskeyLogin />
               <Divider />
-              <EmailLogin />
+              <Suspense fallback={null}>
+                <EmailLogin />
+              </Suspense>
             </Box>
           </CardContent>
         </Card>

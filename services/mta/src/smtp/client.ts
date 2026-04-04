@@ -5,6 +5,8 @@
 
 import * as net from "node:net";
 import * as dns from "node:dns/promises";
+
+interface MxRecord { exchange: string; priority: number; }
 import { EventEmitter } from "node:events";
 import type { SmtpClientConfig, Result } from "../types.js";
 import { ok, err } from "../types.js";
@@ -45,7 +47,7 @@ export class SmtpClient extends EventEmitter {
   /**
    * Resolve MX records for a domain and return them sorted by priority.
    */
-  static async resolveMx(domain: string): Promise<dns.MxRecord[]> {
+  static async resolveMx(domain: string): Promise<MxRecord[]> {
     try {
       const records = await dns.resolveMx(domain);
       return records.sort((a, b) => a.priority - b.priority);
@@ -73,7 +75,7 @@ export class SmtpClient extends EventEmitter {
       return err(new Error(`Invalid recipient address: ${to}`));
     }
 
-    let mxRecords: dns.MxRecord[];
+    let mxRecords: MxRecord[];
     try {
       mxRecords = await SmtpClient.resolveMx(recipientDomain);
     } catch (error) {

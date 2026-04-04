@@ -10,7 +10,7 @@
  * HTML body values are XSS-escaped; text body values are not.
  */
 
-import type { TemplateVariable } from "@emailed/db/src/schema/templates.js";
+import type { TemplateVariable } from "@emailed/db";
 
 export interface RenderResult {
   subject: string;

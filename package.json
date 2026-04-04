@@ -23,6 +23,7 @@
     "db:studio": "bun run --cwd packages/db db:studio"
   },
   "dependencies": {
+    "drizzle-orm": "0.36.4",
     "meilisearch": "^0.44.0"
   },
   "devDependencies": {
