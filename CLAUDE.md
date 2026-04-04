@@ -8,62 +8,121 @@
 - When an agent finishes, commit its output and start the next piece of work immediately.
 - When you hit an error, fix it and keep going. Do not stop to report the error unless you are truly blocked with no path forward.
 - The owner is busy with other projects and cannot babysit this build. You must be fully autonomous.
-- If there is remaining work on the roadmap (see Architecture section), pick the highest-impact item and build it.
+- If there is remaining work on the roadmap, pick the highest-impact item and build it.
 - Always commit and push completed work immediately — never let work sit uncommitted.
 - Run agents in parallel whenever possible to maximize throughput.
 - The goal is a working, deployable product. Every action should move toward that goal.
 
-**Current priority: Wire up the sending pipeline so `POST /v1/messages/send` actually delivers email. This is the critical path to production.**
+**Current priority: Get the product to 100% usable. All pages must work. Stripe must work. SDK must be documented. Then deploy.**
 
-## CONTINUOUS BUILD LOOP — MANDATORY
+## LIVE STATUS — READ THIS FIRST
 
-**This is a loop. Never exit it. After every task, circle back here.**
+**Last updated: 2026-04-04**
+**Overall: ~85% complete. Core email sending/receiving works. Billing UI and polish remain.**
 
-1. **CHECK THE ROADMAP** — Review the Architecture section and service list below. Identify what's missing, stubbed, or incomplete.
-2. **BUILD THE NEXT HIGHEST-IMPACT ITEM** — Pick it and build it. No gaps, no stubs, no broken links.
-3. **VERIFY QUALITY** — Every piece of work must be:
-   - Fully functional (no placeholder code, no hardcoded sample data, no TODO stubs in production paths)
-   - Properly wired (imports resolve, types align, DB schemas match, API contracts consistent)
-   - Error-handled (graceful failures, not silent drops)
-   - Tested or testable (exports clean interfaces, no hidden coupling)
-4. **COMMIT AND PUSH** — Immediately. Never let work sit uncommitted.
-5. **RETURN TO STEP 1** — Do not stop. Do not idle. Do not wait for instructions.
+### Backend Services (API + Workers)
+| Service | Status | Notes |
+|---------|--------|-------|
+| `apps/api` (Hono, port 3001) | ✅ DONE | All routes: messages, domains, webhooks, billing, templates, suppressions, bounces, warmup, admin, analytics |
+| `services/mta` (BullMQ worker) | ✅ DONE | Relay delivery (SES/MailChannels/SMTP), DKIM signing, delivery optimizer, bounce processing |
+| `services/inbound` (SMTP+HTTP) | ✅ DONE | Dual ingress, SPF/DMARC/DKIM validation, AI spam filter, DB storage |
+| `services/jmap` (port 8080) | ✅ DONE | JWT auth, Email/get, Email/query, Email/set, Email/changes |
+| `services/dns` | ✅ DONE | Auto-config (SPF/DKIM/DMARC generation), verification, health checks, DKIM rotation |
+| `services/reputation` | ✅ DONE | Warm-up orchestrator, bounce monitoring, adaptive schedules |
+| `services/imap` | ⚠️ PARTIAL | Parser + formatter done. Server shell exists. Not complete enough for Thunderbird. |
+| `services/ai-engine` | ✅ DONE | Claude API classifier with LRU cache + rule-based fallback |
 
-### Quality Standard: 80-90% Ahead of Competition
-- Every feature must be production-grade, not demo-grade.
-- No broken links, no dead endpoints, no orphaned code.
-- No misleading interfaces — if a button exists, it works. If an API endpoint is listed, it responds correctly.
-- No fake data in production paths. Sample data is for tests and seeds only.
-- The codebase must be honest: what it claims to do, it actually does.
-- If something can't be fully built yet (e.g., needs external credentials), build everything around it and make the integration point clean and obvious.
+### Database (packages/db)
+| Item | Status |
+|------|--------|
+| Schema (8 migrations) | ✅ All tables: users, accounts, domains, dns_records, emails, attachments, delivery_results, api_keys, events, webhooks, webhook_deliveries, suppression_lists, warmup_sessions, templates |
+| Migration runner | ✅ `bun run db:migrate` — works with Neon Postgres (auto SSL) |
+| Seed script | ✅ `bun run db:seed` — creates test user, domain, API key |
+| Drizzle config | ✅ `packages/db/drizzle.config.ts` |
 
-### Build Checklist (circle back to this every iteration):
-- [x] Sending pipeline: API → queue → MTA → relay → delivery
-- [x] Inbound pipeline: SMTP/HTTP → parse → filter → route → store
-- [x] SPF/DMARC/DKIM validation on inbound (full RFC 6376/7208/7489)
-- [x] Webhook delivery with retries and audit trail (BullMQ + webhook_deliveries)
-- [x] Full-text search via Meilisearch (indexed on ingest + search API)
-- [x] Admin dashboard wired to real API data (all 7 pages)
-- [x] Database migrations and seed for Neon Postgres
-- [x] Managed relay support (SES/MailChannels/SMTP)
-- [x] JMAP service with auth and full Email methods
-- [x] Stripe billing integration (checkout, portal, usage enforcement)
-- [x] AI spam/content classification (Claude API with LRU cache + fallback)
-- [x] IP warm-up orchestrator (adaptive schedules, bounce monitoring)
-- [x] Domain auto-configuration (SPF/DKIM/DMARC DNS automation + key rotation)
-- [x] SDK published with working examples (send, domains, webhooks)
-- [x] Monitoring and alerting (OpenTelemetry traces + metrics + middleware)
-- [x] Rate limiting on all public endpoints (Redis sliding window + fallback)
-- [ ] IMAP4rev2 bridge for legacy clients (in progress — parser + formatter done)
-- [x] Docker/Kubernetes deployment configs
-- [x] CI/CD pipeline (GitHub Actions)
-- [x] API documentation (OpenAPI specs)
-- [x] End-to-end integration tests
-- [x] Suppression list management API
-- [x] Email template system (stored templates with variable substitution)
-- [x] Bounce/complaint feedback loop processing
-- [ ] Communication Intelligence Graph (relationship tracking)
-- [ ] Voice Synthesis Engine (writing style learning)
+### Web App (apps/web, Next.js 15, port 3000)
+| Page | Status | Notes |
+|------|--------|-------|
+| Landing page `/` | ✅ DONE | Hero, features, CTAs |
+| Login `/login` | ⚠️ FIX NEEDED | Passkey buttons non-functional — need removal |
+| Register `/register` | ⚠️ FIX NEEDED | Same passkey issue |
+| Inbox `/inbox` | ✅ DONE | Real data, search, reply/forward |
+| Compose `/compose` | ✅ DONE | Send via API, reply/forward prefill |
+| Domains `/domains` | ✅ DONE | Add, verify, DNS records, health |
+| Webhooks `/webhooks` | ✅ DONE | CRUD, test, deliveries |
+| Templates `/templates` | ✅ DONE | CRUD, preview, send |
+| Analytics `/analytics` | ✅ DONE | Overview, time series, domain breakdown |
+| Settings `/settings` | ✅ DONE | Profile, account |
+| API Keys `/api-keys` | ✅ DONE | Create, revoke, copy |
+| **Billing `/billing`** | ❌ MISSING | **Stripe API exists but NO UI. BLOCKING.** |
+| **Suppressions `/suppressions`** | ❌ MISSING | API exists, no dashboard page |
+| **Bounces `/bounces`** | ❌ MISSING | API exists, no dashboard page |
+
+### Admin Dashboard (apps/admin, port 3002)
+| Page | Status |
+|------|--------|
+| Dashboard | ✅ Real API data |
+| Domains | ✅ Real API data |
+| Users | ✅ Real API data |
+| Analytics | ✅ Real API data |
+| Queue | ✅ Real API data |
+| Security | ✅ Real API data |
+| Reputation | ✅ Real API data |
+
+### Infrastructure
+| Item | Status |
+|------|--------|
+| Docker (8 Dockerfiles) | ✅ DONE |
+| docker-compose.yml | ✅ DONE (all services + postgres + redis + meilisearch) |
+| docker-compose.dev.yml | ✅ DONE |
+| Kubernetes manifests | ✅ DONE (deployments, services, ingress, HPA, PDB, network policies) |
+| CI/CD (GitHub Actions) | ✅ DONE (ci.yml, deploy.yml, db-migrate.yml) |
+| Setup scripts | ✅ DONE (setup.sh, dev.sh, reset-db.sh) |
+| .env.example | ✅ DONE |
+| README.md | ✅ DONE |
+
+### SDK (packages/sdk)
+| Item | Status |
+|------|--------|
+| Client + resources | ✅ Messages, Domains, Webhooks, Events, Billing, Contacts, Analytics |
+| Webhook verification | ✅ HMAC-SHA256 |
+| Examples | ✅ send-email, webhook-handler, domain-setup |
+| **README.md** | ❌ MISSING | **No SDK documentation** |
+| package.json (npm ready) | ✅ exports, types, files configured |
+
+### Packages
+| Package | Status |
+|---------|--------|
+| `packages/shared` | ✅ Telemetry (OTel), search (Meilisearch), utils |
+| `packages/db` | ✅ Schema, migrations, client, Neon support |
+| `packages/ui` | ✅ Radix primitives, composites, layouts |
+| `packages/crypto` | ✅ DKIM, hashing, encryption |
+| `packages/email-parser` | ✅ MIME parsing |
+
+### Tests
+| Suite | Status |
+|-------|--------|
+| API e2e (116 tests) | ✅ All passing |
+| Warm-up orchestrator (17 tests) | ✅ All passing |
+
+### OpenAPI Docs
+| Item | Status |
+|------|--------|
+| `docs/api/openapi.yaml` (875 lines) | ✅ |
+| `docs/api/authentication.md` | ✅ |
+| `docs/api/errors.md` | ✅ |
+| `docs/api/rate-limits.md` | ✅ |
+
+## WHAT TO BUILD NEXT (priority order)
+
+1. **Billing page** `/billing` — plan cards, usage meter, Stripe checkout redirect, manage billing portal
+2. **Fix login/register** — remove passkey buttons, clean email/password only
+3. **Suppressions page** `/suppressions` — list, add, remove, import
+4. **Bounces page** `/bounces` — stats cards, recent bounces list, trending chart
+5. **SDK README** — full API reference with code examples
+6. **IMAP server** — complete for Thunderbird/Outlook compatibility
+7. **CIG** — Communication Intelligence Graph (future)
+8. **Voice Synthesis** — Writing style engine (future)
 
 ## Vision
 
