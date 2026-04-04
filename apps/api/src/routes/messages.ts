@@ -185,289 +185,156 @@ const ListMessagesQuery = PaginationSchema.extend({
   tag: z.string().optional(),
 });
 
+// ─── Shared send handler ───────────────────────────────────────────────────
+
+import type { Context } from "hono";
+
+async function handleSend(c: Context) {
+  const input = getValidatedBody<SendMessageInput>(c);
+  const auth = c.get("auth");
+  const db = getDatabase();
+
+  const id = generateId();
+  const senderDomain = domainOf(input.from.email);
+  const messageId = generateMessageId(senderDomain);
+
+  // ── 1. Resolve the sender domain in our database ──────────────────
+  const [domainRecord] = await db
+    .select({ id: domains.id, dkimSelector: domains.dkimSelector })
+    .from(domains)
+    .where(and(eq(domains.domain, senderDomain), eq(domains.accountId, auth.accountId)))
+    .limit(1);
+
+  if (!domainRecord) {
+    return c.json(
+      {
+        error: {
+          type: "validation_error",
+          message: `Domain "${senderDomain}" is not verified for this account. Add it via POST /v1/domains first.`,
+          code: "domain_not_found",
+        },
+      },
+      422,
+    );
+  }
+
+  // ── 2. Build the raw RFC-5322 message ─────────────────────────────
+  const rawMessage = buildRawMessage(input, messageId);
+
+  // ── 3. Collect all recipient addresses (to + cc + bcc) ────────────
+  const allRecipients = [
+    ...input.to.map((r) => r.email),
+    ...(input.cc ?? []).map((r) => r.email),
+    ...(input.bcc ?? []).map((r) => r.email),
+  ];
+
+  // ── 4. Persist the email record in Postgres ───────────────────────
+  const now = new Date();
+
+  await db.insert(emails).values({
+    id,
+    accountId: auth.accountId,
+    domainId: domainRecord.id,
+    messageId,
+    fromAddress: input.from.email,
+    fromName: input.from.name ?? null,
+    toAddresses: input.to.map((r) => ({
+      address: r.email,
+      name: r.name,
+    })),
+    ccAddresses: input.cc
+      ? input.cc.map((r) => ({ address: r.email, name: r.name }))
+      : null,
+    bccAddresses: input.bcc
+      ? input.bcc.map((r) => ({ address: r.email, name: r.name }))
+      : null,
+    replyToAddress: input.replyTo?.email ?? null,
+    replyToName: input.replyTo?.name ?? null,
+    subject: input.subject,
+    textBody: input.text ?? null,
+    htmlBody: input.html ?? null,
+    customHeaders: input.headers ?? null,
+    status: "queued",
+    tags: input.tags ?? [],
+    scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // ── 5. Create delivery_results rows (one per recipient) ───────────
+  const deliveryRows = allRecipients.map((recipient) => ({
+    id: generateId(),
+    emailId: id,
+    recipientAddress: recipient,
+    status: "queued" as const,
+    attemptCount: 0,
+  }));
+
+  if (deliveryRows.length > 0) {
+    await db.insert(deliveryResults).values(deliveryRows);
+  }
+
+  // ── 6. Enqueue to MTA via BullMQ ─────────────────────────────────
+  const queue = getSendQueue();
+
+  let delay: number | undefined;
+  if (input.scheduledAt) {
+    const delayMs = new Date(input.scheduledAt).getTime() - Date.now();
+    if (delayMs > 0) {
+      delay = delayMs;
+    }
+  }
+
+  await queue.add(
+    id,
+    {
+      email: {
+        id,
+        messageId,
+        from: input.from.email,
+        to: allRecipients,
+        rawMessage,
+        priority: 3 as const,
+        attempts: 0,
+        maxAttempts: 8,
+        scheduledAt: input.scheduledAt
+          ? new Date(input.scheduledAt)
+          : new Date(),
+        createdAt: now,
+        domain: senderDomain,
+        metadata: {
+          accountId: auth.accountId,
+          domainId: domainRecord.id,
+          tags: input.tags ?? [],
+        },
+      },
+      addedAt: now.toISOString(),
+    },
+    {
+      priority: 3,
+      attempts: 8,
+      backoff: { type: "exponential", delay: 60_000 },
+      removeOnComplete: true,
+      removeOnFail: false,
+      ...(delay !== undefined ? { delay } : {}),
+    },
+  );
+
+  // ── 7. Return response ────────────────────────────────────────────
+  return c.json({ id, messageId, status: "queued" as const }, 202);
+}
+
 // ─── Route handler ──────────────────────────────────────────────────────────
 
 const messages = new Hono();
 
+const sendMiddleware = [requireScope("messages:send"), validateBody(SendMessageSchema)] as const;
+
 // POST /v1/messages/send — Send an email (production pipeline)
-messages.post(
-  "/send",
-  requireScope("messages:send"),
-  validateBody(SendMessageSchema),
-  async (c) => {
-    const input = getValidatedBody<SendMessageInput>(c);
-    const auth = c.get("auth");
-    const db = getDatabase();
-
-    const id = generateId();
-    const senderDomain = domainOf(input.from.email);
-    const messageId = generateMessageId(senderDomain);
-
-    // ── 1. Resolve the sender domain in our database ──────────────────
-    const [domainRecord] = await db
-      .select({ id: domains.id, dkimSelector: domains.dkimSelector })
-      .from(domains)
-      .where(and(eq(domains.domain, senderDomain), eq(domains.accountId, auth.accountId)))
-      .limit(1);
-
-    if (!domainRecord) {
-      return c.json(
-        {
-          error: {
-            type: "validation_error",
-            message: `Domain "${senderDomain}" is not verified for this account. Add it via POST /v1/domains first.`,
-            code: "domain_not_found",
-          },
-        },
-        422,
-      );
-    }
-
-    // ── 2. Build the raw RFC-5322 message ─────────────────────────────
-    const rawMessage = buildRawMessage(input, messageId);
-
-    // ── 3. Collect all recipient addresses (to + cc + bcc) ────────────
-    const allRecipients = [
-      ...input.to.map((r) => r.email),
-      ...(input.cc ?? []).map((r) => r.email),
-      ...(input.bcc ?? []).map((r) => r.email),
-    ];
-
-    // ── 4. Persist the email record in Postgres ───────────────────────
-    const now = new Date();
-
-    await db.insert(emails).values({
-      id,
-      accountId: auth.accountId,
-      domainId: domainRecord.id,
-      messageId,
-      fromAddress: input.from.email,
-      fromName: input.from.name ?? null,
-      toAddresses: input.to.map((r) => ({
-        address: r.email,
-        name: r.name,
-      })),
-      ccAddresses: input.cc
-        ? input.cc.map((r) => ({ address: r.email, name: r.name }))
-        : null,
-      bccAddresses: input.bcc
-        ? input.bcc.map((r) => ({ address: r.email, name: r.name }))
-        : null,
-      replyToAddress: input.replyTo?.email ?? null,
-      replyToName: input.replyTo?.name ?? null,
-      subject: input.subject,
-      textBody: input.text ?? null,
-      htmlBody: input.html ?? null,
-      customHeaders: input.headers ?? null,
-      status: "queued",
-      tags: input.tags ?? [],
-      scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    // ── 5. Create delivery_results rows (one per recipient) ───────────
-    const deliveryRows = allRecipients.map((recipient) => ({
-      id: generateId(),
-      emailId: id,
-      recipientAddress: recipient,
-      status: "queued" as const,
-      attemptCount: 0,
-    }));
-
-    if (deliveryRows.length > 0) {
-      await db.insert(deliveryResults).values(deliveryRows);
-    }
-
-    // ── 6. Enqueue to MTA via BullMQ ─────────────────────────────────
-    const queue = getSendQueue();
-
-    // Compute optional delay for scheduled sends
-    let delay: number | undefined;
-    if (input.scheduledAt) {
-      const delayMs = new Date(input.scheduledAt).getTime() - Date.now();
-      if (delayMs > 0) {
-        delay = delayMs;
-      }
-    }
-
-    await queue.add(
-      id,
-      {
-        email: {
-          id,
-          messageId,
-          from: input.from.email,
-          to: allRecipients,
-          rawMessage,
-          priority: 3 as const,
-          attempts: 0,
-          maxAttempts: 8,
-          scheduledAt: input.scheduledAt
-            ? new Date(input.scheduledAt)
-            : new Date(),
-          createdAt: now,
-          domain: senderDomain,
-          metadata: {
-            accountId: auth.accountId,
-            domainId: domainRecord.id,
-            tags: input.tags ?? [],
-          },
-        },
-        addedAt: now.toISOString(),
-      },
-      {
-        priority: 3,
-        attempts: 8,
-        backoff: { type: "exponential", delay: 60_000 },
-        removeOnComplete: true,
-        removeOnFail: false,
-        ...(delay !== undefined ? { delay } : {}),
-      },
-    );
-
-    // ── 7. Return response ────────────────────────────────────────────
-    return c.json(
-      {
-        id,
-        messageId,
-        status: "queued" as const,
-      },
-      202,
-    );
-  },
-);
+messages.post("/send", ...sendMiddleware, handleSend);
 
 // POST /v1/messages — Alias for /send
-messages.post(
-  "/",
-  requireScope("messages:send"),
-  validateBody(SendMessageSchema),
-  async (c) => {
-    // Re-dispatch to /send handler logic. We duplicate the handler here
-    // to keep the route registrations simple and avoid Hono redirect quirks.
-    const input = getValidatedBody<SendMessageInput>(c);
-    const auth = c.get("auth");
-    const db = getDatabase();
-
-    const id = generateId();
-    const senderDomain = domainOf(input.from.email);
-    const messageId = generateMessageId(senderDomain);
-
-    const [domainRecord] = await db
-      .select({ id: domains.id, dkimSelector: domains.dkimSelector })
-      .from(domains)
-      .where(and(eq(domains.domain, senderDomain), eq(domains.accountId, auth.accountId)))
-      .limit(1);
-
-    if (!domainRecord) {
-      return c.json(
-        {
-          error: {
-            type: "validation_error",
-            message: `Domain "${senderDomain}" is not verified for this account. Add it via POST /v1/domains first.`,
-            code: "domain_not_found",
-          },
-        },
-        422,
-      );
-    }
-
-    const rawMessage = buildRawMessage(input, messageId);
-
-    const allRecipients = [
-      ...input.to.map((r) => r.email),
-      ...(input.cc ?? []).map((r) => r.email),
-      ...(input.bcc ?? []).map((r) => r.email),
-    ];
-
-    const now = new Date();
-
-    await db.insert(emails).values({
-      id,
-      accountId: auth.accountId,
-      domainId: domainRecord.id,
-      messageId,
-      fromAddress: input.from.email,
-      fromName: input.from.name ?? null,
-      toAddresses: input.to.map((r) => ({ address: r.email, name: r.name })),
-      ccAddresses: input.cc
-        ? input.cc.map((r) => ({ address: r.email, name: r.name }))
-        : null,
-      bccAddresses: input.bcc
-        ? input.bcc.map((r) => ({ address: r.email, name: r.name }))
-        : null,
-      replyToAddress: input.replyTo?.email ?? null,
-      replyToName: input.replyTo?.name ?? null,
-      subject: input.subject,
-      textBody: input.text ?? null,
-      htmlBody: input.html ?? null,
-      customHeaders: input.headers ?? null,
-      status: "queued",
-      tags: input.tags ?? [],
-      scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    const deliveryRows = allRecipients.map((recipient) => ({
-      id: generateId(),
-      emailId: id,
-      recipientAddress: recipient,
-      status: "queued" as const,
-      attemptCount: 0,
-    }));
-
-    if (deliveryRows.length > 0) {
-      await db.insert(deliveryResults).values(deliveryRows);
-    }
-
-    const queue = getSendQueue();
-
-    let delay: number | undefined;
-    if (input.scheduledAt) {
-      const delayMs = new Date(input.scheduledAt).getTime() - Date.now();
-      if (delayMs > 0) delay = delayMs;
-    }
-
-    await queue.add(
-      id,
-      {
-        email: {
-          id,
-          messageId,
-          from: input.from.email,
-          to: allRecipients,
-          rawMessage,
-          priority: 3 as const,
-          attempts: 0,
-          maxAttempts: 8,
-          scheduledAt: input.scheduledAt
-            ? new Date(input.scheduledAt)
-            : new Date(),
-          createdAt: now,
-          domain: senderDomain,
-          metadata: {
-            accountId: auth.accountId,
-            domainId: domainRecord.id,
-            tags: input.tags ?? [],
-          },
-        },
-        addedAt: now.toISOString(),
-      },
-      {
-        priority: 3,
-        attempts: 8,
-        backoff: { type: "exponential", delay: 60_000 },
-        removeOnComplete: true,
-        removeOnFail: false,
-        ...(delay !== undefined ? { delay } : {}),
-      },
-    );
-
-    return c.json({ id, messageId, status: "queued" as const }, 202);
-  },
-);
+messages.post("/", ...sendMiddleware, handleSend);
 
 // GET /v1/messages/:id — Retrieve message + delivery status
 messages.get(
