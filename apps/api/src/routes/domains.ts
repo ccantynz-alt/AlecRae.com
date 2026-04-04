@@ -28,6 +28,7 @@ import {
   checkDomainHealth,
   rotateDkimKey,
 } from "@emailed/dns";
+import { warmup } from "./warmup.js";
 
 // ─── Route handler ──────────────────────────────────────────────────────────
 
@@ -495,5 +496,8 @@ domains.delete(
     return c.json({ deleted: true, id });
   },
 );
+
+// Mount warm-up sub-routes: /v1/domains/:id/warmup/*
+domains.route("/:id/warmup", warmup);
 
 export { domains };

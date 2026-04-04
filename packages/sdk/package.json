@@ -1,22 +1,53 @@
 {
   "name": "@emailed/sdk",
   "version": "0.1.0",
+  "description": "Official Node.js SDK for the Emailed email infrastructure platform",
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./webhooks": {
+      "types": "./dist/webhooks/verification.d.ts",
+      "import": "./dist/webhooks/verification.js"
     }
   },
   "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "email",
+    "smtp",
+    "api",
+    "sdk",
+    "emailed",
+    "transactional-email",
+    "email-api"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/emailed/emailed",
+    "directory": "packages/sdk"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "lint": "eslint src/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@emailed/shared": "workspace:*"
