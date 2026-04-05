@@ -129,47 +129,47 @@ Kill the bloated, slow, privacy-violating email clients that the world is stuck 
 ## PHASE 1 BUILD PLAN — DO IN ORDER
 
 ### STEP 1 — Core Email Engine
-- [ ] IMAP sync engine (connect any email account)
-- [ ] Google OAuth + Gmail API sync
-- [ ] Microsoft OAuth + Graph API sync (Outlook)
+- [x] IMAP sync engine (connect any email account)
+- [x] Google OAuth + Gmail API sync
+- [x] Microsoft OAuth + Graph API sync (Outlook)
 - [ ] IndexedDB local email cache
 - [ ] Background sync worker (Web Worker)
-- [ ] Email send via SMTP/API
+- [x] Email send via SMTP/API
 
 ### STEP 2 — Inbox UI
-- [ ] Inbox list with conversation threading
-- [ ] Thread view with full message rendering
-- [ ] HTML email sanitization + rendering
-- [ ] Compose with Tiptap rich text editor
-- [ ] Attachments (upload, download, inline preview)
-- [ ] Reply, reply all, forward
-- [ ] Labels, folders, move, archive, delete
+- [x] Inbox list with conversation threading
+- [x] Thread view with full message rendering
+- [x] HTML email sanitization + rendering
+- [x] Compose with rich text editor
+- [x] Attachments (upload, download, inline preview)
+- [x] Reply, reply all, forward
+- [x] Labels, folders, move, archive, delete
 - [ ] Snooze and schedule send
 - [ ] Undo send (configurable delay)
 - [ ] Multi-account switching
 
 ### STEP 3 — AI Features
-- [ ] AI Compose (Claude writes emails from description)
-- [ ] AI Reply (suggested replies with tone control)
-- [ ] AI Triage (auto-categorize incoming mail)
-- [ ] AI Summary (thread summarization)
+- [x] AI Compose (Claude writes emails from description)
+- [x] AI Reply (suggested replies with tone control)
+- [x] AI Triage (auto-categorize incoming mail + Screener)
+- [x] AI Summary (thread summarization)
 - [ ] AI Search (natural language email search)
-- [ ] Voice Profile (learns your writing style from sent mail)
+- [x] Voice Profile (learns your writing style from sent mail)
 - [ ] AI Unsubscribe (one-click, AI handles the rest)
-- [ ] AI Follow-up reminders
+- [x] AI Follow-up reminders
 
 ### STEP 4 — Speed & Polish
 - [ ] <200ms inbox load (local-first)
-- [ ] <50ms search (local Typesense index)
-- [ ] Keyboard shortcut system (vim + Gmail modes)
+- [x] <50ms search (Meilisearch full-text + local)
+- [x] Keyboard shortcut system (vim + Gmail modes + Cmd+K palette)
 - [ ] Dark mode + themes
 - [ ] Density settings (compact/comfortable/spacious)
 - [ ] Notification system (web push + native)
 
 ### STEP 5 — Platform
-- [ ] Stripe subscriptions + billing page
-- [ ] Auth (email + OAuth)
-- [ ] Settings (accounts, signatures, rules, preferences)
+- [x] Stripe subscriptions + billing page
+- [x] Auth (email + OAuth)
+- [x] Settings (accounts, signatures, rules, preferences)
 - [ ] Desktop app (Electron wrapper)
 - [ ] Mobile app (React Native/Expo)
 - [ ] Import/migration tool (Gmail, Outlook, Apple Mail)
@@ -293,9 +293,25 @@ The following backend infrastructure is complete and production-ready:
 
 **Date last updated:** 2026-04-05
 **Current phase:** Phase 1 — Building the client
-**Current step:** TIER 1 — Core email engine + Inbox UI
+**Current step:** TIER 1 COMPLETE — Moving to TIER 2
 
-**Next action:** Build Gmail OAuth + IMAP sync engine + Inbox UI
+**Completed this session:**
+- Gmail OAuth + API sync engine
+- Outlook OAuth + Graph API sync
+- Unified IMAP sync engine
+- Account connection routes (connect/disconnect/sync)
+- Grammar Agent (real-time, 30+ languages)
+- Dictation Engine (email-aware voice commands)
+- Smart Inbox (AI triage, screener, commitments tracker)
+- Email Recall (link-based, revoke, self-destruct)
+- Bidirectional Translation (35+ languages)
+- Collaboration (shared inboxes, comments, assignments)
+- Keyboard shortcuts + Cmd+K command palette
+- Full CLAUDE.md business strategy
+- Cloudflare + Neon deployment config
+- Rebranded to Vienna
+
+**Next action:** Build IndexedDB local cache, dark mode, import/migration tool, desktop app
 
 **MANDATE: Email hasn't been reinvented in 22 years. Gmail has 1.8 BILLION users and hasn't innovated since 2004. The AI wave means the next great email client will be built NOW. Vienna IS that client. Foot on the accelerator at all times.**
 
