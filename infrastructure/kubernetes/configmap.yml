@@ -14,19 +14,19 @@ data:
   S3_ENDPOINT: "https://s3.amazonaws.com"
 
   # ─── Public URLs ───────────────────────────────────────────────────────────
-  WEB_URL: "https://app.emailed.dev"
-  API_URL: "https://api.emailed.dev"
+  WEB_URL: "https://app.vienna.com"
+  API_URL: "https://api.vienna.com"
 
   # ─── S3 / Object Storage ──────────────────────────────────────────────────
   S3_BUCKET: "emailed-attachments"
   S3_REGION: "us-east-1"
 
   # ─── MTA Configuration ────────────────────────────────────────────────────
-  MTA_HOSTNAME: "mail.emailed.dev"
+  MTA_HOSTNAME: "mail.vienna.com"
   DKIM_SELECTOR: "default"
 
   # ─── CORS ─────────────────────────────────────────────────────────────────
-  CORS_ORIGINS: "https://app.emailed.dev,https://admin.emailed.dev"
+  CORS_ORIGINS: "https://app.vienna.com,https://admin.vienna.com"
 
   # ─── Observability ────────────────────────────────────────────────────────
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.monitoring.svc.cluster.local:4318"

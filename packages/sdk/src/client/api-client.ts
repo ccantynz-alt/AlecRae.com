@@ -13,7 +13,7 @@ import type {
   ApiErrorBody,
 } from "../types.js";
 
-const DEFAULT_BASE_URL = "https://api.emailed.dev";
+const DEFAULT_BASE_URL = "https://api.vienna.com";
 const DEFAULT_TIMEOUT = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
 

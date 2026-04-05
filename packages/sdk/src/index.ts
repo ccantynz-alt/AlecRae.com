@@ -123,7 +123,7 @@ function normaliseConfig(config: EmailedConfig): ClientConfig {
  * // Full config
  * const emailed2 = new Emailed({
  *   auth: { type: "apiKey", key: "em_live_..." },
- *   baseUrl: "https://api.emailed.dev",
+ *   baseUrl: "https://api.vienna.com",
  *   debug: true,
  * });
  *

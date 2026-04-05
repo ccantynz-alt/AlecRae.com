@@ -7,18 +7,20 @@ info:
     domains, configure webhooks, and query analytics.
   version: 0.1.0
   contact:
-    name: Emailed Support
-    url: https://emailed.dev/support
-    email: support@emailed.dev
+    name: Vienna Support
+    url: https://vienna.com/support
+    email: support@vienna.com
   license:
     name: Proprietary
     url: https://emailed.dev/terms
 
 servers:
-  - url: https://api.emailed.dev
+  - url: https://api.vienna.com
     description: Production
-  - url: https://api.staging.emailed.dev
+  - url: https://api.staging.vienna.com
     description: Staging
+  - url: http://localhost:3001
+    description: Local development
 
 security:
   - BearerAuth: []

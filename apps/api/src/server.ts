@@ -47,6 +47,7 @@ import { inbox } from "./routes/inbox.js";
 import { recall } from "./routes/recall.js";
 import { translate } from "./routes/translate.js";
 import { collaborate } from "./routes/collaborate.js";
+import { connect } from "./routes/connect.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
@@ -172,6 +173,12 @@ app.use("/v1/translate/*", authMiddleware, readRateLimit);
 app.use("/v1/translate", authMiddleware, readRateLimit);
 // Collaboration: write-level (200 req/min)
 app.use("/v1/collaborate/*", authMiddleware, writeRateLimit);
+// Account connection: OAuth callbacks are public, everything else authed
+app.use("/v1/connect/gmail", authMiddleware, writeRateLimit);
+app.use("/v1/connect/outlook", authMiddleware, writeRateLimit);
+app.use("/v1/connect/imap", authMiddleware, writeRateLimit);
+app.use("/v1/connect/accounts", authMiddleware, readRateLimit);
+app.use("/v1/connect/accounts/*", authMiddleware, writeRateLimit);
 
 // Mount route handlers
 app.route("/v1/messages", messages);
@@ -190,6 +197,7 @@ app.route("/v1/inbox", inbox);
 app.route("/v1/recall", recall);
 app.route("/v1/translate", translate);
 app.route("/v1/collaborate", collaborate);
+app.route("/v1/connect", connect);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────
 
