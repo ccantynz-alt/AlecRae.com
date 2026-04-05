@@ -50,6 +50,11 @@ import { collaborate } from "./routes/collaborate.js";
 import { connect } from "./routes/connect.js";
 import { snooze, scheduleSend } from "./routes/snooze.js";
 import { importRouter } from "./routes/import.js";
+import { aiSearch } from "./routes/ai-search.js";
+import { contacts } from "./routes/contacts.js";
+import { calendar } from "./routes/calendar.js";
+import { encryption } from "./routes/encryption.js";
+import { aiRules } from "./routes/ai-rules.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
@@ -187,6 +192,18 @@ app.use("/v1/snooze/*", authMiddleware, writeRateLimit);
 app.use("/v1/send/*", authMiddleware, writeRateLimit);
 // Import: write-level (200 req/min)
 app.use("/v1/import/*", authMiddleware, writeRateLimit);
+// AI Search: search-level (60 req/min)
+app.use("/v1/search/*", authMiddleware, searchRateLimit);
+// Contacts: read-level (600 req/min)
+app.use("/v1/contacts/*", authMiddleware, readRateLimit);
+app.use("/v1/contacts", authMiddleware, readRateLimit);
+// Calendar: read-level (600 req/min)
+app.use("/v1/calendar/*", authMiddleware, readRateLimit);
+// Encryption: write-level (200 req/min)
+app.use("/v1/encryption/*", authMiddleware, writeRateLimit);
+// AI Rules: write-level (200 req/min)
+app.use("/v1/rules/*", authMiddleware, writeRateLimit);
+app.use("/v1/rules", authMiddleware, readRateLimit);
 
 // Mount route handlers
 app.route("/v1/messages", messages);
@@ -209,6 +226,11 @@ app.route("/v1/connect", connect);
 app.route("/v1/snooze", snooze);
 app.route("/v1/send", scheduleSend);
 app.route("/v1/import", importRouter);
+app.route("/v1/search", aiSearch);
+app.route("/v1/contacts", contacts);
+app.route("/v1/calendar", calendar);
+app.route("/v1/encryption", encryption);
+app.route("/v1/rules", aiRules);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────
 
