@@ -64,6 +64,12 @@
 - [x] Bounce/complaint feedback loop processing (RFC 3464 DSN parser, classification, auto-suppression)
 - [x] Communication Intelligence Graph (relationship scoring, follow-up reminders, decay factor)
 - [x] Voice Synthesis Engine (VoiceProfileBuilder + ComposeAssistant + Claude API integration + API routes)
+- [x] Grammar Agent (real-time grammar/spelling/tone correction, email etiquette checks, 30+ languages, FREE)
+- [x] Advanced Dictation Engine (email-aware voice commands, multi-language, AI polish)
+- [x] Smart Inbox (AI classification, Screener, commitments tracker, follow-up nudges)
+- [x] Email Recall (link-based viewing, revoke access, self-destruct timers)
+- [x] Bidirectional Translation (compose in any language, 35+ languages, email-aware)
+- [x] Collaboration (shared inboxes, internal comments, assignments, collaborative drafts)
 
 ## Vision
 

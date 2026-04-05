@@ -44,6 +44,7 @@
         "@emailed/crypto": "workspace:*",
         "@emailed/db": "workspace:*",
         "@emailed/dns": "workspace:*",
+        "@emailed/reputation": "workspace:*",
         "@emailed/shared": "workspace:*",
         "@hono/zod-validator": "^0.4.0",
         "bullmq": "^5.0.0",
@@ -298,6 +299,7 @@
       "dependencies": {
         "@emailed/db": "workspace:*",
         "@emailed/shared": "workspace:*",
+        "drizzle-orm": "^0.36.0",
         "pino": "^9.0.0",
       },
       "devDependencies": {
