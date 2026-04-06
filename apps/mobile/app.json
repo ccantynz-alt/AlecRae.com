@@ -1,0 +1,91 @@
+{
+  "expo": {
+    "name": "Vienna",
+    "slug": "vienna",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "vienna",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "bundleIdentifier": "com.vienna.app",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "associatedDomains": ["applinks:vienna.com", "applinks:mail.vienna.com"],
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Vienna uses Face ID to quickly unlock your encrypted email.",
+        "LSApplicationQueriesSchemes": ["mailto"]
+      }
+    },
+    "android": {
+      "package": "com.vienna.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0f172a"
+      },
+      "permissions": [
+        "NOTIFICATIONS",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "vienna.com" },
+            { "scheme": "https", "host": "mail.vienna.com" },
+            { "scheme": "mailto" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#3b82f6",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Allow Vienna to use Face ID to access your encrypted email."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "vienna-app"
+      }
+    },
+    "owner": "vienna",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/vienna-app"
+    }
+  }
+}
