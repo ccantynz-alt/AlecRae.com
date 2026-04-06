@@ -19,6 +19,16 @@ export {
 } from "./tickets/system";
 export type { TicketStore, TicketFilter } from "./tickets/system";
 
+export {
+  PostgresTicketStore,
+  CREATE_TICKETS_TABLE_SQL,
+} from "./tickets/pg-store";
+export type {
+  DatabaseClient,
+  DatabasePool,
+  TransactionClient,
+} from "./tickets/pg-store";
+
 export { DiagnosticsRunner } from "./diagnostics/runner";
 export type { DiagnosticServices } from "./diagnostics/runner";
 

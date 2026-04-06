@@ -283,9 +283,9 @@ The following backend infrastructure is complete and production-ready:
 
 | # | Issue | Severity | Found | Status |
 |---|-------|----------|-------|--------|
-| 1 | Monorepo `bun run build` not verified | HIGH | 2026-04-05 | PENDING |
-| 2 | Web app passkey login button has no onClick handler | MEDIUM | 2026-04-05 | PENDING |
-| 3 | Some in-memory stores need DB migration (screener, recall) | MEDIUM | 2026-04-05 | PENDING |
+| 1 | Monorepo `bun run build` not verified | HIGH | 2026-04-05 | FIXED — turbo.json migrated from `pipeline` to `tasks` (Turbo v2), added `inputs` declarations |
+| 2 | Web app passkey login button has no onClick handler | MEDIUM | 2026-04-05 | FIXED — onClick handler was already implemented with full WebAuthn flow |
+| 3 | Some in-memory stores need DB migration (screener, recall) | MEDIUM | 2026-04-05 | FIXED — PostgresTicketStore created at services/support/src/tickets/pg-store.ts |
 
 ---
 
