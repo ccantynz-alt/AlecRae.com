@@ -24,6 +24,50 @@ export type { DiagnosticServices } from "./diagnostics/runner";
 
 export { EscalationRouter } from "./escalation/router";
 
+// Pipeline — Inbound email → AI agent → auto-reply
+export {
+  SupportEmailPipeline,
+  SupportReplyComposer,
+  AutoResponder,
+  SatisfactionTracker,
+  SupportLearningEngine,
+  createSupportPipeline,
+} from "./pipeline";
+export type {
+  RawInboundEmail,
+  EmailAddress,
+  EmailAttachment,
+  IntakeResult,
+  PipelineMetrics,
+  PipelineConfig,
+  EmailQueueService,
+  AccountLookupService,
+  ThreadStore,
+  ConversationStore,
+  ComposedEmail,
+  BrandConfig,
+  CategoryTemplate,
+  SpecialistRoute,
+  DuplicateStore,
+  UnsubscribeService,
+  FollowUpService,
+  SurveyResponse,
+  SatisfactionMetrics,
+  LowScoreAlert,
+  FeedbackInsight,
+  SurveyStore,
+  AlertService,
+  TicketLookupService,
+  TicketOutcome,
+  OutcomeRecord,
+  AgentPerformanceMetrics,
+  IssuePattern,
+  PromptImprovement,
+  LearningStore,
+  SupportPipelineDeps,
+  SupportPipeline,
+} from "./pipeline";
+
 export type {
   // Conversation
   Conversation,

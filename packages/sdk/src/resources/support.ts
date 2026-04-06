@@ -1,0 +1,386 @@
+/**
+ * AI Support resource — create and manage support tickets with AI auto-resolution.
+ *
+ * This is the key differentiator: support tickets are automatically triaged,
+ * diagnosed, and often resolved by the AI support agent without human
+ * intervention. The AI has full platform access to investigate deliverability
+ * issues, authentication failures, reputation drops, and more.
+ */
+
+import { type Result } from "@emailed/shared";
+import type { HttpClient, ApiResponse, PaginatedResponse, ApiError } from "../client/http.js";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Support ticket priority levels. */
+export type TicketPriority = "low" | "normal" | "high" | "urgent";
+
+/** Support ticket status. */
+export type TicketStatus =
+  | "open"
+  | "ai_investigating"
+  | "ai_resolved"
+  | "awaiting_customer"
+  | "awaiting_agent"
+  | "escalated"
+  | "resolved"
+  | "closed";
+
+/** Support ticket category for routing and AI specialization. */
+export type TicketCategory =
+  | "deliverability"
+  | "authentication"
+  | "reputation"
+  | "bounce"
+  | "spam_complaint"
+  | "api_integration"
+  | "billing"
+  | "domain_setup"
+  | "general"
+  | "feature_request"
+  | "bug_report";
+
+/** Parameters for creating a new support ticket. */
+export interface CreateTicketParams {
+  /** Ticket subject line. */
+  readonly subject: string;
+  /** Detailed description of the issue. */
+  readonly description: string;
+  /** Issue category (helps AI select the right diagnostic tools). */
+  readonly category: TicketCategory;
+  /** Ticket priority (default "normal"). */
+  readonly priority?: TicketPriority;
+  /** Related message IDs for the AI to investigate. */
+  readonly relatedMessageIds?: readonly string[];
+  /** Related domain ID. */
+  readonly relatedDomainId?: string;
+  /** File attachments (screenshots, logs, etc.). */
+  readonly attachments?: readonly TicketAttachment[];
+  /** Whether to enable AI auto-investigation (default true). */
+  readonly enableAiInvestigation?: boolean;
+  /** Contact email for follow-up (defaults to account email). */
+  readonly contactEmail?: string;
+}
+
+/** An attachment on a support ticket. */
+export interface TicketAttachment {
+  readonly filename: string;
+  readonly contentType: string;
+  /** Base64-encoded content. */
+  readonly content: string;
+  readonly sizeBytes: number;
+}
+
+/** A support ticket as returned by the API. */
+export interface Ticket {
+  readonly id: string;
+  readonly accountId: string;
+  readonly subject: string;
+  readonly description: string;
+  readonly category: TicketCategory;
+  readonly priority: TicketPriority;
+  readonly status: TicketStatus;
+  readonly contactEmail: string;
+  readonly relatedMessageIds: readonly string[];
+  readonly relatedDomainId?: string;
+  readonly attachments: readonly TicketAttachment[];
+  readonly aiInvestigationEnabled: boolean;
+  /** AI-generated diagnosis summary (populated during investigation). */
+  readonly aiDiagnosis?: AiDiagnosis;
+  /** The thread of messages on this ticket. */
+  readonly messages: readonly TicketMessage[];
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly resolvedAt?: string;
+  readonly closedAt?: string;
+  /** Satisfaction rating (1-5) left by the customer. */
+  readonly satisfactionRating?: number;
+}
+
+/** AI-generated diagnosis for a support ticket. */
+export interface AiDiagnosis {
+  /** Human-readable summary of the investigation findings. */
+  readonly summary: string;
+  /** Root cause identified by the AI. */
+  readonly rootCause?: string;
+  /** Confidence score (0-1) in the diagnosis. */
+  readonly confidence: number;
+  /** Specific checks the AI performed. */
+  readonly checksPerformed: readonly AiDiagnosticCheck[];
+  /** Recommended actions to resolve the issue. */
+  readonly recommendations: readonly AiRecommendation[];
+  /** Whether the AI was able to auto-resolve the issue. */
+  readonly autoResolved: boolean;
+  /** Actions the AI took to resolve the issue. */
+  readonly actionsTaken: readonly string[];
+  readonly investigatedAt: string;
+}
+
+/** A diagnostic check performed by the AI. */
+export interface AiDiagnosticCheck {
+  readonly name: string;
+  readonly description: string;
+  readonly status: "pass" | "fail" | "warning" | "skipped";
+  readonly details?: string;
+}
+
+/** An AI-generated recommendation. */
+export interface AiRecommendation {
+  readonly title: string;
+  readonly description: string;
+  readonly severity: "critical" | "important" | "suggestion";
+  /** Whether this action can be auto-applied by the AI. */
+  readonly autoApplicable: boolean;
+}
+
+/** A message in a ticket thread. */
+export interface TicketMessage {
+  readonly id: string;
+  readonly ticketId: string;
+  readonly author: TicketMessageAuthor;
+  readonly body: string;
+  readonly attachments: readonly TicketAttachment[];
+  readonly createdAt: string;
+  /** Whether this message was generated by the AI. */
+  readonly isAiGenerated: boolean;
+}
+
+/** Author of a ticket message. */
+export interface TicketMessageAuthor {
+  readonly type: "customer" | "ai_agent" | "human_agent";
+  readonly name: string;
+  readonly email?: string;
+}
+
+/** Parameters for replying to a ticket. */
+export interface ReplyToTicketParams {
+  /** Reply body text. */
+  readonly body: string;
+  /** Optional attachments. */
+  readonly attachments?: readonly TicketAttachment[];
+  /** Whether to re-trigger AI investigation after this reply (default false). */
+  readonly retriggerAi?: boolean;
+}
+
+/** Query parameters for listing tickets. */
+export interface ListTicketsQuery {
+  readonly page?: number;
+  readonly pageSize?: number;
+  readonly status?: TicketStatus;
+  readonly category?: TicketCategory;
+  readonly priority?: TicketPriority;
+  readonly startDate?: string;
+  readonly endDate?: string;
+  readonly sortBy?: "createdAt" | "updatedAt" | "priority";
+  readonly sortOrder?: "asc" | "desc";
+}
+
+/** AI auto-reply configuration for an account. */
+export interface AiAutoReplyConfig {
+  /** Whether the AI should automatically reply to new tickets. */
+  readonly enabled: boolean;
+  /** Categories where AI auto-reply is active. */
+  readonly enabledCategories: readonly TicketCategory[];
+  /** Whether the AI can auto-resolve tickets without human review. */
+  readonly allowAutoResolve: boolean;
+  /** Categories where AI auto-resolve is permitted. */
+  readonly autoResolveCategories: readonly TicketCategory[];
+  /** Maximum confidence threshold below which to escalate to human. */
+  readonly escalationThreshold: number;
+  /** Custom instructions for the AI support agent. */
+  readonly customInstructions?: string;
+}
+
+/** Parameters for updating AI auto-reply configuration. */
+export interface UpdateAiAutoReplyParams {
+  readonly enabled?: boolean;
+  readonly enabledCategories?: readonly TicketCategory[];
+  readonly allowAutoResolve?: boolean;
+  readonly autoResolveCategories?: readonly TicketCategory[];
+  readonly escalationThreshold?: number;
+  readonly customInstructions?: string;
+}
+
+/** Configuration for routing support emails to the ticket system. */
+export interface SupportEmailRoutingConfig {
+  /** Whether support email routing is enabled. */
+  readonly enabled: boolean;
+  /** Email address that receives support requests (e.g., support@yourdomain.com). */
+  readonly supportAddress: string;
+  /** Domain ID the support address belongs to. */
+  readonly domainId: string;
+  /** Default category for email-created tickets. */
+  readonly defaultCategory: TicketCategory;
+  /** Default priority for email-created tickets. */
+  readonly defaultPriority: TicketPriority;
+  /** Whether to auto-create tickets from inbound emails. */
+  readonly autoCreateTickets: boolean;
+  /** Email addresses to exclude from ticket creation (e.g., noreply addresses). */
+  readonly excludedSenders: readonly string[];
+}
+
+/** Ticket satisfaction rating input. */
+export interface RateTicketParams {
+  /** Rating from 1 (poor) to 5 (excellent). */
+  readonly rating: 1 | 2 | 3 | 4 | 5;
+  /** Optional feedback comment. */
+  readonly comment?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Support Resource
+// ---------------------------------------------------------------------------
+
+export class SupportResource {
+  constructor(private readonly client: HttpClient) {}
+
+  /**
+   * Create a new support ticket.
+   *
+   * The AI support agent will automatically begin investigating the issue
+   * based on the category and any related message/domain IDs provided.
+   * Investigation results are populated asynchronously in the ticket's
+   * aiDiagnosis field.
+   *
+   * @param params - Ticket creation parameters
+   * @returns The created ticket
+   */
+  async createTicket(
+    params: CreateTicketParams,
+  ): Promise<Result<ApiResponse<Ticket>, ApiError | Error>> {
+    return this.client.post<Ticket>("/support/tickets", params);
+  }
+
+  /**
+   * Retrieve a support ticket by ID.
+   *
+   * Includes the full message thread and AI diagnosis if available.
+   *
+   * @param ticketId - The ticket's unique identifier
+   * @returns The full ticket with messages and diagnosis
+   */
+  async getTicket(
+    ticketId: string,
+  ): Promise<Result<ApiResponse<Ticket>, ApiError | Error>> {
+    return this.client.get<Ticket>(
+      `/support/tickets/${encodeURIComponent(ticketId)}`,
+    );
+  }
+
+  /**
+   * Reply to an existing support ticket.
+   *
+   * Optionally re-triggers the AI investigation if new information
+   * is provided that might lead to a different diagnosis.
+   *
+   * @param ticketId - The ticket's unique identifier
+   * @param params - Reply content and options
+   * @returns The updated ticket with the new message
+   */
+  async replyToTicket(
+    ticketId: string,
+    params: ReplyToTicketParams,
+  ): Promise<Result<ApiResponse<Ticket>, ApiError | Error>> {
+    return this.client.post<Ticket>(
+      `/support/tickets/${encodeURIComponent(ticketId)}/reply`,
+      params,
+    );
+  }
+
+  /**
+   * List support tickets with filtering and pagination.
+   *
+   * @param query - Filter and pagination parameters
+   * @returns Paginated list of tickets
+   */
+  async listTickets(
+    query?: ListTicketsQuery,
+  ): Promise<Result<ApiResponse<PaginatedResponse<Ticket>>, ApiError | Error>> {
+    const params: Record<string, string | number | boolean | undefined> = {};
+
+    if (query) {
+      if (query.page !== undefined) params["page"] = query.page;
+      if (query.pageSize !== undefined) params["page_size"] = query.pageSize;
+      if (query.status !== undefined) params["status"] = query.status;
+      if (query.category !== undefined) params["category"] = query.category;
+      if (query.priority !== undefined) params["priority"] = query.priority;
+      if (query.startDate !== undefined) params["start_date"] = query.startDate;
+      if (query.endDate !== undefined) params["end_date"] = query.endDate;
+      if (query.sortBy !== undefined) params["sort_by"] = query.sortBy;
+      if (query.sortOrder !== undefined) params["sort_order"] = query.sortOrder;
+    }
+
+    return this.client.get<PaginatedResponse<Ticket>>("/support/tickets", params);
+  }
+
+  /**
+   * Rate a resolved ticket for satisfaction tracking.
+   *
+   * @param ticketId - The ticket's unique identifier
+   * @param params - Rating and optional comment
+   * @returns The updated ticket with the satisfaction rating
+   */
+  async rateTicket(
+    ticketId: string,
+    params: RateTicketParams,
+  ): Promise<Result<ApiResponse<Ticket>, ApiError | Error>> {
+    return this.client.post<Ticket>(
+      `/support/tickets/${encodeURIComponent(ticketId)}/rate`,
+      params,
+    );
+  }
+
+  /**
+   * Get the AI auto-reply configuration for the account.
+   *
+   * @returns Current AI auto-reply settings
+   */
+  async getAiAutoReplyConfig(): Promise<Result<ApiResponse<AiAutoReplyConfig>, ApiError | Error>> {
+    return this.client.get<AiAutoReplyConfig>("/support/ai-config");
+  }
+
+  /**
+   * Update the AI auto-reply configuration.
+   *
+   * Controls which ticket categories the AI can auto-reply to and
+   * auto-resolve, the confidence threshold for escalation, and
+   * custom instructions for the AI agent.
+   *
+   * @param params - Configuration updates
+   * @returns Updated AI auto-reply configuration
+   */
+  async updateAiAutoReplyConfig(
+    params: UpdateAiAutoReplyParams,
+  ): Promise<Result<ApiResponse<AiAutoReplyConfig>, ApiError | Error>> {
+    return this.client.patch<AiAutoReplyConfig>("/support/ai-config", params);
+  }
+
+  /**
+   * Get the support email routing configuration.
+   *
+   * @returns Current email routing settings
+   */
+  async getEmailRoutingConfig(): Promise<Result<ApiResponse<SupportEmailRoutingConfig>, ApiError | Error>> {
+    return this.client.get<SupportEmailRoutingConfig>("/support/email-routing");
+  }
+
+  /**
+   * Update support email routing configuration.
+   *
+   * Configures a webhook-like mechanism where inbound emails to a designated
+   * support address are automatically converted to support tickets.
+   *
+   * @param config - Email routing configuration
+   * @returns Updated routing configuration
+   */
+  async updateEmailRoutingConfig(
+    config: Partial<SupportEmailRoutingConfig>,
+  ): Promise<Result<ApiResponse<SupportEmailRoutingConfig>, ApiError | Error>> {
+    return this.client.patch<SupportEmailRoutingConfig>(
+      "/support/email-routing",
+      config,
+    );
+  }
+}
