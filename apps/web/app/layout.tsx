@@ -1,10 +1,44 @@
-import type { Metadata } from "next";
-import { ThemeProvider, Box } from "@emailed/ui";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Emailed - AI-Native Email Platform",
-  description: "The intelligent email platform that works for you. AI-powered inbox management, smart composition, and enterprise-grade deliverability.",
+  title: "Vienna — Email, finally.",
+  description:
+    "The fastest, smartest, most beautiful email client ever made. One subscription. All your accounts. AI in every layer.",
+  applicationName: "Vienna",
+  authors: [{ name: "Vienna" }],
+  keywords: [
+    "email client",
+    "Gmail alternative",
+    "Outlook alternative",
+    "AI email",
+    "email app",
+    "Vienna",
+  ],
+  openGraph: {
+    title: "Vienna — Email, finally.",
+    description:
+      "The fastest, smartest, most beautiful email client ever made.",
+    url: "https://vienna.com",
+    siteName: "Vienna",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Vienna — Email, finally.",
+    description:
+      "The fastest, smartest, most beautiful email client ever made.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#1e3a8a",
 };
 
 export default function RootLayout({
@@ -13,12 +47,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Box as="html" lang="en" className="h-full antialiased">
-      <Box as="body" className="h-full bg-surface text-content font-sans">
-        <ThemeProvider mode="light">
-          {children}
-        </ThemeProvider>
-      </Box>
-    </Box>
+    <html lang="en" className="h-full antialiased">
+      <body className="h-full bg-slate-950 text-white font-sans">
+        {children}
+      </body>
+    </html>
   );
 }
