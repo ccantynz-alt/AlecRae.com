@@ -26,7 +26,19 @@ const sampleSuggestions: AISuggestion[] = [
   },
 ];
 
-export default function ComposePage() {
+import { Suspense } from "react";
+
+export const dynamic = "force-dynamic";
+
+export default function ComposePageWrapper() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ComposePage />
+    </Suspense>
+  );
+}
+
+function ComposePage() {
   const searchParams = useSearchParams();
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -68,14 +80,18 @@ export default function ComposePage() {
         return;
       }
 
-      const result = await messagesApi.send({
+      const sendPayload: Parameters<typeof messagesApi.send>[0] = {
         from: { email: fromEmail },
         to: data.to.split(",").map((e: string) => ({ email: e.trim() })).filter((e) => e.email),
-        cc: data.cc ? data.cc.split(",").map((e: string) => ({ email: e.trim() })).filter((e) => e.email) : undefined,
         subject: data.subject,
         html: data.body,
         text: data.body.replace(/<[^>]*>/g, ""),
-      });
+      };
+      if (data.cc) {
+        const ccList = data.cc.split(",").map((e: string) => ({ email: e.trim() })).filter((e) => e.email);
+        if (ccList.length > 0) sendPayload.cc = ccList;
+      }
+      const result = await messagesApi.send(sendPayload);
       setStatus(`Email queued successfully (ID: ${result.id})`);
     } catch (err) {
       setStatus(`Error: ${err instanceof Error ? err.message : "Failed to send"}`);

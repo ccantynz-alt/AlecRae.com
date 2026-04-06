@@ -39,10 +39,10 @@ export interface Shortcut {
 export interface CommandPaletteItem {
   id: string;
   label: string;
-  description?: string;
+  description?: string | undefined;
   category: string;
-  icon?: string;
-  shortcut?: string;
+  icon?: string | undefined;
+  shortcut?: string | undefined;
   action: () => void;
 }
 

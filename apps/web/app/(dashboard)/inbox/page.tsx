@@ -302,7 +302,7 @@ export default function InboxPage() {
           ) : (
             <EmailList
               emails={filteredEmails}
-              selectedId={selectedEmailId}
+              {...(selectedEmailId !== undefined ? { selectedId: selectedEmailId } : {})}
               onSelect={handleSelect}
               onStar={handleStar}
             />

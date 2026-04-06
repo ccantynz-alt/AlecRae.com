@@ -181,7 +181,7 @@ ComposeEditor.displayName = "ComposeEditor";
 
 interface AISuggestionsPanelProps {
   suggestions: AISuggestion[];
-  onApply?: (suggestion: AISuggestion) => void;
+  onApply?: ((suggestion: AISuggestion) => void) | undefined;
 }
 
 function AISuggestionsPanel({ suggestions, onApply }: AISuggestionsPanelProps) {
