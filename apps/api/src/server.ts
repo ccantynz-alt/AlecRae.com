@@ -59,6 +59,9 @@ import { aiRules } from "./routes/ai-rules.js";
 import { programs } from "./routes/programs.js";
 import { explain } from "./routes/explain.js";
 import { agent } from "./routes/agent.js";
+import { unsubscribe } from "./routes/unsubscribe.js";
+import { sendTime } from "./routes/send-time.js";
+import { composeAssist } from "./routes/compose-assist.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
@@ -217,6 +220,12 @@ app.use("/v1/explain/*", authMiddleware, readRateLimit);
 // AI Inbox Agent: write-level (200 req/min) — heavy operations
 app.use("/v1/agent/*", authMiddleware, writeRateLimit);
 app.use("/v1/agent", authMiddleware, writeRateLimit);
+app.use("/v1/unsubscribe/*", authMiddleware, writeRateLimit);
+app.use("/v1/unsubscribe", authMiddleware, writeRateLimit);
+// Predictive Send-Time Optimization (S10)
+app.use("/v1/send-time/*", authMiddleware, writeRateLimit);
+// Compose-Assist / AI calendar slot suggestions (B7)
+app.use("/v1/compose-assist/*", authMiddleware, writeRateLimit);
 
 // Mount route handlers
 app.route("/v1/messages", messages);
@@ -248,6 +257,9 @@ app.route("/v1/rules", aiRules);
 app.route("/v1/programs", programs);
 app.route("/v1/explain", explain);
 app.route("/v1/agent", agent);
+app.route("/v1/unsubscribe", unsubscribe);
+app.route("/v1/send-time", sendTime);
+app.route("/v1/compose-assist", composeAssist);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────
 

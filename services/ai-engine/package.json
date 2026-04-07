@@ -81,6 +81,21 @@
       "bun": "./src/unsubscribe/index.ts",
       "types": "./src/unsubscribe/index.ts",
       "import": "./dist/unsubscribe/index.js"
+    },
+    "./send-time": {
+      "bun": "./src/send-time/predictor.ts",
+      "types": "./src/send-time/predictor.ts",
+      "import": "./dist/send-time/predictor.js"
+    },
+    "./calendar/slot-detector": {
+      "bun": "./src/calendar/slot-detector.ts",
+      "types": "./src/calendar/slot-detector.ts",
+      "import": "./dist/calendar/slot-detector.js"
+    },
+    "./calendar/slot-suggester": {
+      "bun": "./src/calendar/slot-suggester.ts",
+      "types": "./src/calendar/slot-suggester.ts",
+      "import": "./dist/calendar/slot-suggester.js"
     }
   },
   "scripts": {
