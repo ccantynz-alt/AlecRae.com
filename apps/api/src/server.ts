@@ -41,6 +41,8 @@ import { admin } from "./routes/admin.js";
 import { billing } from "./routes/billing.js";
 import { templatesRouter } from "./routes/templates.js";
 import { voice } from "./routes/voice.js";
+import { voiceClone } from "./routes/voice-clone.js";
+import { meetingLink } from "./routes/meeting-link.js";
 import { grammar } from "./routes/grammar.js";
 import { dictation } from "./routes/dictation.js";
 import { inbox } from "./routes/inbox.js";
@@ -59,6 +61,7 @@ import { aiRules } from "./routes/ai-rules.js";
 import { programs } from "./routes/programs.js";
 import { explain } from "./routes/explain.js";
 import { agent } from "./routes/agent.js";
+import { security } from "./routes/security.js";
 import { todo } from "./routes/todo.js";
 import { unsubscribe } from "./routes/unsubscribe.js";
 import { sendTime } from "./routes/send-time.js";
@@ -171,6 +174,12 @@ app.use("/v1/templates/*", authMiddleware, writeRateLimit);
 app.use("/v1/templates", authMiddleware, writeRateLimit);
 // Voice: write-level limits (200 req/min)
 app.use("/v1/voice/*", authMiddleware, writeRateLimit);
+// Voice Clone (S4): write-level — heavier than basic voice profile
+app.use("/v1/voice-clone/*", authMiddleware, writeRateLimit);
+app.use("/v1/voice-clone", authMiddleware, writeRateLimit);
+// Meeting Link (S9): read-level — detection + transcript fetch
+app.use("/v1/meeting-link/*", authMiddleware, readRateLimit);
+app.use("/v1/meeting-link", authMiddleware, readRateLimit);
 // Grammar: high-frequency read (600 req/min — real-time typing)
 app.use("/v1/grammar/*", authMiddleware, readRateLimit);
 // Dictation: write-level (200 req/min)
@@ -221,6 +230,8 @@ app.use("/v1/explain/*", authMiddleware, readRateLimit);
 // AI Inbox Agent: write-level (200 req/min) — heavy operations
 app.use("/v1/agent/*", authMiddleware, writeRateLimit);
 app.use("/v1/agent", authMiddleware, writeRateLimit);
+// Security (sender verification + phishing protection): read-level (600 req/min)
+app.use("/v1/security/*", authMiddleware, readRateLimit);
 app.use("/v1/unsubscribe/*", authMiddleware, writeRateLimit);
 app.use("/v1/unsubscribe", authMiddleware, writeRateLimit);
 // Predictive Send-Time Optimization (S10)
@@ -242,6 +253,8 @@ app.route("/v1/account", account);
 app.route("/v1/billing", billing);
 app.route("/v1/templates", templatesRouter);
 app.route("/v1/voice", voice);
+app.route("/v1/voice-clone", voiceClone);
+app.route("/v1/meeting-link", meetingLink);
 app.route("/v1/grammar", grammar);
 app.route("/v1/dictation", dictation);
 app.route("/v1/inbox", inbox);
@@ -261,6 +274,7 @@ app.route("/v1/rules", aiRules);
 app.route("/v1/programs", programs);
 app.route("/v1/explain", explain);
 app.route("/v1/agent", agent);
+app.route("/v1/security", security);
 app.route("/v1/unsubscribe", unsubscribe);
 app.route("/v1/send-time", sendTime);
 app.route("/v1/compose-assist", composeAssist);

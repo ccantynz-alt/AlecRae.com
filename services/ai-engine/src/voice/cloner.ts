@@ -54,9 +54,9 @@ export interface VoiceCloneAIClient {
 }
 
 export interface GenerateInVoiceContext {
-  readonly recipient?: string;
-  readonly threadHistory?: readonly { from: string; body: string }[];
-  readonly replyTo?: { from: string; subject: string; body: string };
+  readonly recipient?: string | undefined;
+  readonly threadHistory?: readonly { from: string; body: string }[] | undefined;
+  readonly replyTo?: { from: string; subject: string; body: string } | undefined;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────

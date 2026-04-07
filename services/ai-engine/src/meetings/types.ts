@@ -13,22 +13,22 @@ export type DetectionSource =
 
 export interface MeetingReference {
   /** Provider-specific meeting ID (e.g. Zoom meeting numeric ID). */
-  readonly meetingId?: string;
+  readonly meetingId?: string | undefined;
   /** Full join URL if known. */
-  readonly meetingUrl?: string;
-  readonly scheduledAt?: Date;
-  readonly platform?: MeetingPlatform;
+  readonly meetingUrl?: string | undefined;
+  readonly scheduledAt?: Date | undefined;
+  readonly platform?: MeetingPlatform | undefined;
   readonly detectedFrom: DetectionSource;
   /** [0..1] heuristic confidence the thread really maps to a real meeting. */
   readonly confidence: number;
   /** Free-form title pulled from a calendar invite or subject line. */
-  readonly title?: string;
+  readonly title?: string | undefined;
 }
 
 export interface TranscriptParticipant {
   readonly name: string;
-  readonly email?: string;
-  readonly speakerId?: string;
+  readonly email?: string | undefined;
+  readonly speakerId?: string | undefined;
 }
 
 export interface TranscriptResult {
@@ -39,7 +39,7 @@ export interface TranscriptResult {
   readonly participants: readonly TranscriptParticipant[];
   /** Duration in seconds */
   readonly duration: number;
-  readonly recordingUrl?: string;
+  readonly recordingUrl?: string | undefined;
   readonly provider: string;
 }
 
@@ -58,19 +58,19 @@ export interface TranscriptProvider {
 
 /** Minimal email shape used by the linker. */
 export interface LinkerEmail {
-  readonly id?: string;
-  readonly from?: string;
-  readonly to?: readonly string[];
-  readonly subject?: string;
-  readonly textBody?: string;
-  readonly htmlBody?: string;
-  readonly receivedAt?: Date;
-  readonly attachments?: readonly LinkerEmailAttachment[];
+  readonly id?: string | undefined;
+  readonly from?: string | undefined;
+  readonly to?: readonly string[] | undefined;
+  readonly subject?: string | undefined;
+  readonly textBody?: string | undefined;
+  readonly htmlBody?: string | undefined;
+  readonly receivedAt?: Date | undefined;
+  readonly attachments?: readonly LinkerEmailAttachment[] | undefined;
 }
 
 export interface LinkerEmailAttachment {
-  readonly filename?: string;
-  readonly contentType?: string;
+  readonly filename?: string | undefined;
+  readonly contentType?: string | undefined;
   /** UTF-8 string contents of the attachment if already decoded. */
-  readonly content?: string;
+  readonly content?: string | undefined;
 }

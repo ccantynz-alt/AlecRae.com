@@ -63,10 +63,10 @@ const PLATFORM_DETECTORS: readonly PlatformDetector[] = [
 // ─── ICS parsing ─────────────────────────────────────────────────────────────
 
 interface ParsedIcs {
-  readonly summary?: string;
-  readonly dtstart?: Date;
-  readonly url?: string;
-  readonly location?: string;
+  readonly summary?: string | undefined;
+  readonly dtstart?: Date | undefined;
+  readonly url?: string | undefined;
+  readonly location?: string | undefined;
 }
 
 function unfoldIcs(text: string): string {
@@ -147,7 +147,7 @@ function findIcsAttachment(
 function detectInLine(text: string): {
   url: string;
   platform: MeetingPlatform;
-  meetingId?: string;
+  meetingId?: string | undefined;
 } | null {
   for (const det of PLATFORM_DETECTORS) {
     det.regex.lastIndex = 0;
