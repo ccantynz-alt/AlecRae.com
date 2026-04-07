@@ -66,6 +66,11 @@
       "bun": "./src/inbox/email-explainer.ts",
       "types": "./src/inbox/email-explainer.ts",
       "import": "./dist/inbox/email-explainer.js"
+    },
+    "./agent": {
+      "bun": "./src/agent/index.ts",
+      "types": "./src/agent/index.ts",
+      "import": "./dist/agent/index.js"
     }
   },
   "scripts": {
