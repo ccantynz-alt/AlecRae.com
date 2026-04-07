@@ -1,9 +1,9 @@
 // =============================================================================
-// Vienna — On-Device AI Engine (Zero-Latency, Zero-Privacy-Risk)
+// Vieanna — On-Device AI Engine (Zero-Latency, Zero-Privacy-Risk)
 // =============================================================================
 // Runs AI models LOCALLY on the user's device using WebAssembly + ONNX Runtime.
 // No data leaves the device. Sub-10ms inference for triage, priority, and spam.
-// This is what makes Vienna impossible to compete with — Superhuman, Gmail,
+// This is what makes Vieanna impossible to compete with — Superhuman, Gmail,
 // Outlook all require server round-trips. We don't.
 //
 // Architecture:
@@ -321,7 +321,7 @@ export class ONNXModelRunner {
 
   private async doLoad(): Promise<void> {
     // Check if model is cached
-    const cache = await caches.open('vienna-ai-models');
+    const cache = await caches.open('vieanna-ai-models');
     let response = await cache.match(this.manifest.downloadUrl);
 
     if (!response) {
@@ -575,7 +575,7 @@ export class EdgeAIOrchestrator {
       model.dispose();
     }
     this.models.clear();
-    await caches.delete('vienna-ai-models');
+    await caches.delete('vieanna-ai-models');
   }
 
   // ─── Private ────────────────────────────────────────────────────────────

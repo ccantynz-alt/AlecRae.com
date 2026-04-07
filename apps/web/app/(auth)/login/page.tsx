@@ -9,7 +9,7 @@ export default function LoginPage() {
       <Box className="w-full max-w-md">
         <Box className="text-center mb-8">
           <Text variant="heading-lg" className="text-brand-600 font-bold mb-2">
-            Vienna
+            Vieanna
           </Text>
           <Text variant="display-sm">Welcome back</Text>
           <Text variant="body-md" muted className="mt-2">

@@ -1,13 +1,13 @@
 // =============================================================================
-// Vienna — IndexedDB Offline-First Email Cache
+// Vieanna — IndexedDB Offline-First Email Cache
 // =============================================================================
 // Local-first architecture: all emails cached in IndexedDB for <200ms inbox load.
 // Syncs bidirectionally with server. Works fully offline.
-// This is what makes Vienna feel instant while Gmail waits for network.
+// This is what makes Vieanna feel instant while Gmail waits for network.
 
 /** Database schema version — bump on schema changes */
 const DB_VERSION = 1;
-const DB_NAME = 'vienna-mail';
+const DB_NAME = 'vieanna-mail';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -122,7 +122,7 @@ export interface SearchIndex {
 
 // ─── Database Manager ───────────────────────────────────────────────────────
 
-export class ViennaDB {
+export class VieannaDB {
   private db: IDBDatabase | null = null;
   private readonly dbName: string;
   private readonly version: number;
@@ -665,13 +665,13 @@ export interface SyncConfig {
 }
 
 export class SyncEngine {
-  private readonly db: ViennaDB;
+  private readonly db: VieannaDB;
   private readonly config: SyncConfig;
   private syncTimer: ReturnType<typeof setInterval> | null = null;
   private isSyncing = false;
   private listeners: Array<(event: SyncEvent) => void> = [];
 
-  constructor(db: ViennaDB, config: SyncConfig) {
+  constructor(db: VieannaDB, config: SyncConfig) {
     this.db = db;
     this.config = config;
   }

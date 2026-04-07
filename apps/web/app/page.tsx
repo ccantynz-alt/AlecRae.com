@@ -51,7 +51,7 @@ function LandingNav() {
       <Box className="max-w-7xl mx-auto flex items-center justify-between px-6 h-16">
         <Box as="a" href="/" className="flex items-center gap-2">
           <Text variant="heading-md" className="text-brand-600 font-bold">
-            Emailed
+            Vieanna
           </Text>
         </Box>
         <Box as="nav" className="hidden md:flex items-center gap-8">
@@ -83,7 +83,7 @@ function HeroSection() {
           Email, reimagined with AI
         </Text>
         <Text variant="body-lg" muted className="max-w-2xl mx-auto mb-10">
-          Emailed is the AI-native email platform that understands your communication. Smart
+          Vieanna is the AI-native email platform that understands your communication. Smart
           prioritization, intelligent composition, and enterprise-grade infrastructure -- all in one
           place.
         </Text>
@@ -160,7 +160,7 @@ function LandingFooter() {
     <Box as="footer" className="border-t border-border py-12 px-6">
       <Box className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
         <Text variant="body-sm" muted>
-          2026 Emailed. All rights reserved.
+          2026 Vieanna. All rights reserved.
         </Text>
         <Box className="flex items-center gap-6">
           <Box as="a" href="/privacy">

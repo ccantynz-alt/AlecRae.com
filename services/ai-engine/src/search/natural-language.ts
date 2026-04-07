@@ -1,11 +1,11 @@
 // =============================================================================
-// Vienna — AI Natural Language Email Search
+// Vieanna — AI Natural Language Email Search
 // =============================================================================
 // "Find that PDF from Sarah about Q3 budget" → instant results
 // "Emails where someone promised to pay by Friday" → AI understands intent
 // "Show me everything from the Book A Ride project last month" → context-aware
 //
-// This DESTROYS Gmail's search. Gmail requires exact keywords. Vienna understands
+// This DESTROYS Gmail's search. Gmail requires exact keywords. Vieanna understands
 // what you mean, even when you don't remember the exact words.
 
 import Anthropic from '@anthropic-ai/sdk';

@@ -14,14 +14,14 @@ import type {
   MigrationProvider,
 } from "./types";
 
-interface ViennaLabel {
+interface VieannaLabel {
   readonly id: string;
   readonly name: string;
   readonly color: string;
   readonly system: boolean;
 }
 
-interface ViennaMailbox {
+interface VieannaMailbox {
   readonly id: string;
   readonly name: string;
   readonly role: string | null;
@@ -82,8 +82,8 @@ const VIENNA_DEFAULT_COLORS = [
 ];
 
 export class EmailDataMapper {
-  private readonly viennaLabels: Map<string, ViennaLabel>;
-  private readonly viennaMailboxes: Map<string, ViennaMailbox>;
+  private readonly vieannaLabels: Map<string, VieannaLabel>;
+  private readonly vieannaMailboxes: Map<string, VieannaMailbox>;
   private readonly storageClient: StorageClient;
   private readonly httpClient: HttpClient;
   private readonly accountId: string;
@@ -91,22 +91,22 @@ export class EmailDataMapper {
 
   constructor(
     accountId: string,
-    existingLabels: ViennaLabel[],
-    existingMailboxes: ViennaMailbox[],
+    existingLabels: VieannaLabel[],
+    existingMailboxes: VieannaMailbox[],
     storageClient: StorageClient,
     httpClient: HttpClient,
   ) {
     this.accountId = accountId;
-    this.viennaLabels = new Map(existingLabels.map((l) => [l.name.toLowerCase(), l]));
-    this.viennaMailboxes = new Map(existingMailboxes.map((m) => [m.role ?? m.name.toLowerCase(), m]));
+    this.vieannaLabels = new Map(existingLabels.map((l) => [l.name.toLowerCase(), l]));
+    this.vieannaMailboxes = new Map(existingMailboxes.map((m) => [m.role ?? m.name.toLowerCase(), m]));
     this.storageClient = storageClient;
     this.httpClient = httpClient;
     this.colorIndex = 0;
   }
 
   /**
-   * Maps Gmail labels to Vienna labels. System labels are mapped to
-   * their Vienna equivalents. User labels are created or matched by name.
+   * Maps Gmail labels to Vieanna labels. System labels are mapped to
+   * their Vieanna equivalents. User labels are created or matched by name.
    */
   mapGmailLabels(gmailLabels: SourceLabel[]): LabelMapping[] {
     const mappings: LabelMapping[] = [];
@@ -115,7 +115,7 @@ export class EmailDataMapper {
       const systemName = GMAIL_SYSTEM_LABELS[label.id];
 
       if (systemName !== undefined) {
-        const existing = this.findViennaLabelByName(systemName);
+        const existing = this.findVieannaLabelByName(systemName);
         if (existing) {
           mappings.push({
             sourceId: label.id,
@@ -138,7 +138,7 @@ export class EmailDataMapper {
 
       if (label.type === "user") {
         const normalizedName = this.normalizeGmailLabelName(label.name);
-        const existing = this.findViennaLabelByName(normalizedName);
+        const existing = this.findVieannaLabelByName(normalizedName);
 
         if (existing) {
           mappings.push({
@@ -164,7 +164,7 @@ export class EmailDataMapper {
   }
 
   /**
-   * Maps Outlook categories to Vienna labels. Colors are preserved
+   * Maps Outlook categories to Vieanna labels. Colors are preserved
    * where possible.
    */
   mapOutlookCategories(categories: SourceLabel[]): LabelMapping[] {
@@ -172,7 +172,7 @@ export class EmailDataMapper {
 
     for (const category of categories) {
       const normalizedName = category.name.trim();
-      const existing = this.findViennaLabelByName(normalizedName);
+      const existing = this.findVieannaLabelByName(normalizedName);
 
       if (existing) {
         mappings.push({
@@ -202,27 +202,27 @@ export class EmailDataMapper {
 
   /**
    * Maps source folder structures (IMAP, Outlook, Apple Mail) to
-   * Vienna mailboxes. Special-use folders are mapped to their
-   * Vienna counterparts.
+   * Vieanna mailboxes. Special-use folders are mapped to their
+   * Vieanna counterparts.
    */
   mapFolderStructure(sourceFolders: SourceMailbox[]): FolderMapping[] {
     const mappings: FolderMapping[] = [];
 
     for (const folder of sourceFolders) {
       if (folder.specialUse) {
-        const viennaMailbox = this.findViennaMailboxByRole(folder.specialUse);
-        if (viennaMailbox) {
+        const vieannaMailbox = this.findVieannaMailboxByRole(folder.specialUse);
+        if (vieannaMailbox) {
           mappings.push({
             sourcePath: folder.path,
-            targetMailboxId: viennaMailbox.id,
-            targetMailboxName: viennaMailbox.name,
+            targetMailboxId: vieannaMailbox.id,
+            targetMailboxName: vieannaMailbox.name,
             action: "map",
           });
           continue;
         }
       }
 
-      const existingByName = this.findViennaMailboxByName(folder.name);
+      const existingByName = this.findVieannaMailboxByName(folder.name);
       if (existingByName) {
         mappings.push({
           sourcePath: folder.path,
@@ -284,7 +284,7 @@ export class EmailDataMapper {
 
   /**
    * Downloads an attachment from a remote URL and uploads it to
-   * Vienna's object storage. Returns an updated reference with
+   * Vieanna's object storage. Returns an updated reference with
    * the storage key.
    */
   async handleAttachment(
@@ -361,16 +361,16 @@ export class EmailDataMapper {
     return results;
   }
 
-  private findViennaLabelByName(name: string): ViennaLabel | undefined {
-    return this.viennaLabels.get(name.toLowerCase());
+  private findVieannaLabelByName(name: string): VieannaLabel | undefined {
+    return this.vieannaLabels.get(name.toLowerCase());
   }
 
-  private findViennaMailboxByRole(role: string): ViennaMailbox | undefined {
-    return this.viennaMailboxes.get(role);
+  private findVieannaMailboxByRole(role: string): VieannaMailbox | undefined {
+    return this.vieannaMailboxes.get(role);
   }
 
-  private findViennaMailboxByName(name: string): ViennaMailbox | undefined {
-    for (const [, mailbox] of this.viennaMailboxes) {
+  private findVieannaMailboxByName(name: string): VieannaMailbox | undefined {
+    for (const [, mailbox] of this.vieannaMailboxes) {
       if (mailbox.name.toLowerCase() === name.toLowerCase()) {
         return mailbox;
       }

@@ -1,5 +1,5 @@
 // =============================================================================
-// Vienna — AI Unsubscribe Agent
+// Vieanna — AI Unsubscribe Agent
 // =============================================================================
 // One click and the AI handles everything:
 // 1. Finds the unsubscribe link/email in headers or body
@@ -9,7 +9,7 @@
 // 5. Reports back to user
 //
 // No competitor does this automatically. Users click "unsubscribe" in Gmail
-// and get taken to some sketchy form. Vienna handles it all silently.
+// and get taken to some sketchy form. Vieanna handles it all silently.
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

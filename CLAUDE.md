@@ -18,7 +18,7 @@
 
 ## MISSION
 
-Kill the bloated, slow, privacy-violating email clients that the world is stuck with. Email hasn't been reinvented since Gmail in 2004. It's been 22 years. Vienna is the reinvention.
+Kill the bloated, slow, privacy-violating email clients that the world is stuck with. Email hasn't been reinvented since Gmail in 2004. It's been 22 years. Vieanna is the reinvention.
 
 **The customer sees:** The fastest, smartest, most beautiful email client ever made. One subscription. Works with all their accounts.
 **You see:** AI-powered email on a lean stack. Margin on every subscription. No ads. No data mining. Clean revenue.
@@ -88,7 +88,7 @@ Kill the bloated, slow, privacy-violating email clients that the world is stuck 
 **Phase 1 — Build in Public (Month 1-3)**
 - Ship weekly updates on X/Twitter
 - "Gmail is 22 years old" narrative
-- Demo videos: Vienna vs Gmail speed comparison
+- Demo videos: Vieanna vs Gmail speed comparison
 - Waitlist with early access for influencers
 - Target: 10K waitlist signups
 
@@ -113,12 +113,12 @@ Kill the bloated, slow, privacy-violating email clients that the world is stuck 
 
 ## DOMAIN ARCHITECTURE
 
-- **vienna.com** — Landing/marketing site
-- **mail.vienna.com** — Email web app (inbox, compose, settings)
-- **admin.vienna.com** — Admin dashboard
-- **api.vienna.com** — API server
-- **smtp.vienna.com** — MTA (outbound email delivery)
-- **mx1.vienna.com / mx2.vienna.com** — MX records for inbound
+- **vieanna.com** — Landing/marketing site
+- **mail.vieanna.com** — Email web app (inbox, compose, settings)
+- **admin.vieanna.com** — Admin dashboard
+- **api.vieanna.com** — API server
+- **smtp.vieanna.com** — MTA (outbound email delivery)
+- **mx1.vieanna.com / mx2.vieanna.com** — MX records for inbound
 
 **Hosting:** Cloudflare (Pages + Workers + R2)
 **Database:** Neon Serverless PostgreSQL
@@ -196,7 +196,7 @@ Kill the bloated, slow, privacy-violating email clients that the world is stuck 
 | 3 | **Outlook OAuth + Graph API** | 400M users. Must support day one. | DONE |
 | 4 | **Inbox UI + thread view** | The core product. Everything else is built on this. | DONE |
 | 5 | **Compose with Tiptap editor** | Users need to send email. | DONE |
-| 6 | **AI Compose (Claude)** | Our #1 differentiator. What makes Vienna not just another client. | DONE |
+| 6 | **AI Compose (Claude)** | Our #1 differentiator. What makes Vieanna not just another client. | DONE |
 | 7 | **AI Triage + priority inbox** | The reason power users will switch from Gmail | DONE |
 | 8 | **Local IndexedDB cache** | Speed depends on this. No local cache = slow = dead. | DONE |
 | 9 | **Keyboard shortcuts** | Power users are our first adopters. They demand this. | DONE |
@@ -238,10 +238,10 @@ Kill the bloated, slow, privacy-violating email clients that the world is stuck 
 |---|------|-----|--------|
 | 31 | **Own email hosting (Postal/Mailcow)** | Offer @yourdomain.com email. Recurring revenue. | DONE (full MTA built) |
 | 32 | **On-device AI models** | Zero-latency triage without API calls. True privacy. | NOT STARTED |
-| 33 | **Public API + webhooks** | Developers build on Vienna. Platform play. | DONE (21 API routes) |
+| 33 | **Public API + webhooks** | Developers build on Vieanna. Platform play. | DONE (21 API routes) |
 | 34 | **Team shared inboxes** | Enterprise feature. $12/user/mo. | DONE (backend) |
 | 35 | **Admin console + SSO** | Enterprise requirement. | PARTIAL (admin dashboard exists) |
-| 36 | **White-label email SDK** | Other apps embed Vienna's email. Licensing revenue. | DONE (SDK published) |
+| 36 | **White-label email SDK** | Other apps embed Vieanna's email. Licensing revenue. | DONE (SDK published) |
 
 ---
 
@@ -275,7 +275,7 @@ The following backend infrastructure is complete and production-ready:
 - SDK with examples
 - Cloudflare deployment config (DNS, Pages, wrangler.toml)
 - Neon PostgreSQL setup SQL
-- Production .env template for vienna.com
+- Production .env template for vieanna.com
 
 ---
 
@@ -309,11 +309,11 @@ The following backend infrastructure is complete and production-ready:
 - Keyboard shortcuts + Cmd+K command palette
 - Full CLAUDE.md business strategy
 - Cloudflare + Neon deployment config
-- Rebranded to Vienna
+- Rebranded to Vieanna
 
 **Next action:** Build IndexedDB local cache, dark mode, import/migration tool, desktop app
 
-**MANDATE: Email hasn't been reinvented in 22 years. Gmail has 1.8 BILLION users and hasn't innovated since 2004. The AI wave means the next great email client will be built NOW. Vienna IS that client. Foot on the accelerator at all times.**
+**MANDATE: Email hasn't been reinvented in 22 years. Gmail has 1.8 BILLION users and hasn't innovated since 2004. The AI wave means the next great email client will be built NOW. Vieanna IS that client. Foot on the accelerator at all times.**
 
 ---
 

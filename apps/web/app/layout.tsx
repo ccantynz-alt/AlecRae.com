@@ -3,8 +3,8 @@ import { ThemeProvider, Box } from "@emailed/ui";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Emailed - AI-Native Email Platform",
-  description: "The intelligent email platform that works for you. AI-powered inbox management, smart composition, and enterprise-grade deliverability.",
+  title: "Vieanna — The Email Client That Kills Gmail",
+  description: "Email hasn't been reinvented since 2004. Vieanna is the AI-powered email client with on-device intelligence, zero-latency inbox, and the smartest compose ever built.",
 };
 
 export default function RootLayout({

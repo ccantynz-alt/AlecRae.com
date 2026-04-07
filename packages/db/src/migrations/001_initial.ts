@@ -1,7 +1,7 @@
 // =============================================================================
-// Vienna — Database Migration 001: Initial Schema
+// Vieanna — Database Migration 001: Initial Schema
 // =============================================================================
-// Complete schema for the Vienna email platform.
+// Complete schema for the Vieanna email platform.
 // PostgreSQL (Neon Serverless) + Drizzle ORM.
 
 import { sql } from 'drizzle-orm';
@@ -79,7 +79,7 @@ export const passkeys = pgTable('passkeys', {
 export const emailAccounts = pgTable('email_accounts', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  provider: text('provider').notNull(), // gmail, outlook, imap, vienna
+  provider: text('provider').notNull(), // gmail, outlook, imap, vieanna
   email: text('email').notNull(),
   name: text('name'),
   oauthAccessToken: text('oauth_access_token'),
@@ -429,7 +429,7 @@ export const knowledgeArticles = pgTable('knowledge_articles', {
 
 // ─── Migration Runner ───────────────────────────────────────────────────────
 
-export const migrationMeta = pgTable('_vienna_migrations', {
+export const migrationMeta = pgTable('_vieanna_migrations', {
   id: serial('id').primaryKey(),
   name: text('name').notNull().unique(),
   appliedAt: timestamp('applied_at').notNull().defaultNow(),

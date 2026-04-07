@@ -1,14 +1,14 @@
 /**
- * @vienna/sdk — The official Vienna/Emailed developer SDK.
+ * @vieanna/sdk — The official Vieanna/Emailed developer SDK.
  *
  * Provides a typed, ergonomic interface for the Emailed platform API.
  * Includes automatic retries, rate limit handling, and AI-powered support.
  *
  * @example
  * ```ts
- * import { ViennaClient } from "@vienna/sdk";
+ * import { VieannaClient } from "@vieanna/sdk";
  *
- * const client = new ViennaClient({
+ * const client = new VieannaClient({
  *   apiKey: "em_live_abc123...",
  * });
  *
@@ -16,7 +16,7 @@
  * const result = await client.messages.send({
  *   from: { address: "hello@example.com", name: "Example" },
  *   to: [{ address: "user@recipient.com" }],
- *   subject: "Hello from Vienna",
+ *   subject: "Hello from Vieanna",
  *   text: "This is a test email.",
  * });
  *
@@ -37,8 +37,8 @@ import { SupportResource } from "./resources/support.js";
 // Client Configuration
 // ---------------------------------------------------------------------------
 
-/** Configuration for the ViennaClient. */
-export interface ViennaClientConfig {
+/** Configuration for the VieannaClient. */
+export interface VieannaClientConfig {
   /** API key for authentication (required). Starts with "em_live_" or "em_test_". */
   readonly apiKey: string;
   /** Base URL override (default "https://api.emailed.dev/v1"). */
@@ -60,12 +60,12 @@ export interface ViennaClientConfig {
 // ---------------------------------------------------------------------------
 
 /**
- * The main Vienna/Emailed SDK client.
+ * The main Vieanna/Emailed SDK client.
  *
  * Provides access to all platform resources through typed resource objects.
  * All methods return `Result<T, Error>` for type-safe error handling.
  */
-export class ViennaClient {
+export class VieannaClient {
   /** Send, retrieve, search, and manage email messages. */
   readonly messages: MessagesResource;
 
@@ -84,7 +84,7 @@ export class ViennaClient {
   /** The underlying HTTP client (exposed for advanced use cases). */
   readonly http: HttpClient;
 
-  constructor(config: ViennaClientConfig) {
+  constructor(config: VieannaClientConfig) {
     const httpConfig: HttpClientConfig = {
       baseUrl: config.baseUrl ?? "https://api.emailed.dev/v1",
       apiKey: config.apiKey,

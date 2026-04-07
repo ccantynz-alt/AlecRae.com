@@ -1,5 +1,5 @@
 // =============================================================================
-// Vienna — Predictive Email Intelligence (PEI)
+// Vieanna — Predictive Email Intelligence (PEI)
 // =============================================================================
 // THE feature no competitor has. PEI predicts:
 // 1. What emails you'll receive and from whom

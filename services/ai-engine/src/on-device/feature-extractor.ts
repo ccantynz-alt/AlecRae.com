@@ -1,5 +1,5 @@
 // =============================================================================
-// Vienna — Email Feature Extractor for On-Device AI
+// Vieanna — Email Feature Extractor for On-Device AI
 // =============================================================================
 // Extracts numerical feature vectors from emails for ONNX model input.
 // Converts raw email data into fixed-length float arrays optimized for

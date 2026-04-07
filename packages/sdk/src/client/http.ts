@@ -1,7 +1,7 @@
 /**
  * HTTP client with authentication, retries, rate limiting, and typed responses.
  *
- * Handles all low-level communication with the Vienna/Emailed API, including
+ * Handles all low-level communication with the Vieanna/Emailed API, including
  * automatic retries with exponential backoff, rate limit (429) handling,
  * request/response logging, and TypeScript generics for type-safe responses.
  */
@@ -55,7 +55,7 @@ export interface HttpClientConfig {
   readonly logger?: LoggerFn;
   /** Custom headers to include in every request. */
   readonly defaultHeaders?: Readonly<Record<string, string>>;
-  /** User-agent string (default "@vienna/sdk/{version}"). */
+  /** User-agent string (default "@vieanna/sdk/{version}"). */
   readonly userAgent?: string;
 }
 
@@ -168,7 +168,7 @@ function shouldLog(configured: LogLevel, entryLevel: LogLevel): boolean {
 // ---------------------------------------------------------------------------
 
 function defaultLogger(entry: LogEntry): void {
-  const prefix = `[vienna-sdk] [${entry.level.toUpperCase()}]`;
+  const prefix = `[vieanna-sdk] [${entry.level.toUpperCase()}]`;
   const parts = [prefix, entry.message];
 
   if (entry.method && entry.url) {
@@ -227,7 +227,7 @@ export class HttpClient {
       logLevel: config.logLevel ?? "error",
       logger: config.logger ?? defaultLogger,
       defaultHeaders: config.defaultHeaders ?? {},
-      userAgent: config.userAgent ?? "@vienna/sdk/0.1.0",
+      userAgent: config.userAgent ?? "@vieanna/sdk/0.1.0",
     };
   }
 

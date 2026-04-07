@@ -1,5 +1,5 @@
 /**
- * @vienna/crypto — Shared cryptography utilities for the Emailed platform.
+ * @vieanna/crypto — Shared cryptography utilities for the Emailed platform.
  *
  * Provides DKIM signing/verification, TLS certificate management,
  * AES-256-GCM encryption, hashing, and key derivation.

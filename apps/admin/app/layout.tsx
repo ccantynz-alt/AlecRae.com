@@ -3,8 +3,8 @@ import { ThemeProvider, Box, Sidebar, Text, type SidebarSection } from "@emailed
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Emailed Admin - Platform Management",
-  description: "AI-powered administration dashboard for the Emailed platform.",
+  title: "Vieanna Admin - Platform Management",
+  description: "AI-powered administration dashboard for the Vieanna platform.",
 };
 
 const adminNavSections: SidebarSection[] = [
@@ -66,7 +66,7 @@ function AdminBrand() {
       </Box>
       <Box>
         <Text variant="heading-sm" className="leading-none">
-          Emailed
+          Vieanna
         </Text>
         <Text variant="caption" muted>
           Admin Console

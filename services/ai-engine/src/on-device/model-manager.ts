@@ -1,5 +1,5 @@
 // =============================================================================
-// Vienna — On-Device Model Lifecycle Manager
+// Vieanna — On-Device Model Lifecycle Manager
 // =============================================================================
 // Downloads, caches, versions, and manages ONNX models for on-device inference.
 // Models stored in IndexedDB for persistence across sessions. Auto-updates
@@ -52,7 +52,7 @@ export interface DownloadProgress {
 
 // ─── Model Manager ──────────────────────────────────────────────────────────
 
-const MODEL_DB_NAME = 'vienna-models';
+const MODEL_DB_NAME = 'vieanna-models';
 const MODEL_STORE = 'models';
 const MANIFEST_STORE = 'manifests';
 const MODEL_DB_VERSION = 1;

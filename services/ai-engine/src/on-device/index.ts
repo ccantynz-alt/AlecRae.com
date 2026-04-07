@@ -1,5 +1,5 @@
 // =============================================================================
-// Vienna — On-Device AI (Zero-Latency, Zero-Privacy-Risk)
+// Vieanna — On-Device AI (Zero-Latency, Zero-Privacy-Risk)
 // =============================================================================
 
 export {

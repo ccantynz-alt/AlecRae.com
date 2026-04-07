@@ -40,7 +40,7 @@ export default function DashboardLayout({
   const brand = (
     <Box className="flex items-center justify-between">
       <Text variant="heading-md" className="text-brand-600 font-bold">
-        Emailed
+        Vieanna
       </Text>
       <Box
         as="button"

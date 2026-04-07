@@ -146,7 +146,7 @@ export interface WebhookSignatureComponents {
  * The signed payload is "{timestamp}.{body}".
  *
  * @param payload - The raw request body string
- * @param signatureHeader - The value of the "X-Vienna-Signature" header
+ * @param signatureHeader - The value of the "X-Vieanna-Signature" header
  * @param secret - The webhook signing secret
  * @param toleranceSeconds - Maximum age of the timestamp in seconds (default 300 = 5 min)
  * @returns Whether the signature is valid

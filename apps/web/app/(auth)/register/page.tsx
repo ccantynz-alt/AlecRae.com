@@ -6,7 +6,7 @@ export default function RegisterPage() {
       <Box className="w-full max-w-md">
         <Box className="text-center mb-8">
           <Text variant="heading-lg" className="text-brand-600 font-bold mb-2">
-            Emailed
+            Vieanna
           </Text>
           <Text variant="display-sm">Create your account</Text>
           <Text variant="body-md" muted className="mt-2">
