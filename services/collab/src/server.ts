@@ -49,6 +49,29 @@ app.get("/health", (c) =>
 
 app.get("/stats", (c) => c.json(rooms.stats()));
 
+// Admin: forcibly close a room. Requires a JWT signed with the shared secret
+// and `scope: "collab:admin"`. Used by the API server's DELETE collaborate route.
+app.delete("/admin/rooms/:draftId", async (c) => {
+  const authHeader = c.req.header("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json({ error: "missing token" }, 401);
+  }
+  try {
+    const { payload } = await jwtVerify(authHeader.slice(7), JWT_SECRET, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
+    if (payload.scope !== "collab:admin") {
+      return c.json({ error: "insufficient scope" }, 403);
+    }
+  } catch {
+    return c.json({ error: "invalid token" }, 401);
+  }
+  const draftId = c.req.param("draftId");
+  const closed = await rooms.closeRoom(draftId);
+  return c.json({ closed }, closed ? 200 : 404);
+});
+
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 
 async function verifyToken(token: string): Promise<CollabJwtClaims | null> {
