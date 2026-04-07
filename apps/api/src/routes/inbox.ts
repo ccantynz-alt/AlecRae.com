@@ -59,6 +59,11 @@ const customCategories = new Map<string, InboxCategory[]>();
 const commitmentStore = new Map<string, Commitment[]>();
 const screenerQueue = new Map<string, ScreenerEntry[]>();
 
+// Exposed for cross-route access (e.g. todo.ts /from-commitment)
+export function getCommitmentsForAccount(accountId: string): readonly Commitment[] {
+  return commitmentStore.get(accountId) ?? [];
+}
+
 // POST /v1/inbox/classify — Classify an email
 inbox.post(
   "/classify",

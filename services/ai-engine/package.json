@@ -72,6 +72,11 @@
       "types": "./src/agent/index.ts",
       "import": "./dist/agent/index.js"
     },
+    "./todo": {
+      "bun": "./src/todo/index.ts",
+      "types": "./src/todo/index.ts",
+      "import": "./dist/todo/index.js"
+    },
     "./unsubscribe": {
       "bun": "./src/unsubscribe/index.ts",
       "types": "./src/unsubscribe/index.ts",
