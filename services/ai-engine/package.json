@@ -116,6 +116,16 @@
       "bun": "./src/meetings/types.ts",
       "types": "./src/meetings/types.ts",
       "import": "./dist/meetings/types.js"
+    },
+    "./security/sender-verify": {
+      "bun": "./src/security/sender-verify.ts",
+      "types": "./src/security/sender-verify.ts",
+      "import": "./dist/security/sender-verify.js"
+    },
+    "./security/phishing": {
+      "bun": "./src/security/phishing.ts",
+      "types": "./src/security/phishing.ts",
+      "import": "./dist/security/phishing.js"
     }
   },
   "scripts": {
