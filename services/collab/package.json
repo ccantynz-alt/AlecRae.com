@@ -7,7 +7,7 @@
   "types": "src/server.ts",
   "scripts": {
     "dev": "bun run --hot src/server.ts",
-    "build": "bun build src/server.ts --outdir dist --target bun",
+    "build": "echo 'Service builds independently \u2014 not part of Vercel web deployment'",
     "start": "bun run dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",

@@ -19,7 +19,9 @@ export abstract class BaseError extends Error {
   constructor(message: string, context?: ErrorContext, cause?: Error) {
     super(message, { cause });
     this.name = this.constructor.name;
-    this.context = context;
+    if (context !== undefined) {
+      this.context = context;
+    }
     this.timestamp = new Date();
   }
 

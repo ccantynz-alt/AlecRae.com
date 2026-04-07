@@ -2,12 +2,12 @@
   "name": "@emailed/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Vienna Desktop — Native email client for Mac, Windows, Linux",
+  "description": "Vienna Desktop \u2014 Native email client for Mac, Windows, Linux",
   "type": "module",
   "main": "dist/main.cjs",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "build": "echo 'Desktop app builds via electron-builder, not in monorepo turbo build'",
     "preview": "electron-vite preview",
     "start": "electron .",
     "pack": "electron-builder --dir",
@@ -34,7 +34,7 @@
   "build": {
     "appId": "com.vienna.desktop",
     "productName": "Vienna",
-    "copyright": "Copyright © 2026 Vienna",
+    "copyright": "Copyright \u00a9 2026 Vienna",
     "directories": {
       "buildResources": "build",
       "output": "out"
@@ -49,24 +49,64 @@
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] },
-        { "target": "zip", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ]
     },
     "win": {
       "icon": "build/icon.ico",
       "target": [
-        { "target": "nsis", "arch": ["x64", "arm64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "linux": {
       "icon": "build/icon.png",
       "category": "Office",
       "target": [
-        { "target": "AppImage", "arch": ["x64", "arm64"] },
-        { "target": "deb", "arch": ["x64", "arm64"] },
-        { "target": "rpm", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "publish": {
