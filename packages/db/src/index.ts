@@ -89,6 +89,14 @@ export {
   templatesRelations,
 } from "./schema/templates.js";
 
+// Schema - Draft Snapshots (CRDT collaborative drafting)
+export {
+  draftSnapshots,
+  draftSnapshotsRelations,
+  type DraftSnapshot,
+  type NewDraftSnapshot,
+} from "./schema/draft-snapshots.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
