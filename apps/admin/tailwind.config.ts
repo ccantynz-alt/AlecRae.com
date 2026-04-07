@@ -3,10 +3,9 @@ import type { Config } from "tailwindcss";
 const config: Config = {
   content: [
     "./app/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
     "../../packages/ui/src/**/*.{ts,tsx}",
   ],
-  darkMode: "class",
   theme: {
     extend: {
       colors: {
@@ -24,22 +23,22 @@ const config: Config = {
           950: "#1e1b4b",
         },
         surface: {
-          DEFAULT: "#0f172a",
-          secondary: "#1e293b",
-          tertiary: "#334155",
-          inverse: "#ffffff",
+          DEFAULT: "#ffffff",
+          secondary: "#f8fafc",
+          tertiary: "#f1f5f9",
+          inverse: "#0f172a",
         },
         border: {
-          DEFAULT: "#334155",
-          strong: "#475569",
+          DEFAULT: "#e2e8f0",
+          strong: "#cbd5e1",
           focus: "#6366f1",
         },
         content: {
-          DEFAULT: "#f1f5f9",
-          secondary: "#94a3b8",
-          tertiary: "#64748b",
-          inverse: "#0f172a",
-          brand: "#818cf8",
+          DEFAULT: "#0f172a",
+          secondary: "#475569",
+          tertiary: "#94a3b8",
+          inverse: "#ffffff",
+          brand: "#4f46e5",
         },
         status: {
           success: "#10b981",
@@ -73,9 +72,9 @@ const config: Config = {
         "3xl": "1.5rem",
       },
       boxShadow: {
-        "card": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
-        "card-hover": "0 4px 6px -1px rgb(0 0 0 / 0.15), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
-        "elevated": "0 10px 15px -3px rgb(0 0 0 / 0.2), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+        "card": "0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)",
+        "card-hover": "0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.06)",
+        "elevated": "0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04)",
       },
       animation: {
         "fade-in": "fadeIn 0.2s ease-out",

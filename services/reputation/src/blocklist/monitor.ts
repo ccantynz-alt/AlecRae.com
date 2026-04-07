@@ -1,149 +1,12 @@
-/**
- * @emailed/reputation — Blocklist Monitor
- *
- * Continuously monitors IP addresses and domains against major DNS-based
- * blocklists (DNSBLs). When a listing is detected, the monitor:
- *
- *  1. Creates an alert with severity and remediation steps
- *  2. Generates an automated delisting request (where supported)
- *  3. Tracks listing/delisting state over time
- *  4. Notifies the reputation engine so scores can be adjusted
- *
- * Supported blocklists include Spamhaus (SBL, XBL, PBL), Barracuda,
- * SpamCop, SORBS, UCEProtect, and many others.
- */
-
 import type {
   Blocklist,
   BlocklistCheckResult,
   BlocklistAlert,
-} from '../types.js';
+} from '../types';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+// ─── Result Pattern ──────────────────────────────────────────────────────────
 
-/** Default check interval in milliseconds (every 15 minutes) */
-const DEFAULT_CHECK_INTERVAL_MS = 15 * 60 * 1000;
-
-/** Timeout for a single DNS lookup in milliseconds */
-const DNS_LOOKUP_TIMEOUT_MS = 5_000;
-
-/** Maximum concurrent DNSBL checks */
-const MAX_CONCURRENT_CHECKS = 10;
-
-// ---------------------------------------------------------------------------
-// Well-Known Blocklists
-// ---------------------------------------------------------------------------
-
-const WELL_KNOWN_BLOCKLISTS: readonly Blocklist[] = [
-  {
-    id: 'spamhaus-sbl',
-    name: 'Spamhaus SBL',
-    dnsZone: 'sbl.spamhaus.org',
-    type: 'ip',
-    severity: 'critical',
-    description: 'Spamhaus Block List — verified spam sources',
-    lookupMethod: 'dns',
-    delistUrl: 'https://www.spamhaus.org/sbl/removal/',
-  },
-  {
-    id: 'spamhaus-xbl',
-    name: 'Spamhaus XBL',
-    dnsZone: 'xbl.spamhaus.org',
-    type: 'ip',
-    severity: 'critical',
-    description: 'Spamhaus Exploits Block List — compromised hosts',
-    lookupMethod: 'dns',
-    delistUrl: 'https://www.spamhaus.org/xbl/removal/',
-  },
-  {
-    id: 'spamhaus-pbl',
-    name: 'Spamhaus PBL',
-    dnsZone: 'pbl.spamhaus.org',
-    type: 'ip',
-    severity: 'medium',
-    description: 'Spamhaus Policy Block List — dynamic/residential IPs',
-    lookupMethod: 'dns',
-    delistUrl: 'https://www.spamhaus.org/pbl/removal/',
-  },
-  {
-    id: 'spamhaus-dbl',
-    name: 'Spamhaus DBL',
-    dnsZone: 'dbl.spamhaus.org',
-    type: 'domain',
-    severity: 'critical',
-    description: 'Spamhaus Domain Block List — spam domains',
-    lookupMethod: 'dns',
-    delistUrl: 'https://www.spamhaus.org/dbl/removal/',
-  },
-  {
-    id: 'barracuda',
-    name: 'Barracuda BRBL',
-    dnsZone: 'b.barracudacentral.org',
-    type: 'ip',
-    severity: 'high',
-    description: 'Barracuda Reputation Block List',
-    lookupMethod: 'dns',
-    delistUrl: 'https://www.barracudacentral.org/rbl/removal-request',
-  },
-  {
-    id: 'spamcop',
-    name: 'SpamCop',
-    dnsZone: 'bl.spamcop.net',
-    type: 'ip',
-    severity: 'high',
-    description: 'SpamCop Blocking List — user-reported spam sources',
-    lookupMethod: 'dns',
-    delistUrl: 'https://www.spamcop.net/bl.shtml',
-  },
-  {
-    id: 'sorbs-spam',
-    name: 'SORBS Spam',
-    dnsZone: 'spam.dnsbl.sorbs.net',
-    type: 'ip',
-    severity: 'medium',
-    description: 'SORBS — hosts that have sent spam',
-    lookupMethod: 'dns',
-    delistUrl: 'http://www.sorbs.net/delisting/',
-  },
-  {
-    id: 'uceprotect-1',
-    name: 'UCEProtect Level 1',
-    dnsZone: 'dnsbl-1.uceprotect.net',
-    type: 'ip',
-    severity: 'medium',
-    description: 'UCEProtect Level 1 — single IP listings',
-    lookupMethod: 'dns',
-    delistUrl: 'https://www.uceprotect.net/en/index.php?m=7&s=0',
-  },
-  {
-    id: 'cbl',
-    name: 'Composite Blocking List',
-    dnsZone: 'cbl.abuseat.org',
-    type: 'ip',
-    severity: 'high',
-    description: 'CBL — detected sending spam or virus-infected traffic',
-    lookupMethod: 'dns',
-    delistUrl: 'https://www.abuseat.org/lookup.cgi',
-  },
-  {
-    id: 'surbl',
-    name: 'SURBL',
-    dnsZone: 'multi.surbl.org',
-    type: 'domain',
-    severity: 'high',
-    description: 'SURBL — domains found in spam message bodies',
-    lookupMethod: 'dns',
-    delistUrl: 'https://www.surbl.org/surbl-analysis',
-  },
-] as const;
-
-// ---------------------------------------------------------------------------
-// Result Type
-// ---------------------------------------------------------------------------
-
-type Result<T, E = Error> =
+type Result<T, E = string> =
   | { ok: true; value: T }
   | { ok: false; error: E };
 
@@ -155,325 +18,434 @@ function err<E>(error: E): Result<never, E> {
   return { ok: false, error };
 }
 
-// ---------------------------------------------------------------------------
-// DNS Resolver Interface
-// ---------------------------------------------------------------------------
+// ─── DNS Resolver Interface ──────────────────────────────────────────────────
 
-/**
- * Abstraction over DNS resolution for testability.
- * In production, wraps Node's dns.promises.resolve4.
- */
+/** Abstraction over DNS lookups so we can inject test doubles */
 export interface DnsResolver {
   resolve4(hostname: string): Promise<string[]>;
+  resolveTxt(hostname: string): Promise<string[][]>;
 }
 
-// ---------------------------------------------------------------------------
-// Delisting Request
-// ---------------------------------------------------------------------------
+// ─── Default Major Blocklists ────────────────────────────────────────────────
 
-export interface DelistingRequest {
-  blocklist: Blocklist;
-  listedValue: string;
-  requestUrl: string;
-  generatedAt: Date;
-  instructions: string[];
-}
+const MAJOR_BLOCKLISTS: Blocklist[] = [
+  {
+    id: 'spamhaus-sbl',
+    name: 'Spamhaus SBL',
+    dnsZone: 'sbl.spamhaus.org',
+    type: 'ip',
+    severity: 'critical',
+    description: 'Spamhaus Block List — verified spam sources and spam services',
+    lookupMethod: 'dns',
+    delistUrl: 'https://www.spamhaus.org/sbl/removal/form/',
+  },
+  {
+    id: 'spamhaus-xbl',
+    name: 'Spamhaus XBL',
+    dnsZone: 'xbl.spamhaus.org',
+    type: 'ip',
+    severity: 'critical',
+    description: 'Spamhaus Exploits Block List — hijacked PCs and compromised hosts',
+    lookupMethod: 'dns',
+    delistUrl: 'https://www.spamhaus.org/xbl/removal/form/',
+  },
+  {
+    id: 'spamhaus-pbl',
+    name: 'Spamhaus PBL',
+    dnsZone: 'pbl.spamhaus.org',
+    type: 'ip',
+    severity: 'high',
+    description: 'Spamhaus Policy Block List — dynamic/residential IP ranges',
+    lookupMethod: 'dns',
+    delistUrl: 'https://www.spamhaus.org/pbl/removal/form/',
+  },
+  {
+    id: 'spamhaus-dbl',
+    name: 'Spamhaus DBL',
+    dnsZone: 'dbl.spamhaus.org',
+    type: 'domain',
+    severity: 'critical',
+    description: 'Spamhaus Domain Block List — domains found in spam',
+    lookupMethod: 'dns',
+    delistUrl: 'https://www.spamhaus.org/dbl/removal/form/',
+  },
+  {
+    id: 'barracuda',
+    name: 'Barracuda Reputation Block List',
+    dnsZone: 'b.barracudacentral.org',
+    type: 'ip',
+    severity: 'high',
+    description: 'Barracuda Networks IP reputation database',
+    lookupMethod: 'dns',
+    delistUrl: 'https://www.barracudacentral.org/rbl/removal-request',
+  },
+  {
+    id: 'sorbs-spam',
+    name: 'SORBS Spam',
+    dnsZone: 'spam.dnsbl.sorbs.net',
+    type: 'ip',
+    severity: 'medium',
+    description: 'SORBS aggregate zone — hosts that have been caught sending spam',
+    lookupMethod: 'dns',
+    delistUrl: 'http://www.sorbs.net/cgi-bin/support',
+  },
+  {
+    id: 'sorbs-recent',
+    name: 'SORBS Recent Spam',
+    dnsZone: 'new.spam.dnsbl.sorbs.net',
+    type: 'ip',
+    severity: 'medium',
+    description: 'SORBS list of recent spam senders (last 48 hours)',
+    lookupMethod: 'dns',
+    delistUrl: 'http://www.sorbs.net/cgi-bin/support',
+  },
+  {
+    id: 'spamcop',
+    name: 'SpamCop',
+    dnsZone: 'bl.spamcop.net',
+    type: 'ip',
+    severity: 'high',
+    description: 'SpamCop Blocking List — based on user reports',
+    lookupMethod: 'dns',
+    delistUrl: 'https://www.spamcop.net/bl.shtml',
+  },
+  {
+    id: 'cbl',
+    name: 'Composite Blocking List',
+    dnsZone: 'cbl.abuseat.org',
+    type: 'ip',
+    severity: 'high',
+    description: 'CBL — detects botnet/compromised host sending patterns',
+    lookupMethod: 'dns',
+    delistUrl: 'https://www.abuseat.org/lookup.cgi',
+  },
+  {
+    id: 'uribl',
+    name: 'URIBL',
+    dnsZone: 'multi.uribl.com',
+    type: 'domain',
+    severity: 'high',
+    description: 'URI-based blocklist for domains found in spam messages',
+    lookupMethod: 'dns',
+    delistUrl: 'https://admin.uribl.com/',
+  },
+  {
+    id: 'surbl',
+    name: 'SURBL',
+    dnsZone: 'multi.surbl.org',
+    type: 'domain',
+    severity: 'high',
+    description: 'SURBL — detects domains appearing in unsolicited messages',
+    lookupMethod: 'dns',
+    delistUrl: 'https://www.surbl.org/surbl-analysis',
+  },
+  {
+    id: 'invaluement',
+    name: 'Invaluement',
+    dnsZone: 'sip.invaluement.com',
+    type: 'ip',
+    severity: 'medium',
+    description: 'Invaluement anti-spam DNSBL',
+    lookupMethod: 'dns',
+    delistUrl: 'https://www.invaluement.com/removal/',
+  },
+];
 
-// ---------------------------------------------------------------------------
-// Monitor Configuration
-// ---------------------------------------------------------------------------
+// ─── Blocklist Monitor ───────────────────────────────────────────────────────
 
-export interface BlocklistMonitorConfig {
-  /** DNS resolver implementation */
-  resolver: DnsResolver;
-  /** Check interval in milliseconds */
-  checkIntervalMs?: number;
-  /** Additional blocklists beyond the well-known defaults */
-  additionalBlocklists?: Blocklist[];
-  /** Blocklist IDs to exclude from monitoring */
-  excludeBlocklists?: string[];
-  /** Maximum concurrent DNS lookups */
-  maxConcurrent?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Blocklist Monitor
-// ---------------------------------------------------------------------------
-
-/**
- * Monitors IP addresses and domains against DNS-based blocklists.
- *
- * Maintains a registry of blocklists to check, runs periodic checks,
- * and manages alert state for listings and delistings.
- */
 export class BlocklistMonitor {
+  private readonly blocklists: Map<string, Blocklist>;
+  private readonly alerts: Map<string, BlocklistAlert> = new Map();
+  private readonly checkResults: Map<string, BlocklistCheckResult[]> = new Map();
   private readonly resolver: DnsResolver;
   private readonly checkIntervalMs: number;
-  private readonly maxConcurrent: number;
-  private readonly blocklists: Blocklist[];
+  private readonly maxResultsPerValue: number;
+  private nextAlertId = 1;
 
-  /** IPs and domains being monitored */
-  private readonly monitoredIps: Set<string> = new Set();
-  private readonly monitoredDomains: Set<string> = new Set();
+  constructor(options: {
+    resolver: DnsResolver;
+    additionalBlocklists?: Blocklist[];
+    excludeBlocklists?: string[];
+    checkIntervalMs?: number;
+    maxResultsPerValue?: number;
+  }) {
+    this.resolver = options.resolver;
+    this.checkIntervalMs = options.checkIntervalMs ?? 30 * 60 * 1000; // 30 minutes default
+    this.maxResultsPerValue = options.maxResultsPerValue ?? 500;
 
-  /** Active alerts keyed by "blocklistId::listedValue" */
-  private readonly activeAlerts: Map<string, BlocklistAlert> = new Map();
+    // Build blocklist registry
+    this.blocklists = new Map();
+    const excludeSet = new Set(options.excludeBlocklists ?? []);
 
-  /** Full check result history */
-  private readonly checkHistory: BlocklistCheckResult[] = [];
+    for (const bl of MAJOR_BLOCKLISTS) {
+      if (!excludeSet.has(bl.id)) {
+        this.blocklists.set(bl.id, bl);
+      }
+    }
 
-  /** Timer for periodic checks */
-  private checkTimer: ReturnType<typeof setInterval> | null = null;
-
-  /** Monotonic alert counter */
-  private alertCounter = 0;
-
-  constructor(config: BlocklistMonitorConfig) {
-    this.resolver = config.resolver;
-    this.checkIntervalMs = config.checkIntervalMs ?? DEFAULT_CHECK_INTERVAL_MS;
-    this.maxConcurrent = config.maxConcurrent ?? MAX_CONCURRENT_CHECKS;
-
-    // Build effective blocklist set
-    const excludeSet = new Set(config.excludeBlocklists ?? []);
-    this.blocklists = [
-      ...WELL_KNOWN_BLOCKLISTS.filter((bl) => !excludeSet.has(bl.id)),
-      ...(config.additionalBlocklists ?? []),
-    ];
+    if (options.additionalBlocklists) {
+      for (const bl of options.additionalBlocklists) {
+        this.blocklists.set(bl.id, bl);
+      }
+    }
   }
 
-  /**
-   * Add an IP address to the monitoring set.
-   */
-  addIp(ipAddress: string): void {
-    this.monitoredIps.add(ipAddress);
+  /** Get all configured blocklists */
+  getBlocklists(): Blocklist[] {
+    return Array.from(this.blocklists.values());
   }
 
-  /**
-   * Remove an IP address from monitoring.
-   */
-  removeIp(ipAddress: string): void {
-    this.monitoredIps.delete(ipAddress);
+  /** Get a specific blocklist by ID */
+  getBlocklist(id: string): Blocklist | undefined {
+    return this.blocklists.get(id);
   }
 
-  /**
-   * Add a domain to the monitoring set.
-   */
-  addDomain(domain: string): void {
-    this.monitoredDomains.add(domain.toLowerCase());
-  }
-
-  /**
-   * Remove a domain from monitoring.
-   */
-  removeDomain(domain: string): void {
-    this.monitoredDomains.delete(domain.toLowerCase());
-  }
-
-  /**
-   * Check a single IP address against all relevant blocklists.
-   * Returns results for each blocklist checked.
-   */
+  /** Check a single IP against all configured IP blocklists */
   async checkIp(ipAddress: string): Promise<Result<BlocklistCheckResult[]>> {
-    const ipBlocklists = this.blocklists.filter((bl) => bl.type === 'ip' || bl.type === 'both');
-    return this.runChecks(ipAddress, 'ip', ipBlocklists);
-  }
+    const validation = this.validateIpAddress(ipAddress);
+    if (!validation.ok) return validation;
 
-  /**
-   * Check a single domain against all relevant blocklists.
-   */
-  async checkDomain(domain: string): Promise<Result<BlocklistCheckResult[]>> {
-    const domainBlocklists = this.blocklists.filter((bl) => bl.type === 'domain' || bl.type === 'both');
-    return this.runChecks(domain.toLowerCase(), 'domain', domainBlocklists);
-  }
+    const ipBlocklists = Array.from(this.blocklists.values()).filter(
+      bl => bl.type === 'ip' || bl.type === 'both',
+    );
 
-  /**
-   * Run a full check across all monitored IPs and domains.
-   * Updates alert state and returns all results.
-   */
-  async checkAll(): Promise<Result<BlocklistCheckResult[]>> {
-    const allResults: BlocklistCheckResult[] = [];
-
-    // Check all IPs
-    for (const ip of this.monitoredIps) {
-      const result = await this.checkIp(ip);
-      if (result.ok) {
-        allResults.push(...result.value);
-      }
-    }
-
-    // Check all domains
-    for (const domain of this.monitoredDomains) {
-      const result = await this.checkDomain(domain);
-      if (result.ok) {
-        allResults.push(...result.value);
-      }
-    }
-
-    return ok(allResults);
-  }
-
-  /**
-   * Start continuous monitoring at the configured interval.
-   */
-  startMonitoring(): void {
-    if (this.checkTimer) return;
-
-    this.checkTimer = setInterval(async () => {
-      await this.checkAll();
-    }, this.checkIntervalMs);
-  }
-
-  /**
-   * Stop continuous monitoring.
-   */
-  stopMonitoring(): void {
-    if (this.checkTimer) {
-      clearInterval(this.checkTimer);
-      this.checkTimer = null;
-    }
-  }
-
-  /**
-   * Generate a delisting request for a specific blocklist listing.
-   */
-  generateDelistingRequest(
-    blocklistId: string,
-    listedValue: string,
-  ): Result<DelistingRequest> {
-    const blocklist = this.blocklists.find((bl) => bl.id === blocklistId);
-    if (!blocklist) {
-      return err(new Error(`Blocklist "${blocklistId}" not found`));
-    }
-
-    if (!blocklist.delistUrl) {
-      return err(new Error(`Blocklist "${blocklist.name}" does not have a delisting URL`));
-    }
-
-    const instructions = this.buildDelistingInstructions(blocklist, listedValue);
-
-    return ok({
-      blocklist,
-      listedValue,
-      requestUrl: blocklist.delistUrl,
-      generatedAt: new Date(),
-      instructions,
-    });
-  }
-
-  /**
-   * Get all active alerts (current listings).
-   */
-  getActiveAlerts(): BlocklistAlert[] {
-    return [...this.activeAlerts.values()].filter((a) => a.status === 'active');
-  }
-
-  /**
-   * Get all alerts for a specific IP or domain.
-   */
-  getAlertsFor(value: string): BlocklistAlert[] {
-    return [...this.activeAlerts.values()].filter((a) => a.listedValue === value);
-  }
-
-  /**
-   * Mark an alert as being resolved (delisting in progress).
-   */
-  markResolving(alertId: string): Result<BlocklistAlert> {
-    for (const alert of this.activeAlerts.values()) {
-      if (alert.id === alertId) {
-        alert.status = 'resolving';
-        return ok(alert);
-      }
-    }
-    return err(new Error(`Alert "${alertId}" not found`));
-  }
-
-  /**
-   * Get the full check history.
-   */
-  getCheckHistory(): readonly BlocklistCheckResult[] {
-    return this.checkHistory;
-  }
-
-  /**
-   * Get the list of configured blocklists.
-   */
-  getBlocklists(): readonly Blocklist[] {
-    return this.blocklists;
-  }
-
-  /**
-   * Get the count of currently listed IPs/domains (active alerts).
-   */
-  getListingCount(): number {
-    return [...this.activeAlerts.values()].filter((a) => a.status === 'active').length;
-  }
-
-  // ─── Internal ───
-
-  /**
-   * Run blocklist checks for a value against a set of blocklists.
-   * Uses concurrency limiting to avoid overwhelming DNS.
-   */
-  private async runChecks(
-    value: string,
-    type: 'ip' | 'domain',
-    blocklists: Blocklist[],
-  ): Promise<Result<BlocklistCheckResult[]>> {
-    const results: BlocklistCheckResult[] = [];
-
-    // Process in batches to limit concurrency
-    for (let i = 0; i < blocklists.length; i += this.maxConcurrent) {
-      const batch = blocklists.slice(i, i + this.maxConcurrent);
-
-      const batchResults = await Promise.allSettled(
-        batch.map((bl) => this.checkSingleBlocklist(value, type, bl)),
-      );
-
-      for (const settled of batchResults) {
-        if (settled.status === 'fulfilled') {
-          const checkResult = settled.value;
-          results.push(checkResult);
-          this.checkHistory.push(checkResult);
-
-          // Update alert state
-          this.updateAlertState(checkResult);
-        }
-        // DNS timeouts/failures are silently skipped — will retry next cycle
-      }
-    }
+    const results = await this.checkValueAgainstBlocklists(ipAddress, ipBlocklists, 'ip');
+    this.storeResults(ipAddress, results);
+    this.evaluateAlerts(ipAddress, results);
 
     return ok(results);
   }
 
-  /**
-   * Check a single value against a single blocklist via DNS lookup.
-   *
-   * For IP-based DNSBLs, the IP octets are reversed and appended to the
-   * blocklist zone (e.g., 1.2.3.4 becomes 4.3.2.1.bl.spamhaus.org).
-   *
-   * For domain-based DNSBLs, the domain is prepended to the zone
-   * (e.g., example.com becomes example.com.dbl.spamhaus.org).
-   */
-  private async checkSingleBlocklist(
-    value: string,
-    type: 'ip' | 'domain',
-    blocklist: Blocklist,
-  ): Promise<BlocklistCheckResult> {
-    let lookupHost: string;
-
-    if (type === 'ip') {
-      const reversed = value.split('.').reverse().join('.');
-      lookupHost = `${reversed}.${blocklist.dnsZone}`;
-    } else {
-      lookupHost = `${value}.${blocklist.dnsZone}`;
+  /** Check a domain against all configured domain blocklists */
+  async checkDomain(domain: string): Promise<Result<BlocklistCheckResult[]>> {
+    if (!domain || domain.trim().length === 0) {
+      return err('Domain is required');
     }
 
-    try {
-      const addresses = await this.resolveWithTimeout(lookupHost, DNS_LOOKUP_TIMEOUT_MS);
+    const domainBlocklists = Array.from(this.blocklists.values()).filter(
+      bl => bl.type === 'domain' || bl.type === 'both',
+    );
 
-      // A response means the value is listed
+    const results = await this.checkValueAgainstBlocklists(domain, domainBlocklists, 'domain');
+    this.storeResults(domain, results);
+    this.evaluateAlerts(domain, results);
+
+    return ok(results);
+  }
+
+  /** Check a single IP against a specific blocklist */
+  async checkIpAgainstBlocklist(
+    ipAddress: string,
+    blocklistId: string,
+  ): Promise<Result<BlocklistCheckResult>> {
+    const bl = this.blocklists.get(blocklistId);
+    if (!bl) {
+      return err(`Blocklist '${blocklistId}' not found`);
+    }
+
+    const validation = this.validateIpAddress(ipAddress);
+    if (!validation.ok) {
+      return err(validation.error);
+    }
+
+    const result = await this.performDnsLookup(ipAddress, bl, 'ip');
+    return ok(result);
+  }
+
+  /** Check multiple IPs and domains in a batch */
+  async checkBatch(
+    ips: string[],
+    domains: string[],
+  ): Promise<Result<{
+    ipResults: Map<string, BlocklistCheckResult[]>;
+    domainResults: Map<string, BlocklistCheckResult[]>;
+    newAlerts: BlocklistAlert[];
+  }>> {
+    const ipResults = new Map<string, BlocklistCheckResult[]>();
+    const domainResults = new Map<string, BlocklistCheckResult[]>();
+    const alertsBefore = new Set(this.alerts.keys());
+
+    // Run all checks in parallel
+    const ipPromises = ips.map(async ip => {
+      const result = await this.checkIp(ip);
+      if (result.ok) {
+        ipResults.set(ip, result.value);
+      }
+    });
+
+    const domainPromises = domains.map(async domain => {
+      const result = await this.checkDomain(domain);
+      if (result.ok) {
+        domainResults.set(domain, result.value);
+      }
+    });
+
+    await Promise.all([...ipPromises, ...domainPromises]);
+
+    // Find new alerts
+    const newAlerts: BlocklistAlert[] = [];
+    for (const [id, alert] of this.alerts) {
+      if (!alertsBefore.has(id)) {
+        newAlerts.push(alert);
+      }
+    }
+
+    return ok({ ipResults, domainResults, newAlerts });
+  }
+
+  // ─── Alert Management ──────────────────────────────────────────────────────
+
+  /** Get all active alerts */
+  getActiveAlerts(): BlocklistAlert[] {
+    const results: BlocklistAlert[] = [];
+    for (const alert of this.alerts.values()) {
+      if (alert.status === 'active' || alert.status === 'resolving') {
+        results.push(alert);
+      }
+    }
+    return results;
+  }
+
+  /** Get all alerts (including resolved) */
+  getAllAlerts(): BlocklistAlert[] {
+    return Array.from(this.alerts.values());
+  }
+
+  /** Mark an alert as resolving (delisting in progress) */
+  markAlertResolving(alertId: string): Result<BlocklistAlert> {
+    const alert = this.alerts.get(alertId);
+    if (!alert) {
+      return err(`Alert '${alertId}' not found`);
+    }
+
+    if (alert.status === 'resolved') {
+      return err('Alert is already resolved');
+    }
+
+    alert.status = 'resolving';
+    return ok(alert);
+  }
+
+  /** Mark an alert as resolved */
+  resolveAlert(alertId: string): Result<BlocklistAlert> {
+    const alert = this.alerts.get(alertId);
+    if (!alert) {
+      return err(`Alert '${alertId}' not found`);
+    }
+
+    alert.status = 'resolved';
+    alert.resolvedAt = new Date();
+    return ok(alert);
+  }
+
+  /** Get remediation steps for a specific blocklist */
+  getRemediationSteps(blocklistId: string): Result<string[]> {
+    const bl = this.blocklists.get(blocklistId);
+    if (!bl) {
+      return err(`Blocklist '${blocklistId}' not found`);
+    }
+
+    return ok(this.buildRemediationSteps(bl));
+  }
+
+  /** Get the configured check interval in milliseconds */
+  getCheckIntervalMs(): number {
+    return this.checkIntervalMs;
+  }
+
+  /** Get historical check results for a value */
+  getCheckHistory(value: string): BlocklistCheckResult[] {
+    return this.checkResults.get(value) ?? [];
+  }
+
+  /** Get a summary of current listing status across all monitored values */
+  getListingSummary(): {
+    totalChecked: number;
+    totalListed: number;
+    listingsByBlocklist: Map<string, string[]>;
+    listingsBySeverity: Record<string, number>;
+  } {
+    const listingsByBlocklist = new Map<string, string[]>();
+    const listingsBySeverity: Record<string, number> = {
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+    };
+    const listedValues = new Set<string>();
+    const checkedValues = new Set<string>();
+
+    for (const [value, results] of this.checkResults) {
+      checkedValues.add(value);
+      for (const result of results) {
+        if (result.listed) {
+          listedValues.add(value);
+          const existing = listingsByBlocklist.get(result.blocklist.id) ?? [];
+          existing.push(value);
+          listingsByBlocklist.set(result.blocklist.id, existing);
+
+          const severity = result.blocklist.severity;
+          listingsBySeverity[severity] = (listingsBySeverity[severity] ?? 0) + 1;
+        }
+      }
+    }
+
+    return {
+      totalChecked: checkedValues.size,
+      totalListed: listedValues.size,
+      listingsByBlocklist,
+      listingsBySeverity,
+    };
+  }
+
+  // ─── Private Methods ────────────────────────────────────────────────────────
+
+  private async checkValueAgainstBlocklists(
+    value: string,
+    blocklists: Blocklist[],
+    type: 'ip' | 'domain',
+  ): Promise<BlocklistCheckResult[]> {
+    const promises = blocklists.map(bl => this.performDnsLookup(value, bl, type));
+    return Promise.all(promises);
+  }
+
+  private async performDnsLookup(
+    value: string,
+    blocklist: Blocklist,
+    type: 'ip' | 'domain',
+  ): Promise<BlocklistCheckResult> {
+    const queryName = type === 'ip'
+      ? `${this.reverseIp(value)}.${blocklist.dnsZone}`
+      : `${value}.${blocklist.dnsZone}`;
+
+    try {
+      const addresses = await this.resolver.resolve4(queryName);
+
+      if (addresses.length === 0) {
+        return {
+          blocklist,
+          listed: false,
+          listedValue: value,
+          checkedAt: new Date(),
+        };
+      }
+
+      // A result means the value IS listed. The return code indicates the reason.
       const returnCode = addresses[0];
-      const reason = this.interpretReturnCode(blocklist, returnCode);
+      let reason: string | undefined;
+
+      // Try to get a TXT record for the reason
+      try {
+        const txtRecords = await this.resolver.resolveTxt(queryName);
+        if (txtRecords.length > 0) {
+          const firstRecord = txtRecords[0];
+          if (firstRecord && firstRecord.length > 0) {
+            reason = firstRecord.join(' ');
+          }
+        }
+      } catch {
+        // TXT lookup failure is non-critical
+      }
 
       return {
         blocklist,
@@ -484,7 +456,7 @@ export class BlocklistMonitor {
         checkedAt: new Date(),
       };
     } catch {
-      // NXDOMAIN or timeout means NOT listed
+      // NXDOMAIN or lookup failure means NOT listed
       return {
         blocklist,
         listed: false,
@@ -494,156 +466,124 @@ export class BlocklistMonitor {
     }
   }
 
-  /**
-   * Resolve a DNS hostname with a timeout.
-   */
-  private async resolveWithTimeout(hostname: string, timeoutMs: number): Promise<string[]> {
-    return Promise.race([
-      this.resolver.resolve4(hostname),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('DNS lookup timed out')), timeoutMs),
-      ),
-    ]);
+  private reverseIp(ip: string): string {
+    // Reverse the octets of an IPv4 address for DNSBL lookup
+    return ip.split('.').reverse().join('.');
   }
 
-  /**
-   * Update alert state based on a check result.
-   */
-  private updateAlertState(result: BlocklistCheckResult): void {
-    const alertKey = `${result.blocklist.id}::${result.listedValue}`;
+  private validateIpAddress(ip: string): Result<void> {
+    if (!ip || ip.trim().length === 0) {
+      return err('IP address is required');
+    }
 
-    if (result.listed) {
-      // New listing or still listed
-      if (!this.activeAlerts.has(alertKey)) {
-        this.alertCounter++;
-        const alert: BlocklistAlert = {
-          id: `bl-alert-${this.alertCounter}-${Date.now()}`,
-          blocklist: result.blocklist,
-          listedValue: result.listedValue,
-          detectedAt: new Date(),
-          status: 'active',
-          remediationSteps: this.buildRemediationSteps(result.blocklist, result.listedValue),
-        };
-        this.activeAlerts.set(alertKey, alert);
+    // Basic IPv4 validation
+    const parts = ip.split('.');
+    if (parts.length !== 4) {
+      return err(`Invalid IPv4 address: ${ip}`);
+    }
+
+    for (const part of parts) {
+      const num = Number(part);
+      if (isNaN(num) || num < 0 || num > 255 || part !== String(num)) {
+        return err(`Invalid IPv4 address: ${ip}`);
       }
-    } else {
-      // No longer listed — resolve the alert
-      const existing = this.activeAlerts.get(alertKey);
-      if (existing && existing.status !== 'resolved') {
-        existing.status = 'resolved';
-        existing.resolvedAt = new Date();
+    }
+
+    return ok(undefined);
+  }
+
+  private storeResults(value: string, results: BlocklistCheckResult[]): void {
+    const existing = this.checkResults.get(value) ?? [];
+    existing.push(...results);
+
+    // Trim to max size
+    while (existing.length > this.maxResultsPerValue) {
+      existing.shift();
+    }
+
+    this.checkResults.set(value, existing);
+  }
+
+  private evaluateAlerts(value: string, results: BlocklistCheckResult[]): void {
+    for (const result of results) {
+      if (!result.listed) {
+        // Check if there was an active alert that can now be auto-resolved
+        const alertKey = `${value}:${result.blocklist.id}`;
+        const existingAlert = this.alerts.get(alertKey);
+        if (existingAlert && existingAlert.status !== 'resolved') {
+          existingAlert.status = 'resolved';
+          existingAlert.resolvedAt = new Date();
+        }
+        continue;
       }
+
+      // Listed — create or update alert
+      const alertKey = `${value}:${result.blocklist.id}`;
+      const existingAlert = this.alerts.get(alertKey);
+
+      if (existingAlert && existingAlert.status !== 'resolved') {
+        // Alert already exists and is active
+        continue;
+      }
+
+      const alert: BlocklistAlert = {
+        id: `bla-${this.nextAlertId++}`,
+        blocklist: result.blocklist,
+        listedValue: value,
+        detectedAt: new Date(),
+        status: 'active',
+        remediationSteps: this.buildRemediationSteps(result.blocklist),
+      };
+
+      this.alerts.set(alertKey, alert);
     }
   }
 
-  /**
-   * Interpret DNSBL return codes into human-readable reasons.
-   * Common return codes: 127.0.0.2 = listed, 127.0.0.10 = PBL, etc.
-   */
-  private interpretReturnCode(blocklist: Blocklist, returnCode: string | undefined): string {
-    if (!returnCode) return 'Listed (no return code)';
-
-    const codeMap: Record<string, Record<string, string>> = {
-      'spamhaus-sbl': {
-        '127.0.0.2': 'Direct UBE sources',
-        '127.0.0.3': 'Spam support services',
-        '127.0.0.9': 'DROP (Do Not Route or Peer)',
-      },
-      'spamhaus-xbl': {
-        '127.0.0.4': 'CBL (exploited host)',
-        '127.0.0.5': 'CBL (exploited host)',
-        '127.0.0.6': 'CBL (exploited host)',
-        '127.0.0.7': 'CBL (exploited host)',
-      },
-      'spamhaus-pbl': {
-        '127.0.0.10': 'ISP maintained (dynamic IP)',
-        '127.0.0.11': 'Spamhaus maintained',
-      },
-    };
-
-    const blocklistCodes = codeMap[blocklist.id];
-    if (blocklistCodes) {
-      const reason = blocklistCodes[returnCode];
-      if (reason) return reason;
-    }
-
-    return `Listed on ${blocklist.name} (code: ${returnCode})`;
-  }
-
-  /**
-   * Build remediation steps for a blocklist listing.
-   */
-  private buildRemediationSteps(blocklist: Blocklist, value: string): string[] {
+  private buildRemediationSteps(blocklist: Blocklist): string[] {
     const steps: string[] = [];
 
-    steps.push(`IP/Domain ${value} is listed on ${blocklist.name}`);
-    steps.push(`Severity: ${blocklist.severity.toUpperCase()}`);
+    steps.push(`Identified listing on ${blocklist.name} (${blocklist.dnsZone})`);
+    steps.push('Review recent sending logs for suspicious activity or policy violations');
+    steps.push('Check for compromised accounts or scripts that may be sending unauthorized email');
+    steps.push('Verify SPF, DKIM, and DMARC records are correctly configured');
+    steps.push('Review bounce rates and complaint rates for anomalies');
 
     switch (blocklist.severity) {
       case 'critical':
-        steps.push('IMMEDIATE ACTION REQUIRED — this listing will severely impact deliverability');
-        steps.push('Investigate the root cause (compromised account, spam complaints, open relay)');
-        steps.push('Fix the underlying issue before requesting delisting');
+        steps.push('CRITICAL: Reduce sending volume immediately to minimize further reputation damage');
+        steps.push('Audit all sending sources and disable any that are not fully authenticated');
         break;
       case 'high':
-        steps.push('ACTION REQUIRED — this listing impacts deliverability to major ISPs');
-        steps.push('Review recent sending patterns and complaint rates');
+        steps.push('Reduce sending volume and prioritize high-engagement recipients');
         break;
       case 'medium':
-        steps.push('Review recommended — this listing may affect deliverability');
+        steps.push('Monitor sending metrics closely for the next 24-48 hours');
         break;
       case 'low':
-        steps.push('Monitor — this listing has minimal deliverability impact');
+        steps.push('Continue monitoring — low-severity listings often auto-expire');
         break;
     }
 
     if (blocklist.delistUrl) {
-      steps.push(`Submit delisting request at: ${blocklist.delistUrl}`);
+      steps.push(`Submit a delisting request at: ${blocklist.delistUrl}`);
     } else {
-      steps.push('No automated delisting available — listing expires automatically after root cause is fixed');
+      steps.push('No automated delisting URL available — this listing may expire automatically');
     }
 
-    steps.push('After delisting, monitor for re-listing over the next 48 hours');
+    steps.push('After remediation, re-check listing status to confirm removal');
 
     return steps;
   }
+}
 
-  /**
-   * Build detailed delisting instructions for a specific blocklist.
-   */
-  private buildDelistingInstructions(blocklist: Blocklist, value: string): string[] {
-    const instructions: string[] = [];
+// ─── Factory ─────────────────────────────────────────────────────────────────
 
-    instructions.push(`Request delisting of ${value} from ${blocklist.name}`);
-    instructions.push(`Visit: ${blocklist.delistUrl ?? 'N/A'}`);
-
-    switch (blocklist.id) {
-      case 'spamhaus-sbl':
-      case 'spamhaus-xbl':
-      case 'spamhaus-pbl':
-      case 'spamhaus-dbl':
-        instructions.push('Enter the IP/domain in the Spamhaus lookup tool');
-        instructions.push('Follow the removal instructions provided');
-        instructions.push('Spamhaus typically processes requests within 24 hours');
-        break;
-      case 'barracuda':
-        instructions.push('Submit removal request with your IP address');
-        instructions.push('Provide contact information and reason for delisting');
-        instructions.push('Barracuda typically processes within 12 hours');
-        break;
-      case 'spamcop':
-        instructions.push('SpamCop listings are temporary (24-48 hours)');
-        instructions.push('Fix the spam source and listings will expire automatically');
-        break;
-      default:
-        instructions.push('Follow the instructions on the blocklist removal page');
-        instructions.push('Ensure the root cause has been resolved before requesting removal');
-        break;
-    }
-
-    instructions.push('IMPORTANT: Ensure the root cause has been fixed before requesting removal');
-    instructions.push('Repeated listings may result in longer delisting times');
-
-    return instructions;
-  }
+export function createBlocklistMonitor(options: {
+  resolver: DnsResolver;
+  additionalBlocklists?: Blocklist[];
+  excludeBlocklists?: string[];
+  checkIntervalMs?: number;
+  maxResultsPerValue?: number;
+}): BlocklistMonitor {
+  return new BlocklistMonitor(options);
 }

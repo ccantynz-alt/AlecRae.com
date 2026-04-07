@@ -17,13 +17,8 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "db:migrate": "bun run packages/db/src/migrate.ts",
-    "db:seed": "bun run packages/db/src/seed.ts",
-    "db:generate": "bun run --cwd packages/db db:generate",
-    "db:studio": "bun run --cwd packages/db db:studio"
-  },
-  "dependencies": {
-    "meilisearch": "^0.44.0"
+    "db:migrate": "turbo run db:migrate",
+    "db:generate": "turbo run db:generate"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

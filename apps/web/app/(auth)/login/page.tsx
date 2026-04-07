@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Box, Text, Button, Input, Card, CardContent } from "@emailed/ui";
 import { authApi } from "../../../lib/api";
 
@@ -10,7 +10,7 @@ export default function LoginPage() {
       <Box className="w-full max-w-md">
         <Box className="text-center mb-8">
           <Text variant="heading-lg" className="text-brand-600 font-bold mb-2">
-            Emailed
+            Vienna
           </Text>
           <Text variant="display-sm">Welcome back</Text>
           <Text variant="body-md" muted className="mt-2">
@@ -44,12 +44,103 @@ export default function LoginPage() {
 }
 
 function PasskeyLogin() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handlePasskeyLogin = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Check if WebAuthn is supported
+      if (!window.PublicKeyCredential) {
+        setError("Passkeys are not supported in this browser.");
+        return;
+      }
+
+      // Request authentication options from server
+      const optionsResponse = await fetch("/api/auth/passkey/options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!optionsResponse.ok) {
+        setError("Failed to start passkey authentication.");
+        return;
+      }
+
+      const options = await optionsResponse.json();
+
+      // Convert base64 challenge to ArrayBuffer
+      options.challenge = Uint8Array.from(atob(options.challenge), (c) => c.charCodeAt(0));
+      if (options.allowCredentials) {
+        for (const cred of options.allowCredentials) {
+          cred.id = Uint8Array.from(atob(cred.id), (c) => c.charCodeAt(0));
+        }
+      }
+
+      // Prompt user for passkey
+      const credential = await navigator.credentials.get({
+        publicKey: options,
+      }) as PublicKeyCredential;
+
+      if (!credential) {
+        setError("Authentication was cancelled.");
+        return;
+      }
+
+      const authResponse = credential.response as AuthenticatorAssertionResponse;
+
+      // Send credential to server for verification
+      const verifyResponse = await fetch("/api/auth/passkey/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: credential.id,
+          rawId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+          response: {
+            authenticatorData: btoa(String.fromCharCode(...new Uint8Array(authResponse.authenticatorData))),
+            clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(authResponse.clientDataJSON))),
+            signature: btoa(String.fromCharCode(...new Uint8Array(authResponse.signature))),
+          },
+          type: credential.type,
+        }),
+      });
+
+      if (verifyResponse.ok) {
+        window.location.href = "/inbox";
+      } else {
+        const data = await verifyResponse.json();
+        setError(data.error ?? "Passkey verification failed.");
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        setError("Authentication was cancelled.");
+      } else {
+        setError("An unexpected error occurred. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   return (
     <Box className="space-y-3">
       <Text variant="label">Recommended</Text>
-      <Button variant="primary" size="lg" className="w-full">
-        Sign in with Passkey
+      <Button
+        variant="primary"
+        size="lg"
+        className="w-full"
+        onClick={handlePasskeyLogin}
+        disabled={isLoading}
+      >
+        {isLoading ? "Authenticating..." : "Sign in with Passkey"}
       </Button>
+      {error && (
+        <Text variant="caption" className="text-center text-red-600">
+          {error}
+        </Text>
+      )}
       <Text variant="caption" className="text-center">
         Use your fingerprint, face, or security key for instant secure access.
       </Text>

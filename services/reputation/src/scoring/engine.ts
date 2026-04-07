@@ -1,77 +1,14 @@
-/**
- * @emailed/reputation — Reputation Scoring Engine
- *
- * Calculates a multi-factor reputation score (0-100) for IP addresses
- * and domains. The score is a weighted composite of:
- *
- *   - Bounce rate (inverse — lower is better)
- *   - Complaint rate (inverse — lower is better)
- *   - Spam trap hits (inverse)
- *   - Engagement score (open/click rates)
- *   - Volume consistency (stable sending patterns)
- *   - Age (older, established senders score higher)
- *   - Authentication pass rate (SPF/DKIM/DMARC)
- *   - Blocklist presence (critical negative factor)
- *
- * The engine maintains score history for trend analysis and emits
- * alerts when scores cross configurable thresholds.
- */
-
 import type {
   IpReputationScore,
   DomainReputationScore,
   ReputationCategory,
   ReputationSignal,
   ReputationFactors,
-} from '../types.js';
+} from '../types';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+// ─── Result Pattern ──────────────────────────────────────────────────────────
 
-/** Factor weights — must sum to 1.0 */
-const FACTOR_WEIGHTS = {
-  deliveryRate: 0.20,
-  bounceRate: 0.15,
-  complaintRate: 0.20,
-  spamTrapHits: 0.10,
-  blocklistPresence: 0.10,
-  authenticationScore: 0.10,
-  engagementScore: 0.10,
-  volumeConsistency: 0.03,
-  ageInDays: 0.02,
-} as const satisfies Record<keyof ReputationFactors, number>;
-
-/** Score thresholds for category classification */
-const CATEGORY_THRESHOLDS: Readonly<Record<ReputationCategory, { min: number; max: number }>> = {
-  excellent: { min: 90, max: 100 },
-  good: { min: 70, max: 89 },
-  neutral: { min: 50, max: 69 },
-  poor: { min: 25, max: 49 },
-  critical: { min: 0, max: 24 },
-} as const;
-
-/** Default alert thresholds */
-const DEFAULT_ALERT_THRESHOLDS = {
-  /** Alert when score drops below this value */
-  scoreDropThreshold: 50,
-  /** Alert when score drops by this many points in a single recalculation */
-  suddenDropThreshold: 15,
-  /** Alert when entering "critical" category */
-  criticalCategoryAlert: true,
-} as const;
-
-/** Maximum history entries per entity */
-const MAX_HISTORY_ENTRIES = 365;
-
-/** Minimum age in days before age bonus kicks in */
-const AGE_MATURITY_DAYS = 90;
-
-// ---------------------------------------------------------------------------
-// Result Type
-// ---------------------------------------------------------------------------
-
-type Result<T, E = Error> =
+type Result<T, E = string> =
   | { ok: true; value: T }
   | { ok: false; error: E };
 
@@ -83,448 +20,526 @@ function err<E>(error: E): Result<never, E> {
   return { ok: false, error };
 }
 
-// ---------------------------------------------------------------------------
-// Alert Types
-// ---------------------------------------------------------------------------
+// ─── Signal Weight Configuration ─────────────────────────────────────────────
 
-export interface ReputationAlert {
-  id: string;
-  entity: string;
-  entityType: 'ip' | 'domain';
-  alertType: 'score_drop' | 'sudden_drop' | 'critical_category' | 'blocklist_detected';
-  message: string;
-  previousScore: number;
-  currentScore: number;
+interface SignalWeight {
+  name: string;
+  weight: number;
+  description: string;
+}
+
+const DEFAULT_SIGNAL_WEIGHTS: Record<keyof ReputationFactors, SignalWeight> = {
+  deliveryRate: {
+    name: 'Delivery Rate',
+    weight: 0.20,
+    description: 'Percentage of emails successfully delivered',
+  },
+  bounceRate: {
+    name: 'Bounce Rate',
+    weight: 0.15,
+    description: 'Percentage of emails that bounced (inverted)',
+  },
+  complaintRate: {
+    name: 'Complaint Rate',
+    weight: 0.18,
+    description: 'Percentage of recipients who complained (inverted)',
+  },
+  spamTrapHits: {
+    name: 'Spam Trap Hits',
+    weight: 0.15,
+    description: 'Number of spam trap addresses contacted (inverted)',
+  },
+  blocklistPresence: {
+    name: 'Blocklist Presence',
+    weight: 0.10,
+    description: 'Count of blocklists where IP/domain appears (inverted)',
+  },
+  authenticationScore: {
+    name: 'Authentication',
+    weight: 0.08,
+    description: 'SPF/DKIM/DMARC pass rate',
+  },
+  engagementScore: {
+    name: 'Engagement',
+    weight: 0.06,
+    description: 'Recipient engagement (opens, clicks, replies)',
+  },
+  volumeConsistency: {
+    name: 'Volume Consistency',
+    weight: 0.05,
+    description: 'Consistency of sending patterns',
+  },
+  ageInDays: {
+    name: 'Sender Age',
+    weight: 0.03,
+    description: 'Age of the IP/domain as a sender',
+  },
+};
+
+// ─── Trend Detection ─────────────────────────────────────────────────────────
+
+export type ReputationTrend = 'improving' | 'declining' | 'stable';
+
+interface ScoreHistoryEntry {
+  score: number;
   timestamp: Date;
 }
 
-// ---------------------------------------------------------------------------
-// Score History Entry
-// ---------------------------------------------------------------------------
+// ─── Reputation Scoring Engine ───────────────────────────────────────────────
 
-export interface ScoreHistoryEntry {
-  score: number;
-  category: ReputationCategory;
-  factors: ReputationFactors;
-  calculatedAt: Date;
-}
+export class ReputationScoringEngine {
+  private readonly weights: Record<keyof ReputationFactors, SignalWeight>;
+  private readonly ipHistory: Map<string, ScoreHistoryEntry[]> = new Map();
+  private readonly domainHistory: Map<string, ScoreHistoryEntry[]> = new Map();
+  private readonly maxHistorySize: number;
 
-// ---------------------------------------------------------------------------
-// Trend Analysis
-// ---------------------------------------------------------------------------
+  constructor(
+    customWeights?: Partial<Record<keyof ReputationFactors, Partial<SignalWeight>>>,
+    maxHistorySize = 90,
+  ) {
+    this.maxHistorySize = maxHistorySize;
+    this.weights = { ...DEFAULT_SIGNAL_WEIGHTS };
 
-export interface TrendAnalysis {
-  entity: string;
-  entityType: 'ip' | 'domain';
-  currentScore: number;
-  averageScore7d: number;
-  averageScore30d: number;
-  trend: 'improving' | 'stable' | 'declining';
-  changeRate: number;
-  dataPoints: number;
-}
-
-// ---------------------------------------------------------------------------
-// Engine Configuration
-// ---------------------------------------------------------------------------
-
-export interface ReputationEngineConfig {
-  /** Override factor weights */
-  weightOverrides?: Partial<Record<keyof ReputationFactors, number>>;
-  /** Custom alert thresholds */
-  alertThresholds?: Partial<typeof DEFAULT_ALERT_THRESHOLDS>;
-}
-
-// ---------------------------------------------------------------------------
-// Reputation Engine
-// ---------------------------------------------------------------------------
-
-/**
- * Multi-factor reputation scoring engine.
- *
- * Calculates weighted reputation scores for IP addresses and domains,
- * tracks score history for trend analysis, and emits alerts when
- * thresholds are breached.
- */
-export class ReputationEngine {
-  private readonly weights: Record<keyof ReputationFactors, number>;
-  private readonly alertThresholds: typeof DEFAULT_ALERT_THRESHOLDS;
-
-  /** Score history keyed by "ip::address" or "domain::name" */
-  private readonly history: Map<string, ScoreHistoryEntry[]> = new Map();
-
-  /** Pending alerts */
-  private readonly alerts: ReputationAlert[] = [];
-
-  /** Monotonic alert ID counter */
-  private alertCounter = 0;
-
-  constructor(config: ReputationEngineConfig = {}) {
-    // Merge weight overrides
-    this.weights = { ...FACTOR_WEIGHTS };
-    if (config.weightOverrides) {
-      for (const [key, value] of Object.entries(config.weightOverrides)) {
+    if (customWeights) {
+      for (const [key, overrides] of Object.entries(customWeights)) {
         const factorKey = key as keyof ReputationFactors;
-        if (typeof value === 'number' && factorKey in this.weights) {
-          this.weights[factorKey] = value;
+        const existing = this.weights[factorKey];
+        if (existing && overrides) {
+          this.weights[factorKey] = { ...existing, ...overrides };
         }
       }
     }
 
-    this.alertThresholds = { ...DEFAULT_ALERT_THRESHOLDS, ...config.alertThresholds };
+    // Normalize weights to sum to 1.0
+    this.normalizeWeights();
   }
 
-  /**
-   * Calculate a reputation score for an IP address.
-   * Returns a score between 0-100 with contributing signals.
-   */
-  calculateIpScore(ipAddress: string, factors: ReputationFactors): Result<IpReputationScore> {
-    const scoreResult = this.computeCompositeScore(factors);
-    if (!scoreResult.ok) {
-      return scoreResult;
+  /** Calculate the reputation score for an IP address */
+  scoreIp(ipAddress: string, factors: ReputationFactors): Result<IpReputationScore> {
+    const validationError = this.validateFactors(factors);
+    if (validationError) {
+      return err(validationError);
     }
 
-    const { score, signals } = scoreResult.value;
-    const category = this.categorize(score);
+    const signals = this.computeSignals(factors);
+    const overallScore = this.computeOverallScore(signals);
+    const category = this.classifyScore(overallScore);
 
     const result: IpReputationScore = {
       ipAddress,
-      overallScore: score,
+      overallScore,
       category,
       signals,
       calculatedAt: new Date(),
       factors,
     };
 
-    // Record history and check alerts
-    const key = `ip::${ipAddress}`;
-    this.recordHistory(key, score, category, factors);
-    this.checkAlerts(key, 'ip', ipAddress, score);
+    // Track history
+    this.appendHistory(this.ipHistory, ipAddress, overallScore);
 
     return ok(result);
   }
 
-  /**
-   * Calculate a reputation score for a domain.
-   * Returns a score between 0-100 with contributing signals.
-   */
-  calculateDomainScore(domain: string, factors: ReputationFactors): Result<DomainReputationScore> {
-    const scoreResult = this.computeCompositeScore(factors);
-    if (!scoreResult.ok) {
-      return scoreResult;
+  /** Calculate the reputation score for a domain */
+  scoreDomain(domain: string, factors: ReputationFactors): Result<DomainReputationScore> {
+    const validationError = this.validateFactors(factors);
+    if (validationError) {
+      return err(validationError);
     }
 
-    const { score, signals } = scoreResult.value;
-    const category = this.categorize(score);
+    const signals = this.computeSignals(factors);
+    const overallScore = this.computeOverallScore(signals);
+    const category = this.classifyScore(overallScore);
 
     const result: DomainReputationScore = {
       domain,
-      overallScore: score,
+      overallScore,
       category,
       signals,
       calculatedAt: new Date(),
       factors,
     };
 
-    // Record history and check alerts
-    const key = `domain::${domain}`;
-    this.recordHistory(key, score, category, factors);
-    this.checkAlerts(key, 'domain', domain, score);
+    this.appendHistory(this.domainHistory, domain, overallScore);
 
     return ok(result);
   }
 
-  /**
-   * Analyze score trends over time for an IP or domain.
-   * Returns averages and a directional trend indicator.
-   */
-  analyzeTrend(entity: string, entityType: 'ip' | 'domain'): Result<TrendAnalysis> {
-    const key = `${entityType}::${entity}`;
-    const entries = this.history.get(key);
+  /** Detect the trend for an IP's score over time */
+  getIpTrend(ipAddress: string): Result<{ trend: ReputationTrend; delta: number }> {
+    return this.detectTrend(this.ipHistory, ipAddress);
+  }
 
-    if (!entries || entries.length === 0) {
-      return err(new Error(`No history found for ${entityType} "${entity}"`));
+  /** Detect the trend for a domain's score over time */
+  getDomainTrend(domain: string): Result<{ trend: ReputationTrend; delta: number }> {
+    return this.detectTrend(this.domainHistory, domain);
+  }
+
+  /** Get score history for an IP */
+  getIpHistory(ipAddress: string): ScoreHistoryEntry[] {
+    return this.ipHistory.get(ipAddress) ?? [];
+  }
+
+  /** Get score history for a domain */
+  getDomainHistory(domain: string): ScoreHistoryEntry[] {
+    return this.domainHistory.get(domain) ?? [];
+  }
+
+  /** Classify a numeric score into a category */
+  classifyScore(score: number): ReputationCategory {
+    if (score >= 90) return 'excellent';
+    if (score >= 70) return 'good';
+    if (score >= 50) return 'neutral';
+    if (score >= 30) return 'poor';
+    return 'critical';
+  }
+
+  /** Compute a composite score from multiple IP scores (e.g., for a pool) */
+  computePoolScore(ipScores: IpReputationScore[]): Result<{
+    averageScore: number;
+    category: ReputationCategory;
+    worstIp: string;
+    bestIp: string;
+  }> {
+    if (ipScores.length === 0) {
+      return err('Cannot compute pool score from empty list');
     }
 
-    const currentScore = entries[entries.length - 1]?.score ?? 0;
+    let total = 0;
+    let worst: IpReputationScore = ipScores[0]!;
+    let best: IpReputationScore = ipScores[0]!;
 
-    const now = Date.now();
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
-
-    const recent7d = entries.filter((e) => e.calculatedAt.getTime() >= sevenDaysAgo);
-    const recent30d = entries.filter((e) => e.calculatedAt.getTime() >= thirtyDaysAgo);
-
-    const averageScore7d = recent7d.length > 0
-      ? recent7d.reduce((sum, e) => sum + e.score, 0) / recent7d.length
-      : currentScore;
-
-    const averageScore30d = recent30d.length > 0
-      ? recent30d.reduce((sum, e) => sum + e.score, 0) / recent30d.length
-      : currentScore;
-
-    // Determine trend direction by comparing recent average to older average
-    const changeRate = averageScore7d - averageScore30d;
-    let trend: TrendAnalysis['trend'];
-    if (changeRate > 3) {
-      trend = 'improving';
-    } else if (changeRate < -3) {
-      trend = 'declining';
-    } else {
-      trend = 'stable';
+    for (const score of ipScores) {
+      total += score.overallScore;
+      if (score.overallScore < worst.overallScore) worst = score;
+      if (score.overallScore > best.overallScore) best = score;
     }
+
+    const averageScore = Math.round(total / ipScores.length);
 
     return ok({
-      entity,
-      entityType,
-      currentScore,
-      averageScore7d: Math.round(averageScore7d * 100) / 100,
-      averageScore30d: Math.round(averageScore30d * 100) / 100,
-      trend,
-      changeRate: Math.round(changeRate * 100) / 100,
-      dataPoints: entries.length,
+      averageScore,
+      category: this.classifyScore(averageScore),
+      worstIp: worst.ipAddress,
+      bestIp: best.ipAddress,
     });
   }
 
-  /**
-   * Get the full score history for an entity.
-   */
-  getHistory(entity: string, entityType: 'ip' | 'domain'): ScoreHistoryEntry[] {
-    const key = `${entityType}::${entity}`;
-    return [...(this.history.get(key) ?? [])];
+  /** Identify the factors dragging a score down the most */
+  identifyWeakFactors(factors: ReputationFactors, limit = 3): Result<Array<{
+    factor: string;
+    currentScore: number;
+    weight: number;
+    impact: number;
+    recommendation: string;
+  }>> {
+    const signals = this.computeSignals(factors);
+    const ranked = signals
+      .map(signal => ({
+        factor: signal.source,
+        currentScore: signal.score,
+        weight: signal.weight,
+        impact: (100 - signal.score) * signal.weight,
+        recommendation: this.getRecommendation(signal.source, signal.score),
+      }))
+      .sort((a, b) => b.impact - a.impact)
+      .slice(0, limit);
+
+    return ok(ranked);
   }
 
-  /**
-   * Drain all pending alerts. Returns and clears the alert queue.
-   */
-  drainAlerts(): ReputationAlert[] {
-    const pending = [...this.alerts];
-    this.alerts.length = 0;
-    return pending;
+  // ─── Private Methods ────────────────────────────────────────────────────────
+
+  private normalizeWeights(): void {
+    let sum = 0;
+    for (const config of Object.values(this.weights)) {
+      sum += config.weight;
+    }
+
+    if (sum === 0) return;
+
+    for (const config of Object.values(this.weights)) {
+      config.weight = config.weight / sum;
+    }
   }
 
-  /**
-   * Peek at pending alerts without draining.
-   */
-  peekAlerts(): readonly ReputationAlert[] {
-    return this.alerts;
+  private validateFactors(factors: ReputationFactors): string | null {
+    if (factors.deliveryRate < 0 || factors.deliveryRate > 1) {
+      return 'deliveryRate must be between 0 and 1';
+    }
+    if (factors.bounceRate < 0 || factors.bounceRate > 1) {
+      return 'bounceRate must be between 0 and 1';
+    }
+    if (factors.complaintRate < 0 || factors.complaintRate > 1) {
+      return 'complaintRate must be between 0 and 1';
+    }
+    if (factors.authenticationScore < 0 || factors.authenticationScore > 1) {
+      return 'authenticationScore must be between 0 and 1';
+    }
+    if (factors.engagementScore < 0 || factors.engagementScore > 1) {
+      return 'engagementScore must be between 0 and 1';
+    }
+    if (factors.volumeConsistency < 0 || factors.volumeConsistency > 1) {
+      return 'volumeConsistency must be between 0 and 1';
+    }
+    if (factors.spamTrapHits < 0) {
+      return 'spamTrapHits must be non-negative';
+    }
+    if (factors.blocklistPresence < 0) {
+      return 'blocklistPresence must be non-negative';
+    }
+    if (factors.ageInDays < 0) {
+      return 'ageInDays must be non-negative';
+    }
+    return null;
   }
 
-  // ─── Internal ───
-
-  /**
-   * Compute the weighted composite score from reputation factors.
-   * Each factor is normalized to 0-100, then combined by weight.
-   */
-  private computeCompositeScore(
-    factors: ReputationFactors,
-  ): Result<{ score: number; signals: ReputationSignal[] }> {
-    const signals: ReputationSignal[] = [];
+  private computeSignals(factors: ReputationFactors): ReputationSignal[] {
     const now = new Date();
+    const signals: ReputationSignal[] = [];
 
-    // Delivery rate: higher is better (0-1 maps to 0-100)
-    const deliveryScore = factors.deliveryRate * 100;
+    // Delivery rate: direct percentage -> score
     signals.push({
-      source: 'delivery_rate',
-      score: deliveryScore,
-      weight: this.weights.deliveryRate,
-      description: `Delivery rate: ${(factors.deliveryRate * 100).toFixed(1)}%`,
+      source: 'deliveryRate',
+      score: this.scoreDeliveryRate(factors.deliveryRate),
+      weight: this.weights.deliveryRate.weight,
+      description: this.weights.deliveryRate.description,
       lastUpdated: now,
     });
 
-    // Bounce rate: lower is better (inverted, 0% = 100, 10%+ = 0)
-    const bounceScore = Math.max(0, 100 - factors.bounceRate * 1000);
+    // Bounce rate: inverted — lower is better
     signals.push({
-      source: 'bounce_rate',
-      score: bounceScore,
-      weight: this.weights.bounceRate,
-      description: `Bounce rate: ${(factors.bounceRate * 100).toFixed(2)}% (score: ${bounceScore.toFixed(0)})`,
+      source: 'bounceRate',
+      score: this.scoreBounceRate(factors.bounceRate),
+      weight: this.weights.bounceRate.weight,
+      description: this.weights.bounceRate.description,
       lastUpdated: now,
     });
 
-    // Complaint rate: lower is better (inverted, 0% = 100, 0.1%+ = 0)
-    const complaintScore = Math.max(0, 100 - factors.complaintRate * 100_000);
+    // Complaint rate: inverted — lower is better, very sensitive
     signals.push({
-      source: 'complaint_rate',
-      score: complaintScore,
-      weight: this.weights.complaintRate,
-      description: `Complaint rate: ${(factors.complaintRate * 100).toFixed(3)}% (score: ${complaintScore.toFixed(0)})`,
+      source: 'complaintRate',
+      score: this.scoreComplaintRate(factors.complaintRate),
+      weight: this.weights.complaintRate.weight,
+      description: this.weights.complaintRate.description,
       lastUpdated: now,
     });
 
-    // Spam trap hits: 0 = perfect, each hit reduces score significantly
-    const spamTrapScore = Math.max(0, 100 - factors.spamTrapHits * 25);
+    // Spam trap hits: inverted — zero is perfect
     signals.push({
-      source: 'spam_traps',
-      score: spamTrapScore,
-      weight: this.weights.spamTrapHits,
-      description: `Spam trap hits: ${factors.spamTrapHits} (score: ${spamTrapScore.toFixed(0)})`,
+      source: 'spamTrapHits',
+      score: this.scoreSpamTraps(factors.spamTrapHits),
+      weight: this.weights.spamTrapHits.weight,
+      description: this.weights.spamTrapHits.description,
       lastUpdated: now,
     });
 
-    // Blocklist presence: each listing is a severe penalty
-    const blocklistScore = Math.max(0, 100 - factors.blocklistPresence * 33);
+    // Blocklist presence: inverted — zero is perfect
     signals.push({
-      source: 'blocklist_presence',
-      score: blocklistScore,
-      weight: this.weights.blocklistPresence,
-      description: `Blocklists: ${factors.blocklistPresence} listing(s) (score: ${blocklistScore.toFixed(0)})`,
+      source: 'blocklistPresence',
+      score: this.scoreBlocklistPresence(factors.blocklistPresence),
+      weight: this.weights.blocklistPresence.weight,
+      description: this.weights.blocklistPresence.description,
       lastUpdated: now,
     });
 
-    // Authentication: SPF/DKIM/DMARC pass rate (0-1 maps to 0-100)
-    const authScore = factors.authenticationScore * 100;
+    // Authentication: direct percentage
     signals.push({
-      source: 'authentication',
-      score: authScore,
-      weight: this.weights.authenticationScore,
-      description: `Authentication pass rate: ${(factors.authenticationScore * 100).toFixed(1)}%`,
+      source: 'authenticationScore',
+      score: Math.round(factors.authenticationScore * 100),
+      weight: this.weights.authenticationScore.weight,
+      description: this.weights.authenticationScore.description,
       lastUpdated: now,
     });
 
-    // Engagement: open/click rate proxy (0-1 maps to 0-100)
-    const engagementScore = factors.engagementScore * 100;
+    // Engagement: direct percentage
     signals.push({
-      source: 'engagement',
-      score: engagementScore,
-      weight: this.weights.engagementScore,
-      description: `Engagement score: ${(factors.engagementScore * 100).toFixed(1)}%`,
+      source: 'engagementScore',
+      score: Math.round(factors.engagementScore * 100),
+      weight: this.weights.engagementScore.weight,
+      description: this.weights.engagementScore.description,
       lastUpdated: now,
     });
 
-    // Volume consistency: how stable the sending pattern is (0-1 maps to 0-100)
-    const volumeScore = factors.volumeConsistency * 100;
+    // Volume consistency: direct percentage
     signals.push({
-      source: 'volume_consistency',
-      score: volumeScore,
-      weight: this.weights.volumeConsistency,
-      description: `Volume consistency: ${(factors.volumeConsistency * 100).toFixed(1)}%`,
+      source: 'volumeConsistency',
+      score: Math.round(factors.volumeConsistency * 100),
+      weight: this.weights.volumeConsistency.weight,
+      description: this.weights.volumeConsistency.description,
       lastUpdated: now,
     });
 
-    // Age: logarithmic bonus that plateaus at maturity
-    const ageScore = Math.min(100, (Math.log2(Math.max(1, factors.ageInDays)) / Math.log2(AGE_MATURITY_DAYS)) * 100);
+    // Age: logarithmic curve — older is better, plateaus around 365 days
     signals.push({
-      source: 'age',
-      score: ageScore,
-      weight: this.weights.ageInDays,
-      description: `Age: ${factors.ageInDays} days (score: ${ageScore.toFixed(0)})`,
+      source: 'ageInDays',
+      score: this.scoreAge(factors.ageInDays),
+      weight: this.weights.ageInDays.weight,
+      description: this.weights.ageInDays.description,
       lastUpdated: now,
     });
 
-    // Weighted composite
-    let totalWeight = 0;
+    return signals;
+  }
+
+  private scoreDeliveryRate(rate: number): number {
+    // 99%+ = 100, 95% = 80, 90% = 50, below 85% drops fast
+    if (rate >= 0.99) return 100;
+    if (rate >= 0.97) return 90 + (rate - 0.97) / 0.02 * 10;
+    if (rate >= 0.95) return 80 + (rate - 0.95) / 0.02 * 10;
+    if (rate >= 0.90) return 50 + (rate - 0.90) / 0.05 * 30;
+    if (rate >= 0.80) return 20 + (rate - 0.80) / 0.10 * 30;
+    return Math.max(0, Math.round(rate * 25));
+  }
+
+  private scoreBounceRate(rate: number): number {
+    // 0% = 100, 1% = 90, 3% = 60, 5% = 30, 10%+ = 0
+    if (rate <= 0.005) return 100;
+    if (rate <= 0.01) return 90 + (0.01 - rate) / 0.005 * 10;
+    if (rate <= 0.03) return 60 + (0.03 - rate) / 0.02 * 30;
+    if (rate <= 0.05) return 30 + (0.05 - rate) / 0.02 * 30;
+    if (rate <= 0.10) return Math.round((0.10 - rate) / 0.05 * 30);
+    return 0;
+  }
+
+  private scoreComplaintRate(rate: number): number {
+    // Complaints are extremely sensitive
+    // 0% = 100, 0.01% = 95, 0.05% = 70, 0.1% = 40, 0.3%+ = 0
+    if (rate <= 0.0001) return 100;
+    if (rate <= 0.0005) return 70 + (0.0005 - rate) / 0.0004 * 30;
+    if (rate <= 0.001) return 40 + (0.001 - rate) / 0.0005 * 30;
+    if (rate <= 0.003) return Math.round((0.003 - rate) / 0.002 * 40);
+    return 0;
+  }
+
+  private scoreSpamTraps(hits: number): number {
+    // 0 = 100, 1 = 60, 2 = 30, 3 = 10, 4+ = 0
+    if (hits === 0) return 100;
+    if (hits === 1) return 60;
+    if (hits === 2) return 30;
+    if (hits === 3) return 10;
+    return 0;
+  }
+
+  private scoreBlocklistPresence(count: number): number {
+    // 0 = 100, 1 = 40 (one listing is already bad), 2 = 15, 3+ = 0
+    if (count === 0) return 100;
+    if (count === 1) return 40;
+    if (count === 2) return 15;
+    return 0;
+  }
+
+  private scoreAge(days: number): number {
+    // Logarithmic: 0 days = 10, 30 days = 40, 90 days = 60, 180 = 80, 365+ = 100
+    if (days <= 0) return 10;
+    const score = 10 + 90 * (Math.log(days + 1) / Math.log(366));
+    return Math.min(100, Math.round(score));
+  }
+
+  private computeOverallScore(signals: ReputationSignal[]): number {
     let weightedSum = 0;
 
     for (const signal of signals) {
       weightedSum += signal.score * signal.weight;
-      totalWeight += signal.weight;
     }
 
-    const compositeScore = totalWeight > 0
-      ? Math.round(Math.max(0, Math.min(100, weightedSum / totalWeight)))
-      : 0;
-
-    return ok({ score: compositeScore, signals });
+    return Math.round(clamp(weightedSum, 0, 100));
   }
 
-  /** Classify a score into a reputation category */
-  private categorize(score: number): ReputationCategory {
-    for (const [category, range] of Object.entries(CATEGORY_THRESHOLDS)) {
-      if (score >= range.min && score <= range.max) {
-        return category as ReputationCategory;
-      }
-    }
-    return 'critical';
-  }
-
-  /** Record a score in the history, pruning old entries */
-  private recordHistory(
+  private appendHistory(
+    historyMap: Map<string, ScoreHistoryEntry[]>,
     key: string,
     score: number,
-    category: ReputationCategory,
-    factors: ReputationFactors,
   ): void {
-    let entries = this.history.get(key);
-    if (!entries) {
-      entries = [];
-      this.history.set(key, entries);
+    const history = historyMap.get(key) ?? [];
+    history.push({ score, timestamp: new Date() });
+
+    // Trim to max size
+    while (history.length > this.maxHistorySize) {
+      history.shift();
     }
 
-    entries.push({
-      score,
-      category,
-      factors: { ...factors },
-      calculatedAt: new Date(),
-    });
-
-    // Prune old entries
-    if (entries.length > MAX_HISTORY_ENTRIES) {
-      entries.splice(0, entries.length - MAX_HISTORY_ENTRIES);
-    }
+    historyMap.set(key, history);
   }
 
-  /** Check alert conditions and emit alerts as needed */
-  private checkAlerts(
+  private detectTrend(
+    historyMap: Map<string, ScoreHistoryEntry[]>,
     key: string,
-    entityType: 'ip' | 'domain',
-    entity: string,
-    currentScore: number,
-  ): void {
-    const entries = this.history.get(key);
-    if (!entries || entries.length < 2) return;
+  ): Result<{ trend: ReputationTrend; delta: number }> {
+    const history = historyMap.get(key);
 
-    const previousEntry = entries[entries.length - 2];
-    if (!previousEntry) return;
-
-    const previousScore = previousEntry.score;
-
-    // Score dropped below threshold
-    if (currentScore < this.alertThresholds.scoreDropThreshold && previousScore >= this.alertThresholds.scoreDropThreshold) {
-      this.emitAlert(entity, entityType, 'score_drop',
-        `Reputation score dropped below ${this.alertThresholds.scoreDropThreshold} (${previousScore} -> ${currentScore})`,
-        previousScore, currentScore);
+    if (!history || history.length < 2) {
+      return err(`Insufficient history for trend detection (need at least 2 data points for '${key}')`);
     }
 
-    // Sudden drop
-    const drop = previousScore - currentScore;
-    if (drop >= this.alertThresholds.suddenDropThreshold) {
-      this.emitAlert(entity, entityType, 'sudden_drop',
-        `Reputation score dropped ${drop} points in one calculation (${previousScore} -> ${currentScore})`,
-        previousScore, currentScore);
+    // Use simple linear regression on recent entries (last 14 or whatever's available)
+    const recentEntries = history.slice(-14);
+    const n = recentEntries.length;
+
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumX2 = 0;
+
+    for (let i = 0; i < n; i++) {
+      const entry = recentEntries[i]!;
+      sumX += i;
+      sumY += entry.score;
+      sumXY += i * entry.score;
+      sumX2 += i * i;
     }
 
-    // Entered critical category
-    if (this.alertThresholds.criticalCategoryAlert) {
-      const currentCategory = this.categorize(currentScore);
-      const previousCategory = this.categorize(previousScore);
-      if (currentCategory === 'critical' && previousCategory !== 'critical') {
-        this.emitAlert(entity, entityType, 'critical_category',
-          `Reputation entered CRITICAL category (score: ${currentScore})`,
-          previousScore, currentScore);
-      }
+    const denominator = n * sumX2 - sumX * sumX;
+    if (denominator === 0) {
+      return ok({ trend: 'stable', delta: 0 });
     }
+
+    const slope = (n * sumXY - sumX * sumY) / denominator;
+    // Delta is the projected change over the window
+    const delta = Math.round(slope * n * 10) / 10;
+
+    let trend: ReputationTrend;
+    if (Math.abs(delta) < 2) {
+      trend = 'stable';
+    } else if (delta > 0) {
+      trend = 'improving';
+    } else {
+      trend = 'declining';
+    }
+
+    return ok({ trend, delta });
   }
 
-  /** Create and queue an alert */
-  private emitAlert(
-    entity: string,
-    entityType: 'ip' | 'domain',
-    alertType: ReputationAlert['alertType'],
-    message: string,
-    previousScore: number,
-    currentScore: number,
-  ): void {
-    this.alertCounter++;
-    this.alerts.push({
-      id: `alert-${this.alertCounter}-${Date.now()}`,
-      entity,
-      entityType,
-      alertType,
-      message,
-      previousScore,
-      currentScore,
-      timestamp: new Date(),
-    });
+  private getRecommendation(factor: string, score: number): string {
+    if (score >= 80) return 'Performing well. Continue current practices.';
+
+    const recommendations: Record<string, string> = {
+      deliveryRate: 'Improve list hygiene by removing invalid addresses. Verify recipient addresses before sending.',
+      bounceRate: 'Clean your mailing list. Remove hard-bounced addresses immediately. Implement double opt-in.',
+      complaintRate: 'Review content for spam-like patterns. Ensure clear unsubscribe mechanisms. Reduce sending frequency.',
+      spamTrapHits: 'Audit your mailing list sources. Remove purchased lists. Implement confirmed opt-in. Check for recycled trap addresses.',
+      blocklistPresence: 'Investigate blocklist reasons. Submit delisting requests. Review sending practices that triggered the listing.',
+      authenticationScore: 'Verify SPF, DKIM, and DMARC records are correctly configured. Ensure all sending IPs are authorized.',
+      engagementScore: 'Improve content relevance. Segment your audience. Optimize send times. Re-engage or remove inactive subscribers.',
+      volumeConsistency: 'Maintain consistent sending volumes. Avoid sudden spikes. Use warm-up for new IPs or volume increases.',
+      ageInDays: 'Continue building sending history. Maintain consistent, quality sending patterns.',
+    };
+
+    return recommendations[factor] ?? 'Review this factor and take corrective action.';
   }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+// ─── Factory ─────────────────────────────────────────────────────────────────
+
+export function createReputationScoringEngine(
+  customWeights?: Partial<Record<keyof ReputationFactors, Partial<SignalWeight>>>,
+  maxHistorySize?: number,
+): ReputationScoringEngine {
+  return new ReputationScoringEngine(customWeights, maxHistorySize);
 }

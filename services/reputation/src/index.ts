@@ -1,27 +1,4 @@
-/**
- * @emailed/reputation — Reputation Management Service
- *
- * Exports the warm-up orchestrator, monitor, and other reputation
- * management modules.
- */
-
-// Warm-up
-export {
-  WarmupOrchestrator,
-  getWarmupOrchestrator,
-  WARMUP_SCHEDULES,
-  type WarmupScheduleType,
-  type WarmupStatus,
-  type WarmupSignals,
-  type ScheduleStep,
-} from "./warmup/orchestrator.js";
-
-export {
-  WarmupMonitor,
-  getWarmupMonitor,
-  type WarmupMetricSnapshot,
-  type WarmupReport,
-} from "./warmup/monitor.js";
+// ─── Reputation Service — Public API ─────────────────────────────────────────
 
 // Types
 export type {
@@ -31,6 +8,7 @@ export type {
   WarmupSchedule,
   WarmupPhase,
   WarmupMetrics,
+  WarmupStatus,
   DailySnapshot,
   IpReputationScore,
   DomainReputationScore,
@@ -50,4 +28,27 @@ export type {
   ComplianceViolation,
   ConsentRecord,
   EmailMetadata,
-} from "./types.js";
+} from './types';
+
+// Warm-up Orchestrator
+export { WarmupOrchestrator, createWarmupOrchestrator } from './warmup/orchestrator';
+
+// Reputation Scoring Engine
+export {
+  ReputationScoringEngine,
+  createReputationScoringEngine,
+  type ReputationTrend,
+} from './scoring/engine';
+
+// Feedback Loop Processor
+export { FeedbackLoopProcessor, createFeedbackLoopProcessor } from './feedback-loops/processor';
+
+// Blocklist Monitor
+export {
+  BlocklistMonitor,
+  createBlocklistMonitor,
+  type DnsResolver,
+} from './blocklist/monitor';
+
+// Compliance Enforcer
+export { ComplianceEnforcer, createComplianceEnforcer } from './compliance/enforcer';
