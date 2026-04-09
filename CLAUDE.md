@@ -517,7 +517,7 @@ After writing the code:
 - [x] Public API + webhooks
 - [x] Team shared inboxes
 - [x] White-label SDK
-- [ ] Admin SSO (PARTIAL — admin dashboard exists)
+- [x] Admin SSO (SAML 2.0 SP with jose JWT — SP metadata, ACS, SLO endpoints + admin login page)
 
 ### Bonus Features Built (not in original plan)
 - Advanced Dictation Engine (replaces Dragon)
@@ -544,6 +544,10 @@ After writing the code:
 | 3 | Some in-memory stores need DB migration (screener, recall, contacts) | MEDIUM | 2026-04-05 | PENDING |
 | 4 | Landing page (vieanna.com) doesn't exist yet — needs Coming Soon | HIGH | 2026-04-05 | PENDING |
 | 5 | No actual deployment to Cloudflare yet | HIGH | 2026-04-05 | PENDING |
+| 6 | Admin route imported but was never mounted in server.ts | HIGH | 2026-04-09 | FIXED |
+| 7 | 5x `as any` casts in snooze.ts and voice.ts | MEDIUM | 2026-04-09 | FIXED |
+| 8 | `emailStatusEnum` missing "draft" value — using "queued" as workaround | LOW | 2026-04-09 | NOTED |
+| 9 | Pre-existing Drizzle ORM type errors on `.set()` and `.values()` calls | MEDIUM | 2026-04-09 | NOTED |
 
 ---
 
@@ -713,7 +717,7 @@ If you ship something not in this file, you broke the rules.
 |---|---|---|---|
 | C1 | **Status page** | status.vieanna.com showing uptime | NOT STARTED |
 | C2 | **Public API docs site** | docs.vieanna.com (OpenAPI exists, needs site) | NOT STARTED |
-| C3 | **Admin console SSO** | SAML for enterprise sales | NOT STARTED |
+| C3 | **Admin console SSO** | SAML for enterprise sales | DONE |
 | C4 | **SOC 2 Type I → Type II** | Required for enterprise | NOT STARTED |
 | C5 | **GDPR DPA template** | Legal pages exist, need DPA workflow | NOT STARTED |
 | C6 | **Bug bounty program** | HackerOne or Intigriti | NOT STARTED |
