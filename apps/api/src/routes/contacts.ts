@@ -11,7 +11,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, or, ilike, sql, asc } from "drizzle-orm";
+import { eq, and, or, ilike, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { getDatabase, contacts as contactsTable } from "@emailed/db";

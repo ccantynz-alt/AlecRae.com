@@ -1,12 +1,15 @@
 /**
- * Vienna Mobile — Coming Soon Landing
+ * Vienna Mobile — Entry Screen
  *
- * Initial entry screen for the mobile app during beta.
- * Will be replaced with proper auth/inbox flow once backend is live.
+ * Routes the user to the appropriate destination:
+ *   - If authenticated: redirect to inbox tabs
+ *   - If not authenticated: show the Coming Soon / login screen
+ *
+ * During beta phase, shows the Coming Soon landing.
  */
 
-import { View, Text, StyleSheet, Pressable, Linking } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet, Pressable } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -14,12 +17,27 @@ import Animated, {
   withTiming,
   withSequence,
 } from "react-native-reanimated";
-import { useEffect } from "react";
+import { useRouter } from "expo-router";
+import { useAuthStore } from "../lib/store";
 
-export default function ComingSoonScreen() {
+export default function EntryScreen(): React.ReactElement {
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+
+  useEffect((): void => {
+    if (!isLoading && isAuthenticated) {
+      router.replace("/(tabs)/inbox");
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  return <ComingSoonContent />;
+}
+
+function ComingSoonContent(): React.ReactElement {
   const pulseScale = useSharedValue(1);
 
-  useEffect(() => {
+  useEffect((): void => {
     pulseScale.value = withRepeat(
       withSequence(
         withTiming(1.2, { duration: 1000 }),
@@ -28,7 +46,7 @@ export default function ComingSoonScreen() {
       -1,
       false,
     );
-  }, []);
+  }, [pulseScale]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
@@ -36,12 +54,7 @@ export default function ComingSoonScreen() {
   }));
 
   return (
-    <LinearGradient
-      colors={["#020617", "#1e3a8a", "#0c4a6e"]}
-      style={styles.container}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-    >
+    <View style={styles.container}>
       <View style={styles.content}>
         {/* Logo */}
         <Text style={styles.logo}>Vienna</Text>
@@ -68,31 +81,41 @@ export default function ComingSoonScreen() {
 
         {/* Features */}
         <View style={styles.features}>
-          <Feature title="AI-Native" subtitle="Grammar, dictation, compose built-in" />
-          <Feature title="Universal" subtitle="Gmail, Outlook, all your accounts" />
-          <Feature title="Private" subtitle="E2E encryption, no ads, no tracking" />
-          <Feature title="Instant" subtitle="Sub-100ms inbox, local-first" />
+          <FeatureCard title="AI-Native" subtitle="Grammar, dictation, compose built-in" />
+          <FeatureCard title="Universal" subtitle="Gmail, Outlook, all your accounts" />
+          <FeatureCard title="Private" subtitle="E2E encryption, no ads, no tracking" />
+          <FeatureCard title="Instant" subtitle="Sub-100ms inbox, local-first" />
         </View>
 
         {/* Footer */}
-        <Text style={styles.footer}>© 2026 Vienna · The reinvention of email</Text>
+        <Text style={styles.footer}>2026 Vienna. The reinvention of email.</Text>
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
-function Feature({ title, subtitle }: { title: string; subtitle: string }) {
+interface FeatureCardProps {
+  readonly title: string;
+  readonly subtitle: string;
+}
+
+function FeatureCard({ title, subtitle }: FeatureCardProps): React.ReactElement {
   return (
-    <View style={styles.feature}>
+    <Pressable
+      style={styles.feature}
+      accessibilityRole="text"
+      accessibilityLabel={`${title}: ${subtitle}`}
+    >
       <Text style={styles.featureTitle}>{title}</Text>
       <Text style={styles.featureSubtitle}>{subtitle}</Text>
-    </View>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#020617",
   },
   content: {
     flex: 1,
@@ -168,6 +191,7 @@ const styles = StyleSheet.create({
   },
   feature: {
     width: "45%",
+    minHeight: 44,
     padding: 16,
     borderRadius: 16,
     backgroundColor: "rgba(255, 255, 255, 0.05)",

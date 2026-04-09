@@ -141,6 +141,11 @@ app.use("/v1/auth/*", authRateLimit);
 app.route("/v1/auth", auth);
 app.route("/v1/auth/passkey", passkeyRouter);
 
+// SSO endpoints: metadata and ACS are public (IdP calls them), config endpoints use their own auth
+app.use("/v1/sso/config", writeRateLimit);
+app.use("/v1/sso/*", authRateLimit);
+app.route("/v1/sso", sso);
+
 // Tracking endpoints (no auth — embedded in emails)
 app.route("/t", tracking);
 
@@ -282,6 +287,10 @@ app.route("/v1/unsubscribe", unsubscribe);
 app.route("/v1/send-time", sendTime);
 app.route("/v1/compose-assist", composeAssist);
 app.route("/v1/todo", todo);
+
+// Admin dashboard: requires admin API key auth (applied via authMiddleware above)
+app.use("/v1/admin/*", authMiddleware, readRateLimit);
+app.route("/v1/admin", admin);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────
 

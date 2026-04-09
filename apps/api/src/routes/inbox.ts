@@ -13,19 +13,32 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { eq, and } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
   classifyEmail,
   screenSender,
-  getScreenerDecision,
-  extractCommitments,
   detectFollowUpNeeded,
   DEFAULT_CATEGORIES,
   type InboxCategory,
   type Commitment,
-  type ScreenerEntry,
 } from "@emailed/ai-engine/inbox";
+import {
+  getDatabase,
+  screenerQueue as screenerQueueTable,
+  commitments as commitmentsTable,
+  inboxCategories as inboxCategoriesTable,
+  screenerDecisions as screenerDecisionsTable,
+} from "@emailed/db";
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function generateId(): string {
+  return crypto.randomUUID().replace(/-/g, "");
+}
+
+// ─── Schemas ────────────────────────────────────────────────────────────────
 
 const ClassifySchema = z.object({
   emailId: z.string(),
@@ -47,21 +60,31 @@ const CommitmentUpdateSchema = z.object({
 
 const CreateCategorySchema = z.object({
   name: z.string().min(1).max(50),
-  icon: z.string().max(4).default("📁"),
+  icon: z.string().max(4).default("\u{1F4C1}"),
   rule: z.string().min(1).max(500),
   priority: z.number().int().min(1).max(98).default(50),
 });
 
 const inbox = new Hono();
 
-// In-memory stores (production: use DB)
-const customCategories = new Map<string, InboxCategory[]>();
-const commitmentStore = new Map<string, Commitment[]>();
-const screenerQueue = new Map<string, ScreenerEntry[]>();
-
 // Exposed for cross-route access (e.g. todo.ts /from-commitment)
-export function getCommitmentsForAccount(accountId: string): readonly Commitment[] {
-  return commitmentStore.get(accountId) ?? [];
+export async function getCommitmentsForAccount(accountId: string): Promise<readonly Commitment[]> {
+  const db = getDatabase();
+  const rows = await db
+    .select()
+    .from(commitmentsTable)
+    .where(eq(commitmentsTable.accountId, accountId));
+
+  return rows.map((row): Commitment => ({
+    id: row.id,
+    actor: row.actor,
+    actorName: row.actorName,
+    description: row.description,
+    deadline: row.deadline ?? undefined,
+    status: row.status,
+    sourceEmailId: row.sourceEmailId,
+    sourceQuote: row.sourceQuote,
+  }));
 }
 
 // POST /v1/inbox/classify — Classify an email
@@ -83,31 +106,43 @@ inbox.post(
       input.headers,
     );
 
-    // Store commitments
+    const db = getDatabase();
+
+    // Store commitments in DB
     if (result.commitments.length > 0) {
-      const existing = commitmentStore.get(auth.accountId) ?? [];
-      commitmentStore.set(auth.accountId, [...existing, ...result.commitments]);
+      const commitmentRows = result.commitments.map((co) => ({
+        id: co.id,
+        accountId: auth.accountId,
+        actor: co.actor,
+        actorName: co.actorName,
+        description: co.description,
+        deadline: co.deadline ?? null,
+        status: co.status,
+        sourceEmailId: co.sourceEmailId,
+        sourceQuote: co.sourceQuote,
+      }));
+
+      await db.insert(commitmentsTable).values(commitmentRows);
     }
 
     // If screening required, add to screener queue
     if (result.requiresScreening) {
-      const queue = screenerQueue.get(auth.accountId) ?? [];
-      queue.push({
-        senderId: input.from,
+      await db.insert(screenerQueueTable).values({
+        id: generateId(),
+        accountId: auth.accountId,
         senderEmail: input.from,
         senderName: input.fromName,
         firstEmailId: input.emailId,
         firstEmailSubject: input.subject,
         firstEmailSnippet: input.body.slice(0, 200),
-        receivedAt: new Date(),
         aiAssessment: {
           isLikelySpam: false,
           isLikelyNewsletter: result.isNewsletter,
           isLikelyImportant: result.category.id === "important",
           reasoning: result.reasoning,
         },
+        receivedAt: new Date(),
       });
-      screenerQueue.set(auth.accountId, queue);
     }
 
     return c.json({ data: result });
@@ -118,9 +153,15 @@ inbox.post(
 inbox.get(
   "/screener",
   requireScope("inbox:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const queue = screenerQueue.get(auth.accountId) ?? [];
+    const db = getDatabase();
+
+    const queue = await db
+      .select()
+      .from(screenerQueueTable)
+      .where(eq(screenerQueueTable.accountId, auth.accountId));
+
     return c.json({ data: queue });
   },
 );
@@ -130,18 +171,53 @@ inbox.post(
   "/screener/decide",
   requireScope("inbox:write"),
   validateBody(ScreenerDecisionSchema),
-  (c) => {
+  async (c) => {
     const input = getValidatedBody<z.infer<typeof ScreenerDecisionSchema>>(c);
     const auth = c.get("auth");
+    const db = getDatabase();
 
+    // Upsert the screener decision
+    const normalizedEmail = input.senderEmail.toLowerCase();
+
+    // Check if decision already exists
+    const [existing] = await db
+      .select()
+      .from(screenerDecisionsTable)
+      .where(
+        and(
+          eq(screenerDecisionsTable.accountId, auth.accountId),
+          eq(screenerDecisionsTable.senderEmail, normalizedEmail),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(screenerDecisionsTable)
+        .set({ decision: input.decision, decidedAt: new Date() })
+        .where(eq(screenerDecisionsTable.id, existing.id));
+    } else {
+      await db.insert(screenerDecisionsTable).values({
+        id: generateId(),
+        accountId: auth.accountId,
+        senderEmail: normalizedEmail,
+        decision: input.decision,
+        decidedAt: new Date(),
+      });
+    }
+
+    // Also call the AI engine's screenSender to keep its in-process state consistent
     screenSender(auth.accountId, input.senderEmail, input.decision);
 
     // Remove from screener queue
-    const queue = screenerQueue.get(auth.accountId) ?? [];
-    screenerQueue.set(
-      auth.accountId,
-      queue.filter((e) => e.senderEmail !== input.senderEmail),
-    );
+    await db
+      .delete(screenerQueueTable)
+      .where(
+        and(
+          eq(screenerQueueTable.accountId, auth.accountId),
+          eq(screenerQueueTable.senderEmail, input.senderEmail),
+        ),
+      );
 
     return c.json({
       data: {
@@ -159,16 +235,25 @@ inbox.post(
 inbox.get(
   "/commitments",
   requireScope("inbox:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const commitments = commitmentStore.get(auth.accountId) ?? [];
     const status = c.req.query("status");
+    const db = getDatabase();
 
-    const filtered = status
-      ? commitments.filter((co) => co.status === status)
-      : commitments;
+    const baseCondition = eq(commitmentsTable.accountId, auth.accountId);
+    const condition = status
+      ? and(
+          baseCondition,
+          eq(commitmentsTable.status, status as "pending" | "completed" | "overdue" | "unclear"),
+        )
+      : baseCondition;
 
-    return c.json({ data: filtered });
+    const rows = await db
+      .select()
+      .from(commitmentsTable)
+      .where(condition);
+
+    return c.json({ data: rows });
   },
 );
 
@@ -177,23 +262,37 @@ inbox.patch(
   "/commitments/:id",
   requireScope("inbox:write"),
   validateBody(CommitmentUpdateSchema),
-  (c) => {
+  async (c) => {
     const id = c.req.param("id");
     const input = getValidatedBody<z.infer<typeof CommitmentUpdateSchema>>(c);
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const commitments = commitmentStore.get(auth.accountId) ?? [];
-    const commitment = commitments.find((co) => co.id === id);
+    const [existing] = await db
+      .select()
+      .from(commitmentsTable)
+      .where(
+        and(
+          eq(commitmentsTable.id, id),
+          eq(commitmentsTable.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
 
-    if (!commitment) {
+    if (!existing) {
       return c.json(
         { error: { type: "not_found", message: "Commitment not found", code: "commitment_not_found" } },
         404,
       );
     }
 
-    commitment.status = input.status;
-    return c.json({ data: commitment });
+    const [updated] = await db
+      .update(commitmentsTable)
+      .set({ status: input.status, updatedAt: new Date() })
+      .where(eq(commitmentsTable.id, id))
+      .returning();
+
+    return c.json({ data: updated });
   },
 );
 
@@ -202,7 +301,6 @@ inbox.get(
   "/follow-ups",
   requireScope("inbox:read"),
   (c) => {
-    const auth = c.get("auth");
     // In production, query sent emails from DB
     const nudges = detectFollowUpNeeded([]);
     return c.json({ data: nudges });
@@ -213,10 +311,28 @@ inbox.get(
 inbox.get(
   "/categories",
   requireScope("inbox:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const custom = customCategories.get(auth.accountId) ?? [];
-    const all = [...DEFAULT_CATEGORIES, ...custom].sort((a, b) => a.priority - b.priority);
+    const db = getDatabase();
+
+    const custom = await db
+      .select()
+      .from(inboxCategoriesTable)
+      .where(eq(inboxCategoriesTable.accountId, auth.accountId));
+
+    const customAsCategories: InboxCategory[] = custom.map((row) => ({
+      id: row.id,
+      name: row.name,
+      icon: row.icon,
+      rule: row.rule ?? undefined,
+      source: row.source,
+      priority: row.priority,
+    }));
+
+    const all = [...DEFAULT_CATEGORIES, ...customAsCategories].sort(
+      (a, b) => a.priority - b.priority,
+    );
+
     return c.json({ data: all });
   },
 );
@@ -226,21 +342,34 @@ inbox.post(
   "/categories",
   requireScope("inbox:write"),
   validateBody(CreateCategorySchema),
-  (c) => {
+  async (c) => {
     const input = getValidatedBody<z.infer<typeof CreateCategorySchema>>(c);
     const auth = c.get("auth");
+    const db = getDatabase();
+
+    const id = `custom_${Date.now()}`;
+
+    const [row] = await db
+      .insert(inboxCategoriesTable)
+      .values({
+        id,
+        accountId: auth.accountId,
+        name: input.name,
+        icon: input.icon,
+        rule: input.rule,
+        source: "user_rule",
+        priority: input.priority,
+      })
+      .returning();
 
     const category: InboxCategory = {
-      id: `custom_${Date.now()}`,
-      name: input.name,
-      icon: input.icon,
-      rule: input.rule,
-      source: "user_rule",
-      priority: input.priority,
+      id: row.id,
+      name: row.name,
+      icon: row.icon,
+      rule: row.rule ?? undefined,
+      source: row.source,
+      priority: row.priority,
     };
-
-    const existing = customCategories.get(auth.accountId) ?? [];
-    customCategories.set(auth.accountId, [...existing, category]);
 
     return c.json({ data: category }, 201);
   },

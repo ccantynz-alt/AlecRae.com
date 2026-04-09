@@ -21,7 +21,7 @@ import {
   type EmailExplanation,
   type ExplainEmailInput,
 } from "@emailed/ai-engine/inbox/email-explainer";
-import { DEFAULT_CATEGORIES, isKnownSender } from "@emailed/ai-engine/inbox";
+import { DEFAULT_CATEGORIES, getScreenerDecisionAsync } from "@emailed/ai-engine/inbox";
 import { getDatabase, emails } from "@emailed/db";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -203,7 +203,7 @@ explain.get(
       senderHistory: {
         totalEmails,
         lastContacted,
-        isKnown: isKnownSender(auth.accountId, record.fromAddress),
+        isKnown: (await getScreenerDecisionAsync(auth.accountId, record.fromAddress)) === "allow",
       },
       accountContext: {
         inboxCategories: DEFAULT_CATEGORIES.map((cat) => cat.name),

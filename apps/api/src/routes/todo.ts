@@ -351,7 +351,7 @@ todo.post(
     const input = getValidatedBody<z.infer<typeof FromCommitmentSchema>>(c);
     const auth = c.get("auth");
 
-    const commitments = getCommitmentsForAccount(auth.accountId);
+    const commitments = await getCommitmentsForAccount(auth.accountId);
     const commitment = commitments.find((co) => co.id === input.commitmentId);
     if (commitment === undefined) {
       return c.json(
