@@ -4,8 +4,10 @@
  * "Find that PDF Sarah sent about the Q3 budget last month"
  * → Parses intent → Constructs query → Returns results
  *
- * POST /v1/search/ai     — Natural language search
- * POST /v1/search/smart  — Smart filters (date ranges, has:attachment, etc.)
+ * POST /v1/search/ai       — Natural language search (keyword + AI parsing)
+ * POST /v1/search/smart    — Smart filters (date ranges, has:attachment, etc.)
+ * POST /v1/search/semantic — Hybrid vector + keyword search (S5 feature)
+ * GET  /v1/search/status   — Check vector search availability for the caller's account
  */
 
 import { Hono } from "hono";
@@ -13,6 +15,11 @@ import { z } from "zod";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { searchEmails } from "@emailed/shared";
+import { hybridSearch, isVectorSearchAvailable } from "@emailed/ai-engine/embeddings/hybrid";
+import {
+  HybridSearchRequestSchema,
+  type HybridSearchRequest,
+} from "@emailed/ai-engine/embeddings/types";
 
 const ANTHROPIC_API_KEY = process.env["ANTHROPIC_API_KEY"] ?? process.env["CLAUDE_API_KEY"];
 
@@ -209,6 +216,84 @@ aiSearch.post(
         data: { filters: input, results: [], totalHits: 0 },
       });
     }
+  },
+);
+
+// POST /v1/search/semantic — Hybrid vector + keyword search (S5)
+aiSearch.post(
+  "/semantic",
+  requireScope("messages:read"),
+  validateBody(HybridSearchRequestSchema),
+  async (c) => {
+    const input = getValidatedBody<HybridSearchRequest>(c);
+    const auth = c.get("auth");
+
+    try {
+      const response = await hybridSearch(input, auth.accountId);
+      return c.json({ data: response });
+    } catch (err) {
+      console.error("[search/semantic] Hybrid search error:", err);
+
+      // Fallback: if the hybrid orchestrator itself crashes, try pure keyword
+      try {
+        const kwResults = await searchEmails(auth.accountId, input.query, {
+          limit: input.limit,
+        });
+
+        return c.json({
+          data: {
+            query: input.query,
+            results: kwResults.hits.map((hit, idx) => ({
+              emailId: hit.id,
+              subject: hit.subject,
+              from: { email: hit.fromAddress, name: hit.fromName },
+              snippet: hit.snippet,
+              date: new Date(hit.createdAt * 1000).toISOString(),
+              score: 1 / (1 + idx),
+              distance: idx / (kwResults.hits.length || 1),
+              source: "keyword" as const,
+            })),
+            totalHits: kwResults.totalHits,
+            processingTimeMs: kwResults.processingTimeMs,
+            model: null,
+            usedVectorSearch: false,
+            vectorFallbackReason: `Hybrid search failed: ${(err as Error).message}`,
+          },
+        });
+      } catch {
+        return c.json({
+          data: {
+            query: input.query,
+            results: [],
+            totalHits: 0,
+            processingTimeMs: 0,
+            model: null,
+            usedVectorSearch: false,
+            vectorFallbackReason: `All search paths failed: ${(err as Error).message}`,
+          },
+        });
+      }
+    }
+  },
+);
+
+// GET /v1/search/status — Check if vector search is available
+aiSearch.get(
+  "/status",
+  requireScope("messages:read"),
+  async (c) => {
+    const auth = c.get("auth");
+
+    const status = await isVectorSearchAvailable(auth.accountId);
+
+    return c.json({
+      data: {
+        vectorSearchAvailable: status.available,
+        reason: status.reason,
+        keywordSearchAvailable: true,
+        hybridSearchAvailable: status.available,
+      },
+    });
   },
 );
 

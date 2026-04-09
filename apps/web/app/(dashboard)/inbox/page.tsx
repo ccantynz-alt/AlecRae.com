@@ -33,6 +33,25 @@ function formatTimestamp(iso: string): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+// ─── Newsletter detection signals ───────────────────────────────────────────
+
+const NEWSLETTER_SIGNALS = [
+  "unsubscribe",
+  "list-unsubscribe",
+  "view in browser",
+  "view online",
+  "email preferences",
+  "mailing list",
+  "newsletter",
+  "weekly digest",
+  "daily digest",
+];
+
+function isLikelyNewsletter(msg: Message): boolean {
+  const text = `${msg.subject} ${msg.preview}`.toLowerCase();
+  return NEWSLETTER_SIGNALS.some((signal) => text.includes(signal));
+}
+
 function toEmailListItem(msg: Message): EmailListItem {
   return {
     id: msg.id,
@@ -118,6 +137,12 @@ export default function InboxPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // S6: Newsletter detection map (emailId -> isNewsletter)
+  const [newsletterMap, setNewsletterMap] = useState<Map<string, boolean>>(new Map());
+  // S7: Email explainer panel
+  const [explainerOpen, setExplainerOpen] = useState(false);
+  // Whether to show full email content (toggled from newsletter summary)
+  const [showFullEmail, setShowFullEmail] = useState(true);
 
   const fetchEmails = useCallback(async () => {
     try {
@@ -125,6 +150,12 @@ export default function InboxPage() {
       setError(null);
       const res = await messagesApi.list({ limit: 50 });
       const items = res.data.map(toEmailListItem);
+      // S6: Build newsletter classification map
+      const nlMap = new Map<string, boolean>();
+      for (const msg of res.data) {
+        nlMap.set(msg.id, isLikelyNewsletter(msg));
+      }
+      setNewsletterMap(nlMap);
       setEmailItems(items);
       if (items.length > 0 && !selectedEmailId) {
         setSelectedEmailId(items[0]!.id);
@@ -310,15 +341,41 @@ export default function InboxPage() {
             />
           )}
         </Box>
-        <Box className="flex-1 min-w-0">
+        <Box className="flex-1 min-w-0 flex flex-col">
           {detailLoading ? (
             <Box className="flex items-center justify-center h-full">
               <Text variant="body-md" muted>Loading...</Text>
             </Box>
           ) : (
-            <EmailViewer
-              email={selectedEmail}
-              onReply={() => {
+            <>
+              {/* S6: Newsletter Summary Preview (shown above email viewer for newsletter emails) */}
+              {selectedEmailId && (newsletterMap.get(selectedEmailId) ?? false) && (
+                <NewsletterSummaryPreview
+                  emailId={selectedEmailId}
+                  isNewsletter={true}
+                  onShowFullEmail={() => setShowFullEmail(true)}
+                  className="px-4 pt-4"
+                />
+              )}
+
+              {/* S7: "Why is this in my inbox?" button */}
+              {selectedEmailId && selectedEmail && (
+                <Box className="px-4 pt-2 flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setExplainerOpen(true)}
+                    aria-label="Find out why this email is in your inbox"
+                  >
+                    Why is this in my inbox?
+                  </Button>
+                </Box>
+              )}
+
+              <Box className="flex-1 min-w-0">
+                <EmailViewer
+                  email={selectedEmail}
+                  onReply={() => {
                 if (!selectedEmail) return;
                 const params = new URLSearchParams({
                   mode: "reply",
@@ -366,6 +423,17 @@ export default function InboxPage() {
                   setSelectedEmail(null);
                 }
               }}
+            />
+              </Box>
+            </>
+          )}
+
+          {/* S7: Email Explainer Panel (slide-in from right) */}
+          {selectedEmailId && (
+            <EmailExplainerPanel
+              emailId={selectedEmailId}
+              open={explainerOpen}
+              onClose={() => setExplainerOpen(false)}
             />
           )}
         </Box>

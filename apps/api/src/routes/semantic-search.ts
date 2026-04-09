@@ -12,6 +12,8 @@
  *   3. POST /v1/semantic/search         — embed query, kNN cosine search
  *   4. POST /v1/semantic/similar/:id    — kNN search using an existing email
  *   5. DELETE /v1/semantic/index/:id    — drop an email's vector
+ *   6. POST /v1/semantic/backfill       — index all un-indexed emails for account
+ *   7. GET  /v1/semantic/stats          — auto-indexer health + queue stats
  *
  * Storage: pgvector `vector(1024)` column on `email_embeddings`,
  *          HNSW index with cosine ops (see migration 0009).
@@ -31,26 +33,30 @@ import {
   EMBEDDING_DIMENSIONS,
   VOYAGE_MODEL,
 } from "@emailed/ai-engine/embeddings/voyage";
+import {
+  IndexEmailRequestSchema,
+  IndexBatchRequestSchema,
+  SimilarEmailsRequestSchema,
+  type IndexEmailRequest,
+  type IndexBatchRequest,
+  type SimilarEmailsRequest,
+  type SemanticSearchHit,
+  type EmbeddableEmail,
+  MAX_SEARCH_RESULTS,
+  DEFAULT_SEARCH_LIMIT,
+} from "@emailed/ai-engine/embeddings/types";
+import {
+  indexAllUnindexed,
+  getAutoIndexerStats,
+} from "@emailed/ai-engine/embeddings/auto-indexer";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
-const IndexOneSchema = z.object({
-  emailId: z.string().min(1),
-});
-
-const IndexBatchSchema = z.object({
-  emailIds: z.array(z.string().min(1)).min(1).max(256),
-});
-
 const SearchSchema = z.object({
   query: z.string().min(1).max(2000),
-  limit: z.number().int().min(1).max(100).default(20),
+  limit: z.number().int().min(1).max(MAX_SEARCH_RESULTS).default(DEFAULT_SEARCH_LIMIT),
   /** Maximum cosine distance (0 = identical, 2 = opposite). Optional filter. */
   maxDistance: z.number().min(0).max(2).optional(),
-});
-
-const SimilarSchema = z.object({
-  limit: z.number().int().min(1).max(100).default(20),
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

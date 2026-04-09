@@ -134,6 +134,12 @@ export {
   type DailyDistribution,
 } from "./schema/recipient-engagement.js";
 
+// Schema - Custom Dictionaries (spell check)
+export {
+  customDictionaries,
+  customDictionariesRelations,
+} from "./schema/custom-dictionaries.js";
+
 // Schema - Screener, Commitments, Inbox Categories
 export {
   screenerDecisions,
@@ -193,6 +199,7 @@ import type {
   inboxCategories,
 } from "./schema/screener.js";
 import type { unsubscribeHistory } from "./schema/unsubscribe-history.js";
+import type { customDictionaries } from "./schema/custom-dictionaries.js";
 import type { emailTranslations } from "./schema/translations.js";
 import type {
   recipientEngagement,

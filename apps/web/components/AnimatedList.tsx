@@ -6,16 +6,25 @@
  * Wraps each child in a motion.div with `listItemEnter` variants and applies
  * `staggerListItems` to the parent. Used by inbox lists, search results,
  * notification feeds, and anywhere you want list items to feel alive.
+ *
+ * Supports layout animations for smooth reordering when items are added,
+ * removed, or reordered.
  */
 
 import { AnimatePresence, motion } from "motion/react";
 import { Children, type ReactNode } from "react";
 import {
+  emailListItem,
   listItemEnter,
+  staggerFast,
   staggerListItems,
+  staggerSlow,
   useViennaReducedMotion,
   withReducedMotion,
+  type Variants,
 } from "../lib/animations";
+
+export type StaggerSpeed = "fast" | "normal" | "slow";
 
 export interface AnimatedListProps {
   children: ReactNode;
@@ -23,34 +32,50 @@ export interface AnimatedListProps {
   className?: string;
   /** When true, items animate out when removed (uses AnimatePresence). */
   exitOnRemove?: boolean;
-  /** Custom stagger delay (seconds). */
-  staggerDelay?: number;
+  /** Stagger speed preset. Default: "normal". */
+  speed?: StaggerSpeed;
   /** Tag/role for the wrapper. Defaults to ul. */
   as?: "ul" | "ol" | "div";
+  /** Use email-specific item variants (swipe exit). Default: false. */
+  emailMode?: boolean;
+  /** Enable layout animations for reordering. Default: true. */
+  layoutAnimated?: boolean;
+  /** Custom item variants override. */
+  itemVariants?: Variants;
 }
+
+const staggerPresets: Record<StaggerSpeed, Variants> = {
+  fast: staggerFast,
+  normal: staggerListItems,
+  slow: staggerSlow,
+};
 
 export function AnimatedList({
   children,
   className,
   exitOnRemove = true,
+  speed = "normal",
   as = "ul",
+  emailMode = false,
+  layoutAnimated = true,
+  itemVariants: customItemVariants,
 }: AnimatedListProps): JSX.Element {
   const reduced = useViennaReducedMotion();
-  const parentVariants = reduced ? undefined : staggerListItems;
-  const childVariants = withReducedMotion(listItemEnter, reduced);
+  const parentVariants = reduced ? undefined : staggerPresets[speed];
+  const baseItemVariants = customItemVariants ?? (emailMode ? emailListItem : listItemEnter);
+  const childVariants = withReducedMotion(baseItemVariants, reduced);
 
   const items = Children.toArray(children);
   const MotionTag = motion[as];
 
   const content = items.map((child, i) => (
     <motion.li
-      // eslint-disable-next-line react/no-array-index-key
       key={getKey(child, i)}
       variants={childVariants}
       initial="initial"
       animate="animate"
       exit="exit"
-      layout
+      layout={layoutAnimated ? true : undefined}
       style={{ listStyle: "none" }}
     >
       {child}

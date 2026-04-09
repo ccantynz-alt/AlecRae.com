@@ -3,31 +3,31 @@
  *
  * Per CLAUDE.md architecture:
  *
- *   CLIENT GPU (WebGPU) ──→ EDGE (CF Workers) ──→ CLOUD (Claude API)
+ *   CLIENT GPU (WebGPU) --> EDGE (CF Workers) --> CLOUD (Claude API)
  *      $0/token              sub-50ms                full Sonnet/Opus power
  *      sub-10ms              lightweight             heavy reasoning
  *      grammar/triage        compose/translate       voice profile train
  *
  * This module is the dispatch layer. Callers ask for an AI capability
  * (grammarCheck, shortReply, summarize, translate, ...) and we decide
- * — invisibly to the user — whether to run it on the client GPU or punt
+ * -- invisibly to the user -- whether to run it on the client GPU or punt
  * to Claude over the network.
  *
  * Routing rules:
  *   1. If WebGPU is available AND the task fits in the loaded model's
- *      output budget → run locally for $0/token.
+ *      output budget -> run locally for $0/token.
  *   2. If WebGPU is unavailable, the model isn't loaded yet, or the
- *      task exceeds local capability → fall back to Claude API.
+ *      task exceeds local capability -> fall back to Claude API.
  *   3. Some tasks ALWAYS go to cloud regardless of WebGPU:
  *        - Outputs > 1500 tokens (local context window pressure)
  *        - Voice profile training (needs Sonnet-grade reasoning)
  *        - Anything flagged forceCloud: true by the caller
  *
  * Cost savings (vs an all-cloud architecture):
- *   - Grammar checks: ~1M/day at scale → $300+/day on Haiku → $0 on WebGPU
- *   - Short replies:  ~200K/day at scale → $250+/day on Haiku → $0 on WebGPU
- *   - Summarization:  ~50K/day at scale → $400+/day on Haiku → $0 on WebGPU
- *   - Translation:    ~30K/day at scale → $200+/day on Haiku → $0 on WebGPU
+ *   - Grammar checks: ~1M/day at scale -> $300+/day on Haiku -> $0 on WebGPU
+ *   - Short replies:  ~200K/day at scale -> $250+/day on Haiku -> $0 on WebGPU
+ *   - Summarization:  ~50K/day at scale -> $400+/day on Haiku -> $0 on WebGPU
+ *   - Translation:    ~30K/day at scale -> $200+/day on Haiku -> $0 on WebGPU
  *
  *   Estimated savings at 100K DAU: ~$35,000/month. This is why Vienna
  *   can sell at $9/mo while bundling Grammarly + Dragon + Front + more.
@@ -35,56 +35,103 @@
  * Privacy bonus: tasks routed locally never leave the user's device.
  */
 
+import { z } from "zod";
 import {
   initWebGPU,
   loadModel,
   generate as webgpuGenerate,
   generateStreaming as webgpuGenerateStreaming,
   isModelLoaded,
+  isModelCached,
   pickModelForVRAM,
   getLoadedModelId,
+  getModelSpec,
+  getLastProgress,
+  getCacheMetadata,
+  getAllCacheMetadata,
+  onProgress as onWebGPUProgress,
+  MODEL_CATALOG,
   type ModelId,
   type WebGPUCapabilities,
+  type ModelDownloadProgress,
+  type ProgressCallback,
+  type ModelCacheMetadata,
 } from "./webgpu-inference";
+
+// ─── Zod Schemas ────────────────────────────────────────────────────────────
+
+export const LocalAITaskSchema = z.enum([
+  "grammar",
+  "shortReply",
+  "summarize",
+  "translate",
+  "voiceProfileTrain",
+  "longCompose",
+  "other",
+]);
+
+export const LocalAIRequestSchema = z.object({
+  task: LocalAITaskSchema,
+  prompt: z.string().min(1, "Prompt must not be empty"),
+  systemPrompt: z.string().optional(),
+  maxTokens: z.number().int().positive().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  forceCloud: z.boolean().optional(),
+  localOnly: z.boolean().optional(),
+});
+
+export const LocalAIResultSchema = z.object({
+  text: z.string(),
+  source: z.enum(["webgpu", "cloud"]),
+  modelId: z.string(),
+  latencyMs: z.number().nonnegative(),
+  estimatedCostUSD: z.number().nonnegative(),
+});
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type LocalAITask =
-  | "grammar"
-  | "shortReply"
-  | "summarize"
-  | "translate"
-  | "voiceProfileTrain"
-  | "longCompose"
-  | "other";
+export type LocalAITask = z.infer<typeof LocalAITaskSchema>;
 
-export interface LocalAIRequest {
-  task: LocalAITask;
-  prompt: string;
-  systemPrompt?: string;
-  /** Estimated max output size in tokens. Used to decide local vs cloud. */
-  maxTokens?: number;
-  temperature?: number;
-  /** Force the request to go to the cloud regardless of WebGPU availability. */
-  forceCloud?: boolean;
-  /** Force the request to fail rather than fall back to cloud. */
-  localOnly?: boolean;
-}
+export type LocalAIRequest = z.infer<typeof LocalAIRequestSchema>;
 
-export interface LocalAIResult {
-  text: string;
-  source: "webgpu" | "cloud";
-  modelId: string;
-  /** Wall-clock latency in ms. */
-  latencyMs: number;
-  /** Estimated USD cost of this call. WebGPU is always 0. */
-  estimatedCostUSD: number;
-}
+export type LocalAIResult = z.infer<typeof LocalAIResultSchema>;
 
 export interface LocalAIStreamChunk {
   delta: string;
   source: "webgpu" | "cloud";
 }
+
+/** Full status snapshot of the local AI subsystem, consumed by UI. */
+export interface LocalAIStatus {
+  /** Whether the subsystem has been probed/initialized. */
+  initialized: boolean;
+  /** WebGPU hardware capabilities (null if not yet probed). */
+  capabilities: WebGPUCapabilities | null;
+  /** Which model was selected for this device (null if WebGPU unavailable). */
+  selectedModel: ModelId | null;
+  /** Human-readable label for the selected model. */
+  selectedModelLabel: string | null;
+  /** Whether the selected model weights are already cached in the browser. */
+  modelCached: boolean;
+  /** Whether the model is loaded and ready for inference. */
+  modelReady: boolean;
+  /** Current model download/init progress (null if not loading). */
+  downloadProgress: ModelDownloadProgress | null;
+  /** IndexedDB cache metadata (null if no prior loads). */
+  cacheMetadata: ModelCacheMetadata | null;
+  /** Any init error message. */
+  initError: string | null;
+}
+
+// Re-export for consumers
+export type {
+  ModelId,
+  WebGPUCapabilities,
+  ModelDownloadProgress,
+  ProgressCallback,
+  ModelCacheMetadata,
+};
+export { MODEL_CATALOG, onWebGPUProgress, getCacheMetadata, getAllCacheMetadata };
 
 // ─── Routing Policy ──────────────────────────────────────────────────────────
 
@@ -104,7 +151,7 @@ const ALWAYS_CLOUD_TASKS: ReadonlySet<LocalAITask> = new Set<LocalAITask>([
 
 /**
  * Hard ceiling on output tokens for local inference. Anything larger goes
- * to the cloud — local models can technically produce longer output, but
+ * to the cloud -- local models can technically produce longer output, but
  * latency degrades and KV cache pressure becomes a problem.
  */
 const LOCAL_MAX_OUTPUT_TOKENS = 1500;
@@ -171,7 +218,7 @@ export interface LocalAIInitOptions {
  * Initializes the local AI subsystem. Probes WebGPU, picks the best model
  * that fits in the user's VRAM, and (unless probeOnly) starts loading it.
  *
- * Safe to call multiple times — only the first call does real work.
+ * Safe to call multiple times -- only the first call does real work.
  */
 export async function initLocalAI(options?: LocalAIInitOptions): Promise<LocalAIState> {
   if (state.initialized) return state;
@@ -213,6 +260,32 @@ export async function initLocalAI(options?: LocalAIInitOptions): Promise<LocalAI
 
 export function getLocalAIState(): Readonly<LocalAIState> {
   return state;
+}
+
+/**
+ * Returns a full status snapshot of the local AI subsystem, suitable
+ * for rendering in the LocalAIStatusIndicator component.
+ *
+ * This consolidates multiple internal state sources into a single
+ * coherent view.
+ */
+export async function getLocalAIStatus(): Promise<LocalAIStatus> {
+  const modelId = state.selectedModel;
+  const spec = modelId ? getModelSpec(modelId) : undefined;
+  const cached = modelId ? await isModelCached(modelId) : false;
+  const cacheMetadata = modelId ? await getCacheMetadata(modelId) : null;
+
+  return {
+    initialized: state.initialized,
+    capabilities: state.capabilities,
+    selectedModel: modelId,
+    selectedModelLabel: spec?.label ?? null,
+    modelCached: cached,
+    modelReady: isModelLoaded(),
+    downloadProgress: getLastProgress(),
+    cacheMetadata,
+    initError: state.initError,
+  };
 }
 
 // ─── Cloud Fallback ──────────────────────────────────────────────────────────
