@@ -363,12 +363,21 @@ agent.post(
     // Fire-and-forget. Real prod: enqueue a BullMQ job and return runId.
     queueMicrotask(async () => {
       try {
-        const report = await getAgent().run(auth.accountId, {
-          since: input.since ? new Date(input.since) : undefined,
+        // Build options without undefined values (exactOptionalPropertyTypes)
+        const runOptions: {
+          since?: Date;
+          maxEmails: number;
+          dryRun: boolean;
+          morningHour: number;
+        } = {
           maxEmails: input.maxEmails,
           dryRun: input.dryRun,
           morningHour: input.morningHour,
-        });
+        };
+        if (input.since) {
+          runOptions.since = new Date(input.since);
+        }
+        const report = await getAgent().run(auth.accountId, runOptions);
         // Persist to DB with the pre-allocated runId.
         await persistReportToDb(report, runId);
       } catch (err) {

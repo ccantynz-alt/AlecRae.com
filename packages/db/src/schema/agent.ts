@@ -88,7 +88,7 @@ export interface StoredTriageDecision {
   confidence: number;
   reasoning: string;
   suspicious: boolean;
-  suspicionReasons?: string[];
+  suspicionReasons: string[] | undefined;
   needsReply: boolean;
 }
 
@@ -98,7 +98,7 @@ export interface StoredCommitment {
   actor: string;
   actorName: string;
   description: string;
-  deadline?: string;
+  deadline: string | undefined;
   status: string;
   sourceEmailId: string;
   sourceQuote: string;
@@ -111,7 +111,7 @@ export interface StoredAgentSuggestion {
   action: string;
   reasoning: string;
   confidence: number;
-  affectedCount?: number;
+  affectedCount: number | undefined;
 }
 
 export const agentRuns = pgTable(

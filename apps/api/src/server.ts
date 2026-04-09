@@ -63,7 +63,7 @@ import { programs } from "./routes/programs.js";
 import { explain } from "./routes/explain.js";
 import { agent } from "./routes/agent.js";
 import { security, emailSecurity } from "./routes/security.js";
-import { todo } from "./routes/todo.js";
+import { todo, emailTasks, taskRoutes } from "./routes/todo.js";
 import { unsubscribe, emailUnsubscribe } from "./routes/unsubscribe.js";
 import { sendTime, optimalSendTime, recipientPatterns } from "./routes/send-time.js";
 import { composeAssist } from "./routes/compose-assist.js";
@@ -272,6 +272,14 @@ app.use("/v1/compose/spellcheck", authMiddleware, readRateLimit);
 // Native Todo App Integrations (S8): write-level (200 req/min)
 app.use("/v1/todo/*", authMiddleware, writeRateLimit);
 app.use("/v1/todo", authMiddleware, writeRateLimit);
+// Thread action-item extraction (S8): write-level (200 req/min — AI call)
+app.use("/v1/emails/*/extract-tasks", authMiddleware, writeRateLimit);
+// Task CRUD (S8): write-level for create, read-level for list
+app.use("/v1/tasks/create", authMiddleware, writeRateLimit);
+app.use("/v1/tasks/create-batch", authMiddleware, writeRateLimit);
+app.use("/v1/tasks/providers", authMiddleware, readRateLimit);
+app.use("/v1/tasks/providers/*/config", authMiddleware, writeRateLimit);
+app.use("/v1/tasks", authMiddleware, readRateLimit);
 // Gamification (A7): read-level for stats, write-level for check-zero/track
 app.use("/v1/gamification/*", authMiddleware, readRateLimit);
 app.use("/v1/gamification", authMiddleware, readRateLimit);
@@ -324,6 +332,9 @@ app.route("/v1/analytics", recipientPatterns);
 app.route("/v1/compose-assist", composeAssist);
 app.route("/v1/compose/spellcheck", spellcheckRouter);
 app.route("/v1/todo", todo);
+// S8: Thread → Action Items extraction + task CRUD
+app.route("/v1/emails", emailTasks);
+app.route("/v1/tasks", taskRoutes);
 app.route("/v1/gamification", gamification);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
