@@ -47,7 +47,7 @@ export default function ComposePageWrapper() {
   );
 }
 
-function ComposePage(): JSX.Element {
+function ComposePage(): React.ReactNode {
   const searchParams = useSearchParams();
   const reduced = useViennaReducedMotion();
   const [sending, setSending] = useState(false);

@@ -11,7 +11,7 @@
  * removed, or reordered.
  */
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, type Variants } from "motion/react";
 import { Children, type ReactNode } from "react";
 import {
   emailListItem,
@@ -21,7 +21,6 @@ import {
   staggerSlow,
   useViennaReducedMotion,
   withReducedMotion,
-  type Variants,
 } from "../lib/animations";
 
 export type StaggerSpeed = "fast" | "normal" | "slow";
@@ -61,7 +60,7 @@ export function AnimatedList({
   itemVariants: customItemVariants,
 }: AnimatedListProps): React.ReactNode {
   const reduced = useViennaReducedMotion();
-  const parentVariants = reduced ? undefined : staggerPresets[speed];
+  const parentVariants = staggerPresets[speed];
   const baseItemVariants = customItemVariants ?? (emailMode ? emailListItem : listItemEnter);
   const childVariants = withReducedMotion(baseItemVariants, reduced);
 
@@ -75,7 +74,7 @@ export function AnimatedList({
       initial="initial"
       animate="animate"
       exit="exit"
-      layout={layoutAnimated ? true : undefined}
+      layout={layoutAnimated ? true : false}
       style={{ listStyle: "none" }}
     >
       {child}

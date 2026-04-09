@@ -37,6 +37,14 @@ const CARD_GROUPS: readonly CardGroup[] = [
     ],
   },
   {
+    label: "Migration Guides",
+    cards: [
+      { slug: "migrate-gmail", title: "From Gmail", description: "Switch from Gmail to Vienna in 5 minutes — import labels, contacts, and all.", icon: "migrate" },
+      { slug: "migrate-outlook", title: "From Outlook", description: "Migrate from Outlook / Microsoft 365 with full history and calendar.", icon: "migrate" },
+      { slug: "migrate-apple-mail", title: "From Apple Mail", description: "Export MBOX from Apple Mail and import into Vienna seamlessly.", icon: "migrate" },
+    ],
+  },
+  {
     label: "More Resources",
     cards: [
       { slug: "domains", title: "Domains", description: "Domain verification, SPF, DKIM, DMARC.", icon: "globe" },

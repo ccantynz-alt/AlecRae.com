@@ -28,7 +28,7 @@ const fallbackDeliverability: ChartDataPoint[] = [
   { label: "Sun", value: 0 },
 ];
 
-export default function AnalyticsPage(): JSX.Element {
+export default function AnalyticsPage(): React.ReactNode {
   const reduced = useViennaReducedMotion();
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [loading, setLoading] = useState(true);

@@ -17,6 +17,7 @@ export { CalendarSlotSuggestion, type CalendarSlotSuggestionProps, type MeetingI
 export { SendTimeSuggestion, type SendTimeSuggestionProps, type SendTimeSlot, type ConfidenceLevel, type DataSource } from "./composites/send-time-suggestion";
 export { UnsubscribeButton, type UnsubscribeButtonProps, type UnsubscribeStatus, type UnsubscribeOption, type UnsubscribeResult } from "./composites/unsubscribe-button";
 export { TranslationBadge, type TranslationBadgeProps, type TranslationBadgeData, type TranslationContent, type TranslationRecord, type TranslationViewMode } from "./composites/translation-badge";
+export { SpellCheckSuggestions, type SpellCheckSuggestionsProps, type SpellCheckIssue, type SpellCheckResult, type SpellCheckRequestFn, type AddToDictionaryFn } from "./composites/spellcheck-suggestions";
 
 // Layouts
 export { Sidebar, type SidebarProps, type SidebarNavItem, type SidebarSection } from "./layouts/sidebar";

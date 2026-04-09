@@ -11,8 +11,8 @@
  * any reorderable list content.
  */
 
-import { motion, useMotionValue, useTransform } from "motion/react";
-import type { ReactNode } from "react";
+import { motion, useMotionValue, useTransform, type PanInfo } from "motion/react";
+import type { ReactNode, MouseEvent, TouchEvent, PointerEvent } from "react";
 import {
   SPRING_HEAVY,
   SPRING_SNAPPY,
@@ -76,8 +76,24 @@ export function AnimatedDragItem({
     typeof dragConstraints === "boolean"
       ? dragConstraints
         ? { top: 0, right: 0, bottom: 0, left: 0 }
-        : undefined
+        : false
       : dragConstraints;
+
+  const handleDrag = onDrag
+    ? (_event: MouseEvent | TouchEvent | PointerEvent, _info: PanInfo): void => {
+        onDrag({ x: x.get(), y: y.get() });
+      }
+    : (_event: MouseEvent | TouchEvent | PointerEvent, _info: PanInfo): void => {
+        // noop — required to satisfy exactOptionalPropertyTypes
+      };
+
+  const handleDragEnd = onDragEnd
+    ? (_event: MouseEvent | TouchEvent | PointerEvent, _info: PanInfo): void => {
+        onDragEnd({ x: x.get(), y: y.get() });
+      }
+    : (_event: MouseEvent | TouchEvent | PointerEvent, _info: PanInfo): void => {
+        // noop — required to satisfy exactOptionalPropertyTypes
+      };
 
   return (
     <motion.div
@@ -89,29 +105,17 @@ export function AnimatedDragItem({
       style={{ x, y, boxShadow, cursor: reduced ? "default" : "grab", zIndex: 0 }}
       whileDrag={
         reduced
-          ? undefined
+          ? { scale: 1 }
           : {
               scale: liftScale,
               cursor: "grabbing",
               zIndex: 50,
             }
       }
-      onDrag={
-        onDrag
-          ? () => {
-              onDrag({ x: x.get(), y: y.get() });
-            }
-          : undefined
-      }
-      onDragEnd={
-        onDragEnd
-          ? () => {
-              onDragEnd({ x: x.get(), y: y.get() });
-            }
-          : undefined
-      }
+      onDrag={handleDrag}
+      onDragEnd={handleDragEnd}
       transition={SPRING_SNAPPY}
-      layout={layoutAnimation ? true : undefined}
+      layout={layoutAnimation ? true : false}
       layoutId={layoutId}
       role="listitem"
       aria-label={ariaLabel}
@@ -148,7 +152,7 @@ export function AnimatedDropZone({
       className={`rounded-lg border-2 border-dashed transition-colors ${className ?? ""}`}
       animate={
         reduced
-          ? undefined
+          ? { opacity: 1 }
           : {
               borderColor: active ? "rgba(59,130,246,0.5)" : "rgba(0,0,0,0.1)",
               backgroundColor: active ? "rgba(59,130,246,0.04)" : "rgba(0,0,0,0)",

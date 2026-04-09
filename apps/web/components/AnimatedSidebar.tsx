@@ -70,7 +70,7 @@ export function AnimatedSidebar({
             key={sectionIndex}
             section={section}
             collapsed={collapsed}
-            onNavigate={onNavigate}
+            onNavigate={onNavigate ?? noop}
             reduced={reduced}
           />
         ))}
@@ -84,10 +84,14 @@ export function AnimatedSidebar({
   );
 }
 
+function noop(_item: AnimatedSidebarNavItem): void {
+  // intentionally empty — default no-op for optional onNavigate
+}
+
 interface SidebarSectionGroupProps {
   section: AnimatedSidebarSection;
   collapsed: boolean;
-  onNavigate?: (item: AnimatedSidebarNavItem) => void;
+  onNavigate: (item: AnimatedSidebarNavItem) => void;
   reduced: boolean;
 }
 
@@ -105,8 +109,8 @@ function SidebarSectionGroup({
             key={section.title}
             className="block px-2 py-1 text-caption font-semibold uppercase tracking-wider text-content-tertiary"
             initial={reduced ? false : { opacity: 0, x: -8 }}
-            animate={reduced ? undefined : { opacity: 1, x: 0 }}
-            exit={reduced ? undefined : { opacity: 0, x: -8 }}
+            animate={reduced ? { opacity: 1 } : { opacity: 1, x: 0 }}
+            exit={reduced ? { opacity: 0 } : { opacity: 0, x: -8 }}
             transition={reduced ? { duration: 0 } : { duration: 0.15 }}
           >
             {section.title}
@@ -133,7 +137,7 @@ SidebarSectionGroup.displayName = "SidebarSectionGroup";
 interface SidebarNavItemRowProps {
   item: AnimatedSidebarNavItem;
   collapsed: boolean;
-  onNavigate?: (item: AnimatedSidebarNavItem) => void;
+  onNavigate: (item: AnimatedSidebarNavItem) => void;
   reduced: boolean;
 }
 
@@ -153,13 +157,11 @@ function SidebarNavItemRow({
             : "text-content-secondary hover:bg-surface-tertiary hover:text-content"
         } ${collapsed ? "justify-center" : ""}`}
         onClick={(e: React.MouseEvent) => {
-          if (onNavigate) {
-            e.preventDefault();
-            onNavigate(item);
-          }
+          e.preventDefault();
+          onNavigate(item);
         }}
-        whileHover={reduced ? undefined : { x: 2 }}
-        whileTap={reduced ? undefined : { scale: 0.98 }}
+        whileHover={reduced ? { scale: 1 } : { x: 2 }}
+        whileTap={reduced ? { scale: 1 } : { scale: 0.98 }}
         transition={SPRING_PRECISE}
       >
         {item.icon && (
@@ -173,8 +175,8 @@ function SidebarNavItemRow({
               key={`label-${item.id}`}
               className="flex-1 truncate"
               initial={reduced ? false : { opacity: 0, width: 0 }}
-              animate={reduced ? undefined : { opacity: 1, width: "auto" }}
-              exit={reduced ? undefined : { opacity: 0, width: 0 }}
+              animate={reduced ? { opacity: 1 } : { opacity: 1, width: "auto" }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, width: 0 }}
               transition={reduced ? { duration: 0 } : { duration: 0.15 }}
             >
               {item.label}
@@ -187,8 +189,8 @@ function SidebarNavItemRow({
               key={`badge-${item.id}`}
               className="px-1.5 py-0.5 bg-brand-100 text-brand-700 rounded-full font-medium min-w-[1.25rem] text-center text-caption"
               initial={reduced ? false : { scale: 0.6, opacity: 0 }}
-              animate={reduced ? undefined : { scale: 1, opacity: 1 }}
-              exit={reduced ? undefined : { scale: 0.6, opacity: 0 }}
+              animate={reduced ? { opacity: 1 } : { scale: 1, opacity: 1 }}
+              exit={reduced ? { opacity: 0 } : { scale: 0.6, opacity: 0 }}
               transition={
                 reduced
                   ? { duration: 0 }

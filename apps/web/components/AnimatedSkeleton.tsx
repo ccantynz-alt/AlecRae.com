@@ -54,7 +54,7 @@ export function AnimatedSkeleton({
       className={`relative overflow-hidden ${className ?? ""}`}
       variants={skeletonRow}
       initial="initial"
-      animate={reduced ? undefined : "animate"}
+      animate={reduced ? "initial" : "animate"}
       style={{
         width: resolvedWidth,
         height: resolvedHeight,

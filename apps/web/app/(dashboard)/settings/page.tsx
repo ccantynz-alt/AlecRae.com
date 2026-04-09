@@ -33,7 +33,7 @@ interface AccountData {
   emailsSentThisPeriod: number;
 }
 
-export default function SettingsPage(): JSX.Element {
+export default function SettingsPage(): React.ReactNode {
   const reduced = useViennaReducedMotion();
   const [user, setUser] = useState<UserData | null>(null);
   const [account, setAccount] = useState<AccountData | null>(null);

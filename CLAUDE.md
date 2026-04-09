@@ -684,7 +684,7 @@ If you ship something not in this file, you broke the rules.
 | S2 | **CRDT real-time collaborative drafting** | Two people editing the same email with live cursors (Yjs). API endpoint exists, UI doesn't. Nobody has this in email. | NOT STARTED |
 | S3 | **AI inbox agent (works while you sleep)** | Wakes up overnight, triages, drafts replies, schedules sends. You approve in the morning with one tap. INDUSTRY FIRST. | NOT STARTED |
 | S4 | **Voice cloning for AI replies** | Drafts sound exactly like you (style transfer beyond voice profile). | NOT STARTED |
-| S5 | **Semantic vector search** | "Find the email where someone said something like 'we should consider the budget'" via embeddings. Beyond keyword. | NOT STARTED |
+| S5 | **Semantic vector search** | "Find the email where someone said something like 'we should consider the budget'" via embeddings. Beyond keyword. | DONE |
 | S6 | **Auto-summary of every newsletter** | AI reduces newsletters to 3 bullets in inbox preview. Full text on demand. | DONE |
 | S7 | **AI "Why is this in my inbox?" explainer** | Click any email → AI explains who this is, history, why it landed here, suggested action. | DONE |
 | S8 | **One-click thread → action items in todo apps** | Native Things, Todoist, Linear, Notion integration. | NOT STARTED |
@@ -709,8 +709,8 @@ If you ship something not in this file, you broke the rules.
 |---|---|---|---|
 | B1 | **Programmable email (TypeScript snippets)** | Apps Script but better, type-safe, runs on every email. | NOT STARTED |
 | B2 | **Email-as-database (SQL over inbox)** | Treat your inbox as a queryable dataset. | NOT STARTED |
-| B3 | **AI unsubscribe agent (browser automation)** | One click → AI navigates the unsubscribe page → confirms. | NOT STARTED |
-| B4 | **Auto-translation badges** | "Translated from Spanish" badge with toggle to original. | NOT STARTED |
+| B3 | **AI unsubscribe agent (browser automation)** | One click → AI navigates the unsubscribe page → confirms. | DONE |
+| B4 | **Auto-translation badges** | "Translated from Spanish" badge with toggle to original. | DONE |
 | B5 | **Real-time sender verification** | Check sender reputation, business legitimacy, recent news inline. | NOT STARTED |
 | B6 | **Phishing protection with explainer** | "This email is suspicious because..." | NOT STARTED |
 | B7 | **AI calendar slot suggestions in compose** | Type "let's meet next week" → AI suggests slots inline. | DONE |
@@ -798,9 +798,9 @@ If you ship something not in this file, you broke the rules.
 | Vercel deployment | Configured, deploying from main | 100% |
 | Neon SQL setup | Ready | 100% |
 | CLAUDE.md Bible | Complete | 100% |
-| **Tier S features (industry firsts)** | **S1+S6+S7+S10 done** | **40%** |
+| **Tier S features (industry firsts)** | **S1+S5+S6+S7+S10 done** | **50%** |
 | **Tier A features (cutting-edge UX)** | **Not started** | **0%** |
-| **Tier B features (power user)** | **B7 done** | **12%** |
+| **Tier B features (power user)** | **B3, B4, B7 done** | **37%** |
 | **Tier C features (polish + trust)** | **Not started** | **0%** |
 
 **Overall: ~90% of launch-ready product. Remaining 10% is Craig action items (Vercel verify, Neon/Upstash/Stripe setup, API keys, DNS) + Tier S/A/B/C post-launch features.**

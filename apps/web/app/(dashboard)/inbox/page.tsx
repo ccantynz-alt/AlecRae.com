@@ -134,7 +134,7 @@ function toEmailMessage(detail: MessageDetail): EmailMessage {
   };
 }
 
-export default function InboxPage(): JSX.Element {
+export default function InboxPage(): React.ReactNode {
   const router = useRouter();
   const reduced = useViennaReducedMotion();
   const [emailItems, setEmailItems] = useState<EmailListItem[]>([]);
@@ -313,7 +313,7 @@ export default function InboxPage(): JSX.Element {
         <Box className="flex flex-col items-center justify-center h-full gap-4">
           <motion.div
             initial={reduced ? false : { opacity: 0, y: 8 }}
-            animate={reduced ? undefined : { opacity: 1, y: 0 }}
+            animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
             transition={SPRING_BOUNCY}
           >
             <Text variant="body-md" muted>{error}</Text>
@@ -359,8 +359,8 @@ export default function InboxPage(): JSX.Element {
               <motion.div
                 key="list"
                 initial={reduced ? false : { opacity: 0 }}
-                animate={reduced ? undefined : { opacity: 1 }}
-                exit={reduced ? undefined : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.15 }}
               >
                 <EmailList
