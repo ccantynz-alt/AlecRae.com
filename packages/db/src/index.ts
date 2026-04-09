@@ -253,6 +253,12 @@ export {
   meetingLinksRelations,
 } from "./schema/meeting-links.js";
 
+// Schema - Changelog Entries (C8 — public changelog page)
+export {
+  changelogEntries,
+  changelogCategoryEnum,
+} from "./schema/changelog.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -305,6 +311,7 @@ import type {
   dailyStats,
 } from "./schema/gamification.js";
 import type { meetingLinks } from "./schema/meeting-links.js";
+import type { changelogEntries } from "./schema/changelog.js";
 
 // Select types (what you get back from queries)
 export type Account = InferSelectModel<typeof accounts>;
@@ -385,3 +392,5 @@ export type TaskProviderConfig = InferSelectModel<typeof taskProviderConfigs>;
 export type NewTaskProviderConfig = InferInsertModel<typeof taskProviderConfigs>;
 export type MeetingLink = InferSelectModel<typeof meetingLinks>;
 export type NewMeetingLink = InferInsertModel<typeof meetingLinks>;
+export type ChangelogEntry = InferSelectModel<typeof changelogEntries>;
+export type NewChangelogEntry = InferInsertModel<typeof changelogEntries>;
