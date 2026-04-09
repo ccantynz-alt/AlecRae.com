@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useState, useCallback, type HTMLAttributes } from "react";
+import React, { forwardRef, useState, useCallback, type HTMLAttributes } from "react";
 import { Box } from "../primitives/box";
 import { Text } from "../primitives/text";
 import { Button } from "../primitives/button";
@@ -63,7 +63,7 @@ export interface TranslationBadgeProps
 
 // ─── Icons ──────────────────────────────────────────────────────────────────
 
-function GlobeIcon(): JSX.Element {
+function GlobeIcon(): React.ReactElement {
   return (
     <Box
       as="svg"
@@ -84,7 +84,7 @@ function GlobeIcon(): JSX.Element {
 
 GlobeIcon.displayName = "GlobeIcon";
 
-function ToggleIcon({ flipped }: { flipped: boolean }): JSX.Element {
+function ToggleIcon({ flipped }: { flipped: boolean }): React.ReactElement {
   return (
     <Box
       as="svg"

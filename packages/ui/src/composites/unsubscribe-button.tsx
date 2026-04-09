@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useState, useCallback, type HTMLAttributes } from "react";
+import React, { forwardRef, useState, useCallback, type HTMLAttributes } from "react";
 import { Box } from "../primitives/box";
 import { Text } from "../primitives/text";
 import { Button } from "../primitives/button";
@@ -70,7 +70,7 @@ export interface UnsubscribeButtonProps
 
 // ─── Status icons (SVG-based, no external deps) ────────────────────────────
 
-function CheckCircleIcon(): JSX.Element {
+function CheckCircleIcon(): React.ReactElement {
   return (
     <Box
       as="svg"
@@ -91,7 +91,7 @@ function CheckCircleIcon(): JSX.Element {
 
 CheckCircleIcon.displayName = "CheckCircleIcon";
 
-function XCircleIcon(): JSX.Element {
+function XCircleIcon(): React.ReactElement {
   return (
     <Box
       as="svg"
@@ -112,7 +112,7 @@ function XCircleIcon(): JSX.Element {
 
 XCircleIcon.displayName = "XCircleIcon";
 
-function MailOffIcon(): JSX.Element {
+function MailOffIcon(): React.ReactElement {
   return (
     <Box
       as="svg"
@@ -137,7 +137,7 @@ MailOffIcon.displayName = "MailOffIcon";
 
 // ─── Confidence badge ──────────────────────────────────────────────────────
 
-function ConfidenceBadge({ confidence }: { confidence: number }): JSX.Element {
+function ConfidenceBadge({ confidence }: { confidence: number }): React.ReactElement {
   const pct = Math.round(confidence * 100);
   const color =
     pct >= 90
