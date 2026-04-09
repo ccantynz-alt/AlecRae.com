@@ -695,7 +695,7 @@ If you ship something not in this file, you broke the rules.
 
 | # | Feature | Why It Wins | Status |
 |---|---|---|---|
-| A1 | **Magic UI animations (Linear-style)** | Framer Motion + spring physics. Already installed, need to use it. | NOT STARTED |
+| A1 | **Magic UI animations (Linear-style)** | Framer Motion + spring physics. Full animation library + 8 reusable components. Wired into sidebar, inbox, compose, analytics, settings. | DONE |
 | A2 | **Spatial inbox (3D thread visualization)** | R3F-powered 3D view for power users. Optional. | NOT STARTED |
 | A3 | **Inbox heatmap** | Visual email habits (when you're most productive). | NOT STARTED |
 | A4 | **Focus mode** | Hides everything except important emails. Full screen. No distractions. | NOT STARTED |
@@ -799,7 +799,7 @@ If you ship something not in this file, you broke the rules.
 | Neon SQL setup | Ready | 100% |
 | CLAUDE.md Bible | Complete | 100% |
 | **Tier S features (industry firsts)** | **S1+S5+S6+S7+S10 done** | **50%** |
-| **Tier A features (cutting-edge UX)** | **Not started** | **0%** |
+| **Tier A features (cutting-edge UX)** | **A1 Magic UI done** | **14%** |
 | **Tier B features (power user)** | **B3, B4, B7 done** | **37%** |
 | **Tier C features (polish + trust)** | **3/10 done (C1, C9, C10)** | **30%** |
 
