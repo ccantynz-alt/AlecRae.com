@@ -52,6 +52,26 @@
       "types": "./src/embeddings/voyage.ts",
       "import": "./dist/embeddings/voyage.js"
     },
+    "./embeddings/types": {
+      "bun": "./src/embeddings/types.ts",
+      "types": "./src/embeddings/types.ts",
+      "import": "./dist/embeddings/types.js"
+    },
+    "./embeddings/local": {
+      "bun": "./src/embeddings/local.ts",
+      "types": "./src/embeddings/local.ts",
+      "import": "./dist/embeddings/local.js"
+    },
+    "./embeddings/hybrid": {
+      "bun": "./src/embeddings/hybrid.ts",
+      "types": "./src/embeddings/hybrid.ts",
+      "import": "./dist/embeddings/hybrid.js"
+    },
+    "./embeddings/auto-indexer": {
+      "bun": "./src/embeddings/auto-indexer.ts",
+      "types": "./src/embeddings/auto-indexer.ts",
+      "import": "./dist/embeddings/auto-indexer.js"
+    },
     "./inbox": {
       "bun": "./src/inbox/smart-inbox.ts",
       "types": "./src/inbox/smart-inbox.ts",
@@ -126,6 +146,11 @@
       "bun": "./src/security/phishing.ts",
       "types": "./src/security/phishing.ts",
       "import": "./dist/security/phishing.js"
+    },
+    "./grammar/spellcheck": {
+      "bun": "./src/grammar/spellcheck.ts",
+      "types": "./src/grammar/spellcheck.ts",
+      "import": "./dist/grammar/spellcheck.js"
     }
   },
   "scripts": {

@@ -30,7 +30,7 @@ export function AnimatedCard({
   disabled = false,
   role,
   ariaLabel,
-}: AnimatedCardProps): JSX.Element {
+}: AnimatedCardProps): React.ReactNode {
   const reduced = useViennaReducedMotion();
   const interactive = !disabled && Boolean(onClick);
 
@@ -59,10 +59,10 @@ export function AnimatedCard({
           : undefined
       }
       initial={reduced ? false : { opacity: 0, y: 8 }}
-      animate={reduced ? undefined : { opacity: 1, y: 0 }}
+      animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
       transition={SPRING_SNAPPY}
-      whileHover={reduced || !interactive ? undefined : { y: -3, scale: 1.01 }}
-      whileTap={reduced || !interactive ? undefined : { scale: 0.98 }}
+      whileHover={reduced || !interactive ? { scale: 1 } : { y: -3, scale: 1.01 }}
+      whileTap={reduced || !interactive ? { scale: 1 } : { scale: 0.98 }}
     >
       {children}
     </motion.div>

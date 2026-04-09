@@ -48,7 +48,7 @@ import { grammar } from "./routes/grammar.js";
 import { dictation } from "./routes/dictation.js";
 import { inbox } from "./routes/inbox.js";
 import { recall } from "./routes/recall.js";
-import { translate } from "./routes/translate.js";
+import { translate, emailTranslate } from "./routes/translate.js";
 import { collaborate } from "./routes/collaborate.js";
 import { connect } from "./routes/connect.js";
 import { snooze, scheduleSend } from "./routes/snooze.js";
@@ -64,14 +64,17 @@ import { explain } from "./routes/explain.js";
 import { agent } from "./routes/agent.js";
 import { security } from "./routes/security.js";
 import { todo } from "./routes/todo.js";
-import { unsubscribe } from "./routes/unsubscribe.js";
-import { sendTime } from "./routes/send-time.js";
+import { unsubscribe, emailUnsubscribe } from "./routes/unsubscribe.js";
+import { sendTime, optimalSendTime, recipientPatterns } from "./routes/send-time.js";
 import { composeAssist } from "./routes/compose-assist.js";
 import { sso } from "./routes/sso.js";
+import { spellcheckRouter } from "./routes/spellcheck.js";
+import { status } from "./routes/status.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
 import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@emailed/shared";
+import { startAutoIndexer, stopAutoIndexer } from "@emailed/ai-engine/embeddings/auto-indexer";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -135,6 +138,9 @@ app.get("/health", (c) => {
 
 // Deep health check with dependency verification (also no auth)
 app.route("/v1/health", health);
+
+// Public status health endpoint (no auth — consumed by status.48co.ai)
+app.route("/v1/status", status);
 
 // Auth endpoints: strict IP rate limiting (10 req/min), no API key auth
 app.use("/v1/auth/*", authRateLimit);
@@ -235,6 +241,15 @@ app.use("/v1/programs/*", authMiddleware, writeRateLimit);
 app.use("/v1/rules", authMiddleware, readRateLimit);
 // Explain (newsletter summary + "why is this in my inbox?"): read-level (600 req/min)
 app.use("/v1/explain/*", authMiddleware, readRateLimit);
+// Email-level explain/summary convenience endpoints (S6+S7)
+app.use("/v1/emails/*/summary", authMiddleware, readRateLimit);
+app.use("/v1/emails/*/explain", authMiddleware, readRateLimit);
+// Per-email unsubscribe (B3): write-level (200 req/min)
+app.use("/v1/emails/*/unsubscribe", authMiddleware, writeRateLimit);
+app.use("/v1/emails/*/unsubscribe/*", authMiddleware, readRateLimit);
+// Per-email translation (B4): read-level (600 req/min)
+app.use("/v1/emails/*/translate", authMiddleware, readRateLimit);
+app.use("/v1/emails/*/translation", authMiddleware, readRateLimit);
 // AI Inbox Agent: write-level (200 req/min) — heavy operations
 app.use("/v1/agent/*", authMiddleware, writeRateLimit);
 app.use("/v1/agent", authMiddleware, writeRateLimit);
@@ -244,8 +259,13 @@ app.use("/v1/unsubscribe/*", authMiddleware, writeRateLimit);
 app.use("/v1/unsubscribe", authMiddleware, writeRateLimit);
 // Predictive Send-Time Optimization (S10)
 app.use("/v1/send-time/*", authMiddleware, writeRateLimit);
+// Optimal Send Time (batch endpoint for multiple recipients)
+app.use("/v1/emails/optimal-send-time", authMiddleware, readRateLimit);
 // Compose-Assist / AI calendar slot suggestions (B7)
 app.use("/v1/compose-assist/*", authMiddleware, writeRateLimit);
+// Spell Check (C10): high-frequency read (600 req/min — real-time typing)
+app.use("/v1/compose/spellcheck/*", authMiddleware, readRateLimit);
+app.use("/v1/compose/spellcheck", authMiddleware, readRateLimit);
 // Native Todo App Integrations (S8): write-level (200 req/min)
 app.use("/v1/todo/*", authMiddleware, writeRateLimit);
 app.use("/v1/todo", authMiddleware, writeRateLimit);
@@ -281,11 +301,20 @@ app.route("/v1/encryption", encryption);
 app.route("/v1/rules", aiRules);
 app.route("/v1/programs", programs);
 app.route("/v1/explain", explain);
+// Mount explain router again at /v1 to serve /v1/emails/:id/summary and /v1/emails/:id/explain
+app.route("/v1", explain);
 app.route("/v1/agent", agent);
 app.route("/v1/security", security);
 app.route("/v1/unsubscribe", unsubscribe);
+// Per-email unsubscribe (B3): /v1/emails/:id/unsubscribe
+app.route("/v1/emails", emailUnsubscribe);
+// Per-email translation (B4): /v1/emails/:id/translate + /v1/emails/:id/translation
+app.route("/v1/emails", emailTranslate);
 app.route("/v1/send-time", sendTime);
+app.route("/v1/emails", optimalSendTime);
+app.route("/v1/analytics", recipientPatterns);
 app.route("/v1/compose-assist", composeAssist);
+app.route("/v1/compose/spellcheck", spellcheckRouter);
 app.route("/v1/todo", todo);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
@@ -354,6 +383,9 @@ initSearchIndex().catch((err) => {
 // Start the webhook delivery worker (BullMQ consumer)
 startWebhookWorker();
 
+// Start the semantic search auto-indexer (embeds new emails in background)
+startAutoIndexer();
+
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 
 let isShuttingDown = false;
@@ -370,6 +402,10 @@ async function shutdown(signal: string): Promise<void> {
   }, 15_000);
 
   try {
+    // Stop the semantic search auto-indexer (drains remaining queue)
+    await stopAutoIndexer();
+    console.log("[api] Auto-indexer stopped");
+
     // Close the webhook delivery worker
     await stopWebhookWorker();
     console.log("[api] Webhook worker stopped");

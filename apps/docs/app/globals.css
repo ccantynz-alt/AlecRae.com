@@ -1,3 +1,61 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+
+  ::selection {
+    background-color: rgba(34, 211, 238, 0.25);
+    color: white;
+  }
+}
+
+@layer components {
+  .prose pre {
+    @apply rounded-xl border border-white/10 bg-slate-900/80;
+  }
+
+  .prose code {
+    @apply text-cyan-300 font-mono;
+  }
+
+  .prose a {
+    @apply text-cyan-300 hover:text-cyan-200 transition-colors;
+  }
+
+  .prose table {
+    @apply border-collapse;
+  }
+
+  .prose th {
+    @apply text-blue-200/60 text-xs uppercase tracking-wider;
+  }
+
+  .prose td {
+    @apply text-blue-100/70 border-white/5;
+  }
+}

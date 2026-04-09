@@ -13,7 +13,18 @@ import {
   type EmailListItem,
   type EmailMessage,
 } from "@emailed/ui";
+import { AnimatePresence, motion } from "motion/react";
 import { messagesApi, type Message, type MessageDetail } from "../../../lib/api";
+import { NewsletterSummaryPreview } from "../../../components/NewsletterSummaryPreview";
+import { EmailExplainerPanel } from "../../../components/EmailExplainerPanel";
+import { EmailListSkeleton } from "../../../components/AnimatedSkeleton";
+import { PressableScale } from "../../../components/PressableScale";
+import {
+  fadeInUp,
+  threadExpand,
+  SPRING_BOUNCY,
+  useViennaReducedMotion,
+} from "../../../lib/animations";
 
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
@@ -29,6 +40,25 @@ function formatTimestamp(iso: string): string {
     return date.toLocaleDateString(undefined, { weekday: "short" });
   }
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+// ─── Newsletter detection signals ───────────────────────────────────────────
+
+const NEWSLETTER_SIGNALS = [
+  "unsubscribe",
+  "list-unsubscribe",
+  "view in browser",
+  "view online",
+  "email preferences",
+  "mailing list",
+  "newsletter",
+  "weekly digest",
+  "daily digest",
+];
+
+function isLikelyNewsletter(msg: Message): boolean {
+  const text = `${msg.subject} ${msg.preview}`.toLowerCase();
+  return NEWSLETTER_SIGNALS.some((signal) => text.includes(signal));
 }
 
 function toEmailListItem(msg: Message): EmailListItem {
@@ -104,8 +134,9 @@ function toEmailMessage(detail: MessageDetail): EmailMessage {
   };
 }
 
-export default function InboxPage() {
+export default function InboxPage(): React.ReactNode {
   const router = useRouter();
+  const reduced = useViennaReducedMotion();
   const [emailItems, setEmailItems] = useState<EmailListItem[]>([]);
   const [selectedEmailId, setSelectedEmailId] = useState<string | undefined>();
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);
@@ -116,6 +147,12 @@ export default function InboxPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // S6: Newsletter detection map (emailId -> isNewsletter)
+  const [newsletterMap, setNewsletterMap] = useState<Map<string, boolean>>(new Map());
+  // S7: Email explainer panel
+  const [explainerOpen, setExplainerOpen] = useState(false);
+  // Whether to show full email content (toggled from newsletter summary)
+  const [showFullEmail, setShowFullEmail] = useState(true);
 
   const fetchEmails = useCallback(async () => {
     try {
@@ -123,6 +160,12 @@ export default function InboxPage() {
       setError(null);
       const res = await messagesApi.list({ limit: 50 });
       const items = res.data.map(toEmailListItem);
+      // S6: Build newsletter classification map
+      const nlMap = new Map<string, boolean>();
+      for (const msg of res.data) {
+        nlMap.set(msg.id, isLikelyNewsletter(msg));
+      }
+      setNewsletterMap(nlMap);
       setEmailItems(items);
       if (items.length > 0 && !selectedEmailId) {
         setSelectedEmailId(items[0]!.id);
@@ -232,27 +275,16 @@ export default function InboxPage() {
         }
       />
       <Box className="flex items-center gap-2 ml-auto">
-        <Button
-          variant={filter === "all" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setFilter("all")}
-        >
-          All
-        </Button>
-        <Button
-          variant={filter === "unread" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setFilter("unread")}
-        >
-          Unread
-        </Button>
-        <Button
-          variant={filter === "starred" ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setFilter("starred")}
-        >
-          Starred
-        </Button>
+        {(["all", "unread", "starred"] as const).map((f) => (
+          <PressableScale key={f} as="button" type="button" tapScale={0.95} hoverScale={1.03} onClick={() => setFilter(f)}>
+            <Button
+              variant={filter === f ? "secondary" : "ghost"}
+              size="sm"
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+            </Button>
+          </PressableScale>
+        ))}
       </Box>
     </Box>
   );
@@ -260,8 +292,16 @@ export default function InboxPage() {
   if (loading) {
     return (
       <PageLayout header={searchHeader} fullWidth>
-        <Box className="flex items-center justify-center h-full">
-          <Text variant="body-md" muted>Loading emails...</Text>
+        <Box className="flex flex-1 h-full">
+          <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
+            <Box className="px-4 py-2 border-b border-border bg-surface-secondary">
+              <Text variant="body-sm" muted>Loading...</Text>
+            </Box>
+            <EmailListSkeleton count={10} />
+          </Box>
+          <Box className="flex-1 flex items-center justify-center">
+            <Text variant="body-md" muted>Select an email to read</Text>
+          </Box>
         </Box>
       </PageLayout>
     );
@@ -271,10 +311,18 @@ export default function InboxPage() {
     return (
       <PageLayout header={searchHeader} fullWidth>
         <Box className="flex flex-col items-center justify-center h-full gap-4">
-          <Text variant="body-md" muted>{error}</Text>
-          <Button variant="secondary" size="sm" onClick={fetchEmails}>
-            Retry
-          </Button>
+          <motion.div
+            initial={reduced ? false : { opacity: 0, y: 8 }}
+            animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            transition={SPRING_BOUNCY}
+          >
+            <Text variant="body-md" muted>{error}</Text>
+          </motion.div>
+          <PressableScale as="button" tapScale={0.95}>
+            <Button variant="secondary" size="sm" onClick={fetchEmails}>
+              Retry
+            </Button>
+          </PressableScale>
         </Box>
       </PageLayout>
     );
@@ -293,30 +341,90 @@ export default function InboxPage() {
                   : `${filteredEmails.filter((e) => !e.read).length} unread of ${filteredEmails.length} emails`}
             </Text>
           </Box>
-          {filteredEmails.length === 0 ? (
-            <Box className="flex items-center justify-center p-8">
-              <Text variant="body-sm" muted>
-                {filter === "all" ? "No emails yet" : `No ${filter} emails`}
-              </Text>
-            </Box>
-          ) : (
-            <EmailList
-              emails={filteredEmails}
-              {...(selectedEmailId !== undefined ? { selectedId: selectedEmailId } : {})}
-              onSelect={handleSelect}
-              onStar={handleStar}
-            />
-          )}
+          <AnimatePresence mode="wait">
+            {filteredEmails.length === 0 ? (
+              <motion.div
+                key="empty"
+                className="flex items-center justify-center p-8"
+                variants={fadeInUp}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+              >
+                <Text variant="body-sm" muted>
+                  {filter === "all" ? "No emails yet" : `No ${filter} emails`}
+                </Text>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="list"
+                initial={reduced ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                <EmailList
+                  emails={filteredEmails}
+                  {...(selectedEmailId !== undefined ? { selectedId: selectedEmailId } : {})}
+                  onSelect={handleSelect}
+                  onStar={handleStar}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </Box>
-        <Box className="flex-1 min-w-0">
-          {detailLoading ? (
-            <Box className="flex items-center justify-center h-full">
-              <Text variant="body-md" muted>Loading...</Text>
-            </Box>
-          ) : (
-            <EmailViewer
-              email={selectedEmail}
-              onReply={() => {
+        <Box className="flex-1 min-w-0 flex flex-col">
+          <AnimatePresence mode="wait">
+            {detailLoading ? (
+              <motion.div
+                key="detail-loading"
+                className="flex items-center justify-center h-full"
+                variants={fadeInUp}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+              >
+                <Text variant="body-md" muted>Loading...</Text>
+              </motion.div>
+            ) : (
+              <motion.div
+                key={selectedEmail?.id ?? "no-email"}
+                className="flex flex-col flex-1 min-w-0"
+                variants={threadExpand}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+              >
+                {/* S6: Newsletter Summary Preview (shown above email viewer for newsletter emails) */}
+                {selectedEmailId && (newsletterMap.get(selectedEmailId) ?? false) && (
+                  <NewsletterSummaryPreview
+                    emailId={selectedEmailId}
+                    isNewsletter={true}
+                    onShowFullEmail={() => setShowFullEmail(true)}
+                    className="px-4 pt-4"
+                  />
+                )}
+
+                {/* S7: "Why is this in my inbox?" button */}
+                {selectedEmailId && selectedEmail && (
+                  <Box className="px-4 pt-2 flex items-center gap-2">
+                    <PressableScale as="button" tapScale={0.95}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setExplainerOpen(true)}
+                        aria-label="Find out why this email is in your inbox"
+                      >
+                        Why is this in my inbox?
+                      </Button>
+                    </PressableScale>
+                  </Box>
+                )}
+
+                <Box className="flex-1 min-w-0">
+                  <EmailViewer
+                  email={selectedEmail}
+                  onReply={() => {
                 if (!selectedEmail) return;
                 const params = new URLSearchParams({
                   mode: "reply",
@@ -364,6 +472,18 @@ export default function InboxPage() {
                   setSelectedEmail(null);
                 }
               }}
+            />
+                </Box>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* S7: Email Explainer Panel (slide-in from right) */}
+          {selectedEmailId && (
+            <EmailExplainerPanel
+              emailId={selectedEmailId}
+              open={explainerOpen}
+              onClose={() => setExplainerOpen(false)}
             />
           )}
         </Box>

@@ -1,10 +1,12 @@
 "use client";
 
-import { forwardRef, useState, type HTMLAttributes } from "react";
+import { forwardRef, useState, useCallback, useRef, useEffect, type HTMLAttributes } from "react";
 import { Box } from "../primitives/box";
 import { Text } from "../primitives/text";
 import { Button } from "../primitives/button";
 import { Input } from "../primitives/input";
+import { CalendarSlotSuggestion, type MeetingIntentInfo } from "./calendar-slot-suggestion";
+import type { SlotOption } from "./slot-picker";
 
 export interface AISuggestion {
   id: string;
@@ -22,6 +24,14 @@ export interface ComposeData {
   body: string;
 }
 
+/** Callback signature for requesting calendar slot suggestions from an API. */
+export type CalendarSlotRequestFn = (text: string, recipientEmail: string) => Promise<{
+  detected: boolean;
+  intent: MeetingIntentInfo;
+  slots: SlotOption[];
+  formattedText: string | null;
+}>;
+
 export interface ComposeEditorProps extends HTMLAttributes<HTMLDivElement> {
   from?: string;
   to?: string;
@@ -35,8 +45,37 @@ export interface ComposeEditorProps extends HTMLAttributes<HTMLDivElement> {
   onDiscard?: () => void;
   onApplySuggestion?: (suggestion: AISuggestion) => void;
   showAIPanel?: boolean;
+  /** Callback to fetch AI calendar slot suggestions. When provided, enables B7 feature. */
+  onRequestCalendarSlots?: CalendarSlotRequestFn;
   className?: string;
 }
+
+// ─── Meeting intent detection (heuristic, client-side) ─────────────────────
+
+const MEETING_PHRASES_RE =
+  /\b(let'?s\s+(meet|chat|sync|catch up|talk|call|hop on)|schedule\s+a\s+(call|meeting|chat)|find\s+a\s+time|are\s+you\s+free|do\s+you\s+have\s+time|how\s+about|want\s+to\s+(meet|chat|call)|shall\s+we\s+(meet|call|chat)|can\s+we\s+(meet|call|set up)|book\s+a\s+(meeting|call)|set\s+up\s+a\s+(call|meeting|time))\b/i;
+
+function hasLocalMeetingIntent(text: string): boolean {
+  return MEETING_PHRASES_RE.test(text);
+}
+
+// ─── Calendar slot state ────────────────────────────────────────────────────
+
+interface CalendarSlotState {
+  visible: boolean;
+  loading: boolean;
+  intent: MeetingIntentInfo | null;
+  slots: SlotOption[];
+  formattedText: string | null;
+}
+
+const INITIAL_SLOT_STATE: CalendarSlotState = {
+  visible: false,
+  loading: false,
+  intent: null,
+  slots: [],
+  formattedText: null,
+};
 
 export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(function ComposeEditor(
   {
@@ -52,6 +91,7 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
     onDiscard,
     onApplySuggestion,
     showAIPanel = true,
+    onRequestCalendarSlots,
     className = "",
     ...props
   },
@@ -65,9 +105,100 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
 
-  const handleSend = () => {
+  // Calendar slot suggestion state (B7)
+  const [slotState, setSlotState] = useState<CalendarSlotState>(INITIAL_SLOT_STATE);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastDetectedRef = useRef<string>("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleSend = useCallback((): void => {
     onSend?.({ from, to, cc, bcc, subject, body });
-  };
+  }, [from, to, cc, bcc, subject, body, onSend]);
+
+  // Fetch calendar slots from the API
+  const fetchCalendarSlots = useCallback(
+    async (text: string): Promise<void> => {
+      if (!onRequestCalendarSlots) return;
+
+      // Extract first recipient email for personalisation
+      const recipientEmail = to.split(",")[0]?.trim() ?? "";
+
+      setSlotState((prev) => ({ ...prev, loading: true, visible: true }));
+      try {
+        const result = await onRequestCalendarSlots(text, recipientEmail);
+        setSlotState({
+          visible: result.detected,
+          loading: false,
+          intent: result.intent,
+          slots: result.slots,
+          formattedText: result.formattedText,
+        });
+        lastDetectedRef.current = text;
+      } catch {
+        setSlotState((prev) => ({ ...prev, loading: false }));
+      }
+    },
+    [onRequestCalendarSlots, to],
+  );
+
+  // Debounced meeting intent detection on body changes
+  useEffect(() => {
+    if (!onRequestCalendarSlots) return;
+    if (!body || body.length < 10) {
+      setSlotState(INITIAL_SLOT_STATE);
+      return;
+    }
+
+    // Quick client-side check before calling the API
+    if (!hasLocalMeetingIntent(body)) {
+      if (slotState.visible) setSlotState(INITIAL_SLOT_STATE);
+      return;
+    }
+
+    // Don't re-fetch if body hasn't changed meaningfully since last detection
+    if (lastDetectedRef.current === body) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      void fetchCalendarSlots(body);
+    }, 800);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [body, onRequestCalendarSlots, fetchCalendarSlots, slotState.visible]);
+
+  // Insert a single slot into the body
+  const handleInsertSlot = useCallback(
+    (slot: SlotOption): void => {
+      const insertText = `\n\nHow about ${slot.formattedRange}? (${slot.durationMinutes} min)\n`;
+      setBody((prev) => prev + insertText);
+      setSlotState(INITIAL_SLOT_STATE);
+      // Refocus the textarea
+      textareaRef.current?.focus();
+    },
+    [],
+  );
+
+  // Insert all slots as formatted text
+  const handleInsertAll = useCallback(
+    (text: string): void => {
+      setBody((prev) => prev + "\n\n" + text + "\n");
+      setSlotState(INITIAL_SLOT_STATE);
+      textareaRef.current?.focus();
+    },
+    [],
+  );
+
+  // Dismiss the calendar suggestion
+  const handleDismissSlots = useCallback((): void => {
+    setSlotState(INITIAL_SLOT_STATE);
+  }, []);
+
+  // Refresh calendar slot suggestions
+  const handleRefreshSlots = useCallback((): void => {
+    void fetchCalendarSlots(body);
+  }, [fetchCalendarSlots, body]);
 
   return (
     <Box ref={ref} className={`flex flex-col h-full bg-surface ${className}`} {...props}>
@@ -156,14 +287,30 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
               />
             </Box>
           </Box>
-          <Box className="flex-1 p-4">
+          <Box className="flex-1 p-4 flex flex-col">
             <Box
               as="textarea"
+              ref={textareaRef}
               value={body}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
               placeholder="Write your email..."
-              className="w-full h-full resize-none bg-transparent text-body-md text-content focus:outline-none placeholder:text-content-tertiary"
+              className="w-full flex-1 resize-none bg-transparent text-body-md text-content focus:outline-none placeholder:text-content-tertiary"
             />
+            {/* B7: Calendar Slot Suggestions inline in compose */}
+            {onRequestCalendarSlots && (
+              <CalendarSlotSuggestion
+                visible={slotState.visible}
+                loading={slotState.loading}
+                intent={slotState.intent}
+                slots={slotState.slots}
+                formattedText={slotState.formattedText}
+                onInsertSlot={handleInsertSlot}
+                onInsertAll={handleInsertAll}
+                onDismiss={handleDismissSlots}
+                onRefresh={handleRefreshSlots}
+                className="mt-3"
+              />
+            )}
           </Box>
         </Box>
         {showAIPanel && suggestions.length > 0 && (
