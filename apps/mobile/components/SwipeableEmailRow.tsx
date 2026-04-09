@@ -63,6 +63,8 @@ const ACTION_LABELS: Record<ActionKind, string> = {
   read: "Read",
   snooze: "Snooze",
   delete: "Delete",
+  reply: "Reply",
+  flag: "Flag",
 };
 
 const ACTION_ICONS: Record<ActionKind, string> = {
@@ -70,6 +72,8 @@ const ACTION_ICONS: Record<ActionKind, string> = {
   read: "\u{2709}\u{FE0F}", // envelope
   snooze: "\u{1F4A4}", // zzz
   delete: "\u{1F5D1}\u{FE0F}", // wastebasket
+  reply: "\u{21A9}\u{FE0F}", // reply arrow
+  flag: "\u{1F6A9}", // flag
 };
 
 function pickAction(

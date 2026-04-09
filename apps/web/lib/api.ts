@@ -494,6 +494,72 @@ export const analyticsApi = {
   },
 };
 
+// ─── Inbox Heatmap Analytics (A3) ─────────────────────────────────────────
+
+export interface HeatmapDayEntry {
+  date: string;
+  sent: number;
+  received: number;
+}
+
+export interface HourlyBucketEntry {
+  hour: number;
+  sent: number;
+  received: number;
+}
+
+export interface HeatmapStatsMetrics {
+  avgResponseTimeSec: number | null;
+  emailsPerDay: number;
+  busiestDay: string | null;
+  quietestDay: string | null;
+  inboxZeroStreak: number;
+  totalSent: number;
+  totalReceived: number;
+}
+
+export interface HeatmapStatsCompare {
+  avgResponseTimeDelta: number | null;
+  emailsPerDayDelta: number | null;
+  totalSentDelta: number | null;
+  totalReceivedDelta: number | null;
+}
+
+export type HeatmapPeriod = "7d" | "30d" | "90d" | "1y";
+
+export const heatmapApi = {
+  heatmap(params?: { period?: HeatmapPeriod; mode?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.period) qs.set("period", params.period);
+    if (params?.mode) qs.set("mode", params.mode);
+    const query = qs.toString();
+    return apiFetch<{ data: HeatmapDayEntry[]; meta: { period: string; from: string; to: string; days: number } }>(
+      `/v1/analytics/heatmap${query ? `?${query}` : ""}`,
+    );
+  },
+
+  hourly(params?: { period?: HeatmapPeriod }) {
+    const qs = new URLSearchParams();
+    if (params?.period) qs.set("period", params.period);
+    const query = qs.toString();
+    return apiFetch<{
+      data: HourlyBucketEntry[];
+      meta: { period: string; from: string; to: string; peakHour: number; peakHours: number[]; bestSendHours: number[] };
+    }>(`/v1/analytics/hourly${query ? `?${query}` : ""}`);
+  },
+
+  stats(params?: { period?: HeatmapPeriod; compare?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params?.period) qs.set("period", params.period);
+    if (params?.compare) qs.set("compare", "true");
+    const query = qs.toString();
+    return apiFetch<{
+      data: { metrics: HeatmapStatsMetrics; compare: HeatmapStatsCompare | null };
+      meta: { period: string; from: string; to: string; days: number };
+    }>(`/v1/analytics/stats${query ? `?${query}` : ""}`);
+  },
+};
+
 // ─── Webhooks ──────────────────────────────────────────────────────────────
 
 export const webhooksApi = {

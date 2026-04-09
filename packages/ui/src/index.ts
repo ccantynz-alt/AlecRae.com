@@ -41,6 +41,9 @@ export { InboxHeatmap, type InboxHeatmapProps, type HeatmapDayData, type Heatmap
 export { HourlyActivityChart, type HourlyActivityChartProps, type HourlyBucket } from "./composites/hourly-activity-chart";
 export { EmailStatsDashboard, type EmailStatsDashboardProps, type EmailStatsMetrics, type EmailStatsCompare, type StatsPeriod } from "./composites/email-stats-dashboard";
 
+export { ChangelogEntry, type ChangelogEntryProps, type ChangelogEntryData, type ChangelogCategory } from "./composites/changelog-entry";
+export { ChangelogFeed, type ChangelogFeedProps } from "./composites/changelog-feed";
+
 // Layouts
 export { Sidebar, type SidebarProps, type SidebarNavItem, type SidebarSection } from "./layouts/sidebar";
 export { PageLayout, type PageLayoutProps } from "./layouts/page-layout";

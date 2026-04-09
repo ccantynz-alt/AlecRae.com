@@ -700,7 +700,7 @@ If you ship something not in this file, you broke the rules.
 | A3 | **Inbox heatmap** | Visual email habits (when you're most productive). | NOT STARTED |
 | A4 | **Focus mode** | Hides everything except important emails. Full screen. Timer, progress tracking, Cmd+Shift+F shortcut. | DONE |
 | A5 | **Quick-reply gestures (mobile)** | Brilliant swipe interactions. Mobile already has the pattern, needs polish. | NOT STARTED |
-| A6 | **Drag-to-snooze on mini-calendar** | Drag email to a time slot to snooze. | NOT STARTED |
+| A6 | **Drag-to-snooze on mini-calendar** | Drag email to a time slot to snooze. HTML5 DnD + touch long-press, mini-calendar drop zones, time slot picker, quick presets, keyboard S shortcut, undo support. | DONE |
 | A7 | **Inbox zero rituals (gamification)** | Streaks, achievements (optional). DB schema (user_streaks, user_achievements, daily_stats), 6 API endpoints, 6 React components (celebration, streak counter, achievement badge/panel, weekly stats, toggle). Respects prefers-reduced-motion. | DONE |
 
 ### TIER B — POWER FEATURES COMPETITORS DON'T HAVE
@@ -798,8 +798,8 @@ If you ship something not in this file, you broke the rules.
 | Vercel deployment | Configured, deploying from main | 100% |
 | Neon SQL setup | Ready | 100% |
 | CLAUDE.md Bible | Complete | 100% |
-| **Tier S features (industry firsts)** | **S1+S2+S3+S5+S6+S7+S8+S10 done (8/10)** | **80%** |
-| **Tier A features (cutting-edge UX)** | **A1+A4+A7 done (3/7)** | **43%** |
+| **Tier S features (industry firsts)** | **S1+S2+S3+S5+S6+S7+S8+S9+S10 done (9/10)** | **90%** |
+| **Tier A features (cutting-edge UX)** | **A1+A4+A6+A7 done (4/7)** | **57%** |
 | **Tier B features (power user)** | **B3+B4+B5+B6+B7 done (5/8)** | **62%** |
 | **Tier C features (polish + trust)** | **C1+C2+C3+C9+C10 done (5/10)** | **50%** |
 

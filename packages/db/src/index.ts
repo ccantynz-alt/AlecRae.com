@@ -259,6 +259,21 @@ export {
   changelogCategoryEnum,
 } from "./schema/changelog.js";
 
+// Schema - Voice Clone Profiles (S4 — voice cloning for AI replies)
+export {
+  voiceStyleProfiles,
+  voiceTrainingSamples,
+  voiceStyleProfilesRelations,
+  voiceTrainingSamplesRelations,
+} from "./schema/voice-clone.js";
+export type {
+  StyleFingerprintData,
+  ExtractedFeaturesData,
+  RhythmFingerprintData,
+  VocabularyFingerprintData,
+  PunctuationStyleData,
+} from "./schema/voice-clone.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -312,6 +327,10 @@ import type {
 } from "./schema/gamification.js";
 import type { meetingLinks } from "./schema/meeting-links.js";
 import type { changelogEntries } from "./schema/changelog.js";
+import type {
+  voiceStyleProfiles,
+  voiceTrainingSamples,
+} from "./schema/voice-clone.js";
 
 // Select types (what you get back from queries)
 export type Account = InferSelectModel<typeof accounts>;
@@ -394,3 +413,7 @@ export type MeetingLink = InferSelectModel<typeof meetingLinks>;
 export type NewMeetingLink = InferInsertModel<typeof meetingLinks>;
 export type ChangelogEntry = InferSelectModel<typeof changelogEntries>;
 export type NewChangelogEntry = InferInsertModel<typeof changelogEntries>;
+export type VoiceStyleProfile = InferSelectModel<typeof voiceStyleProfiles>;
+export type NewVoiceStyleProfile = InferInsertModel<typeof voiceStyleProfiles>;
+export type VoiceTrainingSample = InferSelectModel<typeof voiceTrainingSamples>;
+export type NewVoiceTrainingSample = InferInsertModel<typeof voiceTrainingSamples>;
