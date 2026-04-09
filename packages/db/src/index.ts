@@ -346,6 +346,7 @@ import type {
   dailyStats,
 } from "./schema/gamification.js";
 import type { meetingLinks } from "./schema/meeting-links.js";
+import type { savedQueries, queryHistory } from "./schema/saved-queries.js";
 import type { emailScripts, scriptRuns } from "./schema/email-scripts.js";
 import type { changelogEntries } from "./schema/changelog.js";
 import type {
@@ -432,6 +433,10 @@ export type TaskProviderConfig = InferSelectModel<typeof taskProviderConfigs>;
 export type NewTaskProviderConfig = InferInsertModel<typeof taskProviderConfigs>;
 export type MeetingLink = InferSelectModel<typeof meetingLinks>;
 export type NewMeetingLink = InferInsertModel<typeof meetingLinks>;
+export type SavedQuery = InferSelectModel<typeof savedQueries>;
+export type NewSavedQuery = InferInsertModel<typeof savedQueries>;
+export type QueryHistoryRecord = InferSelectModel<typeof queryHistory>;
+export type NewQueryHistoryRecord = InferInsertModel<typeof queryHistory>;
 export type ChangelogEntry = InferSelectModel<typeof changelogEntries>;
 export type NewChangelogEntry = InferInsertModel<typeof changelogEntries>;
 export type VoiceStyleProfile = InferSelectModel<typeof voiceStyleProfiles>;

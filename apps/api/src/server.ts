@@ -364,6 +364,8 @@ app.route("/v1/gamification", gamification);
 app.route("/v1/changelog", changelog);
 // B8: Voice-to-Voice Replies (recording, transcription, inline player)
 app.route("/v1/voice-messages", voiceMessageRouter);
+// B1: Programmable Email — TypeScript snippet engine
+app.route("/v1/scripts", scripts);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);
