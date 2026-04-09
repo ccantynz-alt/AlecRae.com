@@ -311,7 +311,7 @@ export class InboxAgent {
         out.push(this.fallbackTriage(email));
         continue;
       }
-      out.push({
+      const decision: TriageDecision = {
         emailId: email.id,
         category: coerceCategory(raw.category),
         priority: coercePriority(raw.priority),
@@ -319,9 +319,12 @@ export class InboxAgent {
         confidence: clamp(raw.confidence ?? 0.5, 0, 1),
         reasoning: typeof raw.reasoning === "string" ? raw.reasoning : "no reasoning provided",
         suspicious: Boolean(raw.suspicious),
-        suspicionReasons: Array.isArray(raw.suspicionReasons) ? raw.suspicionReasons : undefined,
         needsReply: Boolean(raw.needsReply),
-      });
+      };
+      if (Array.isArray(raw.suspicionReasons)) {
+        decision.suspicionReasons = raw.suspicionReasons;
+      }
+      out.push(decision);
     }
     return out;
   }
@@ -425,9 +428,8 @@ export class InboxAgent {
     // Schedule for the user's morning hour, tomorrow if it's already past.
     const scheduledFor = nextMorning(morningHour);
 
-    return {
+    const reply: DraftedReply = {
       emailId: email.id,
-      threadId: email.threadId,
       draft: bailed ? "" : body.trim(),
       subject: email.subject.startsWith("Re:") ? email.subject : `Re: ${email.subject}`,
       tone: voiceProfile && voiceProfile.formality > 0.6 ? "professional" : "friendly",
@@ -437,6 +439,10 @@ export class InboxAgent {
       scheduledFor,
       to: [email.from],
     };
+    if (email.threadId) {
+      reply.threadId = email.threadId;
+    }
+    return reply;
   }
 
   // ─── Cleanup suggestions ───────────────────────────────────────────────────

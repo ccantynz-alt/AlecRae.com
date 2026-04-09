@@ -97,6 +97,11 @@
       "types": "./src/todo/index.ts",
       "import": "./dist/todo/index.js"
     },
+    "./todo/thread-extractor": {
+      "bun": "./src/todo/thread-extractor.ts",
+      "types": "./src/todo/thread-extractor.ts",
+      "import": "./dist/todo/thread-extractor.js"
+    },
     "./unsubscribe": {
       "bun": "./src/unsubscribe/index.ts",
       "types": "./src/unsubscribe/index.ts",

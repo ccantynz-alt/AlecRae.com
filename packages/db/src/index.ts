@@ -164,12 +164,86 @@ export {
   unsubscribeHistoryRelations,
 } from "./schema/unsubscribe-history.js";
 
+// Schema - Tasks & Task Provider Configs (S8)
+export {
+  tasks,
+  taskProviderConfigs,
+  taskPriorityEnum,
+  taskStatusEnum,
+  taskProviderEnum,
+  tasksRelations,
+  taskProviderConfigsRelations,
+} from "./schema/tasks.js";
+export type {
+  TaskSource,
+  ProviderCredentials,
+} from "./schema/tasks.js";
+
 // Schema - Email Translations
 export {
   emailTranslations,
   emailTranslationsRelations,
 } from "./schema/translations.js";
 export type { TranslationContent } from "./schema/translations.js";
+
+// Schema - Gamification (A7 — inbox zero streaks, achievements, daily stats)
+export {
+  userStreaks,
+  userAchievements,
+  dailyStats,
+  achievementKeyEnum,
+  userStreaksRelations,
+  userAchievementsRelations,
+  dailyStatsRelations,
+} from "./schema/gamification.js";
+
+// Schema - AI Inbox Agent (runs, drafts, config)
+export {
+  agentRuns,
+  agentDrafts,
+  agentConfigs,
+  agentRunStatusEnum,
+  agentDraftStatusEnum,
+  triageCategoryEnum,
+  triagePriorityEnum,
+  triageActionEnum,
+  agentRunsRelations,
+  agentDraftsRelations,
+  agentConfigsRelations,
+} from "./schema/agent.js";
+export type {
+  AgentRunStats,
+  StoredTriageDecision,
+  StoredCommitment,
+  StoredAgentSuggestion,
+  AgentCategoryRule,
+  AgentScheduleConfig,
+} from "./schema/agent.js";
+
+// Schema - Collaboration (CRDT real-time collaborative drafting — S2)
+export {
+  collaborationSessions,
+  collaborationInvites,
+  collaborationParticipants,
+  collaborationHistory,
+  collabSessionStatusEnum,
+  collabInviteStatusEnum,
+  collabRoleEnum,
+  collaborationSessionsRelations,
+  collaborationInvitesRelations,
+  collaborationParticipantsRelations,
+  collaborationHistoryRelations,
+} from "./schema/collaboration.js";
+export type {
+  CollaborationSession,
+  NewCollaborationSession,
+  CollaborationInvite,
+  NewCollaborationInvite,
+  CollaborationParticipant,
+  NewCollaborationParticipant,
+  CollaborationHistoryEntry,
+  NewCollaborationHistoryEntry,
+} from "./schema/collaboration.js";
 
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
@@ -205,6 +279,23 @@ import type {
   recipientEngagement,
   engagementEvents,
 } from "./schema/recipient-engagement.js";
+import type {
+  collaborationSessions,
+  collaborationInvites,
+  collaborationParticipants,
+  collaborationHistory,
+} from "./schema/collaboration.js";
+import type { tasks, taskProviderConfigs } from "./schema/tasks.js";
+import type {
+  agentRuns,
+  agentDrafts,
+  agentConfigs,
+} from "./schema/agent.js";
+import type {
+  userStreaks,
+  userAchievements,
+  dailyStats,
+} from "./schema/gamification.js";
 
 // Select types (what you get back from queries)
 export type Account = InferSelectModel<typeof accounts>;
@@ -267,3 +358,19 @@ export type EmailTranslation = InferSelectModel<typeof emailTranslations>;
 export type NewEmailTranslation = InferInsertModel<typeof emailTranslations>;
 export type CustomDictionary = InferSelectModel<typeof customDictionaries>;
 export type NewCustomDictionary = InferInsertModel<typeof customDictionaries>;
+export type AgentRun = InferSelectModel<typeof agentRuns>;
+export type NewAgentRun = InferInsertModel<typeof agentRuns>;
+export type AgentDraft = InferSelectModel<typeof agentDrafts>;
+export type NewAgentDraft = InferInsertModel<typeof agentDrafts>;
+export type AgentConfig = InferSelectModel<typeof agentConfigs>;
+export type NewAgentConfig = InferInsertModel<typeof agentConfigs>;
+export type UserStreak = InferSelectModel<typeof userStreaks>;
+export type NewUserStreak = InferInsertModel<typeof userStreaks>;
+export type UserAchievement = InferSelectModel<typeof userAchievements>;
+export type NewUserAchievement = InferInsertModel<typeof userAchievements>;
+export type DailyStat = InferSelectModel<typeof dailyStats>;
+export type NewDailyStat = InferInsertModel<typeof dailyStats>;
+export type Task = InferSelectModel<typeof tasks>;
+export type NewTask = InferInsertModel<typeof tasks>;
+export type TaskProviderConfig = InferSelectModel<typeof taskProviderConfigs>;
+export type NewTaskProviderConfig = InferInsertModel<typeof taskProviderConfigs>;

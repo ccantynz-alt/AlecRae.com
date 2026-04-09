@@ -1,27 +1,37 @@
 /**
- * AI Inbox Agent — REST API
+ * AI Inbox Agent — REST API (S3: Industry First)
  *
- * Vienna's flagship overnight agent. Endpoints:
+ * Vienna's flagship overnight agent. While the user sleeps, the agent
+ * triages every new email, drafts replies in the user's voice, identifies
+ * commitments, flags suspicious senders, and produces a one-tap morning
+ * briefing.
  *
- *   POST   /v1/agent/run                    — Trigger an agent run (returns runId)
- *   GET    /v1/agent/runs                   — List recent runs for the account
+ * Endpoints:
+ *
+ *   POST   /v1/agent/run                    — Trigger an agent run
+ *   GET    /v1/agent/briefing               — Get the latest morning briefing
+ *   GET    /v1/agent/drafts                 — List auto-drafted replies awaiting approval
+ *   POST   /v1/agent/drafts/:id/approve     — Approve and send a draft
+ *   POST   /v1/agent/drafts/:id/reject      — Reject a draft
+ *   POST   /v1/agent/drafts/:id/edit        — Edit a draft before sending
+ *   PUT    /v1/agent/config                 — Configure agent behaviour
+ *   GET    /v1/agent/config                 — Get current config
+ *   GET    /v1/agent/runs                   — List recent runs
  *   GET    /v1/agent/runs/:id               — Full report for a single run
- *   POST   /v1/agent/runs/:id/approve       — Approve and send ALL drafted replies
- *   POST   /v1/agent/runs/:id/approve-batch — Approve a subset of replies by emailId
- *   POST   /v1/agent/schedule               — Configure the recurring schedule (cron)
- *   GET    /v1/agent/schedule               — Read the current schedule
- *   DELETE /v1/agent/schedule               — Disable the recurring schedule
+ *   POST   /v1/agent/runs/:id/approve       — Approve ALL drafted replies for a run
+ *   POST   /v1/agent/runs/:id/approve-batch — Approve a subset of replies by draftId
  *
  * Auth: every endpoint requires `agent:read` or `agent:write` scope.
  * Rate-limit: write-level (200/min) — these are heavy operations.
  *
  * NOTE: Run execution is asynchronous. POST /run kicks the agent off via
- *       setImmediate so the HTTP request returns immediately with a runId
+ *       queueMicrotask so the HTTP request returns immediately with a runId
  *       the client can poll. In production this should be a BullMQ job.
  */
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { eq, and, desc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { requireScope } from "../middleware/auth.js";
@@ -32,8 +42,26 @@ import {
   type AgentReport,
   type DraftedReply,
 } from "@emailed/ai-engine/agent";
+import {
+  getDatabase,
+  agentRuns,
+  agentDrafts,
+  agentConfigs,
+  type AgentRunStats,
+  type StoredTriageDecision,
+  type StoredCommitment,
+  type StoredAgentSuggestion,
+  type AgentCategoryRule,
+  type AgentScheduleConfig,
+} from "@emailed/db";
 
-// ─── Schemas ─────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function generateId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${randomUUID().slice(0, 8)}`;
+}
+
+// ─── Zod Schemas ────────────────────────────────────────────────────────────
 
 const RunSchema = z.object({
   since: z.string().datetime().optional(),
@@ -43,39 +71,100 @@ const RunSchema = z.object({
 });
 
 const ApproveBatchSchema = z.object({
-  emailIds: z.array(z.string()).min(1).max(200),
+  draftIds: z.array(z.string()).min(1).max(200),
 });
 
-const ScheduleSchema = z.object({
-  /** Cron expression — e.g. "0 5 * * *" for every day at 05:00 */
+const EditDraftSchema = z.object({
+  body: z.string().min(1).max(50000),
+});
+
+const AgentCategoryRuleSchema = z.object({
+  category: z.string(),
+  autoDraft: z.boolean(),
+  autoArchive: z.boolean(),
+  minConfidence: z.number().min(0).max(1),
+});
+
+const AgentScheduleConfigSchema = z.object({
   cron: z.string().min(9).max(100),
-  /** IANA tz, e.g. "America/Los_Angeles" */
   timezone: z.string().default("UTC"),
-  morningHour: z.number().int().min(0).max(23).default(8),
-  enabled: z.boolean().default(true),
 });
 
-interface AgentSchedule {
-  accountId: string;
-  cron: string;
-  timezone: string;
-  morningHour: number;
-  enabled: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+const ConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  schedule: AgentScheduleConfigSchema.nullable().optional(),
+  morningHour: z.number().int().min(0).max(23).optional(),
+  maxEmailsPerRun: z.number().int().min(1).max(500).optional(),
+  minDraftConfidence: z.number().min(0).max(1).optional(),
+  categoryRules: z.array(AgentCategoryRuleSchema).optional(),
+  autoDraftCategories: z.array(z.string()).optional(),
+  skipCategories: z.array(z.string()).optional(),
+  enableCleanupSuggestions: z.boolean().optional(),
+  enableCommitments: z.boolean().optional(),
+  enableSecurityScan: z.boolean().optional(),
+});
+
+// ─── Report ↔ DB serialisation helpers ──────────────────────────────────────
+
+function reportToStoredTriageDecisions(
+  report: AgentReport,
+): StoredTriageDecision[] {
+  return report.triageDecisions.map((d) => ({
+    emailId: d.emailId,
+    category: d.category,
+    priority: d.priority,
+    action: d.action,
+    confidence: d.confidence,
+    reasoning: d.reasoning,
+    suspicious: d.suspicious,
+    suspicionReasons: d.suspicionReasons,
+    needsReply: d.needsReply,
+  }));
 }
 
-// ─── In-memory stores ────────────────────────────────────────────────────────
-// Production: persist these to Postgres. Kept in-memory here so the route is
-// runnable without a migration (matches the pattern used by inbox.ts).
+function reportToStoredCommitments(report: AgentReport): StoredCommitment[] {
+  return report.commitments.map((c) => ({
+    id: c.id,
+    actor: c.actor,
+    actorName: c.actorName,
+    description: c.description,
+    deadline: c.deadline ? c.deadline.toISOString() : undefined,
+    status: c.status,
+    sourceEmailId: c.sourceEmailId,
+    sourceQuote: c.sourceQuote,
+  }));
+}
 
-const runStore = new Map<string, AgentReport[]>();          // accountId → reports
-const runIndex = new Map<string, AgentReport>();             // runId → report
-const inflightRuns = new Map<string, "running" | "done" | "failed">();
-const scheduleStore = new Map<string, AgentSchedule>();      // accountId → schedule
-const approvedDrafts = new Set<string>();                    // runId:emailId
+function reportToStoredSuggestions(
+  report: AgentReport,
+): StoredAgentSuggestion[] {
+  return report.suggestions.map((s) => ({
+    type: s.type,
+    target: s.target,
+    action: s.action,
+    reasoning: s.reasoning,
+    confidence: s.confidence,
+    affectedCount: s.affectedCount,
+  }));
+}
 
-// ─── Agent singleton ─────────────────────────────────────────────────────────
+function reportToStoredFlaggedSuspicious(
+  report: AgentReport,
+): StoredTriageDecision[] {
+  return report.flaggedSuspicious.map((d) => ({
+    emailId: d.emailId,
+    category: d.category,
+    priority: d.priority,
+    action: d.action,
+    confidence: d.confidence,
+    reasoning: d.reasoning,
+    suspicious: d.suspicious,
+    suspicionReasons: d.suspicionReasons,
+    needsReply: d.needsReply,
+  }));
+}
+
+// ─── Agent singleton ────────────────────────────────────────────────────────
 //
 // The agent needs three things wired in:
 //   1. an AI client (Claude)
@@ -104,7 +193,10 @@ function getAgent(): InboxAgent {
     }): Promise<T> {
       const text = await this.generateText(args);
       // Strip code fences the model sometimes adds even when asked not to.
-      const cleaned = text.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+      const cleaned = text
+        .replace(/^```(?:json)?\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
       return JSON.parse(cleaned) as T;
     },
     async generateText(args: {
@@ -133,9 +225,13 @@ function getAgent(): InboxAgent {
         }),
       });
       if (!res.ok) {
-        throw new Error(`Claude API error: ${res.status} ${await res.text()}`);
+        throw new Error(
+          `Claude API error: ${res.status} ${await res.text()}`,
+        );
       }
-      const json = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+      const json = (await res.json()) as {
+        content?: Array<{ type: string; text?: string }>;
+      };
       const block = json.content?.find((b) => b.type === "text");
       return block?.text ?? "";
     },
@@ -157,10 +253,7 @@ function getAgent(): InboxAgent {
     ai,
     loadEmails,
     persistReport: async (report) => {
-      runIndex.set(report.runId, report);
-      const list = runStore.get(report.accountId) ?? [];
-      list.unshift(report);
-      runStore.set(report.accountId, list.slice(0, 100));
+      await persistReportToDb(report);
     },
     queueDraft: async (_draft) => {
       // TODO: hand off to schedule-send queue. Kept as a no-op so the agent
@@ -171,11 +264,83 @@ function getAgent(): InboxAgent {
   return _agent;
 }
 
-// ─── Router ──────────────────────────────────────────────────────────────────
+// ─── DB persistence helpers ─────────────────────────────────────────────────
+
+async function persistReportToDb(
+  report: AgentReport,
+  overrideRunId?: string,
+): Promise<void> {
+  const db = getDatabase();
+  const runId = overrideRunId ?? report.runId;
+
+  // Upsert the run record
+  const existingRuns = await db
+    .select({ id: agentRuns.id })
+    .from(agentRuns)
+    .where(eq(agentRuns.id, runId))
+    .limit(1);
+
+  const runData = {
+    status: "completed" as const,
+    totalProcessed: report.totalProcessed,
+    stats: report.stats as AgentRunStats,
+    triageDecisions: reportToStoredTriageDecisions(report),
+    commitmentsList: reportToStoredCommitments(report),
+    suggestions: reportToStoredSuggestions(report),
+    flaggedSuspicious: reportToStoredFlaggedSuspicious(report),
+    briefingMarkdown: report.briefingMarkdown,
+    dryRun: report.dryRun,
+    durationMs: report.durationMs,
+    startedAt: report.runAt,
+    finishedAt: report.finishedAt,
+  };
+
+  if (existingRuns.length > 0) {
+    await db.update(agentRuns).set(runData).where(eq(agentRuns.id, runId));
+  } else {
+    await db.insert(agentRuns).values({
+      id: runId,
+      accountId: report.accountId,
+      ...runData,
+    });
+  }
+
+  // Persist each drafted reply
+  if (!report.dryRun) {
+    for (const draft of report.draftedReplies) {
+      const draftId = generateId("draft");
+      // Find the corresponding triage decision for this email
+      const decision = report.triageDecisions.find(
+        (d) => d.emailId === draft.emailId,
+      );
+      await db.insert(agentDrafts).values({
+        id: draftId,
+        accountId: report.accountId,
+        runId,
+        emailId: draft.emailId,
+        threadId: draft.threadId ?? null,
+        toAddresses: draft.to,
+        subject: draft.subject,
+        body: draft.draft,
+        tone: draft.tone,
+        confidence: draft.confidence,
+        reasoning: draft.reasoning,
+        category: decision?.category ?? null,
+        priority: decision?.priority ?? null,
+        action: decision?.action ?? null,
+        status: "pending",
+        scheduledFor: draft.scheduledFor ?? null,
+      });
+    }
+  }
+}
+
+// ─── Router ─────────────────────────────────────────────────────────────────
 
 const agent = new Hono();
 
-// POST /v1/agent/run — Kick off a run. Returns a runId immediately.
+// ─── POST /v1/agent/run — Kick off a run. Returns a runId immediately. ────
+
 agent.post(
   "/run",
   requireScope("agent:write"),
@@ -183,29 +348,53 @@ agent.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof RunSchema>>(c);
     const auth = c.get("auth");
-    const runId = `agent_${Date.now()}_${randomUUID().slice(0, 8)}`;
+    const runId = generateId("agent");
+    const db = getDatabase();
 
-    inflightRuns.set(runId, "running");
+    // Create a pending run record in the DB immediately.
+    await db.insert(agentRuns).values({
+      id: runId,
+      accountId: auth.accountId,
+      status: "running",
+      dryRun: input.dryRun,
+      startedAt: new Date(),
+    });
 
     // Fire-and-forget. Real prod: enqueue a BullMQ job and return runId.
     queueMicrotask(async () => {
       try {
-        const report = await getAgent().run(auth.accountId, {
-          since: input.since ? new Date(input.since) : undefined,
+        // Build options without undefined values (exactOptionalPropertyTypes)
+        const runOptions: {
+          since?: Date;
+          maxEmails: number;
+          dryRun: boolean;
+          morningHour: number;
+        } = {
           maxEmails: input.maxEmails,
           dryRun: input.dryRun,
           morningHour: input.morningHour,
-        });
-        // Override runId so it matches the one returned to the caller.
-        const stored: AgentReport = { ...report, runId };
-        runIndex.set(runId, stored);
-        const list = runStore.get(auth.accountId) ?? [];
-        list.unshift(stored);
-        runStore.set(auth.accountId, list.slice(0, 100));
-        inflightRuns.set(runId, "done");
+        };
+        if (input.since) {
+          runOptions.since = new Date(input.since);
+        }
+        const report = await getAgent().run(auth.accountId, runOptions);
+        // Persist to DB with the pre-allocated runId.
+        await persistReportToDb(report, runId);
       } catch (err) {
         console.error("[agent] run failed:", err);
-        inflightRuns.set(runId, "failed");
+        try {
+          await db
+            .update(agentRuns)
+            .set({
+              status: "failed",
+              errorMessage:
+                err instanceof Error ? err.message : "Unknown error",
+              finishedAt: new Date(),
+            })
+            .where(eq(agentRuns.id, runId));
+        } catch (dbErr) {
+          console.error("[agent] failed to update run status:", dbErr);
+        }
       }
     });
 
@@ -214,7 +403,8 @@ agent.post(
         data: {
           runId,
           status: "running",
-          message: "Agent run started. Poll GET /v1/agent/runs/:id for the report.",
+          message:
+            "Agent run started. Poll GET /v1/agent/runs/:id for the report.",
         },
       },
       202,
@@ -222,100 +412,707 @@ agent.post(
   },
 );
 
-// GET /v1/agent/runs — List recent runs for the account.
-agent.get(
-  "/runs",
-  requireScope("agent:read"),
-  (c) => {
-    const auth = c.get("auth");
-    const list = runStore.get(auth.accountId) ?? [];
-    return c.json({
-      data: list.map((r) => ({
-        runId: r.runId,
-        runAt: r.runAt,
-        finishedAt: r.finishedAt,
-        durationMs: r.durationMs,
-        totalProcessed: r.totalProcessed,
-        stats: r.stats,
-        dryRun: r.dryRun,
+// ─── GET /v1/agent/briefing — Latest morning briefing ─────────────────────
+
+agent.get("/briefing", requireScope("agent:read"), async (c) => {
+  const auth = c.get("auth");
+  const db = getDatabase();
+
+  const [latestRun] = await db
+    .select({
+      id: agentRuns.id,
+      briefingMarkdown: agentRuns.briefingMarkdown,
+      stats: agentRuns.stats,
+      totalProcessed: agentRuns.totalProcessed,
+      durationMs: agentRuns.durationMs,
+      startedAt: agentRuns.startedAt,
+      finishedAt: agentRuns.finishedAt,
+      status: agentRuns.status,
+    })
+    .from(agentRuns)
+    .where(
+      and(
+        eq(agentRuns.accountId, auth.accountId),
+        eq(agentRuns.status, "completed"),
+      ),
+    )
+    .orderBy(desc(agentRuns.createdAt))
+    .limit(1);
+
+  if (!latestRun) {
+    return c.json(
+      {
+        error: {
+          type: "not_found",
+          message: "No completed agent runs found. Trigger a run first.",
+          code: "no_briefing",
+        },
+      },
+      404,
+    );
+  }
+
+  // Count pending drafts for this run
+  const pendingDrafts = await db
+    .select({ id: agentDrafts.id })
+    .from(agentDrafts)
+    .where(
+      and(
+        eq(agentDrafts.runId, latestRun.id),
+        eq(agentDrafts.status, "pending"),
+      ),
+    );
+
+  return c.json({
+    data: {
+      runId: latestRun.id,
+      briefingMarkdown: latestRun.briefingMarkdown,
+      stats: latestRun.stats,
+      totalProcessed: latestRun.totalProcessed,
+      durationMs: latestRun.durationMs,
+      startedAt: latestRun.startedAt,
+      finishedAt: latestRun.finishedAt,
+      pendingDraftCount: pendingDrafts.length,
+    },
+  });
+});
+
+// ─── GET /v1/agent/drafts — List auto-drafted replies ─────────────────────
+
+agent.get("/drafts", requireScope("agent:read"), async (c) => {
+  const auth = c.get("auth");
+  const db = getDatabase();
+  const statusFilter = c.req.query("status") ?? "pending";
+  const limit = Math.min(
+    parseInt(c.req.query("limit") ?? "50", 10),
+    200,
+  );
+  const offset = parseInt(c.req.query("offset") ?? "0", 10);
+
+  // Validate status filter against known values
+  const validStatuses = [
+    "pending",
+    "approved",
+    "rejected",
+    "edited",
+    "sent",
+    "expired",
+    "all",
+  ];
+  if (!validStatuses.includes(statusFilter)) {
+    return c.json(
+      {
+        error: {
+          type: "validation_error",
+          message: `Invalid status filter. Must be one of: ${validStatuses.join(", ")}`,
+          code: "invalid_status",
+        },
+      },
+      422,
+    );
+  }
+
+  const conditions =
+    statusFilter === "all"
+      ? [eq(agentDrafts.accountId, auth.accountId)]
+      : [
+          eq(agentDrafts.accountId, auth.accountId),
+          eq(
+            agentDrafts.status,
+            statusFilter as
+              | "pending"
+              | "approved"
+              | "rejected"
+              | "edited"
+              | "sent"
+              | "expired",
+          ),
+        ];
+
+  const drafts = await db
+    .select()
+    .from(agentDrafts)
+    .where(and(...conditions))
+    .orderBy(desc(agentDrafts.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return c.json({
+    data: {
+      drafts: drafts.map((d) => ({
+        id: d.id,
+        runId: d.runId,
+        emailId: d.emailId,
+        threadId: d.threadId,
+        to: d.toAddresses,
+        subject: d.subject,
+        body: d.body,
+        editedBody: d.editedBody,
+        tone: d.tone,
+        confidence: d.confidence,
+        reasoning: d.reasoning,
+        category: d.category,
+        priority: d.priority,
+        action: d.action,
+        status: d.status,
+        scheduledFor: d.scheduledFor,
+        approvedAt: d.approvedAt,
+        rejectedAt: d.rejectedAt,
+        sentAt: d.sentAt,
+        createdAt: d.createdAt,
+        updatedAt: d.updatedAt,
       })),
-    });
-  },
-);
+      total: drafts.length,
+      limit,
+      offset,
+    },
+  });
+});
 
-// GET /v1/agent/runs/:id — Full report including briefing markdown.
-agent.get(
-  "/runs/:id",
-  requireScope("agent:read"),
-  (c) => {
-    const id = c.req.param("id");
+// ─── POST /v1/agent/drafts/:id/approve — Approve a single draft ──────────
+
+agent.post(
+  "/drafts/:id/approve",
+  requireScope("agent:write"),
+  async (c) => {
+    const draftId = c.req.param("id");
     const auth = c.get("auth");
-    const report = runIndex.get(id);
-    const status = inflightRuns.get(id);
+    const db = getDatabase();
 
-    if (!report) {
-      if (status === "running") {
-        return c.json({ data: { runId: id, status: "running" } }, 202);
-      }
-      if (status === "failed") {
-        return c.json(
-          { error: { type: "internal", message: "Agent run failed", code: "agent_run_failed" } },
-          500,
-        );
-      }
+    const [draft] = await db
+      .select()
+      .from(agentDrafts)
+      .where(
+        and(
+          eq(agentDrafts.id, draftId),
+          eq(agentDrafts.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
+
+    if (!draft) {
       return c.json(
-        { error: { type: "not_found", message: "Run not found", code: "agent_run_not_found" } },
+        {
+          error: {
+            type: "not_found",
+            message: "Draft not found",
+            code: "draft_not_found",
+          },
+        },
         404,
       );
     }
 
-    if (report.accountId !== auth.accountId) {
+    if (draft.status !== "pending" && draft.status !== "edited") {
       return c.json(
-        { error: { type: "forbidden", message: "Run belongs to another account", code: "forbidden" } },
-        403,
+        {
+          error: {
+            type: "conflict",
+            message: `Draft is already ${draft.status} and cannot be approved`,
+            code: "draft_already_actioned",
+          },
+        },
+        409,
       );
     }
 
-    return c.json({ data: report });
+    const now = new Date();
+    await db
+      .update(agentDrafts)
+      .set({
+        status: "approved",
+        approvedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(agentDrafts.id, draftId));
+
+    // TODO: enqueue into schedule-send pipeline for actual delivery.
+
+    return c.json({
+      data: {
+        id: draftId,
+        status: "approved",
+        approvedAt: now,
+        scheduledFor: draft.scheduledFor,
+        message: "Draft approved. It will be sent at the scheduled time.",
+      },
+    });
   },
 );
 
-// POST /v1/agent/runs/:id/approve — Approve and send ALL drafted replies.
+// ─── POST /v1/agent/drafts/:id/reject — Reject a single draft ────────────
+
+agent.post(
+  "/drafts/:id/reject",
+  requireScope("agent:write"),
+  async (c) => {
+    const draftId = c.req.param("id");
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const [draft] = await db
+      .select()
+      .from(agentDrafts)
+      .where(
+        and(
+          eq(agentDrafts.id, draftId),
+          eq(agentDrafts.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
+
+    if (!draft) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: "Draft not found",
+            code: "draft_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    if (draft.status !== "pending" && draft.status !== "edited") {
+      return c.json(
+        {
+          error: {
+            type: "conflict",
+            message: `Draft is already ${draft.status} and cannot be rejected`,
+            code: "draft_already_actioned",
+          },
+        },
+        409,
+      );
+    }
+
+    const now = new Date();
+    await db
+      .update(agentDrafts)
+      .set({
+        status: "rejected",
+        rejectedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(agentDrafts.id, draftId));
+
+    return c.json({
+      data: {
+        id: draftId,
+        status: "rejected",
+        rejectedAt: now,
+        message: "Draft rejected. It will not be sent.",
+      },
+    });
+  },
+);
+
+// ─── POST /v1/agent/drafts/:id/edit — Edit a draft before sending ────────
+
+agent.post(
+  "/drafts/:id/edit",
+  requireScope("agent:write"),
+  validateBody(EditDraftSchema),
+  async (c) => {
+    const draftId = c.req.param("id");
+    const auth = c.get("auth");
+    const input = getValidatedBody<z.infer<typeof EditDraftSchema>>(c);
+    const db = getDatabase();
+
+    const [draft] = await db
+      .select()
+      .from(agentDrafts)
+      .where(
+        and(
+          eq(agentDrafts.id, draftId),
+          eq(agentDrafts.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
+
+    if (!draft) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: "Draft not found",
+            code: "draft_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    if (
+      draft.status !== "pending" &&
+      draft.status !== "edited"
+    ) {
+      return c.json(
+        {
+          error: {
+            type: "conflict",
+            message: `Draft is already ${draft.status} and cannot be edited`,
+            code: "draft_already_actioned",
+          },
+        },
+        409,
+      );
+    }
+
+    const now = new Date();
+    await db
+      .update(agentDrafts)
+      .set({
+        status: "edited",
+        editedBody: input.body,
+        updatedAt: now,
+      })
+      .where(eq(agentDrafts.id, draftId));
+
+    return c.json({
+      data: {
+        id: draftId,
+        status: "edited",
+        editedBody: input.body,
+        updatedAt: now,
+        message:
+          "Draft edited. Use /approve to send or /reject to discard.",
+      },
+    });
+  },
+);
+
+// ─── PUT /v1/agent/config — Configure agent behaviour ─────────────────────
+
+agent.put(
+  "/config",
+  requireScope("agent:write"),
+  validateBody(ConfigSchema),
+  async (c) => {
+    const auth = c.get("auth");
+    const input = getValidatedBody<z.infer<typeof ConfigSchema>>(c);
+    const db = getDatabase();
+
+    const [existing] = await db
+      .select()
+      .from(agentConfigs)
+      .where(eq(agentConfigs.accountId, auth.accountId))
+      .limit(1);
+
+    const now = new Date();
+
+    if (existing) {
+      // Build update payload — only set fields that were provided
+      const updatePayload: Record<string, unknown> = { updatedAt: now };
+      if (input.enabled !== undefined)
+        updatePayload["enabled"] = input.enabled;
+      if (input.schedule !== undefined)
+        updatePayload["schedule"] = input.schedule as AgentScheduleConfig | null;
+      if (input.morningHour !== undefined)
+        updatePayload["morningHour"] = input.morningHour;
+      if (input.maxEmailsPerRun !== undefined)
+        updatePayload["maxEmailsPerRun"] = input.maxEmailsPerRun;
+      if (input.minDraftConfidence !== undefined)
+        updatePayload["minDraftConfidence"] = input.minDraftConfidence;
+      if (input.categoryRules !== undefined)
+        updatePayload["categoryRules"] = input.categoryRules as AgentCategoryRule[];
+      if (input.autoDraftCategories !== undefined)
+        updatePayload["autoDraftCategories"] = input.autoDraftCategories;
+      if (input.skipCategories !== undefined)
+        updatePayload["skipCategories"] = input.skipCategories;
+      if (input.enableCleanupSuggestions !== undefined)
+        updatePayload["enableCleanupSuggestions"] =
+          input.enableCleanupSuggestions;
+      if (input.enableCommitments !== undefined)
+        updatePayload["enableCommitments"] = input.enableCommitments;
+      if (input.enableSecurityScan !== undefined)
+        updatePayload["enableSecurityScan"] = input.enableSecurityScan;
+
+      await db
+        .update(agentConfigs)
+        .set(updatePayload)
+        .where(eq(agentConfigs.accountId, auth.accountId));
+
+      // Re-read to return the current state
+      const [updated] = await db
+        .select()
+        .from(agentConfigs)
+        .where(eq(agentConfigs.accountId, auth.accountId))
+        .limit(1);
+
+      return c.json({ data: updated });
+    }
+
+    // First-time config creation
+    const configId = generateId("agcfg");
+    const newConfig = {
+      id: configId,
+      accountId: auth.accountId,
+      enabled: input.enabled ?? false,
+      schedule: (input.schedule as AgentScheduleConfig | undefined) ?? null,
+      morningHour: input.morningHour ?? 8,
+      maxEmailsPerRun: input.maxEmailsPerRun ?? 200,
+      minDraftConfidence: input.minDraftConfidence ?? 0.5,
+      categoryRules: (input.categoryRules as AgentCategoryRule[] | undefined) ?? [],
+      autoDraftCategories: input.autoDraftCategories ?? [
+        "work",
+        "personal",
+        "important",
+      ],
+      skipCategories: input.skipCategories ?? ["spam", "promotional"],
+      enableCleanupSuggestions: input.enableCleanupSuggestions ?? true,
+      enableCommitments: input.enableCommitments ?? true,
+      enableSecurityScan: input.enableSecurityScan ?? true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await db.insert(agentConfigs).values(newConfig);
+
+    return c.json({ data: newConfig }, 201);
+  },
+);
+
+// ─── GET /v1/agent/config — Get current config ───────────────────────────
+
+agent.get("/config", requireScope("agent:read"), async (c) => {
+  const auth = c.get("auth");
+  const db = getDatabase();
+
+  const [config] = await db
+    .select()
+    .from(agentConfigs)
+    .where(eq(agentConfigs.accountId, auth.accountId))
+    .limit(1);
+
+  if (!config) {
+    // Return sensible defaults if no config exists yet
+    return c.json({
+      data: {
+        accountId: auth.accountId,
+        enabled: false,
+        schedule: null,
+        morningHour: 8,
+        maxEmailsPerRun: 200,
+        minDraftConfidence: 0.5,
+        categoryRules: [],
+        autoDraftCategories: ["work", "personal", "important"],
+        skipCategories: ["spam", "promotional"],
+        enableCleanupSuggestions: true,
+        enableCommitments: true,
+        enableSecurityScan: true,
+      },
+    });
+  }
+
+  return c.json({ data: config });
+});
+
+// ─── GET /v1/agent/runs — List recent runs ────────────────────────────────
+
+agent.get("/runs", requireScope("agent:read"), async (c) => {
+  const auth = c.get("auth");
+  const db = getDatabase();
+  const limit = Math.min(
+    parseInt(c.req.query("limit") ?? "20", 10),
+    100,
+  );
+  const offset = parseInt(c.req.query("offset") ?? "0", 10);
+
+  const runs = await db
+    .select({
+      id: agentRuns.id,
+      status: agentRuns.status,
+      totalProcessed: agentRuns.totalProcessed,
+      stats: agentRuns.stats,
+      dryRun: agentRuns.dryRun,
+      durationMs: agentRuns.durationMs,
+      errorMessage: agentRuns.errorMessage,
+      startedAt: agentRuns.startedAt,
+      finishedAt: agentRuns.finishedAt,
+      createdAt: agentRuns.createdAt,
+    })
+    .from(agentRuns)
+    .where(eq(agentRuns.accountId, auth.accountId))
+    .orderBy(desc(agentRuns.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return c.json({ data: runs });
+});
+
+// ─── GET /v1/agent/runs/:id — Full report for a single run ───────────────
+
+agent.get("/runs/:id", requireScope("agent:read"), async (c) => {
+  const id = c.req.param("id");
+  const auth = c.get("auth");
+  const db = getDatabase();
+
+  const [run] = await db
+    .select()
+    .from(agentRuns)
+    .where(
+      and(eq(agentRuns.id, id), eq(agentRuns.accountId, auth.accountId)),
+    )
+    .limit(1);
+
+  if (!run) {
+    return c.json(
+      {
+        error: {
+          type: "not_found",
+          message: "Run not found",
+          code: "agent_run_not_found",
+        },
+      },
+      404,
+    );
+  }
+
+  if (run.status === "running") {
+    return c.json(
+      { data: { runId: id, status: "running" } },
+      202,
+    );
+  }
+
+  if (run.status === "failed") {
+    return c.json(
+      {
+        error: {
+          type: "internal",
+          message: run.errorMessage ?? "Agent run failed",
+          code: "agent_run_failed",
+        },
+      },
+      500,
+    );
+  }
+
+  // Fetch associated drafts
+  const drafts = await db
+    .select()
+    .from(agentDrafts)
+    .where(eq(agentDrafts.runId, id))
+    .orderBy(desc(agentDrafts.confidence));
+
+  return c.json({
+    data: {
+      ...run,
+      drafts: drafts.map((d) => ({
+        id: d.id,
+        emailId: d.emailId,
+        threadId: d.threadId,
+        to: d.toAddresses,
+        subject: d.subject,
+        body: d.body,
+        editedBody: d.editedBody,
+        tone: d.tone,
+        confidence: d.confidence,
+        reasoning: d.reasoning,
+        category: d.category,
+        priority: d.priority,
+        status: d.status,
+        scheduledFor: d.scheduledFor,
+        approvedAt: d.approvedAt,
+        rejectedAt: d.rejectedAt,
+        createdAt: d.createdAt,
+      })),
+    },
+  });
+});
+
+// ─── POST /v1/agent/runs/:id/approve — Approve ALL drafts for a run ──────
+
 agent.post(
   "/runs/:id/approve",
   requireScope("agent:write"),
   async (c) => {
     const id = c.req.param("id");
     const auth = c.get("auth");
-    const report = runIndex.get(id);
+    const db = getDatabase();
 
-    if (!report || report.accountId !== auth.accountId) {
+    // Verify run exists and belongs to account
+    const [run] = await db
+      .select({ id: agentRuns.id })
+      .from(agentRuns)
+      .where(
+        and(
+          eq(agentRuns.id, id),
+          eq(agentRuns.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
+
+    if (!run) {
       return c.json(
-        { error: { type: "not_found", message: "Run not found", code: "agent_run_not_found" } },
+        {
+          error: {
+            type: "not_found",
+            message: "Run not found",
+            code: "agent_run_not_found",
+          },
+        },
         404,
       );
     }
 
-    const approved: DraftedReply[] = [];
-    for (const draft of report.draftedReplies) {
-      const key = `${id}:${draft.emailId}`;
-      if (approvedDrafts.has(key)) continue;
-      approvedDrafts.add(key);
-      approved.push(draft);
-      // TODO: actually enqueue these into the schedule-send pipeline.
+    // Find all pending drafts for this run
+    const pendingDrafts = await db
+      .select({ id: agentDrafts.id })
+      .from(agentDrafts)
+      .where(
+        and(
+          eq(agentDrafts.runId, id),
+          eq(agentDrafts.status, "pending"),
+        ),
+      );
+
+    const now = new Date();
+    let approvedCount = 0;
+
+    for (const draft of pendingDrafts) {
+      await db
+        .update(agentDrafts)
+        .set({ status: "approved", approvedAt: now, updatedAt: now })
+        .where(eq(agentDrafts.id, draft.id));
+      approvedCount++;
     }
+
+    // Also approve any edited drafts
+    const editedDrafts = await db
+      .select({ id: agentDrafts.id })
+      .from(agentDrafts)
+      .where(
+        and(
+          eq(agentDrafts.runId, id),
+          eq(agentDrafts.status, "edited"),
+        ),
+      );
+
+    for (const draft of editedDrafts) {
+      await db
+        .update(agentDrafts)
+        .set({ status: "approved", approvedAt: now, updatedAt: now })
+        .where(eq(agentDrafts.id, draft.id));
+      approvedCount++;
+    }
+
+    // TODO: enqueue all approved drafts into the schedule-send pipeline.
 
     return c.json({
       data: {
         runId: id,
-        approvedCount: approved.length,
-        message: `Approved ${approved.length} draft(s) for scheduled send.`,
+        approvedCount,
+        message: `Approved ${approvedCount} draft(s) for scheduled send.`,
       },
     });
   },
 );
 
-// POST /v1/agent/runs/:id/approve-batch — Approve specific drafts by emailId.
+// ─── POST /v1/agent/runs/:id/approve-batch — Approve specific drafts ─────
+
 agent.post(
   "/runs/:id/approve-batch",
   requireScope("agent:write"),
@@ -324,78 +1121,71 @@ agent.post(
     const id = c.req.param("id");
     const auth = c.get("auth");
     const input = getValidatedBody<z.infer<typeof ApproveBatchSchema>>(c);
-    const report = runIndex.get(id);
+    const db = getDatabase();
 
-    if (!report || report.accountId !== auth.accountId) {
+    // Verify run exists and belongs to account
+    const [run] = await db
+      .select({ id: agentRuns.id })
+      .from(agentRuns)
+      .where(
+        and(
+          eq(agentRuns.id, id),
+          eq(agentRuns.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
+
+    if (!run) {
       return c.json(
-        { error: { type: "not_found", message: "Run not found", code: "agent_run_not_found" } },
+        {
+          error: {
+            type: "not_found",
+            message: "Run not found",
+            code: "agent_run_not_found",
+          },
+        },
         404,
       );
     }
 
-    const requested = new Set(input.emailIds);
-    const approved: DraftedReply[] = [];
-    for (const draft of report.draftedReplies) {
-      if (!requested.has(draft.emailId)) continue;
-      const key = `${id}:${draft.emailId}`;
-      if (approvedDrafts.has(key)) continue;
-      approvedDrafts.add(key);
-      approved.push(draft);
+    const now = new Date();
+    const approvedIds: string[] = [];
+
+    for (const draftId of input.draftIds) {
+      const [draft] = await db
+        .select({ id: agentDrafts.id, status: agentDrafts.status })
+        .from(agentDrafts)
+        .where(
+          and(
+            eq(agentDrafts.id, draftId),
+            eq(agentDrafts.runId, id),
+          ),
+        )
+        .limit(1);
+
+      if (
+        draft &&
+        (draft.status === "pending" || draft.status === "edited")
+      ) {
+        await db
+          .update(agentDrafts)
+          .set({
+            status: "approved",
+            approvedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(agentDrafts.id, draftId));
+        approvedIds.push(draftId);
+      }
     }
 
     return c.json({
       data: {
         runId: id,
-        approvedCount: approved.length,
-        approvedIds: approved.map((d) => d.emailId),
+        approvedCount: approvedIds.length,
+        approvedIds,
       },
     });
-  },
-);
-
-// POST /v1/agent/schedule — Configure the recurring schedule.
-agent.post(
-  "/schedule",
-  requireScope("agent:write"),
-  validateBody(ScheduleSchema),
-  (c) => {
-    const auth = c.get("auth");
-    const input = getValidatedBody<z.infer<typeof ScheduleSchema>>(c);
-    const now = new Date();
-    const existing = scheduleStore.get(auth.accountId);
-    const schedule: AgentSchedule = {
-      accountId: auth.accountId,
-      cron: input.cron,
-      timezone: input.timezone,
-      morningHour: input.morningHour,
-      enabled: input.enabled,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    };
-    scheduleStore.set(auth.accountId, schedule);
-    return c.json({ data: schedule }, existing ? 200 : 201);
-  },
-);
-
-// GET /v1/agent/schedule — Read the current schedule.
-agent.get(
-  "/schedule",
-  requireScope("agent:read"),
-  (c) => {
-    const auth = c.get("auth");
-    const schedule = scheduleStore.get(auth.accountId) ?? null;
-    return c.json({ data: schedule });
-  },
-);
-
-// DELETE /v1/agent/schedule — Disable / remove the schedule.
-agent.delete(
-  "/schedule",
-  requireScope("agent:write"),
-  (c) => {
-    const auth = c.get("auth");
-    scheduleStore.delete(auth.accountId);
-    return c.json({ data: { disabled: true } });
   },
 );
 

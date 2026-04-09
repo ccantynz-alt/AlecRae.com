@@ -2,6 +2,7 @@
  * Security Routes — Sender Verification (B5) + Phishing Protection (B6)
  *
  * POST /v1/security/verify-sender       — Verify a sender from email + headers
+ * POST /v1/security/check-sender        — Alias for verify-sender
  * POST /v1/security/check-phishing      — Run a phishing analysis on an email
  * GET  /v1/security/check-email/:id     — Convenience: load email + run both
  * POST /v1/security/report-phishing     — User reports an email as phishing
@@ -140,6 +141,27 @@ const security = new Hono();
 
 security.post(
   "/verify-sender",
+  requireScope("messages:read"),
+  validateBody(VerifySenderSchema),
+  async (c) => {
+    const input = getValidatedBody<z.infer<typeof VerifySenderSchema>>(c);
+    try {
+      const verification: SenderVerification = await verifySender(
+        input.email,
+        input.headers,
+      );
+      return c.json({ data: verification });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+  },
+);
+
+// ─── POST /v1/security/check-sender (alias for verify-sender) ────────────────
+
+security.post(
+  "/check-sender",
   requireScope("messages:read"),
   validateBody(VerifySenderSchema),
   async (c) => {
@@ -301,4 +323,92 @@ security.post(
   },
 );
 
-export { security };
+// ─── Per-email security router (mounted at /v1/emails) ──────────────────────
+//
+// GET /v1/emails/:emailId/security — full security report for a specific email
+
+const emailSecurity = new Hono();
+
+emailSecurity.get(
+  "/:emailId/security",
+  requireScope("messages:read"),
+  async (c) => {
+    const emailId = c.req.param("emailId");
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const [record] = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!record) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: "Email not found",
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    const attachmentRows = await db
+      .select()
+      .from(attachmentsTable)
+      .where(eq(attachmentsTable.emailId, record.id));
+
+    const headers = record.customHeaders ?? {};
+    const html = record.htmlBody ?? "";
+    const text = record.textBody ?? "";
+    const links: PhishingLink[] = html
+      ? extractLinksFromHtml(html)
+      : extractLinksFromText(text);
+
+    const phishingAttachments: PhishingAttachment[] = attachmentRows.map(
+      (a) => ({
+        filename: a.filename,
+        contentType: a.contentType,
+        size: a.size,
+      }),
+    );
+
+    try {
+      const senderVerification = await verifySender(record.fromAddress, headers);
+      const phishing = await analyzePhishing({
+        from: record.fromName
+          ? `${record.fromName} <${record.fromAddress}>`
+          : record.fromAddress,
+        subject: record.subject,
+        body: text || html,
+        links,
+        headers,
+        senderVerification,
+        attachments: phishingAttachments,
+        ...(record.replyToAddress
+          ? { replyTo: record.replyToAddress }
+          : {}),
+      });
+
+      return c.json({
+        data: {
+          emailId: record.id,
+          subject: record.subject,
+          from: record.fromAddress,
+          fromName: record.fromName ?? null,
+          senderVerification,
+          phishing,
+          checkedAt: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+  },
+);
+
+export { security, emailSecurity };

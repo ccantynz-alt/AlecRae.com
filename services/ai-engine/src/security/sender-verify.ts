@@ -22,6 +22,19 @@ export interface SenderVerificationIndicator {
 
 export type SenderTrustLevel = "high" | "medium" | "low" | "suspicious";
 
+export interface TyposquatMatch {
+  readonly brand: string;
+  readonly legitimateDomain: string;
+  readonly distance: number;
+  readonly technique: "levenshtein" | "substring" | "homograph";
+}
+
+export interface DnsAuthRecords {
+  readonly spfRecord: string | null;
+  readonly dmarcRecord: string | null;
+  readonly hasDkimSelector: boolean;
+}
+
 export interface SenderVerification {
   readonly email: string;
   readonly domain: string;
@@ -38,6 +51,8 @@ export interface SenderVerification {
   readonly recentNewsHeadlines: readonly string[];
   readonly trustLevel: SenderTrustLevel;
   readonly indicators: readonly SenderVerificationIndicator[];
+  readonly typosquatMatch: TyposquatMatch | null;
+  readonly dnsAuth: DnsAuthRecords;
 }
 
 // ─── Known services registry ─────────────────────────────────────────────────
@@ -94,6 +109,148 @@ const FREE_EMAIL_PROVIDERS: ReadonlySet<string> = new Set([
   "yandex.com",
   "mail.com",
 ]);
+
+// ─── Brand registry for typosquatting detection ─────────────────────────────
+
+const BRAND_DOMAINS: ReadonlyMap<string, readonly string[]> = new Map([
+  ["paypal", ["paypal.com"]],
+  ["apple", ["apple.com", "icloud.com"]],
+  ["google", ["google.com", "gmail.com"]],
+  ["microsoft", ["microsoft.com", "outlook.com", "office.com", "live.com"]],
+  ["amazon", ["amazon.com", "aws.amazon.com"]],
+  ["netflix", ["netflix.com"]],
+  ["facebook", ["facebook.com", "meta.com"]],
+  ["instagram", ["instagram.com"]],
+  ["chase", ["chase.com"]],
+  ["wellsfargo", ["wellsfargo.com"]],
+  ["bankofamerica", ["bankofamerica.com"]],
+  ["dropbox", ["dropbox.com"]],
+  ["github", ["github.com"]],
+  ["stripe", ["stripe.com"]],
+  ["linkedin", ["linkedin.com"]],
+  ["docusign", ["docusign.com"]],
+  ["slack", ["slack.com"]],
+  ["zoom", ["zoom.us"]],
+  ["twitter", ["twitter.com", "x.com"]],
+  ["coinbase", ["coinbase.com"]],
+  ["binance", ["binance.com"]],
+]);
+
+// ─── Levenshtein distance ───────────────────────────────────────────────────
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  let prev = new Array<number>(n + 1);
+  let curr = new Array<number>(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(
+        (prev[j] ?? 0) + 1,
+        (curr[j - 1] ?? 0) + 1,
+        (prev[j - 1] ?? 0) + cost,
+      );
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n] ?? 0;
+}
+
+function containsNonAscii(s: string): boolean {
+  return /[^\x00-\x7f]/.test(s);
+}
+
+// ─── Typosquatting detection ────────────────────────────────────────────────
+
+function detectTyposquat(domain: string): TyposquatMatch | null {
+  const base = (domain.split(".")[0] ?? "").toLowerCase();
+  if (base.length < 3) return null;
+
+  // Check for homograph/punycode attack first
+  if (domain.startsWith("xn--") || domain.includes(".xn--") || containsNonAscii(domain)) {
+    // Try to find which brand it mimics
+    for (const [brand, brandDomains] of BRAND_DOMAINS) {
+      if (brandDomains.some((d) => domain === d || domain.endsWith(`.${d}`))) return null;
+      if (levenshtein(base, brand) <= 3) {
+        return {
+          brand,
+          legitimateDomain: brandDomains[0] ?? brand,
+          distance: levenshtein(base, brand),
+          technique: "homograph",
+        };
+      }
+    }
+    return {
+      brand: "unknown",
+      legitimateDomain: domain,
+      distance: 0,
+      technique: "homograph",
+    };
+  }
+
+  for (const [brand, brandDomains] of BRAND_DOMAINS) {
+    // Skip if this IS the legitimate domain
+    if (brandDomains.some((d) => domain === d || domain.endsWith(`.${d}`))) return null;
+
+    const distance = levenshtein(base, brand);
+    if (distance > 0 && distance <= 2) {
+      return {
+        brand,
+        legitimateDomain: brandDomains[0] ?? brand,
+        distance,
+        technique: "levenshtein",
+      };
+    }
+    // Substring inclusion: e.g. "paypal-secure.com"
+    if (base.includes(brand) && base !== brand) {
+      return {
+        brand,
+        legitimateDomain: brandDomains[0] ?? brand,
+        distance: 0,
+        technique: "substring",
+      };
+    }
+  }
+  return null;
+}
+
+// ─── DNS-based auth record lookup ───────────────────────────────────────────
+
+async function lookupDnsAuthRecords(domain: string): Promise<DnsAuthRecords> {
+  const [spfResult, dmarcResult, dkimResult] = await Promise.all([
+    withTimeout(dns.resolveTxt(domain), 2_000).catch((): string[][] => []),
+    withTimeout(dns.resolveTxt(`_dmarc.${domain}`), 2_000).catch((): string[][] => []),
+    // Check common DKIM selectors
+    withTimeout(dns.resolveTxt(`default._domainkey.${domain}`), 2_000)
+      .then((): boolean => true)
+      .catch((): Promise<boolean> =>
+        withTimeout(dns.resolveTxt(`google._domainkey.${domain}`), 2_000)
+          .then((): boolean => true)
+          .catch((): Promise<boolean> =>
+            withTimeout(dns.resolveTxt(`selector1._domainkey.${domain}`), 2_000)
+              .then((): boolean => true)
+              .catch((): boolean => false),
+          ),
+      ),
+  ]);
+
+  const spfRecord = spfResult
+    .map((r) => r.join(""))
+    .find((r) => r.startsWith("v=spf1")) ?? null;
+
+  const dmarcRecord = dmarcResult
+    .map((r) => r.join(""))
+    .find((r) => r.startsWith("v=DMARC1")) ?? null;
+
+  return {
+    spfRecord,
+    dmarcRecord,
+    hasDkimSelector: dkimResult,
+  };
+}
 
 // ─── Header parsing — SPF / DKIM / DMARC ─────────────────────────────────────
 
@@ -284,6 +441,8 @@ interface ScoreInputs {
   readonly hasMx: boolean;
   readonly domainAgeDays: number | null;
   readonly isFreeProvider: boolean;
+  readonly typosquat: TyposquatMatch | null;
+  readonly dnsAuth: DnsAuthRecords;
 }
 
 function computeReputation(inputs: ScoreInputs): number {
@@ -308,6 +467,19 @@ function computeReputation(inputs: ScoreInputs): number {
   }
 
   if (inputs.isFreeProvider && !inputs.knownService) score -= 5;
+
+  // Typosquatting is a strong negative signal
+  if (inputs.typosquat) {
+    if (inputs.typosquat.technique === "homograph") score -= 40;
+    else if (inputs.typosquat.technique === "levenshtein" && inputs.typosquat.distance <= 1) score -= 35;
+    else if (inputs.typosquat.technique === "levenshtein") score -= 25;
+    else if (inputs.typosquat.technique === "substring") score -= 20;
+  }
+
+  // DNS auth records: bonus for having SPF/DMARC published even if header check wasn't done
+  if (inputs.dnsAuth.spfRecord && !inputs.auth.spfPass) score += 2;
+  if (inputs.dnsAuth.dmarcRecord && !inputs.auth.dmarcPass) score += 2;
+  if (inputs.dnsAuth.hasDkimSelector && !inputs.auth.dkimPass) score += 2;
 
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -347,12 +519,17 @@ export async function verifySender(
   const knownService = findKnownService(domain);
   const isFreeProvider = FREE_EMAIL_PROVIDERS.has(domain);
 
-  const [hasMx, domainAgeDays, news] = await Promise.all([
+  const typosquat = knownService ? null : detectTyposquat(domain);
+
+  const [hasMx, domainAgeDays, news, dnsAuth] = await Promise.all([
     options.skipDns ? Promise.resolve(true) : hasMxRecords(domain),
     options.skipWhois ? Promise.resolve(null) : lookupDomainAgeDays(domain),
     (options.newsFetcher ?? defaultNewsFetcher)(domain).catch(
       (): readonly NewsHeadline[] => [],
     ),
+    options.skipDns
+      ? Promise.resolve({ spfRecord: null, dmarcRecord: null, hasDkimSelector: false } satisfies DnsAuthRecords)
+      : lookupDnsAuthRecords(domain),
   ]);
 
   const reputationScore = computeReputation({
@@ -361,6 +538,8 @@ export async function verifySender(
     hasMx,
     domainAgeDays,
     isFreeProvider,
+    typosquat,
+    dnsAuth,
   });
 
   const trustLevel = deriveTrustLevel(reputationScore, knownService, auth);
@@ -435,6 +614,40 @@ export async function verifySender(
     });
   }
 
+  // Typosquatting indicators
+  if (typosquat) {
+    const techniqueLabel =
+      typosquat.technique === "homograph"
+        ? "uses internationalized characters mimicking"
+        : typosquat.technique === "levenshtein"
+          ? `is ${typosquat.distance} character${typosquat.distance === 1 ? "" : "s"} away from`
+          : "contains the name of";
+    indicators.push({
+      type: "negative",
+      message: `Possible typosquatting: "${domain}" ${techniqueLabel} ${typosquat.brand} (${typosquat.legitimateDomain})`,
+    });
+  }
+
+  // DNS auth record indicators
+  if (dnsAuth.spfRecord) {
+    indicators.push({
+      type: "positive",
+      message: "Domain publishes an SPF record",
+    });
+  }
+  if (dnsAuth.dmarcRecord) {
+    indicators.push({
+      type: "positive",
+      message: "Domain publishes a DMARC policy",
+    });
+  }
+  if (dnsAuth.hasDkimSelector) {
+    indicators.push({
+      type: "positive",
+      message: "Domain has DKIM DNS records",
+    });
+  }
+
   return {
     email: normalisedEmail,
     domain,
@@ -451,6 +664,8 @@ export async function verifySender(
     recentNewsHeadlines: news.map((n) => n.title),
     trustLevel,
     indicators,
+    typosquatMatch: typosquat,
+    dnsAuth,
   };
 }
 
@@ -461,4 +676,7 @@ export const __internal = {
   computeReputation,
   deriveTrustLevel,
   parseCreationDate,
+  levenshtein,
+  detectTyposquat,
+  lookupDnsAuthRecords,
 };

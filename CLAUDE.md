@@ -649,7 +649,7 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 **Date last updated:** 2026-04-09
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Production deployment (Vercel live, awaiting Craig's infra setup)
-**Build completion:** TIER 1-4 ALL DONE (36/36) + 7 bonus + 14 advanced features (S/A/B/C)
+**Build completion:** TIER 1-4 ALL DONE (36/36) + 7 bonus + 21 advanced features (S/A/B/C)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
 
@@ -681,13 +681,13 @@ If you ship something not in this file, you broke the rules.
 | # | Feature | Why It Wins | Status |
 |---|---|---|---|
 | S1 | **WebGPU client-side AI inference** | Llama 3.1 8B at 41 tok/sec in browser. $0/token. No competitor has this. Full WebLLM engine, Zod-validated API, IndexedDB cache tracking, progress events, `localInfer()` API, React status indicator. | DONE |
-| S2 | **CRDT real-time collaborative drafting** | Two people editing the same email with live cursors (Yjs). API endpoint exists, UI doesn't. Nobody has this in email. | NOT STARTED |
-| S3 | **AI inbox agent (works while you sleep)** | Wakes up overnight, triages, drafts replies, schedules sends. You approve in the morning with one tap. INDUSTRY FIRST. | NOT STARTED |
+| S2 | **CRDT real-time collaborative drafting** | Two people editing the same email with live cursors (Yjs). Full Yjs + Awareness client, WebSocket collab service, DB persistence, UI (editor + panel + avatars), typed API client. INDUSTRY FIRST in email. | DONE |
+| S3 | **AI inbox agent (works while you sleep)** | Wakes up overnight, triages, drafts replies, schedules sends. You approve in the morning with one tap. INDUSTRY FIRST. Full InboxAgent engine (Haiku triage + Sonnet drafting + briefing), 12 API endpoints, DB-persisted runs/drafts/config, per-draft approve/reject/edit, morning briefing, confidence scoring, human-in-the-loop. | DONE |
 | S4 | **Voice cloning for AI replies** | Drafts sound exactly like you (style transfer beyond voice profile). | NOT STARTED |
 | S5 | **Semantic vector search** | "Find the email where someone said something like 'we should consider the budget'" via embeddings. Beyond keyword. | DONE |
 | S6 | **Auto-summary of every newsletter** | AI reduces newsletters to 3 bullets in inbox preview. Full text on demand. | DONE |
 | S7 | **AI "Why is this in my inbox?" explainer** | Click any email → AI explains who this is, history, why it landed here, suggested action. | DONE |
-| S8 | **One-click thread → action items in todo apps** | Native Things, Todoist, Linear, Notion integration. | NOT STARTED |
+| S8 | **One-click thread → action items in todo apps** | Native Things, Todoist, Linear, Notion integration. AI thread extraction, batch create, built-in task list, DB-backed provider configs. | DONE |
 | S9 | **Email thread → meeting transcript link** | If a thread leads to a call, auto-link the recording + transcript. | NOT STARTED |
 | S10 | **Predictive send-time optimization** | AI predicts best send time based on recipient open patterns. | DONE |
 
@@ -701,7 +701,7 @@ If you ship something not in this file, you broke the rules.
 | A4 | **Focus mode** | Hides everything except important emails. Full screen. Timer, progress tracking, Cmd+Shift+F shortcut. | DONE |
 | A5 | **Quick-reply gestures (mobile)** | Brilliant swipe interactions. Mobile already has the pattern, needs polish. | NOT STARTED |
 | A6 | **Drag-to-snooze on mini-calendar** | Drag email to a time slot to snooze. | NOT STARTED |
-| A7 | **Inbox zero rituals (gamification)** | Streaks, achievements (optional). | NOT STARTED |
+| A7 | **Inbox zero rituals (gamification)** | Streaks, achievements (optional). DB schema (user_streaks, user_achievements, daily_stats), 6 API endpoints, 6 React components (celebration, streak counter, achievement badge/panel, weekly stats, toggle). Respects prefers-reduced-motion. | DONE |
 
 ### TIER B — POWER FEATURES COMPETITORS DON'T HAVE
 
@@ -711,8 +711,8 @@ If you ship something not in this file, you broke the rules.
 | B2 | **Email-as-database (SQL over inbox)** | Treat your inbox as a queryable dataset. | NOT STARTED |
 | B3 | **AI unsubscribe agent (browser automation)** | One click → AI navigates the unsubscribe page → confirms. | DONE |
 | B4 | **Auto-translation badges** | "Translated from Spanish" badge with toggle to original. | DONE |
-| B5 | **Real-time sender verification** | Check sender reputation, business legitimacy, recent news inline. | NOT STARTED |
-| B6 | **Phishing protection with explainer** | "This email is suspicious because..." | NOT STARTED |
+| B5 | **Real-time sender verification** | Check sender reputation, business legitimacy, recent news inline. SPF/DKIM/DMARC, DNS auth records, WHOIS domain age, typosquatting detection, trust badges. | DONE |
+| B6 | **Phishing protection with explainer** | "This email is suspicious because..." AI-powered multi-signal analysis, urgency/credential harvesting/URL mismatch/lookalike/homograph/attachment detection, Claude Sonnet explainer, one-click report. | DONE |
 | B7 | **AI calendar slot suggestions in compose** | Type "let's meet next week" → AI suggests slots inline. | DONE |
 | B8 | **Voice-to-voice replies** | Voice messages as attachments + auto-transcription for recipient. | NOT STARTED |
 
@@ -798,9 +798,9 @@ If you ship something not in this file, you broke the rules.
 | Vercel deployment | Configured, deploying from main | 100% |
 | Neon SQL setup | Ready | 100% |
 | CLAUDE.md Bible | Complete | 100% |
-| **Tier S features (industry firsts)** | **S1+S5+S6+S7+S10 done (5/10)** | **50%** |
-| **Tier A features (cutting-edge UX)** | **A1+A4 done (2/7)** | **29%** |
-| **Tier B features (power user)** | **B3+B4+B7 done (3/8)** | **37%** |
+| **Tier S features (industry firsts)** | **S1+S2+S3+S5+S6+S7+S8+S10 done (8/10)** | **80%** |
+| **Tier A features (cutting-edge UX)** | **A1+A4+A7 done (3/7)** | **43%** |
+| **Tier B features (power user)** | **B3+B4+B5+B6+B7 done (5/8)** | **62%** |
 | **Tier C features (polish + trust)** | **C1+C2+C3+C9+C10 done (5/10)** | **50%** |
 
 **Overall: ~95% of launch-ready product. Core platform 100% done. Remaining: Craig infra setup (Neon/Upstash/Stripe/DNS/API keys) + remaining Tier S/A/B/C features.**

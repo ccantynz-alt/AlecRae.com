@@ -5,13 +5,19 @@
  *   - a single shared Y.Doc
  *   - an Awareness instance for cursors and presence
  *   - a set of connected WebSocket clients
+ *   - version history tracking (each update persisted with version + author)
  *
  * Wire protocol is the standard y-websocket sync + awareness protocol so any
  * y-websocket compatible client (incl. our `CollabDraft` class) can connect.
  */
 
 import * as Y from "yjs";
-import { Awareness, encodeAwarenessUpdate, applyAwarenessUpdate, removeAwarenessStates } from "y-protocols/awareness";
+import {
+  Awareness,
+  encodeAwarenessUpdate,
+  applyAwarenessUpdate,
+  removeAwarenessStates,
+} from "y-protocols/awareness";
 import * as syncProtocol from "y-protocols/sync";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
@@ -29,17 +35,31 @@ export interface ClientContext {
   accountId: string;
   /** Draft / room id. */
   draftId: string;
+  /** Session id for collaboration tracking. */
+  sessionId?: string | undefined;
+  /** User display name (for awareness). */
+  userName?: string | undefined;
+  /** User avatar URL. */
+  avatarUrl?: string | undefined;
   /** Per-connection awareness client id (set after first awareness msg). */
-  awarenessClientId?: number;
+  awarenessClientId?: number | undefined;
 }
 
 export interface Room {
   draftId: string;
   accountId: string;
+  sessionId: string | undefined;
   doc: Y.Doc;
   awareness: Awareness;
   clients: Set<ServerWebSocket<ClientContext>>;
+  /** Map of userId -> client ws for quick lookups. */
+  clientsByUser: Map<string, ServerWebSocket<ClientContext>>;
   version: { value: number };
+  /** Track which users are currently connected. */
+  connectedUsers: Map<
+    string,
+    { name: string; avatarUrl: string | undefined; joinedAt: Date }
+  >;
 }
 
 export class RoomManager {
@@ -51,7 +71,11 @@ export class RoomManager {
   }
 
   /** Get-or-create a room and load persisted state on first creation. */
-  async getOrCreateRoom(draftId: string, accountId: string): Promise<Room> {
+  async getOrCreateRoom(
+    draftId: string,
+    accountId: string,
+    sessionId?: string,
+  ): Promise<Room> {
     const existing = this.rooms.get(draftId);
     if (existing) return existing;
 
@@ -63,24 +87,51 @@ export class RoomManager {
     const room: Room = {
       draftId,
       accountId,
+      sessionId,
       doc,
       awareness,
       clients: new Set(),
+      clientsByUser: new Map(),
       version,
+      connectedUsers: new Map(),
     };
 
     // Persist on every doc update (debounced).
-    doc.on("update", (_update: Uint8Array, origin: unknown) => {
+    doc.on("update", (update: Uint8Array, origin: unknown) => {
       // Don't re-persist updates that came from our own load.
       if (origin === "load") return;
-      this.persistence.schedule(draftId, accountId, doc, version);
+
+      // Extract user id from the origin (WebSocket) if available
+      let editedBy: string | undefined;
+      if (
+        origin !== null &&
+        typeof origin === "object" &&
+        "data" in origin
+      ) {
+        const wsOrigin = origin as ServerWebSocket<ClientContext>;
+        editedBy = wsOrigin.data?.userId;
+      }
+
+      this.persistence.schedule(
+        draftId,
+        accountId,
+        doc,
+        version,
+        sessionId,
+        editedBy,
+        update,
+      );
     });
 
     // Broadcast awareness changes to all peers.
     awareness.on(
       "update",
       (
-        { added, updated, removed }: { added: number[]; updated: number[]; removed: number[] },
+        {
+          added,
+          updated,
+          removed,
+        }: { added: number[]; updated: number[]; removed: number[] },
         origin: unknown,
       ) => {
         const changedClients = added.concat(updated, removed);
@@ -159,6 +210,12 @@ export class RoomManager {
 
   addClient(room: Room, ws: ServerWebSocket<ClientContext>): void {
     room.clients.add(ws);
+    room.clientsByUser.set(ws.data.userId, ws);
+    room.connectedUsers.set(ws.data.userId, {
+      name: ws.data.userName ?? "Unknown",
+      avatarUrl: ws.data.avatarUrl,
+      joinedAt: new Date(),
+    });
   }
 
   async removeClient(
@@ -166,6 +223,8 @@ export class RoomManager {
     ws: ServerWebSocket<ClientContext>,
   ): Promise<void> {
     room.clients.delete(ws);
+    room.clientsByUser.delete(ws.data.userId);
+    room.connectedUsers.delete(ws.data.userId);
 
     // Drop this client's awareness entry so peers see them disappear.
     if (ws.data.awarenessClientId !== undefined) {
@@ -184,14 +243,36 @@ export class RoomManager {
           room.accountId,
           room.doc,
           room.version,
+          room.sessionId,
         );
       } catch (err) {
-        console.error(`[collab:room] final flush failed for ${room.draftId}:`, err);
+        console.error(
+          `[collab:room] final flush failed for ${room.draftId}:`,
+          err,
+        );
       }
       room.awareness.destroy();
       room.doc.destroy();
       this.rooms.delete(room.draftId);
     }
+  }
+
+  /** Remove a specific user from a room by user id. */
+  async removeUserFromRoom(
+    draftId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const room = this.rooms.get(draftId);
+    if (!room) return false;
+    const ws = room.clientsByUser.get(userId);
+    if (!ws) return false;
+    try {
+      ws.close(1000, "removed by admin");
+    } catch {
+      // ignore
+    }
+    await this.removeClient(room, ws);
+    return true;
   }
 
   /** Force-close a room (admin / DELETE endpoint). */
@@ -210,6 +291,7 @@ export class RoomManager {
       room.accountId,
       room.doc,
       room.version,
+      room.sessionId,
     );
     room.awareness.destroy();
     room.doc.destroy();
@@ -221,9 +303,67 @@ export class RoomManager {
     return this.rooms.get(draftId);
   }
 
+  /** Get connected users for a given room. */
+  getConnectedUsers(
+    draftId: string,
+  ): Array<{
+    userId: string;
+    name: string;
+    avatarUrl: string | undefined;
+    joinedAt: Date;
+  }> {
+    const room = this.rooms.get(draftId);
+    if (!room) return [];
+    return Array.from(room.connectedUsers.entries()).map(
+      ([userId, info]) => ({
+        userId,
+        ...info,
+      }),
+    );
+  }
+
   stats(): { rooms: number; clients: number } {
     let clients = 0;
     for (const room of this.rooms.values()) clients += room.clients.size;
     return { rooms: this.rooms.size, clients };
+  }
+
+  /** Return extended stats including per-room details. */
+  detailedStats(): {
+    rooms: number;
+    clients: number;
+    roomDetails: Array<{
+      draftId: string;
+      sessionId: string | undefined;
+      clientCount: number;
+      version: number;
+      users: string[];
+    }>;
+  } {
+    const roomDetails: Array<{
+      draftId: string;
+      sessionId: string | undefined;
+      clientCount: number;
+      version: number;
+      users: string[];
+    }> = [];
+    let totalClients = 0;
+
+    for (const room of this.rooms.values()) {
+      totalClients += room.clients.size;
+      roomDetails.push({
+        draftId: room.draftId,
+        sessionId: room.sessionId,
+        clientCount: room.clients.size,
+        version: room.version.value,
+        users: Array.from(room.connectedUsers.keys()),
+      });
+    }
+
+    return {
+      rooms: this.rooms.size,
+      clients: totalClients,
+      roomDetails,
+    };
   }
 }

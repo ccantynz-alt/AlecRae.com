@@ -18,6 +18,19 @@ export { SendTimeSuggestion, type SendTimeSuggestionProps, type SendTimeSlot, ty
 export { UnsubscribeButton, type UnsubscribeButtonProps, type UnsubscribeStatus, type UnsubscribeOption, type UnsubscribeResult } from "./composites/unsubscribe-button";
 export { TranslationBadge, type TranslationBadgeProps, type TranslationBadgeData, type TranslationContent, type TranslationRecord, type TranslationViewMode } from "./composites/translation-badge";
 export { SpellCheckSuggestions, type SpellCheckSuggestionsProps, type SpellCheckIssue, type SpellCheckResult, type SpellCheckRequestFn, type AddToDictionaryFn } from "./composites/spellcheck-suggestions";
+export { InboxZeroCelebration, type InboxZeroCelebrationProps, type NewAchievement } from "./composites/inbox-zero-celebration";
+export { StreakCounter, type StreakCounterProps } from "./composites/streak-counter";
+export { AchievementBadge, type AchievementBadgeProps, type AchievementBadgeData } from "./composites/achievement-badge";
+export { AchievementPanel, type AchievementPanelProps, type AchievementFilter } from "./composites/achievement-panel";
+export { WeeklyStatsCard, type WeeklyStatsCardProps, type DailyStatEntry } from "./composites/weekly-stats-card";
+export { GamificationToggle, type GamificationToggleProps } from "./composites/gamification-toggle";
+export { SenderTrustBadge, type SenderTrustBadgeProps, type SenderVerificationData, type SenderTrustLevel, type SenderVerificationIndicator, type TyposquatMatch, type DnsAuthRecords } from "./composites/sender-trust-badge";
+export { PhishingWarningBanner, type PhishingWarningBannerProps, type PhishingAnalysisData, type PhishingRiskLevel, type PhishingSuggestedAction, type PhishingIndicator, type PhishingSeverity } from "./composites/phishing-warning-banner";
+export { SecurityReport, type SecurityReportProps, type SecurityReportData } from "./composites/security-report";
+export { CollaboratorAvatars, type CollaboratorAvatarsProps, type Collaborator } from "./composites/collaborator-avatars";
+export { CollaborationPanel, type CollaborationPanelProps, type CollabPanelView, type CollabInvite, type CollabHistoryEntry, type CollabSessionInfo, type CollabSessionStatus } from "./composites/collaboration-panel";
+export { CollaborativeEditor, type CollaborativeEditorProps, type CollaborativeEditorConfig, type ConnectionStatus, type AwarenessUserState } from "./composites/collaborative-editor";
+export { ActionItemList, type ActionItemListProps, type ExtractedActionItem, type TaskProvider, type TaskPriority, type ExtractionState, type CreateState } from "./composites/action-item-list";
 
 // Layouts
 export { Sidebar, type SidebarProps, type SidebarNavItem, type SidebarSection } from "./layouts/sidebar";
