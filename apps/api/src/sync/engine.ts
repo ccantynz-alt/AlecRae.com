@@ -142,7 +142,7 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
 const GOOGLE_CLIENT_ID = process.env["GOOGLE_CLIENT_ID"] ?? "";
 const GOOGLE_CLIENT_SECRET = process.env["GOOGLE_CLIENT_SECRET"] ?? "";
-const GOOGLE_REDIRECT_URI = process.env["GOOGLE_REDIRECT_URI"] ?? "https://api.vieanna.com/v1/auth/callback/google";
+const GOOGLE_REDIRECT_URI = process.env["GOOGLE_REDIRECT_URI"] ?? "https://api.48co.ai/v1/auth/callback/google";
 
 export function getGoogleAuthUrl(state: string): string {
   const params = new URLSearchParams({
@@ -438,7 +438,7 @@ const MS_GRAPH_API = "https://graph.microsoft.com/v1.0";
 
 const MS_CLIENT_ID = process.env["MICROSOFT_CLIENT_ID"] ?? "";
 const MS_CLIENT_SECRET = process.env["MICROSOFT_CLIENT_SECRET"] ?? "";
-const MS_REDIRECT_URI = process.env["MICROSOFT_REDIRECT_URI"] ?? "https://api.vieanna.com/v1/auth/callback/microsoft";
+const MS_REDIRECT_URI = process.env["MICROSOFT_REDIRECT_URI"] ?? "https://api.48co.ai/v1/auth/callback/microsoft";
 
 export function getMicrosoftAuthUrl(state: string): string {
   const params = new URLSearchParams({

@@ -9,7 +9,7 @@ export type AuthMethod =
 export interface ClientConfig {
   /** API key or bearer token */
   readonly auth: AuthMethod;
-  /** Base URL for the API. Default: "https://api.vieanna.com" */
+  /** Base URL for the API. Default: "https://api.48co.ai" */
   readonly baseUrl?: string;
   /** Request timeout in milliseconds. Default: 30000 */
   readonly timeout?: number;
@@ -26,13 +26,13 @@ export interface ClientConfig {
  *
  * Usage:
  * ```ts
- * new Emailed({ apiKey: "em_live_...", baseUrl: "https://api.vieanna.com" });
+ * new Emailed({ apiKey: "em_live_...", baseUrl: "https://api.48co.ai" });
  * ```
  */
 export interface SimpleClientConfig {
   /** The API key for authentication */
   readonly apiKey: string;
-  /** Base URL for the API. Default: "https://api.vieanna.com" */
+  /** Base URL for the API. Default: "https://api.48co.ai" */
   readonly baseUrl?: string;
   /** Request timeout in milliseconds. Default: 30000 */
   readonly timeout?: number;

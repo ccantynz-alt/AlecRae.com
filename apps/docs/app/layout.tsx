@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Vienna API Docs",
     description: "Developer documentation for the Vienna email platform.",
-    url: "https://docs.vieanna.com",
+    url: "https://docs.48co.ai",
     siteName: "Vienna Docs",
     type: "website",
   },

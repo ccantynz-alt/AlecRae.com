@@ -4,7 +4,7 @@ Send your first email through the Vienna API in under five minutes.
 
 ## 1. Get an API key
 
-Sign in to the [Vienna dashboard](https://mail.vieanna.com/settings/api), create a new API key, and copy it. Treat it like a password — anyone with the key can send mail on your behalf.
+Sign in to the [Vienna dashboard](https://mail.48co.ai/settings/api), create a new API key, and copy it. Treat it like a password — anyone with the key can send mail on your behalf.
 
 ```bash
 export VIENNA_API_KEY=vn_live_xxxxxxxxxxxxxxxxxxxxxxxx
@@ -19,7 +19,7 @@ See [Domains](/domains) for the full walkthrough.
 ## 3. Send a message
 
 ```bash
-curl https://api.vieanna.com/v1/messages \
+curl https://api.48co.ai/v1/messages \
   -H "Authorization: Bearer $VIENNA_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

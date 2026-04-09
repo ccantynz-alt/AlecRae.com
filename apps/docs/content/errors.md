@@ -32,7 +32,7 @@ Always include the `request_id` when contacting support.
 | `422 Unprocessable Entity` | Semantically invalid (e.g. unverified domain) |
 | `429 Too Many Requests` | Rate limit exceeded — see `Retry-After` |
 | `500 Internal Server Error` | Vienna's fault — retry with backoff |
-| `503 Service Unavailable` | Vienna is degraded — see status.vieanna.com |
+| `503 Service Unavailable` | Vienna is degraded — see status.48co.ai |
 
 ## Common error codes
 

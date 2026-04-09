@@ -48,15 +48,15 @@ export default async function DocPage({ params }: PageProps): Promise<React.JSX.
         <div className="rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm p-6 space-y-3">
           <a
             className="block text-cyan-300 hover:text-cyan-200 underline font-mono text-sm"
-            href="https://api.vieanna.com/openapi.yaml"
+            href="https://api.48co.ai/openapi.yaml"
           >
-            https://api.vieanna.com/openapi.yaml
+            https://api.48co.ai/openapi.yaml
           </a>
           <a
             className="block text-cyan-300 hover:text-cyan-200 underline font-mono text-sm"
-            href="https://api.vieanna.com/openapi.json"
+            href="https://api.48co.ai/openapi.json"
           >
-            https://api.vieanna.com/openapi.json
+            https://api.48co.ai/openapi.json
           </a>
         </div>
         <div className="mt-8">

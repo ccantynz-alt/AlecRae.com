@@ -26,9 +26,9 @@ interface Incident {
 }
 
 const SERVICES: readonly Service[] = [
-  { id: "api", name: "API", description: "api.vieanna.com — REST + tRPC endpoints", status: "operational", uptime90d: 99.998 },
+  { id: "api", name: "API", description: "api.48co.ai — REST + tRPC endpoints", status: "operational", uptime90d: 99.998 },
   { id: "mta", name: "Mail Transport (MTA)", description: "Inbound MX + outbound SMTP", status: "operational", uptime90d: 99.995 },
-  { id: "web", name: "Web App", description: "mail.vieanna.com — Vienna inbox UI", status: "operational", uptime90d: 100.0 },
+  { id: "web", name: "Web App", description: "mail.48co.ai — Vienna inbox UI", status: "operational", uptime90d: 100.0 },
   { id: "search", name: "Search", description: "Meilisearch — full-text & semantic search", status: "operational", uptime90d: 99.991 },
   { id: "ai", name: "AI Services", description: "Claude, Whisper, on-device inference routing", status: "operational", uptime90d: 99.987 },
 ];
@@ -191,8 +191,8 @@ export default function StatusPage(): React.JSX.Element {
             <p className="text-sm text-blue-100/60 mb-4">
               Get notified by email when incidents are reported or resolved. Subscriptions
               are coming soon — for now, follow{" "}
-              <a className="text-cyan-300 hover:text-cyan-200 underline" href="https://vieanna.com">
-                vieanna.com
+              <a className="text-cyan-300 hover:text-cyan-200 underline" href="https://48co.ai">
+                48co.ai
               </a>{" "}
               for updates.
             </p>
@@ -215,7 +215,7 @@ export default function StatusPage(): React.JSX.Element {
         </section>
 
         <footer className="text-center text-xs text-blue-200/40 pt-8 border-t border-white/5">
-          © 2026 Vienna · status.vieanna.com
+          © 2026 Vienna · status.48co.ai
         </footer>
       </div>
     </main>

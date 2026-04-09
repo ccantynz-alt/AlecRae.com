@@ -296,16 +296,22 @@ export function extractCommitments(
         /\b(by|before|deadline)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week|end of (?:day|week|month))/i,
       );
 
-      commitments.push({
+      const commitment: Commitment = {
         id: `commit_${emailId}_${commitments.length}`,
         actor,
         actorName,
         description,
-        deadline: deadlineMatch ? parseRelativeDate(deadlineMatch[2]!) : undefined,
         status: "pending",
         sourceEmailId: emailId,
         sourceQuote: fullMatch.slice(0, 200),
-      });
+      };
+      if (deadlineMatch) {
+        const parsed = parseRelativeDate(deadlineMatch[2]!);
+        if (parsed !== undefined) {
+          commitment.deadline = parsed;
+        }
+      }
+      commitments.push(commitment);
     }
   }
 

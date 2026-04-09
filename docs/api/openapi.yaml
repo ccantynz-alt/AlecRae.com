@@ -8,16 +8,16 @@ info:
   version: 0.1.0
   contact:
     name: Vienna Support
-    url: https://vieanna.com/support
-    email: support@vieanna.com
+    url: https://48co.ai/support
+    email: support@48co.ai
   license:
     name: Proprietary
     url: https://emailed.dev/terms
 
 servers:
-  - url: https://api.vieanna.com
+  - url: https://api.48co.ai
     description: Production
-  - url: https://api.staging.vieanna.com
+  - url: https://api.staging.48co.ai
     description: Staging
   - url: http://localhost:3001
     description: Local development

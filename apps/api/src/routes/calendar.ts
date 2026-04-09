@@ -214,7 +214,7 @@ calendar.post(
     const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     schedulingLinks.set(token, { config: input, accountId: auth.accountId, token });
 
-    const baseUrl = process.env["WEB_URL"] ?? "https://mail.vieanna.com";
+    const baseUrl = process.env["WEB_URL"] ?? "https://mail.48co.ai";
 
     return c.json({
       data: {

@@ -29,7 +29,7 @@ async function main() {
     htmlBody: `
       <h1>Welcome!</h1>
       <p>This is your first email sent through the Emailed platform.</p>
-      <p><a href="https://vieanna.com/docs">Read the docs</a></p>
+      <p><a href="https://48co.ai/docs">Read the docs</a></p>
     `,
     textBody: "Welcome! This is your first email sent through the Emailed platform.",
     tags: ["welcome", "onboarding"],

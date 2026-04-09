@@ -93,7 +93,7 @@ export default async function ChangelogPage(): Promise<React.JSX.Element> {
         <ChangelogList releases={releases} />
 
         <footer className="text-center text-xs text-blue-200/40 pt-16 mt-16 border-t border-white/5">
-          © 2026 Vienna · changelog.vieanna.com
+          © 2026 Vienna · changelog.48co.ai
         </footer>
       </div>
     </main>

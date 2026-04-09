@@ -15,7 +15,7 @@ Native desktop wrapper for Vienna, providing:
 
 ## Architecture
 
-The desktop app is a thin Electron wrapper around `mail.vieanna.com`. All business logic lives in the web app — the desktop wrapper adds native integration only.
+The desktop app is a thin Electron wrapper around `mail.48co.ai`. All business logic lives in the web app — the desktop wrapper adds native integration only.
 
 ```
 ┌─────────────────────────────────────────┐
@@ -34,7 +34,7 @@ The desktop app is a thin Electron wrapper around `mail.vieanna.com`. All busine
 └─────────────────┬───────────────────────┘
                   │ contextBridge
 ┌─────────────────┴───────────────────────┐
-│  Renderer: https://mail.vieanna.com       │
+│  Renderer: https://mail.48co.ai       │
 │  - Uses window.vienna when available     │
 │  - Falls back gracefully in browser      │
 └─────────────────────────────────────────┘

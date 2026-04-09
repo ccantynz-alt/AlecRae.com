@@ -42,3 +42,4 @@ yarn-error.log*
 *.p12
 credentials.json
 secrets.json
+apps/mobile/.expo/

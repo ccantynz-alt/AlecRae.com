@@ -4,7 +4,7 @@ The Vienna API uses bearer tokens (API keys) for authentication. Every request m
 
 ## API keys
 
-API keys are created from the [dashboard](https://mail.vieanna.com/settings/api). Keys come in two flavors:
+API keys are created from the [dashboard](https://mail.48co.ai/settings/api). Keys come in two flavors:
 
 - **`vn_live_*`** — production keys that send real email
 - **`vn_test_*`** — sandbox keys that simulate sends without delivery
@@ -12,7 +12,7 @@ API keys are created from the [dashboard](https://mail.vieanna.com/settings/api)
 ## Sending a key
 
 ```bash
-curl https://api.vieanna.com/v1/messages \
+curl https://api.48co.ai/v1/messages \
   -H "Authorization: Bearer $VIENNA_API_KEY"
 ```
 

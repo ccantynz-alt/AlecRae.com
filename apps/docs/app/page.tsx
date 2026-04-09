@@ -39,7 +39,7 @@ export default function DocsLanding(): React.JSX.Element {
         <div className="rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-sm p-6 font-mono text-sm">
           <div className="text-blue-200/40 mb-2"># Send an email</div>
           <pre className="text-cyan-200 overflow-x-auto">
-{`curl https://api.vieanna.com/v1/messages \\
+{`curl https://api.48co.ai/v1/messages \\
   -H "Authorization: Bearer $VIENNA_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{

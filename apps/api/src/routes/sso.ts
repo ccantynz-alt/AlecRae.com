@@ -42,7 +42,7 @@ const ssoConfigs = new Map<string, SsoConfig>();
 // ─── Environment ──────────���──────────────────────────���────────────────────────
 
 function getBaseUrl(): string {
-  return process.env["API_BASE_URL"] ?? "https://api.vieanna.com";
+  return process.env["API_BASE_URL"] ?? "https://api.48co.ai";
 }
 
 function getJwtSecret(): Uint8Array {
@@ -249,7 +249,7 @@ sso.get("/metadata", (c) => {
     `  <md:Organization>`,
     `    <md:OrganizationName xml:lang="en">Vienna</md:OrganizationName>`,
     `    <md:OrganizationDisplayName xml:lang="en">Vienna Email</md:OrganizationDisplayName>`,
-    `    <md:OrganizationURL xml:lang="en">https://vieanna.com</md:OrganizationURL>`,
+    `    <md:OrganizationURL xml:lang="en">https://48co.ai</md:OrganizationURL>`,
     `  </md:Organization>`,
     `</md:EntityDescriptor>`,
   ].join("\n");
@@ -285,7 +285,7 @@ sso.post("/login", validateBody(SsoLoginSchema), async (c) => {
 
   const relayState = JSON.stringify({
     accountId: input.accountId,
-    returnUrl: input.returnUrl ?? "https://admin.vieanna.com",
+    returnUrl: input.returnUrl ?? "https://admin.48co.ai",
     requestId,
   });
 
@@ -463,7 +463,7 @@ sso.post("/acs", validateBody(SsoAcsSchema), async (c) => {
     ssoIssuer: assertion.issuer,
   });
 
-  const returnUrl = relayState?.returnUrl ?? "https://admin.vieanna.com";
+  const returnUrl = relayState?.returnUrl ?? "https://admin.48co.ai";
 
   // Return token + redirect info
   return c.json({

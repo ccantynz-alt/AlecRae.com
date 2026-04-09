@@ -77,7 +77,7 @@ recall.post(
       .limit(1);
 
     if (existing) {
-      const baseUrl = process.env["API_URL"] ?? "https://api.vieanna.com";
+      const baseUrl = process.env["API_URL"] ?? "https://api.48co.ai";
       return c.json({
         data: {
           emailId: input.emailId,
@@ -105,7 +105,7 @@ recall.post(
       })
       .returning();
 
-    const baseUrl = process.env["API_URL"] ?? "https://api.vieanna.com";
+    const baseUrl = process.env["API_URL"] ?? "https://api.48co.ai";
 
     return c.json({
       data: {
@@ -309,18 +309,20 @@ recall.post(
     const db = getDatabase();
 
     // Check if recall already enabled for this email
-    let [record] = await db
+    const existingRows = await db
       .select()
       .from(recallRecords)
       .where(eq(recallRecords.emailId, input.emailId))
       .limit(1);
+
+    let record = existingRows[0];
 
     // Auto-enable recall if not already enabled
     if (!record) {
       const token = generateSecureToken();
       const id = generateId();
 
-      [record] = await db
+      const insertedRows = await db
         .insert(recallRecords)
         .values({
           id,
@@ -331,6 +333,14 @@ recall.post(
           viewCount: 0,
         })
         .returning();
+
+      record = insertedRows[0];
+      if (!record) {
+        return c.json(
+          { error: { type: "server_error", message: "Failed to create recall record", code: "create_failed" } },
+          500,
+        );
+      }
     }
 
     if (record.accountId !== auth.accountId) {

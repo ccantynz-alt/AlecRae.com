@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Vienna Status",
     description: "Real-time system status for Vienna.",
-    url: "https://status.vieanna.com",
+    url: "https://status.48co.ai",
     siteName: "Vienna Status",
     type: "website",
   },

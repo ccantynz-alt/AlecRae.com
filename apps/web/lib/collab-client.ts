@@ -42,7 +42,7 @@ export type CollabStatus =
   | "disconnected";
 
 export interface CollabDraftOptions {
-  /** Override the collab WS base, e.g. wss://collab.vieanna.com */
+  /** Override the collab WS base, e.g. wss://collab.48co.ai */
   endpoint?: string;
   /** Initial reconnect delay in ms (default 500). */
   baseReconnectDelayMs?: number;
@@ -54,7 +54,7 @@ export interface CollabDraftOptions {
 
 const DEFAULT_ENDPOINT =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_COLLAB_URL) ||
-  "wss://collab.vieanna.com";
+  "wss://collab.48co.ai";
 
 export class CollabDraft {
   private readonly doc: Y.Doc;

@@ -18,7 +18,7 @@ The response includes the DNS records you need to add.
 
 | Type | Name | Value |
 |---|---|---|
-| TXT | `yourdomain.com` | `v=spf1 include:_spf.vieanna.com ~all` |
+| TXT | `yourdomain.com` | `v=spf1 include:_spf.48co.ai ~all` |
 | TXT | `vienna._domainkey.yourdomain.com` | `v=DKIM1; k=rsa; p=...` |
 | TXT | `_dmarc.yourdomain.com` | `v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com` |
 | MX | `yourdomain.com` | (only if receiving inbound) |
@@ -33,7 +33,7 @@ Vienna checks DNS, validates SPF/DKIM signatures, and marks the domain as `verif
 
 ## Tracking subdomains
 
-Vienna can rewrite links and pixels for open and click tracking. To avoid the deliverability cost of using `vieanna.com` URLs, point a `CNAME` like `track.yourdomain.com → t.vieanna.com` and set it as your tracking host.
+Vienna can rewrite links and pixels for open and click tracking. To avoid the deliverability cost of using `48co.ai` URLs, point a `CNAME` like `track.yourdomain.com → t.48co.ai` and set it as your tracking host.
 
 ## Removing a domain
 

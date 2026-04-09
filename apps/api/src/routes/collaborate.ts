@@ -21,8 +21,8 @@ import { validateBody, getValidatedBody } from "../middleware/validator.js";
 
 // ─── Collab service config ───────────────────────────────────────────────────
 
-const COLLAB_WS_URL = process.env.COLLAB_WS_URL ?? "wss://collab.vieanna.com";
-const COLLAB_HTTP_URL = process.env.COLLAB_HTTP_URL ?? "https://collab.vieanna.com";
+const COLLAB_WS_URL = process.env.COLLAB_WS_URL ?? "wss://collab.48co.ai";
+const COLLAB_HTTP_URL = process.env.COLLAB_HTTP_URL ?? "https://collab.48co.ai";
 const COLLAB_JWT_SECRET = new TextEncoder().encode(
   process.env.COLLAB_JWT_SECRET ?? process.env.JWT_SECRET ?? "dev-collab-secret-change-me",
 );

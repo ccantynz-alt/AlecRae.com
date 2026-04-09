@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Vienna Changelog",
     description: "Every Vienna release.",
-    url: "https://changelog.vieanna.com",
+    url: "https://changelog.48co.ai",
     siteName: "Vienna Changelog",
     type: "website",
   },

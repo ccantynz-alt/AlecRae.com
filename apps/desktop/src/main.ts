@@ -1,7 +1,7 @@
 /**
  * Vienna Desktop — Electron Main Process
  *
- * Native desktop wrapper for mail.vieanna.com providing:
+ * Native desktop wrapper for mail.48co.ai providing:
  *   - System tray + dock badge with unread count
  *   - Native notifications
  *   - Auto-updater
@@ -44,7 +44,7 @@ function resolveAppPath(...segments: string[]): string {
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 const WEB_APP_URL: string =
-  process.env["VIENNA_APP_URL"] ?? "https://mail.vieanna.com";
+  process.env["VIENNA_APP_URL"] ?? "https://mail.48co.ai";
 const IS_DEV: boolean = process.env["NODE_ENV"] === "development";
 
 // ─── Store Types ────────────────────────────────────────────────────────────
@@ -217,8 +217,8 @@ function createMainWindow(): void {
   // Open external links in the default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (
-      url.startsWith("https://mail.vieanna.com") ||
-      url.startsWith("https://vieanna.com")
+      url.startsWith("https://mail.48co.ai") ||
+      url.startsWith("https://48co.ai")
     ) {
       return { action: "allow" as const };
     }
@@ -490,7 +490,7 @@ function createMenu(): void {
         {
           label: "Vienna Documentation",
           click: (): void => {
-            void shell.openExternal("https://docs.vieanna.com");
+            void shell.openExternal("https://docs.48co.ai");
           },
         },
         {
