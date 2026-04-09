@@ -357,7 +357,7 @@ export class PostgresMessageStore implements MessageStore {
       fromAddress: "unknown@local",
       subject: "Appended message",
       textBody: message.rawMessage,
-      status: mailbox.toLowerCase() === "drafts" ? "draft" as any : "delivered" as any,
+      status: mailbox.toLowerCase() === "drafts" ? "queued" : "delivered", // "draft" not in enum; "queued" = not yet sent
       createdAt: message.internalDate,
       updatedAt: new Date(),
       tags: [],
@@ -413,7 +413,7 @@ export class PostgresMessageStore implements MessageStore {
       case "all":
         return true;
       case "uid":
-        return (criteria as any).uids?.includes(uid) ?? true;
+        return criteria.value.includes(String(uid));
       case "seen":
         return getFlags(row.id).includes("\\Seen");
       case "unseen":
@@ -441,23 +441,23 @@ export class PostgresMessageStore implements MessageStore {
       case "recent":
         return getFlags(row.id).includes("\\Recent");
       case "from":
-        return row.fromAddress.toLowerCase().includes(((criteria as any).value ?? "").toLowerCase());
+        return row.fromAddress.toLowerCase().includes(criteria.value.toLowerCase());
       case "to": {
         const toStr = JSON.stringify(row).toLowerCase();
-        return toStr.includes(((criteria as any).value ?? "").toLowerCase());
+        return toStr.includes(criteria.value.toLowerCase());
       }
       case "subject":
-        return row.subject.toLowerCase().includes(((criteria as any).value ?? "").toLowerCase());
+        return row.subject.toLowerCase().includes(criteria.value.toLowerCase());
       case "body":
       case "text":
-        return (row.textBody ?? "").toLowerCase().includes(((criteria as any).value ?? "").toLowerCase());
+        return (row.textBody ?? "").toLowerCase().includes(criteria.value.toLowerCase());
       case "before":
-        return row.createdAt < new Date((criteria as any).date);
+        return row.createdAt < criteria.value;
       case "since":
-        return row.createdAt >= new Date((criteria as any).date);
+        return row.createdAt >= criteria.value;
       case "on": {
         const d = row.createdAt;
-        const target = new Date((criteria as any).date);
+        const target = criteria.value;
         return (
           d.getFullYear() === target.getFullYear() &&
           d.getMonth() === target.getMonth() &&
@@ -465,18 +465,18 @@ export class PostgresMessageStore implements MessageStore {
         );
       }
       case "larger":
-        return Buffer.byteLength(row.textBody ?? "", "utf-8") > ((criteria as any).size ?? 0);
+        return Buffer.byteLength(row.textBody ?? "", "utf-8") > criteria.value;
       case "smaller":
-        return Buffer.byteLength(row.textBody ?? "", "utf-8") < ((criteria as any).size ?? Infinity);
+        return Buffer.byteLength(row.textBody ?? "", "utf-8") < criteria.value;
       case "not":
-        return !this.matchesCriteria(row, uid, (criteria as any).criteria);
+        return !this.matchesCriteria(row, uid, criteria.criteria);
       case "or":
         return (
-          this.matchesCriteria(row, uid, (criteria as any).left) ||
-          this.matchesCriteria(row, uid, (criteria as any).right)
+          this.matchesCriteria(row, uid, criteria.left) ||
+          this.matchesCriteria(row, uid, criteria.right)
         );
       case "and":
-        return ((criteria as any).criteria as ImapSearchCriteria[]).every((c) =>
+        return criteria.criteria.every((c) =>
           this.matchesCriteria(row, uid, c),
         );
       default:
