@@ -109,7 +109,7 @@ export class CollabDraft {
   private readonly endpoint: string;
   private readonly baseDelay: number;
   private readonly maxDelay: number;
-  private readonly onStatus?: (status: CollabStatus) => void;
+  private readonly onStatus: ((status: CollabStatus) => void) | undefined;
 
   constructor(opts: CollabDraftOptions = {}) {
     this.doc = new Y.Doc();
@@ -384,8 +384,8 @@ export class CollabDraft {
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, MESSAGE_SYNC);
         syncProtocol.readSyncMessage(
-          encoder,
           decoder,
+          encoder,
           this.doc,
           "remote",
         );

@@ -1052,3 +1052,130 @@ export const taskApi = {
     );
   },
 };
+
+// ─── Collaboration (S2: CRDT collaborative drafting) ─────────────────────
+
+export interface CollaborationSession {
+  id: string;
+  draftId: string;
+  title: string;
+  status: "active" | "closed" | "archived";
+  currentVersion: number;
+  maxCollaborators: number;
+  createdAt: string;
+}
+
+export interface CollaborationParticipant {
+  id: string;
+  userId: string;
+  userName: string;
+  avatarUrl: string | null;
+  role: "owner" | "editor" | "viewer";
+  isOnline: boolean;
+  cursorColor: string;
+}
+
+export interface CollaborationInvite {
+  id: string;
+  inviteeEmail: string;
+  role: "owner" | "editor" | "viewer";
+  status: "pending" | "accepted" | "declined" | "revoked";
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface CollaborationHistoryEntry {
+  id: string;
+  version: number;
+  editedBy: string | null;
+  editorName: string | null;
+  updateSize: number;
+  summary: string | null;
+  createdAt: string;
+}
+
+export interface CreateSessionResponse {
+  sessionId: string;
+  draftId: string;
+  websocketUrl: string;
+  token: string;
+  features: string[];
+}
+
+export interface SessionDetailsResponse {
+  session: CollaborationSession;
+  participants: CollaborationParticipant[];
+  pendingInvites: CollaborationInvite[];
+  connection: { websocketUrl: string; token: string } | null;
+}
+
+export const collaborationApi = {
+  createSession(payload: {
+    draftId: string;
+    title?: string;
+    maxCollaborators?: number;
+  }): Promise<{ data: CreateSessionResponse }> {
+    return apiFetch<{ data: CreateSessionResponse }>(
+      "/v1/collaborate/draft",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  getSession(
+    sessionId: string,
+  ): Promise<{ data: SessionDetailsResponse }> {
+    return apiFetch<{ data: SessionDetailsResponse }>(
+      `/v1/collaborate/draft/${sessionId}`,
+    );
+  },
+
+  invite(
+    sessionId: string,
+    payload: { email: string; role?: "editor" | "viewer" },
+  ): Promise<{
+    data: {
+      inviteId: string;
+      sessionId: string;
+      inviteeEmail: string;
+      role: string;
+      expiresAt: string;
+    };
+  }> {
+    return apiFetch(
+      `/v1/collaborate/draft/${sessionId}/invite`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  removeCollaborator(
+    sessionId: string,
+    userId: string,
+  ): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>(
+      `/v1/collaborate/draft/${sessionId}/collaborator/${userId}`,
+      { method: "DELETE" },
+    );
+  },
+
+  getHistory(
+    sessionId: string,
+    params?: { limit?: number; offset?: number },
+  ): Promise<{ data: { entries: CollaborationHistoryEntry[]; total: number } }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", params.limit.toString());
+    if (params?.offset) qs.set("offset", params.offset.toString());
+    const query = qs.toString();
+    return apiFetch(
+      `/v1/collaborate/draft/${sessionId}/history${query ? `?${query}` : ""}`,
+    );
+  },
+
+  closeSession(
+    draftId: string,
+  ): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>(
+      `/v1/collaborate/drafts/${draftId}/collaborate`,
+      { method: "DELETE" },
+    );
+  },
+};
