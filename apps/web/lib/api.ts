@@ -1466,3 +1466,110 @@ export const voiceCloneApi = {
     );
   },
 };
+
+// ─── Email Query (B2: Email-as-Database) ───────────────────────────────────
+
+export interface QueryExecuteResponse {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  executionTimeMs: number;
+  query: {
+    original: string;
+    parsed: Record<string, unknown>;
+  };
+}
+
+export interface QueryExplainResponse {
+  description: string;
+  estimatedScope: string;
+  warnings: string[];
+  parsedQuery: Record<string, unknown>;
+}
+
+export interface QueryHistoryEntryData {
+  id: string;
+  queryText: string;
+  queryType: "natural" | "sql";
+  resultCount: number | null;
+  executionTimeMs: number | null;
+  createdAt: string;
+}
+
+export interface SavedQueryData {
+  id: string;
+  name: string;
+  queryText: string;
+  queryType: "natural" | "sql";
+  lastRunAt: string | null;
+  runCount: number;
+  createdAt: string;
+}
+
+export const emailQueryApi = {
+  /** Execute a query against the user's inbox. */
+  execute(payload: {
+    query: string;
+    queryType?: "natural" | "sql";
+    limit?: number;
+    offset?: number;
+    format?: "json" | "csv";
+  }): Promise<{ data: QueryExecuteResponse }> {
+    return apiFetch<{ data: QueryExecuteResponse }>("/v1/query", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Explain what a query would do without executing it. */
+  explain(payload: {
+    query: string;
+    queryType?: "natural" | "sql";
+  }): Promise<{ data: QueryExplainResponse }> {
+    return apiFetch<{ data: QueryExplainResponse }>("/v1/query/explain", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Get recent query history. */
+  getHistory(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ data: { entries: QueryHistoryEntryData[]; total: number } }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", params.limit.toString());
+    if (params?.offset) qs.set("offset", params.offset.toString());
+    const query = qs.toString();
+    return apiFetch(`/v1/query/history${query ? `?${query}` : ""}`);
+  },
+
+  /** Get saved queries. */
+  getSavedQueries(): Promise<{
+    data: { queries: SavedQueryData[]; total: number };
+  }> {
+    return apiFetch("/v1/query/saved");
+  },
+
+  /** Save a query. */
+  saveQuery(payload: {
+    name: string;
+    queryText: string;
+    queryType?: "natural" | "sql";
+  }): Promise<{ data: SavedQueryData }> {
+    return apiFetch<{ data: SavedQueryData }>("/v1/query/save", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Delete a saved query. */
+  deleteSavedQuery(
+    id: string,
+  ): Promise<{ data: { deleted: boolean; id: string } }> {
+    return apiFetch<{ data: { deleted: boolean; id: string } }>(
+      `/v1/query/saved/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+};
