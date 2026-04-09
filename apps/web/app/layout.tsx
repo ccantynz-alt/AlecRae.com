@@ -1,44 +1,10 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
+import { ThemeProvider, Box } from "@emailed/ui";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vienna — Email, finally.",
-  description:
-    "The fastest, smartest, most beautiful email client ever made. One subscription. All your accounts. AI in every layer.",
-  applicationName: "Vienna",
-  authors: [{ name: "Vienna" }],
-  keywords: [
-    "email client",
-    "Gmail alternative",
-    "Outlook alternative",
-    "AI email",
-    "email app",
-    "Vienna",
-  ],
-  openGraph: {
-    title: "Vienna — Email, finally.",
-    description:
-      "The fastest, smartest, most beautiful email client ever made.",
-    url: "https://48co.ai",
-    siteName: "Vienna",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Vienna — Email, finally.",
-    description:
-      "The fastest, smartest, most beautiful email client ever made.",
-  },
-  robots: {
-    index: true,
-    follow: true,
-  },
-};
-
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  themeColor: "#1e3a8a",
+  title: "Vieanna — The Email Client That Kills Gmail",
+  description: "Email hasn't been reinvented since 2004. Vieanna is the AI-powered email client with on-device intelligence, zero-latency inbox, and the smartest compose ever built.",
 };
 
 export default function RootLayout({
@@ -47,10 +13,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="h-full bg-slate-950 text-white font-sans">
-        {children}
-      </body>
-    </html>
+    <Box as="html" lang="en" className="h-full antialiased">
+      <Box as="body" className="h-full bg-surface text-content font-sans">
+        <ThemeProvider mode="light">
+          {children}
+        </ThemeProvider>
+      </Box>
+    </Box>
   );
 }

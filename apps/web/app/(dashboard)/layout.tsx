@@ -1,20 +1,13 @@
 "use client";
 
-import type { JSX } from "react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
-import { Box, Text, type SidebarSection } from "@emailed/ui";
-import { AnimatedSidebar, type AnimatedSidebarSection } from "../../components/AnimatedSidebar";
-import { AnimatedPage } from "../../components/AnimatedPage";
-import { FocusModeOverlay, type FocusModeOverlayEmail } from "../../components/FocusModeOverlay";
-import { FocusModeToggle } from "../../components/FocusModeToggle";
-import { useFocusMode } from "../../lib/focus-mode";
-import { authApi } from "../../lib/api";
+import { Box, Text, Sidebar, type SidebarNavItem, type SidebarSection } from "@emailed/ui";
 
-const navigationSections: AnimatedSidebarSection[] = [
+const navigationSections: SidebarSection[] = [
   {
     items: [
-      { id: "inbox", label: "Inbox", href: "/inbox" },
+      { id: "inbox", label: "Inbox", href: "/inbox", badge: 12 },
       { id: "compose", label: "Compose", href: "/compose" },
     ],
   },
@@ -28,52 +21,15 @@ const navigationSections: AnimatedSidebarSection[] = [
   },
 ];
 
-interface UserInfo {
-  name: string;
-  email: string;
-}
-
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
-}): JSX.Element {
+}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [user, setUser] = useState<UserInfo>({ name: "User", email: "" });
-  const hydrate = useFocusMode((s) => s.hydrate);
-  const toggleFocusMode = useFocusMode((s) => s.toggleFocusMode);
 
-  // Hydrate focus mode state from IndexedDB on mount
-  useEffect(() => {
-    void hydrate();
-  }, [hydrate]);
-
-  // Register Cmd+Shift+F keyboard shortcut for focus mode
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent): void => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        void toggleFocusMode();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleFocusMode]);
-
-  useEffect(() => {
-    authApi
-      .me()
-      .then((res) => {
-        setUser({ name: res.data.name, email: res.data.email });
-      })
-      .catch(() => {
-        // Fallback to stored token info or defaults
-      });
-  }, []);
-
-  const sectionsWithActive: AnimatedSidebarSection[] = navigationSections.map((section) => ({
+  const sectionsWithActive: SidebarSection[] = navigationSections.map((section) => ({
     ...section,
     items: section.items.map((item) => ({
       ...item,
@@ -81,17 +37,10 @@ export default function DashboardLayout({
     })),
   }));
 
-  const initials = user.name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || "U";
-
   const brand = (
     <Box className="flex items-center justify-between">
       <Text variant="heading-md" className="text-brand-600 font-bold">
-        Vienna
+        Vieanna
       </Text>
       <Box
         as="button"
@@ -106,69 +55,37 @@ export default function DashboardLayout({
     </Box>
   );
 
-  const handleLogout = (): void => {
-    authApi.logout();
-    window.location.href = "/login";
-  };
-
   const footer = (
     <Box className="flex items-center gap-3">
       <Box className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center">
         <Text variant="caption" className="text-brand-700 font-semibold">
-          {initials}
+          U
         </Text>
       </Box>
       {!collapsed && (
-        <>
-          <Box className="flex-1 min-w-0">
-            <Text variant="body-sm" className="truncate font-medium">
-              {user.name}
-            </Text>
-            <Text variant="caption" className="truncate">
-              {user.email}
-            </Text>
-          </Box>
-          <Box
-            as="button"
-            className="text-content-tertiary hover:text-content transition-colors p-1"
-            onClick={handleLogout}
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <Text as="span" variant="caption">
-              Sign out
-            </Text>
-          </Box>
-        </>
+        <Box className="flex-1 min-w-0">
+          <Text variant="body-sm" className="truncate font-medium">
+            User
+          </Text>
+          <Text variant="caption" className="truncate">
+            user@emailed.dev
+          </Text>
+        </Box>
       )}
     </Box>
   );
 
-  // Placeholder email list for focus mode overlay.
-  // In production this comes from the inbox store / IndexedDB cache.
-  // The overlay filters them by the active focus criteria.
-  const focusModeEmails: FocusModeOverlayEmail[] = [];
-
   return (
     <Box className="flex h-full">
-      <AnimatedSidebar
+      <Sidebar
         brand={brand}
         sections={sectionsWithActive}
         footer={footer}
         collapsed={collapsed}
       />
       <Box as="main" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Toolbar bar with focus mode toggle */}
-        <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">
-          <FocusModeToggle />
-        </Box>
-        <AnimatedPage pageKey={pathname ?? "dashboard"} mode="slide" className="flex flex-col flex-1 min-h-0">
-          {children}
-        </AnimatedPage>
+        {children}
       </Box>
-
-      {/* Focus Mode Overlay — covers entire screen when active */}
-      <FocusModeOverlay emails={focusModeEmails} />
     </Box>
   );
 }

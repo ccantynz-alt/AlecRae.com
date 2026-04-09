@@ -2,120 +2,25 @@
   "name": "@emailed/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Vienna Desktop \u2014 Native email client for Mac, Windows, Linux",
-  "type": "module",
-  "main": "dist/main.cjs",
+  "description": "Emailed Desktop — Native email client powered by AI",
+  "main": "dist/main.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "start": "electron .",
-    "pack": "electron-vite build && electron-builder --dir",
-    "dist": "electron-vite build && electron-builder",
-    "dist:mac": "electron-vite build && electron-builder --mac",
-    "dist:win": "electron-vite build && electron-builder --win",
-    "dist:linux": "electron-vite build && electron-builder --linux",
+    "dev": "tsc && electron dist/main.js",
+    "build": "tsc",
+    "package": "electron-builder",
+    "package:mac": "electron-builder --mac",
+    "package:win": "electron-builder --win",
+    "package:linux": "electron-builder --linux",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
-    "clean": "rm -rf dist out"
+    "clean": "rm -rf dist"
   },
   "dependencies": {
-    "electron-store": "^10.0.0",
     "electron-updater": "^6.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0",
-    "electron-vite": "^2.3.0",
-    "typescript": "^5.7.0",
-    "vite": "^6.0.0"
-  },
-  "build": {
-    "appId": "com.vienna.desktop",
-    "productName": "Vienna",
-    "copyright": "Copyright \u00a9 2026 Vienna",
-    "directories": {
-      "buildResources": "build",
-      "output": "out"
-    },
-    "files": [
-      "dist/**/*",
-      "package.json"
-    ],
-    "mac": {
-      "category": "public.app-category.productivity",
-      "icon": "build/icon.icns",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ]
-    },
-    "win": {
-      "icon": "build/icon.ico",
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "linux": {
-      "icon": "build/icon.png",
-      "category": "Office",
-      "target": [
-        {
-          "target": "AppImage",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "deb",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "rpm",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "ccantynz-alt",
-      "repo": "emailed"
-    }
-  },
-  "engines": {
-    "node": ">=22.0.0"
+    "electron-builder": "^25.1.0",
+    "typescript": "^5.7.0"
   }
 }

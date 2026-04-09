@@ -1,21 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Box, Text, Button, Input, Card, CardContent } from "@emailed/ui";
-import { authApi } from "../../../lib/api";
-import {
-  isWebAuthnSupported,
-  isPlatformAuthenticatorAvailable,
-  getPasskeyAssertion,
-} from "../../../lib/webauthn";
 
-export default function LoginPage(): React.ReactElement {
+export default function LoginPage() {
   return (
     <Box className="min-h-full flex items-center justify-center px-4 py-12 bg-surface-secondary">
       <Box className="w-full max-w-md">
         <Box className="text-center mb-8">
           <Text variant="heading-lg" className="text-brand-600 font-bold mb-2">
-            Vienna
+            Vieanna
           </Text>
           <Text variant="display-sm">Welcome back</Text>
           <Text variant="body-md" muted className="mt-2">
@@ -35,7 +29,7 @@ export default function LoginPage(): React.ReactElement {
 
         <Box className="text-center mt-6">
           <Text variant="body-sm" muted>
-            Don&apos;t have an account?{" "}
+            Don't have an account?{" "}
           </Text>
           <Box as="a" href="/register" className="inline">
             <Text as="span" variant="body-sm" className="text-brand-600 hover:text-brand-700 font-medium">
@@ -48,87 +42,104 @@ export default function LoginPage(): React.ReactElement {
   );
 }
 
-function PasskeyLogin(): React.ReactElement {
-  const [loading, setLoading] = useState(false);
+function PasskeyLogin() {
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [supported, setSupported] = useState<boolean>(true);
 
-  useEffect(() => {
-    async function checkSupport(): Promise<void> {
-      const webauthnSupported = isWebAuthnSupported();
-      if (!webauthnSupported) {
-        setSupported(false);
-        return;
-      }
-      const platformAvailable = await isPlatformAuthenticatorAvailable();
-      setSupported(platformAvailable);
-    }
-    void checkSupport();
-  }, []);
-
-  const handlePasskeyLogin = async (): Promise<void> => {
-    setLoading(true);
+  const handlePasskeyLogin = useCallback(async () => {
+    setIsLoading(true);
     setError(null);
 
     try {
-      // Step 1: Request a challenge from the server
-      const challengeResponse = await authApi.passkeyLoginChallenge();
+      // Check if WebAuthn is supported
+      if (!window.PublicKeyCredential) {
+        setError("Passkeys are not supported in this browser.");
+        return;
+      }
 
-      // Step 2: Run the WebAuthn ceremony in the browser
-      const assertion = await getPasskeyAssertion(challengeResponse.publicKey);
-
-      // Step 3: Send the assertion to the server for verification
-      await authApi.passkeyLoginVerify({
-        challengeId: challengeResponse.challengeId,
-        credential: assertion,
+      // Request authentication options from server
+      const optionsResponse = await fetch("/api/auth/passkey/options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
 
-      // Step 4: Redirect to inbox on success
-      window.location.href = "/inbox";
+      if (!optionsResponse.ok) {
+        setError("Failed to start passkey authentication.");
+        return;
+      }
+
+      const options = await optionsResponse.json();
+
+      // Convert base64 challenge to ArrayBuffer
+      options.challenge = Uint8Array.from(atob(options.challenge), (c) => c.charCodeAt(0));
+      if (options.allowCredentials) {
+        for (const cred of options.allowCredentials) {
+          cred.id = Uint8Array.from(atob(cred.id), (c) => c.charCodeAt(0));
+        }
+      }
+
+      // Prompt user for passkey
+      const credential = await navigator.credentials.get({
+        publicKey: options,
+      }) as PublicKeyCredential;
+
+      if (!credential) {
+        setError("Authentication was cancelled.");
+        return;
+      }
+
+      const authResponse = credential.response as AuthenticatorAssertionResponse;
+
+      // Send credential to server for verification
+      const verifyResponse = await fetch("/api/auth/passkey/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: credential.id,
+          rawId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+          response: {
+            authenticatorData: btoa(String.fromCharCode(...new Uint8Array(authResponse.authenticatorData))),
+            clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(authResponse.clientDataJSON))),
+            signature: btoa(String.fromCharCode(...new Uint8Array(authResponse.signature))),
+          },
+          type: credential.type,
+        }),
+      });
+
+      if (verifyResponse.ok) {
+        window.location.href = "/inbox";
+      } else {
+        const data = await verifyResponse.json();
+        setError(data.error ?? "Passkey verification failed.");
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
-        setError("Passkey authentication was cancelled. Please try again.");
-      } else if (err instanceof DOMException && err.name === "AbortError") {
-        setError("Passkey authentication timed out. Please try again.");
+        setError("Authentication was cancelled.");
       } else {
-        setError(err instanceof Error ? err.message : "Passkey login failed");
+        setError("An unexpected error occurred. Please try again.");
       }
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
-
-  if (!supported) {
-    return (
-      <Box className="space-y-3">
-        <Text variant="label">Passkey</Text>
-        <Text variant="caption" className="text-center" muted>
-          Passkey authentication is not available on this device. Please use email and password.
-        </Text>
-      </Box>
-    );
-  }
+  }, []);
 
   return (
     <Box className="space-y-3">
       <Text variant="label">Recommended</Text>
-      {error && (
-        <Box className="p-3 rounded-lg bg-red-50 border border-red-200">
-          <Text variant="body-sm" className="text-red-800">
-            {error}
-          </Text>
-        </Box>
-      )}
       <Button
         variant="primary"
         size="lg"
         className="w-full"
         onClick={handlePasskeyLogin}
-        loading={loading}
-        disabled={loading}
+        disabled={isLoading}
       >
-        {loading ? "Authenticating..." : "Sign in with Passkey"}
+        {isLoading ? "Authenticating..." : "Sign in with Passkey"}
       </Button>
+      {error && (
+        <Text variant="caption" className="text-center text-red-600">
+          {error}
+        </Text>
+      )}
       <Text variant="caption" className="text-center">
         Use your fingerprint, face, or security key for instant secure access.
       </Text>
@@ -138,7 +149,7 @@ function PasskeyLogin(): React.ReactElement {
 
 PasskeyLogin.displayName = "PasskeyLogin";
 
-function Divider(): React.ReactElement {
+function Divider() {
   return (
     <Box className="flex items-center gap-4">
       <Box className="flex-1 h-px bg-border" />
@@ -152,53 +163,20 @@ function Divider(): React.ReactElement {
 
 Divider.displayName = "Divider";
 
-function EmailLogin(): React.ReactElement {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
-    if (!email || !password) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      await authApi.login(email, password);
-      window.location.href = "/inbox";
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+function EmailLogin() {
   return (
-    <Box as="form" className="space-y-4" onSubmit={handleSubmit}>
-      {error && (
-        <Box className="p-3 rounded-lg bg-red-50 border border-red-200">
-          <Text variant="body-sm" className="text-red-800">
-            {error}
-          </Text>
-        </Box>
-      )}
+    <Box as="form" className="space-y-4">
       <Input
         label="Email address"
         variant="email"
         placeholder="you@example.com"
         autoComplete="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
       />
       <Input
         label="Password"
         variant="password"
         placeholder="Enter your password"
         autoComplete="current-password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
       />
       <Box className="flex items-center justify-between">
         <Box className="flex items-center gap-2">
@@ -213,14 +191,8 @@ function EmailLogin(): React.ReactElement {
           </Text>
         </Box>
       </Box>
-      <Button
-        variant="secondary"
-        size="lg"
-        className="w-full"
-        type="submit"
-        disabled={loading || !email || !password}
-      >
-        {loading ? "Signing in..." : "Sign in with Email"}
+      <Button variant="secondary" size="lg" className="w-full" type="submit">
+        Sign in with Email
       </Button>
     </Box>
   );

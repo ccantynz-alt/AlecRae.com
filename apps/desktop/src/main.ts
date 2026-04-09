@@ -1,700 +1,426 @@
 /**
- * Vienna Desktop — Electron Main Process
+ * Emailed Desktop — Main Process
  *
- * Native desktop wrapper for mail.48co.ai providing:
- *   - System tray + dock badge with unread count
- *   - Native notifications
- *   - Auto-updater
- *   - Keyboard shortcut registration (global)
- *   - Window state persistence
- *   - Deep-link handling (mailto:)
- *   - Secure session storage
+ * Creates the main BrowserWindow pointing to the Emailed web app,
+ * manages system tray, native notifications, deep link handling,
+ * auto-updates, dock badge, and global keyboard shortcuts.
  */
 
 import {
   app,
   BrowserWindow,
-  Tray,
-  Menu,
-  nativeImage,
-  shell,
-  ipcMain,
-  Notification,
   globalShortcut,
-  screen,
+  ipcMain,
+  nativeImage,
+  Notification,
+  protocol,
+  shell,
+  type BrowserWindowConstructorOptions,
 } from "electron";
 import { autoUpdater } from "electron-updater";
-import Store from "electron-store";
-import path from "node:path";
-import fs from "node:fs";
-import { fileURLToPath } from "node:url";
+import * as path from "node:path";
+import { TrayManager } from "./tray";
 
-// ─── Path Resolution ────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const APP_URL = process.env["EMAILED_APP_URL"] ?? "https://app.emailed.com";
+const PROTOCOL_SCHEME = "emailed";
+const IS_MAC = process.platform === "darwin";
+const IS_WIN = process.platform === "win32";
+const IS_LINUX = process.platform === "linux";
+const IS_DEV = process.env["NODE_ENV"] === "development";
 
-/** Resolve a path relative to the app root (works in both dev and packaged) */
-function resolveAppPath(...segments: string[]): string {
-  const base = app.isPackaged
-    ? path.dirname(app.getPath("exe"))
-    : path.join(__dirname, "..");
-  return path.join(base, ...segments);
-}
-
-// ─── Configuration ──────────────────────────────────────────────────────────
-
-const WEB_APP_URL: string =
-  process.env["VIENNA_APP_URL"] ?? "https://mail.48co.ai";
-const IS_DEV: boolean = process.env["NODE_ENV"] === "development";
-
-// ─── Store Types ────────────────────────────────────────────────────────────
-
-interface WindowBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface StoreSchema {
-  windowBounds: WindowBounds;
-  isMaximized: boolean;
-  minimizeToTray: boolean;
-  launchOnStartup: boolean;
-  unreadCount: number;
-  lastAccount: string | undefined;
-}
-
-type StoreKey = keyof StoreSchema;
-
-const VALID_STORE_KEYS: ReadonlySet<string> = new Set<StoreKey>([
-  "windowBounds",
-  "isMaximized",
-  "minimizeToTray",
-  "launchOnStartup",
-  "unreadCount",
-  "lastAccount",
-]);
-
-function isValidStoreKey(key: string): key is StoreKey {
-  return VALID_STORE_KEYS.has(key);
-}
-
-// Persisted settings across launches
-const store = new Store<StoreSchema>({
-  defaults: {
-    windowBounds: { x: 100, y: 100, width: 1400, height: 900 },
-    isMaximized: false,
-    minimizeToTray: true,
-    launchOnStartup: false,
-    unreadCount: 0,
-    lastAccount: undefined,
-  },
-});
-
-// ─── State ──────────────────────────────────────────────────────────────────
+// ── State ─────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null;
-let tray: Tray | null = null;
-let isQuitting = false;
+let trayManager: TrayManager | null = null;
+let unreadCount = 0;
 
-// ─── Single Instance Lock ───────────────────────────────────────────────────
+// ── Window Creation ───────────────────────────────────────
 
-const gotLock: boolean = app.requestSingleInstanceLock();
-
-if (!gotLock) {
-  app.quit();
-} else {
-  app.on("second-instance", (_event, commandLine) => {
-    // If user tries to open a second instance, focus the existing window
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) {
-        mainWindow.restore();
-      }
-      mainWindow.show();
-      mainWindow.focus();
-    }
-
-    // Handle mailto: deep link from command line
-    const mailtoArg = commandLine.find((arg) => arg.startsWith("mailto:"));
-    if (mailtoArg && mainWindow) {
-      mainWindow.webContents.send("deep-link", mailtoArg);
-    }
-  });
-}
-
-// ─── Window Bounds Validation ───────────────────────────────────────────────
-
-/** Ensure saved window bounds are within a visible display area */
-function getValidatedBounds(): WindowBounds {
-  const saved = store.get("windowBounds");
-  const displays = screen.getAllDisplays();
-
-  // Check if any part of the saved position is visible on any display
-  const isVisible = displays.some((display) => {
-    const { x, y, width, height } = display.workArea;
-    return (
-      saved.x < x + width &&
-      saved.x + saved.width > x &&
-      saved.y < y + height &&
-      saved.y + saved.height > y
-    );
-  });
-
-  if (isVisible) {
-    return saved;
-  }
-
-  // Fall back to primary display center
-  const primary = screen.getPrimaryDisplay();
-  const { width, height } = primary.workArea;
-  return {
-    x: Math.round((width - 1400) / 2),
-    y: Math.round((height - 900) / 2),
-    width: 1400,
-    height: 900,
-  };
-}
-
-// ─── Main Window ────────────────────────────────────────────────────────────
-
-function createMainWindow(): void {
-  const bounds = getValidatedBounds();
-
-  mainWindow = new BrowserWindow({
-    ...bounds,
+function createMainWindow(): BrowserWindow {
+  const windowOptions: BrowserWindowConstructorOptions = {
+    width: 1280,
+    height: 860,
     minWidth: 800,
     minHeight: 600,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 20, y: 20 },
-    backgroundColor: "#0f172a", // Slate 950
-    show: false, // Show after "ready-to-show" to avoid white flash
+    title: "Emailed",
+    show: false,
+    titleBarStyle: IS_MAC ? "hiddenInset" : "default",
+    trafficLightPosition: IS_MAC ? { x: 16, y: 16 } : undefined,
+    backgroundColor: "#ffffff",
     webPreferences: {
-      preload: path.join(__dirname, "preload.cjs"),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      webSecurity: !IS_DEV,
       spellcheck: true,
+      webviewTag: false,
     },
+  };
+
+  const window = new BrowserWindow(windowOptions);
+
+  window.loadURL(APP_URL).catch((err: unknown) => {
+    console.error("Failed to load app URL:", err);
+    window.loadURL(`data:text/html,<h1>Failed to connect to Emailed</h1><p>Check your internet connection.</p>`);
   });
 
-  // Restore maximized state
-  if (store.get("isMaximized")) {
-    mainWindow.maximize();
-  }
-
-  // Load the web app (remote URL in prod, can be localhost in dev)
-  void mainWindow.loadURL(WEB_APP_URL);
-
-  // Show window when content is ready (prevents white flash)
-  mainWindow.once("ready-to-show", () => {
-    mainWindow?.show();
+  window.once("ready-to-show", () => {
+    window.show();
   });
 
-  // Persist window bounds on resize/move
-  mainWindow.on("resize", saveWindowBounds);
-  mainWindow.on("move", saveWindowBounds);
-  mainWindow.on("maximize", () => {
-    store.set("isMaximized", true);
-  });
-  mainWindow.on("unmaximize", () => {
-    store.set("isMaximized", false);
-  });
-
-  // Minimize to tray instead of quitting on close (configurable)
-  mainWindow.on("close", (event) => {
-    if (!isQuitting && store.get("minimizeToTray")) {
+  window.on("close", (event) => {
+    if (IS_MAC && !app.isQuitting) {
       event.preventDefault();
-      mainWindow?.hide();
+      window.hide();
     }
   });
 
-  mainWindow.on("closed", () => {
-    mainWindow = null;
-  });
-
-  // Open external links in the default browser
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (
-      url.startsWith("https://mail.48co.ai") ||
-      url.startsWith("https://48co.ai")
-    ) {
-      return { action: "allow" as const };
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://") || url.startsWith("http://")) {
+      shell.openExternal(url);
     }
-    void shell.openExternal(url);
-    return { action: "deny" as const };
+    return { action: "deny" };
   });
 
-  // Dev tools in development only
-  if (IS_DEV) {
-    mainWindow.webContents.openDevTools({ mode: "detach" });
-  }
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription) => {
+    console.error(`Page load failed: ${errorCode} - ${errorDescription}`);
+  });
+
+  return window;
 }
 
-function saveWindowBounds(): void {
-  if (!mainWindow || mainWindow.isMaximized()) return;
-  const bounds = mainWindow.getBounds();
-  store.set("windowBounds", bounds);
-}
+// ── Deep Link Handling ────────────────────────────────────
 
-// ─── System Tray ────────────────────────────────────────────────────────────
-
-function createTray(): void {
-  const iconPath = resolveAppPath("build", "tray-icon.png");
-
-  // Gracefully handle missing tray icon (skip tray if icon not found)
-  if (!fs.existsSync(iconPath)) {
-    return;
+function setupDeepLinks(): void {
+  if (IS_MAC || IS_WIN) {
+    app.setAsDefaultProtocolClient(PROTOCOL_SCHEME);
   }
 
-  const icon = nativeImage
-    .createFromPath(iconPath)
-    .resize({ width: 22, height: 22 });
-  icon.setTemplateImage(true); // macOS dark mode support
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    handleDeepLink(url);
+  });
 
-  tray = new Tray(icon);
-  tray.setToolTip("Vienna");
-
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: "Show Vienna",
-      click: (): void => {
-        mainWindow?.show();
-      },
-    },
-    { type: "separator" },
-    {
-      label: "Compose New Email",
-      accelerator: "CmdOrCtrl+N",
-      click: (): void => {
-        mainWindow?.show();
-        mainWindow?.webContents.send("compose-new");
-      },
-    },
-    {
-      label: "Check Mail",
-      click: (): void => {
-        mainWindow?.webContents.send("sync-now");
-      },
-    },
-    { type: "separator" },
-    {
-      label: "Preferences...",
-      accelerator: "CmdOrCtrl+,",
-      click: (): void => {
-        mainWindow?.show();
-        mainWindow?.webContents.send("open-preferences");
-      },
-    },
-    { type: "separator" },
-    {
-      label: "Quit Vienna",
-      accelerator: "CmdOrCtrl+Q",
-      click: (): void => {
-        isQuitting = true;
-        app.quit();
-      },
-    },
-  ]);
-
-  tray.setContextMenu(contextMenu);
-
-  tray.on("click", () => {
-    if (mainWindow?.isVisible()) {
-      mainWindow.hide();
-    } else {
-      mainWindow?.show();
+  if (IS_WIN || IS_LINUX) {
+    const gotSingleLock = app.requestSingleInstanceLock();
+    if (!gotSingleLock) {
+      app.quit();
+      return;
     }
-  });
-}
 
-// ─── Application Menu (Vienna branding) ─────────────────────────────────────
-
-function createMenu(): void {
-  const isMac = process.platform === "darwin";
-
-  const macAppMenu: Electron.MenuItemConstructorOptions[] = isMac
-    ? [
-        {
-          label: "Vienna",
-          submenu: [
-            { role: "about" },
-            { type: "separator" },
-            {
-              label: "Preferences...",
-              accelerator: "Cmd+,",
-              click: (): void => {
-                mainWindow?.webContents.send("open-preferences");
-              },
-            },
-            { type: "separator" },
-            { role: "services" },
-            { type: "separator" },
-            { role: "hide" },
-            { role: "hideOthers" },
-            { role: "unhide" },
-            { type: "separator" },
-            { role: "quit" },
-          ],
-        },
-      ]
-    : [];
-
-  const template: Electron.MenuItemConstructorOptions[] = [
-    ...macAppMenu,
-    {
-      label: "File",
-      submenu: [
-        {
-          label: "New Email",
-          accelerator: "CmdOrCtrl+N",
-          click: (): void => {
-            mainWindow?.webContents.send("compose-new");
-          },
-        },
-        {
-          label: "New Window",
-          accelerator: "CmdOrCtrl+Shift+N",
-          click: (): void => {
-            createMainWindow();
-          },
-        },
-        { type: "separator" },
-        {
-          label: "Check Mail",
-          accelerator: "CmdOrCtrl+Shift+M",
-          click: (): void => {
-            mainWindow?.webContents.send("sync-now");
-          },
-        },
-        { type: "separator" },
-        isMac ? { role: "close" } : { role: "quit" },
-      ],
-    },
-    {
-      label: "Edit",
-      submenu: [
-        { role: "undo" },
-        { role: "redo" },
-        { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "selectAll" },
-        { type: "separator" },
-        {
-          label: "Find in Mailbox",
-          accelerator: "CmdOrCtrl+F",
-          click: (): void => {
-            mainWindow?.webContents.send("focus-search");
-          },
-        },
-        {
-          label: "Command Palette",
-          accelerator: "CmdOrCtrl+K",
-          click: (): void => {
-            mainWindow?.webContents.send("open-command-palette");
-          },
-        },
-      ],
-    },
-    {
-      label: "View",
-      submenu: [
-        { role: "reload" },
-        { role: "forceReload" },
-        ...(IS_DEV ? [{ role: "toggleDevTools" as const }] : []),
-        { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
-        { type: "separator" },
-        { role: "togglefullscreen" },
-        { type: "separator" },
-        {
-          label: "Toggle Dark Mode",
-          accelerator: "CmdOrCtrl+Shift+D",
-          click: (): void => {
-            mainWindow?.webContents.send("toggle-dark-mode");
-          },
-        },
-      ],
-    },
-    {
-      label: "Go",
-      submenu: [
-        {
-          label: "Inbox",
-          accelerator: "CmdOrCtrl+1",
-          click: (): void => {
-            mainWindow?.webContents.send("navigate", "inbox");
-          },
-        },
-        {
-          label: "Sent",
-          accelerator: "CmdOrCtrl+2",
-          click: (): void => {
-            mainWindow?.webContents.send("navigate", "sent");
-          },
-        },
-        {
-          label: "Drafts",
-          accelerator: "CmdOrCtrl+3",
-          click: (): void => {
-            mainWindow?.webContents.send("navigate", "drafts");
-          },
-        },
-        {
-          label: "Archive",
-          accelerator: "CmdOrCtrl+4",
-          click: (): void => {
-            mainWindow?.webContents.send("navigate", "archive");
-          },
-        },
-        { type: "separator" },
-        {
-          label: "Calendar",
-          accelerator: "CmdOrCtrl+5",
-          click: (): void => {
-            mainWindow?.webContents.send("navigate", "calendar");
-          },
-        },
-        {
-          label: "Contacts",
-          accelerator: "CmdOrCtrl+6",
-          click: (): void => {
-            mainWindow?.webContents.send("navigate", "contacts");
-          },
-        },
-      ],
-    },
-    {
-      label: "Window",
-      submenu: [
-        { role: "minimize" },
-        { role: "zoom" },
-        ...(isMac
-          ? [
-              { type: "separator" as const },
-              { role: "front" as const },
-              { type: "separator" as const },
-              { role: "window" as const },
-            ]
-          : [{ role: "close" as const }]),
-      ],
-    },
-    {
-      label: "Help",
-      submenu: [
-        {
-          label: "Vienna Documentation",
-          click: (): void => {
-            void shell.openExternal("https://docs.48co.ai");
-          },
-        },
-        {
-          label: "Keyboard Shortcuts",
-          accelerator: "CmdOrCtrl+/",
-          click: (): void => {
-            mainWindow?.webContents.send("show-shortcuts");
-          },
-        },
-        { type: "separator" },
-        {
-          label: "Report an Issue",
-          click: (): void => {
-            void shell.openExternal(
-              "https://github.com/ccantynz-alt/emailed/issues",
-            );
-          },
-        },
-        {
-          label: "Check for Updates",
-          click: (): void => {
-            void autoUpdater.checkForUpdatesAndNotify();
-          },
-        },
-      ],
-    },
-  ];
-
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-}
-
-// ─── Unread Badge (dock + tray) ─────────────────────────────────────────────
-
-function updateUnreadBadge(count: number): void {
-  store.set("unreadCount", count);
-
-  // macOS dock badge
-  if (process.platform === "darwin") {
-    app.dock?.setBadge(count > 0 ? String(count) : "");
-  }
-
-  // Windows taskbar overlay
-  if (process.platform === "win32" && mainWindow) {
-    if (count > 0) {
-      const overlayPath = resolveAppPath("build", "overlay-unread.png");
-      if (fs.existsSync(overlayPath)) {
-        mainWindow.setOverlayIcon(
-          nativeImage.createFromPath(overlayPath),
-          `${count} unread`,
-        );
+    app.on("second-instance", (_event, argv) => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
       }
-    } else {
-      mainWindow.setOverlayIcon(null, "");
-    }
+      const deepLinkUrl = argv.find((arg) => arg.startsWith(`${PROTOCOL_SCHEME}://`));
+      if (deepLinkUrl) {
+        handleDeepLink(deepLinkUrl);
+      }
+    });
   }
-
-  // Tray tooltip
-  tray?.setToolTip(count > 0 ? `Vienna \u2014 ${count} unread` : "Vienna");
 }
 
-// ─── Notifications ──────────────────────────────────────────────────────────
+function handleDeepLink(url: string): void {
+  if (!mainWindow) return;
 
-function showNotification(
-  title: string,
-  body: string,
-  emailId?: string,
-): void {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== `${PROTOCOL_SCHEME}:`) return;
+
+    const appPath = buildAppPath(parsed);
+    mainWindow.loadURL(`${APP_URL}${appPath}`);
+
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  } catch (err: unknown) {
+    console.error("Invalid deep link URL:", url, err);
+  }
+}
+
+function buildAppPath(parsed: URL): string {
+  const host = parsed.hostname;
+  const pathname = parsed.pathname;
+
+  switch (host) {
+    case "compose":
+      return `/compose${pathname}`;
+    case "inbox":
+      return `/inbox${pathname}`;
+    case "message":
+      return `/message${pathname}`;
+    case "settings":
+      return `/settings${pathname}`;
+    default:
+      return `/${host}${pathname}`;
+  }
+}
+
+// ── Keyboard Shortcuts ────────────────────────────────────
+
+function registerGlobalShortcuts(): void {
+  globalShortcut.register("CommandOrControl+Shift+E", () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.focus();
+      } else {
+        mainWindow.show();
+      }
+    }
+  });
+
+  globalShortcut.register("CommandOrControl+Shift+N", () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.send("navigate", "/compose");
+    }
+  });
+
+  globalShortcut.register("CommandOrControl+Shift+I", () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+      mainWindow.webContents.send("navigate", "/inbox");
+    }
+  });
+}
+
+// ── Auto-Updater ──────────────────────────────────────────
+
+function setupAutoUpdater(): void {
+  if (IS_DEV) return;
+
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.allowPrerelease = false;
+
+  autoUpdater.on("checking-for-update", () => {
+    sendToRenderer("updater:checking", undefined);
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    sendToRenderer("updater:available", {
+      version: info.version,
+      releaseDate: info.releaseDate,
+    });
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    sendToRenderer("updater:not-available", undefined);
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    sendToRenderer("updater:progress", {
+      percent: progress.percent,
+      bytesPerSecond: progress.bytesPerSecond,
+      transferred: progress.transferred,
+      total: progress.total,
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    sendToRenderer("updater:downloaded", {
+      version: info.version,
+    });
+    showNativeNotification(
+      "Update Ready",
+      `Version ${info.version} has been downloaded. Restart to apply.`,
+    );
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("Auto-updater error:", err);
+    sendToRenderer("updater:error", { message: err.message });
+  });
+
+  autoUpdater.checkForUpdatesAndNotify();
+
+  setInterval(() => {
+    autoUpdater.checkForUpdatesAndNotify();
+  }, 4 * 60 * 60 * 1000);
+}
+
+// ── Native Notifications ──────────────────────────────────
+
+function showNativeNotification(title: string, body: string): void {
   if (!Notification.isSupported()) return;
 
   const notification = new Notification({
     title,
     body,
     silent: false,
-    timeoutType: "default",
   });
 
   notification.on("click", () => {
-    mainWindow?.show();
-    mainWindow?.focus();
-    if (emailId) {
-      mainWindow?.webContents.send("open-email", emailId);
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
     }
   });
 
   notification.show();
 }
 
-// ─── IPC Handlers (from renderer/web app) ───────────────────────────────────
+// ── IPC Handlers ──────────────────────────────────────────
 
-ipcMain.on("update-badge", (_event, count: number) => {
-  updateUnreadBadge(count);
-});
-
-ipcMain.on(
-  "show-notification",
-  (
-    _event,
-    payload: { title: string; body: string; emailId?: string },
-  ) => {
-    showNotification(payload.title, payload.body, payload.emailId);
-  },
-);
-
-ipcMain.on("set-preference", (_event, key: string, value: unknown) => {
-  if (isValidStoreKey(key)) {
-    // Use type-safe setter via individual key checks
-    switch (key) {
-      case "windowBounds":
-        store.set("windowBounds", value as WindowBounds);
-        break;
-      case "isMaximized":
-        store.set("isMaximized", value as boolean);
-        break;
-      case "minimizeToTray":
-        store.set("minimizeToTray", value as boolean);
-        break;
-      case "launchOnStartup":
-        store.set("launchOnStartup", value as boolean);
-        break;
-      case "unreadCount":
-        store.set("unreadCount", value as number);
-        break;
-      case "lastAccount":
-        store.set("lastAccount", value as string | undefined);
-        break;
-    }
-  }
-});
-
-ipcMain.handle("get-preference", (_event, key: string): unknown => {
-  if (isValidStoreKey(key)) {
-    return store.get(key);
-  }
-  return undefined;
-});
-
-interface PlatformInfo {
-  platform: NodeJS.Platform;
-  arch: string;
-  version: string;
-  isPackaged: boolean;
-}
-
-ipcMain.handle("get-platform", (): PlatformInfo => {
-  return {
-    platform: process.platform,
-    arch: process.arch,
-    version: app.getVersion(),
-    isPackaged: app.isPackaged,
-  };
-});
-
-// ─── Auto Updater ───────────────────────────────────────────────────────────
-
-autoUpdater.on("update-available", () => {
-  mainWindow?.webContents.send("update-available");
-});
-
-autoUpdater.on("update-downloaded", () => {
-  mainWindow?.webContents.send("update-downloaded");
-});
-
-// ─── App Lifecycle ──────────────────────────────────────────────────────────
-
-void app.whenReady().then(() => {
-  createMainWindow();
-  createTray();
-  createMenu();
-
-  // Register global shortcut for quick compose (show app + open compose)
-  globalShortcut.register("CommandOrControl+Shift+E", () => {
-    mainWindow?.show();
-    mainWindow?.webContents.send("compose-new");
+function setupIpcHandlers(): void {
+  ipcMain.handle("app:get-version", () => {
+    return app.getVersion();
   });
 
-  // Check for updates in production (non-blocking)
-  if (!IS_DEV) {
-    void autoUpdater.checkForUpdatesAndNotify();
+  ipcMain.handle("app:get-platform", () => {
+    return process.platform;
+  });
+
+  ipcMain.handle("app:get-locale", () => {
+    return app.getLocale();
+  });
+
+  ipcMain.on("notification:show", (_event, data: { title: string; body: string }) => {
+    showNativeNotification(data.title, data.body);
+  });
+
+  ipcMain.on("badge:set", (_event, count: number) => {
+    unreadCount = count;
+    updateBadge(count);
+    trayManager?.updateUnreadCount(count);
+  });
+
+  ipcMain.handle("updater:check", async () => {
+    if (IS_DEV) return { updateAvailable: false };
+    const result = await autoUpdater.checkForUpdates();
+    return {
+      updateAvailable: result?.updateInfo !== undefined,
+      version: result?.updateInfo.version,
+    };
+  });
+
+  ipcMain.handle("updater:install", () => {
+    autoUpdater.quitAndInstall(false, true);
+  });
+
+  ipcMain.on("window:minimize", () => {
+    mainWindow?.minimize();
+  });
+
+  ipcMain.on("window:maximize", () => {
+    if (mainWindow?.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow?.maximize();
+    }
+  });
+
+  ipcMain.on("window:close", () => {
+    mainWindow?.close();
+  });
+}
+
+// ── Badge Management ──────────────────────────────────────
+
+function updateBadge(count: number): void {
+  if (IS_MAC) {
+    app.dock.setBadge(count > 0 ? String(count) : "");
   }
 
-  // macOS: re-create window when dock icon clicked and no windows open
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+  if (IS_WIN && mainWindow) {
+    if (count > 0) {
+      mainWindow.setOverlayIcon(
+        createBadgeIcon(count),
+        `${count} unread messages`,
+      );
     } else {
+      mainWindow.setOverlayIcon(null, "");
+    }
+  }
+
+  if (IS_LINUX && mainWindow) {
+    app.setBadgeCount(count);
+  }
+}
+
+function createBadgeIcon(count: number): Electron.NativeImage {
+  const size = 16;
+  const canvas = `
+    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="#ef4444"/>
+      <text x="${size / 2}" y="${size / 2 + 1}" font-size="10" fill="white"
+        text-anchor="middle" dominant-baseline="middle" font-family="sans-serif">
+        ${count > 99 ? "99+" : count}
+      </text>
+    </svg>
+  `;
+  return nativeImage.createFromBuffer(Buffer.from(canvas));
+}
+
+// ── Utility ───────────────────────────────────────────────
+
+function sendToRenderer(channel: string, data: unknown): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, data);
+  }
+}
+
+// ── App Extensions ────────────────────────────────────────
+
+declare module "electron" {
+  interface App {
+    isQuitting?: boolean;
+  }
+}
+
+// ── App Lifecycle ─────────────────────────────────────────
+
+setupDeepLinks();
+
+app.whenReady().then(() => {
+  setupIpcHandlers();
+  registerGlobalShortcuts();
+
+  mainWindow = createMainWindow();
+
+  trayManager = new TrayManager({
+    onShowInbox: () => {
       mainWindow?.show();
+      mainWindow?.focus();
+      mainWindow?.webContents.send("navigate", "/inbox");
+    },
+    onCompose: () => {
+      mainWindow?.show();
+      mainWindow?.focus();
+      mainWindow?.webContents.send("navigate", "/compose");
+    },
+    onQuit: () => {
+      app.isQuitting = true;
+      app.quit();
+    },
+  });
+
+  setupAutoUpdater();
+
+  app.on("activate", () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      mainWindow = createMainWindow();
     }
   });
 });
 
 app.on("window-all-closed", () => {
-  // On macOS, keep running in the menu bar until explicit quit
-  if (process.platform !== "darwin") {
+  if (!IS_MAC) {
     app.quit();
   }
-});
-
-app.on("before-quit", () => {
-  isQuitting = true;
 });
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
 });
 
-// Handle mailto: protocol — makes Vienna the default email handler
-app.setAsDefaultProtocolClient("mailto");
+app.on("before-quit", () => {
+  app.isQuitting = true;
+});

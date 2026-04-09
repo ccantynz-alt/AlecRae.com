@@ -1,59 +1,28 @@
 {
-  "name": "@emailed/sdk",
+  "name": "@vieanna/sdk",
   "version": "0.1.0",
-  "description": "Official Node.js SDK for the Emailed email infrastructure platform",
+  "private": true,
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./webhooks": {
-      "types": "./dist/webhooks/verification.d.ts",
-      "import": "./dist/webhooks/verification.js"
     }
   },
   "main": "./dist/index.js",
-  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "sideEffects": false,
-  "keywords": [
-    "email",
-    "smtp",
-    "api",
-    "sdk",
-    "emailed",
-    "transactional-email",
-    "email-api"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/emailed/emailed",
-    "directory": "packages/sdk"
-  },
-  "license": "MIT",
-  "engines": {
-    "node": ">=18.0.0"
-  },
   "scripts": {
-    "build": "tsc; exit 0",
+    "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "lint": "eslint src/",
-    "test": "vitest run",
-    "prepublishOnly": "npm run build"
+    "test": "vitest run"
   },
   "dependencies": {
     "@emailed/shared": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "typescript": "^5.7.0"
   }
 }

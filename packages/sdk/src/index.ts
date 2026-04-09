@@ -1,179 +1,215 @@
-// Client
-export { ApiClient, ApiError, RateLimitError } from "./client/api-client.js";
-
-// Resources
-export { Messages } from "./resources/messages.js";
-export { Domains } from "./resources/domains.js";
-export { Contacts } from "./resources/contacts.js";
-export { Analytics } from "./resources/analytics.js";
-export { Webhooks } from "./resources/webhooks.js";
-export { Events } from "./resources/events.js";
-export { Billing } from "./resources/billing.js";
-
-// Webhooks verification
-export {
-  verifyWebhook,
-  verifySignature,
-  isWebhookEventType,
-  WebhookVerificationError,
-  SIGNATURE_HEADER,
-  TIMESTAMP_HEADER,
-} from "./webhooks/verification.js";
-
-// Types
-export type {
-  AuthMethod,
-  ClientConfig,
-  SimpleClientConfig,
-  ResolvedConfig,
-  HttpMethod,
-  RequestOptions,
-  ApiResponse,
-  RateLimitInfo,
-  PaginationParams,
-  PaginatedList,
-  SdkEmailAddress,
-  SendMessageParams,
-  SdkAttachment,
-  Message,
-  MessageSearchParams,
-  SdkDomain,
-  AddDomainParams,
-  DomainDnsRecords,
-  DnsRecordInstruction,
-  DomainDnsResponse,
-  DomainDnsRecord,
-  DomainHealth,
-  Contact,
-  UpsertContactParams,
-  ContactListParams,
-  AnalyticsTimeRange,
-  AnalyticsGranularity,
-  DeliveryAnalytics,
-  TimeSeriesPoint,
-  AnalyticsQueryParams,
-  EngagementAnalytics,
-  WebhookEventType,
-  WebhookEvent,
-  WebhookVerifyOptions,
-  Webhook,
-  CreateWebhookParams,
-  UpdateWebhookParams,
-  WebhookDelivery,
-  PlatformEvent,
-  EventListParams,
-  BillingUsage,
-  BillingPlan,
-  ApiErrorBody,
-} from "./types.js";
-
-// ─── Convenience Client ──────────────────────────────────────────────────────
-
-import type { ClientConfig, SimpleClientConfig } from "./types.js";
-import { ApiClient } from "./client/api-client.js";
-import { Messages } from "./resources/messages.js";
-import { Domains } from "./resources/domains.js";
-import { Contacts } from "./resources/contacts.js";
-import { Analytics } from "./resources/analytics.js";
-import { Webhooks } from "./resources/webhooks.js";
-import { Events } from "./resources/events.js";
-import { Billing } from "./resources/billing.js";
-
 /**
- * Configuration accepted by the `Emailed` convenience client.
+ * @vieanna/sdk — The official Vieanna/Emailed developer SDK.
  *
- * Supports both the full `ClientConfig` format and the simpler
- * `{ apiKey: string }` shorthand.
- */
-export type EmailedConfig = ClientConfig | SimpleClientConfig;
-
-/**
- * Normalise a user-supplied config into a full `ClientConfig`.
- */
-function normaliseConfig(config: EmailedConfig): ClientConfig {
-  if ("apiKey" in config) {
-    const result: ClientConfig = {
-      auth: { type: "apiKey", key: config.apiKey },
-    };
-    // Only include optional fields when they are explicitly provided,
-    // satisfying exactOptionalPropertyTypes.
-    const out = result as unknown as Record<string, unknown>;
-    if (config.baseUrl !== undefined) out.baseUrl = config.baseUrl;
-    if (config.timeout !== undefined) out.timeout = config.timeout;
-    if (config.maxRetries !== undefined) out.maxRetries = config.maxRetries;
-    if (config.headers !== undefined) out.headers = config.headers;
-    if (config.debug !== undefined) out.debug = config.debug;
-    return result;
-  }
-  return config;
-}
-
-/**
- * The main Emailed SDK client.
+ * Provides a typed, ergonomic interface for the Emailed platform API.
+ * Includes automatic retries, rate limit handling, and AI-powered support.
  *
- * Provides access to all API resources through a single entry point.
- *
- * Usage:
+ * @example
  * ```ts
- * import { Emailed } from "@emailed/sdk";
+ * import { VieannaClient } from "@vieanna/sdk";
  *
- * // Simple — just pass an API key
- * const emailed = new Emailed({ apiKey: "em_live_..." });
- *
- * // Full config
- * const emailed2 = new Emailed({
- *   auth: { type: "apiKey", key: "em_live_..." },
- *   baseUrl: "https://api.48co.ai",
- *   debug: true,
+ * const client = new VieannaClient({
+ *   apiKey: "em_live_abc123...",
  * });
  *
  * // Send an email
- * const result = await emailed.messages.send({
- *   from: { address: "hello@example.com" },
- *   to: [{ address: "alice@example.com" }],
- *   subject: "Hello from Emailed",
- *   textBody: "Welcome to the platform!",
+ * const result = await client.messages.send({
+ *   from: { address: "hello@example.com", name: "Example" },
+ *   to: [{ address: "user@recipient.com" }],
+ *   subject: "Hello from Vieanna",
+ *   text: "This is a test email.",
  * });
  *
- * // Check delivery analytics
- * const stats = await emailed.analytics.delivery({
- *   startDate: "2026-03-01",
- *   endDate: "2026-03-31",
- * });
+ * if (result.ok) {
+ *   console.log("Sent:", result.value.data.id);
+ * }
  * ```
  */
-export class Emailed {
-  private readonly client: ApiClient;
 
-  /** Email message operations (send, retrieve, list, search). */
-  readonly messages: Messages;
+import { HttpClient, type HttpClientConfig } from "./client/http.js";
+import { MessagesResource } from "./resources/messages.js";
+import { DomainsResource } from "./resources/domains.js";
+import { AnalyticsResource } from "./resources/analytics.js";
+import { WebhooksResource } from "./resources/webhooks.js";
+import { SupportResource } from "./resources/support.js";
 
-  /** Domain management (add, verify, DNS configuration, health). */
-  readonly domains: Domains;
+// ---------------------------------------------------------------------------
+// Client Configuration
+// ---------------------------------------------------------------------------
 
-  /** Contact and recipient management. */
-  readonly contacts: Contacts;
+/** Configuration for the VieannaClient. */
+export interface VieannaClientConfig {
+  /** API key for authentication (required). Starts with "em_live_" or "em_test_". */
+  readonly apiKey: string;
+  /** Base URL override (default "https://api.emailed.dev/v1"). */
+  readonly baseUrl?: string;
+  /** Maximum retry attempts for failed requests (default 3). */
+  readonly maxRetries?: number;
+  /** Request timeout in milliseconds (default 30000). */
+  readonly timeoutMs?: number;
+  /** Log level for SDK activity (default "error"). */
+  readonly logLevel?: "none" | "error" | "warn" | "info" | "debug";
+  /** Custom logger function. */
+  readonly logger?: (entry: import("./client/http.js").LogEntry) => void;
+  /** Custom default headers for all requests. */
+  readonly defaultHeaders?: Readonly<Record<string, string>>;
+}
 
-  /** Analytics and reporting. */
-  readonly analytics: Analytics;
+// ---------------------------------------------------------------------------
+// Main Client
+// ---------------------------------------------------------------------------
 
-  /** Webhook endpoint management (create, update, test). */
-  readonly webhooks: Webhooks;
+/**
+ * The main Vieanna/Emailed SDK client.
+ *
+ * Provides access to all platform resources through typed resource objects.
+ * All methods return `Result<T, Error>` for type-safe error handling.
+ */
+export class VieannaClient {
+  /** Send, retrieve, search, and manage email messages. */
+  readonly messages: MessagesResource;
 
-  /** Platform event history. */
-  readonly events: Events;
+  /** Manage sending domains, DNS records, and email authentication. */
+  readonly domains: DomainsResource;
 
-  /** Billing usage and plan information. */
-  readonly billing: Billing;
+  /** Query delivery stats, bounce analysis, and engagement metrics. */
+  readonly analytics: AnalyticsResource;
 
-  constructor(config: EmailedConfig) {
-    this.client = new ApiClient(normaliseConfig(config));
-    this.messages = new Messages(this.client);
-    this.domains = new Domains(this.client);
-    this.contacts = new Contacts(this.client);
-    this.analytics = new Analytics(this.client);
-    this.webhooks = new Webhooks(this.client);
-    this.events = new Events(this.client);
-    this.billing = new Billing(this.client);
+  /** Manage webhook endpoints and verify webhook signatures. */
+  readonly webhooks: WebhooksResource;
+
+  /** Create and manage AI-powered support tickets. */
+  readonly support: SupportResource;
+
+  /** The underlying HTTP client (exposed for advanced use cases). */
+  readonly http: HttpClient;
+
+  constructor(config: VieannaClientConfig) {
+    const httpConfig: HttpClientConfig = {
+      baseUrl: config.baseUrl ?? "https://api.emailed.dev/v1",
+      apiKey: config.apiKey,
+      ...(config.maxRetries !== undefined ? { maxRetries: config.maxRetries } : {}),
+      ...(config.timeoutMs !== undefined ? { timeoutMs: config.timeoutMs } : {}),
+      ...(config.logLevel !== undefined ? { logLevel: config.logLevel } : {}),
+      ...(config.logger !== undefined ? { logger: config.logger } : {}),
+      ...(config.defaultHeaders !== undefined ? { defaultHeaders: config.defaultHeaders } : {}),
+    };
+
+    this.http = new HttpClient(httpConfig);
+    this.messages = new MessagesResource(this.http);
+    this.domains = new DomainsResource(this.http);
+    this.analytics = new AnalyticsResource(this.http);
+    this.webhooks = new WebhooksResource(this.http);
+    this.support = new SupportResource(this.http);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Re-exports
+// ---------------------------------------------------------------------------
+
+// Client
+export { HttpClient, ApiError } from "./client/http.js";
+export type {
+  HttpClientConfig,
+  HttpMethod,
+  LogLevel,
+  LoggerFn,
+  LogEntry,
+  RequestOptions,
+  ApiResponse,
+  RateLimitInfo,
+  PaginatedResponse,
+  ApiErrorBody,
+} from "./client/http.js";
+
+// Messages
+export { MessagesResource } from "./resources/messages.js";
+export type {
+  SendMessageParams,
+  AttachmentInput,
+  BatchSendParams,
+  SendMessageResult,
+  BatchSendResult,
+  BatchSendItemResult,
+  Message,
+  ListMessagesQuery,
+  SearchMessagesQuery,
+  RenderTemplateParams,
+  RenderTemplateResult,
+} from "./resources/messages.js";
+
+// Domains
+export { DomainsResource } from "./resources/domains.js";
+export type {
+  CreateDomainParams,
+  CreateDomainResult,
+  DnsConfigInstruction,
+  ListDomainsQuery,
+  VerifyDomainResult,
+  DnsRecordVerificationStatus,
+  DomainDnsRecords,
+  AuthenticationCheckResult,
+  AuthenticationIssue,
+} from "./resources/domains.js";
+
+// Analytics
+export { AnalyticsResource } from "./resources/analytics.js";
+export type {
+  TimeGranularity,
+  DateRangeFilter,
+  AnalyticsFilter,
+  AggregationOptions,
+  DeliveryStats,
+  DeliveryTotals,
+  DeliveryRates,
+  DeliveryTimePoint,
+  BounceAnalysis,
+  BounceCategoryBreakdown,
+  BounceByDomain,
+  BounceTimePoint,
+  BouncingAddress,
+  EngagementMetrics,
+  EngagementTotals,
+  EngagementRates,
+  EngagementTimePoint,
+  LinkEngagement,
+  DeviceBreakdown,
+} from "./resources/analytics.js";
+
+// Webhooks
+export { WebhooksResource, verifyWebhookSignature, generateWebhookSignature } from "./resources/webhooks.js";
+export type {
+  CreateWebhookParams,
+  UpdateWebhookParams,
+  Webhook,
+  WebhookStats,
+  ListWebhooksQuery,
+  TestWebhookParams,
+  TestWebhookResult,
+  WebhookDeliveryAttempt,
+  ListDeliveryAttemptsQuery,
+  WebhookSignatureComponents,
+} from "./resources/webhooks.js";
+
+// Support
+export { SupportResource } from "./resources/support.js";
+export type {
+  TicketPriority,
+  TicketStatus,
+  TicketCategory,
+  CreateTicketParams,
+  TicketAttachment,
+  Ticket,
+  AiDiagnosis,
+  AiDiagnosticCheck,
+  AiRecommendation,
+  TicketMessage,
+  TicketMessageAuthor,
+  ReplyToTicketParams,
+  ListTicketsQuery,
+  AiAutoReplyConfig,
+  UpdateAiAutoReplyParams,
+  SupportEmailRoutingConfig,
+  RateTicketParams,
+} from "./resources/support.js";

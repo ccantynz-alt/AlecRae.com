@@ -1,16 +1,16 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "target": "ES2024",
+    "module": "CommonJS",
+    "moduleResolution": "node",
     "outDir": "dist",
     "rootDir": "src",
-    "module": "ESNext",
-    "target": "ES2022",
-    "moduleResolution": "bundler",
-    "types": ["node"],
-    "lib": ["ES2024", "DOM"],
+    "lib": ["ES2024"],
     "declaration": false,
-    "declarationMap": false
+    "declarationMap": false,
+    "sourceMap": true
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"],
-  "exclude": ["node_modules", "dist", "out"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
 }

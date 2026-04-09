@@ -1,5 +1,5 @@
 {
-  "name": "@emailed/crypto",
+  "name": "@vieanna/crypto",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc; exit 0",
+    "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
@@ -23,7 +23,6 @@
     "@emailed/shared": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
-    "vitest": "^2.1.0"
+    "typescript": "^5.7.0"
   }
 }

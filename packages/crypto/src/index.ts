@@ -1,62 +1,102 @@
-// Types
-export type {
-  DkimAlgorithm,
-  DkimRsaKeySize,
-  DkimKeyPair,
-  DkimKeyGenOptions,
-  DkimRotationPlan,
-  TlsVersion,
-  CsrResult,
-  CsrOptions,
-  CertificateInfo,
-  CertificateChainValidation,
-  EncryptionAlgorithm,
-  EnvelopeScheme,
-  EncryptedPayload,
-  EncryptionKey,
-  EnvelopeEncryptOptions,
-  EnvelopeEncryptedMessage,
-  HashAlgorithm,
-  HmacAlgorithm,
-  Argon2Params,
-  HashedPassword,
-} from "./types.js";
+/**
+ * @vieanna/crypto — Shared cryptography utilities for the Emailed platform.
+ *
+ * Provides DKIM signing/verification, TLS certificate management,
+ * AES-256-GCM encryption, hashing, and key derivation.
+ */
 
 // DKIM
 export {
-  generateDkimKeyPair,
-  formatDkimDnsRecord,
-  dkimDnsName,
-  createRotationPlan,
-  generateSelector,
+  signMessage,
+  verifySignature,
+  generateKeyPair,
+  parseSignatureHeader,
+  validateKeyPair,
+  canonicalizeHeader,
+  canonicalizeBody,
+  dkimRecordName,
+} from "./dkim.js";
+
+export type {
+  DkimAlgorithm,
+  CanonicalizationMethod,
+  Canonicalization,
+  DkimSignOptions,
+  DkimSignature,
+  DkimVerifyResult,
+  DkimKeyPair,
 } from "./dkim.js";
 
 // TLS
 export {
-  fingerprint256,
-  parseCertificate,
-  validateCertificateChain,
-  generateCsr,
-  expiresWithin,
+  generateSelfSignedCert,
+  validateCertificate,
+  checkCertificateExpiry,
+  generateTlsaRecord,
+  generateMtaStsPolicy,
+  serializeMtaStsPolicy,
+  parseMtaStsPolicy,
+  generateMtaStsDnsRecord,
+  generateTlsRptRecord,
+} from "./tls.js";
+
+export type {
+  TlsCertificate,
+  TlsaMatchingType,
+  TlsaCertificateUsage,
+  TlsaSelector,
+  TlsaRecord,
+  MtaStsMode,
+  MtaStsPolicy,
+  CertificateValidationResult,
+  CertificateExpiryStatus,
+  SelfSignedCertOptions,
 } from "./tls.js";
 
 // Encryption
 export {
+  encrypt,
+  decrypt,
+  deriveKey,
   generateEncryptionKey,
-  encryptContent,
-  decryptContent,
+  generateSalt,
   envelopeEncrypt,
+  envelopeDecrypt,
+  rotateEnvelopeKey,
+} from "./encryption.js";
+
+export type {
+  EncryptedPayload,
+  EnvelopeEncryptedPayload,
+  HkdfParams,
+  DerivedKey,
+  SmimeSignatureInfo,
+  SmimeEncryptionParams,
+  PgpPublicKey,
+  PgpEncryptionOptions,
+  KeyRotationInfo,
 } from "./encryption.js";
 
 // Hashing
 export {
-  hash,
   sha256,
   sha512,
-  hmac,
-  hmacRaw,
-  constantTimeEqual,
+  hash,
+  hmacSign,
+  hmacVerify,
+  fingerprint,
+  parseFingerprint,
+  fingerprintsMatch,
   hashPassword,
   verifyPassword,
-  generateToken,
-} from "./hashing.js";
+  parsePhcString,
+} from "./hash.js";
+
+export type {
+  HashAlgorithm,
+  HashEncoding,
+  HmacResult,
+  ContentFingerprint,
+  Argon2idParams,
+  PasswordHash,
+} from "./hash.js";

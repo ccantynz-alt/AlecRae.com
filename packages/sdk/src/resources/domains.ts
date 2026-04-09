@@ -1,137 +1,231 @@
 /**
- * Domains resource — add, verify, and configure sending domains.
- */
-import type { ApiClient } from "../client/api-client.js";
-import type {
-  ApiResponse,
-  SdkDomain,
-  AddDomainParams,
-  DomainDnsRecords,
-  DomainDnsResponse,
-  DomainHealth,
-  PaginatedList,
-  PaginationParams,
-} from "../types.js";
-
-/** The API path prefix for domain endpoints. */
-const BASE_PATH = "/v1/domains";
-
-/**
- * Resource class for interacting with the Domains API.
+ * Domains resource — manage sending domains, DNS records, and authentication.
  *
- * Usage:
- * ```ts
- * const emailed = new Emailed({ auth: { type: "apiKey", key: "em_live_..." } });
- * const domain = await emailed.domains.add({ name: "example.com" });
- * const records = await emailed.domains.getDnsRecords(domain.data.id);
- * await emailed.domains.verify(domain.data.id);
- * ```
+ * Provides typed methods for domain lifecycle management, DNS record generation,
+ * and email authentication status checking (SPF, DKIM, DMARC).
  */
-export class Domains {
-  constructor(private readonly client: ApiClient) {}
+
+import { type Result } from "@emailed/shared";
+import type {
+  Domain,
+  DnsRecord,
+  AuthenticationStatus,
+  DomainVerificationStatus,
+} from "@emailed/shared";
+import type { HttpClient, ApiResponse, PaginatedResponse, ApiError } from "../client/http.js";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/** Parameters for creating (registering) a new sending domain. */
+export interface CreateDomainParams {
+  /** The domain name (e.g., "notifications.example.com"). */
+  readonly domain: string;
+  /** Optional subdomain for sending (e.g., "mail"). */
+  readonly subdomain?: string;
+  /** Whether to make this the default sending domain. */
+  readonly isDefault?: boolean;
+  /** Auto-generate and configure DNS records. */
+  readonly autoConfigureDns?: boolean;
+  /** DKIM selector to use (default "em"). */
+  readonly dkimSelector?: string;
+}
+
+/** Result of creating a new domain. */
+export interface CreateDomainResult {
+  readonly domain: Domain;
+  /** DNS records that need to be configured. */
+  readonly requiredDnsRecords: readonly DnsRecord[];
+  /** Instructions for manual DNS configuration. */
+  readonly instructions: readonly DnsConfigInstruction[];
+}
+
+/** A human-readable DNS configuration instruction. */
+export interface DnsConfigInstruction {
+  readonly recordType: string;
+  readonly host: string;
+  readonly value: string;
+  readonly purpose: string;
+  readonly priority?: number;
+}
+
+/** Query parameters for listing domains. */
+export interface ListDomainsQuery {
+  readonly page?: number;
+  readonly pageSize?: number;
+  readonly status?: DomainVerificationStatus;
+  readonly isActive?: boolean;
+}
+
+/** Result of a domain verification attempt. */
+export interface VerifyDomainResult {
+  readonly domain: Domain;
+  readonly verificationStatus: DomainVerificationStatus;
+  /** Per-record verification status. */
+  readonly recordStatus: readonly DnsRecordVerificationStatus[];
+  /** Whether all required records are verified. */
+  readonly allRecordsVerified: boolean;
+}
+
+/** Status of a single DNS record verification check. */
+export interface DnsRecordVerificationStatus {
+  readonly recordType: string;
+  readonly host: string;
+  readonly expectedValue: string;
+  readonly actualValue?: string;
+  readonly verified: boolean;
+  readonly error?: string;
+}
+
+/** DNS records generated for a domain. */
+export interface DomainDnsRecords {
+  readonly domain: string;
+  readonly records: readonly DnsRecord[];
+  readonly spfRecord: DnsRecord;
+  readonly dkimRecord: DnsRecord;
+  readonly dmarcRecord: DnsRecord;
+  readonly mxRecords: readonly DnsRecord[];
+  readonly returnPathRecord: DnsRecord;
+}
+
+/** Domain authentication check result. */
+export interface AuthenticationCheckResult {
+  readonly domain: string;
+  readonly authentication: AuthenticationStatus;
+  readonly score: number;
+  readonly issues: readonly AuthenticationIssue[];
+  readonly checkedAt: string;
+}
+
+/** An issue found during authentication checking. */
+export interface AuthenticationIssue {
+  readonly severity: "error" | "warning" | "info";
+  readonly mechanism: "spf" | "dkim" | "dmarc" | "return-path" | "mta-sts";
+  readonly message: string;
+  readonly recommendation: string;
+}
+
+// ---------------------------------------------------------------------------
+// Domains Resource
+// ---------------------------------------------------------------------------
+
+export class DomainsResource {
+  constructor(private readonly client: HttpClient) {}
 
   /**
    * Register a new sending domain.
    *
-   * @param params  Domain name to register
-   * @returns The created domain (status will be "pending")
+   * Returns the domain with required DNS records that must be configured
+   * for verification to succeed.
+   *
+   * @param params - Domain creation parameters
+   * @returns The created domain with DNS setup instructions
    */
-  async add(params: AddDomainParams): Promise<ApiResponse<SdkDomain>> {
-    return this.client.post<SdkDomain>(BASE_PATH, params);
+  async create(
+    params: CreateDomainParams,
+  ): Promise<Result<ApiResponse<CreateDomainResult>, ApiError | Error>> {
+    return this.client.post<CreateDomainResult>("/domains", params);
   }
 
   /**
-   * Retrieve a single domain by ID.
+   * Trigger verification of a domain's DNS records.
    *
-   * @param domainId  The domain identifier
-   * @returns The domain object
+   * Checks that all required DNS records (SPF, DKIM, DMARC, MX) are
+   * properly configured. Verification may take a few seconds as the
+   * system queries authoritative nameservers.
+   *
+   * @param domainId - The domain's unique identifier
+   * @returns Verification result with per-record status
    */
-  async get(domainId: string): Promise<ApiResponse<SdkDomain>> {
-    return this.client.get<SdkDomain>(`${BASE_PATH}/${encodeURIComponent(domainId)}`);
+  async verify(
+    domainId: string,
+  ): Promise<Result<ApiResponse<VerifyDomainResult>, ApiError | Error>> {
+    return this.client.post<VerifyDomainResult>(
+      `/domains/${encodeURIComponent(domainId)}/verify`,
+    );
   }
 
   /**
-   * List all domains with optional pagination.
+   * Retrieve a domain by ID.
    *
-   * @param params  Pagination parameters
-   * @returns A paginated list of domains
+   * @param domainId - The domain's unique identifier
+   * @returns The full domain object
+   */
+  async get(
+    domainId: string,
+  ): Promise<Result<ApiResponse<Domain>, ApiError | Error>> {
+    return this.client.get<Domain>(`/domains/${encodeURIComponent(domainId)}`);
+  }
+
+  /**
+   * List domains with filtering and pagination.
+   *
+   * @param query - Filter and pagination parameters
+   * @returns Paginated list of domains
    */
   async list(
-    params: PaginationParams = {},
-  ): Promise<ApiResponse<PaginatedList<SdkDomain>>> {
-    const query: Record<string, string | number | boolean | undefined> = {
-      page: params.page,
-      page_size: params.pageSize,
-      cursor: params.cursor,
-    };
+    query?: ListDomainsQuery,
+  ): Promise<Result<ApiResponse<PaginatedResponse<Domain>>, ApiError | Error>> {
+    const params: Record<string, string | number | boolean | undefined> = {};
 
-    return this.client.get<PaginatedList<SdkDomain>>(BASE_PATH, query);
+    if (query) {
+      if (query.page !== undefined) params["page"] = query.page;
+      if (query.pageSize !== undefined) params["page_size"] = query.pageSize;
+      if (query.status !== undefined) params["status"] = query.status;
+      if (query.isActive !== undefined) params["is_active"] = query.isActive;
+    }
+
+    return this.client.get<PaginatedResponse<Domain>>("/domains", params);
   }
 
   /**
-   * Trigger domain verification.
+   * Delete a sending domain.
    *
-   * The platform checks that the required DNS records are properly
-   * configured. On success the domain status moves to "verified".
+   * The domain must not be actively sending. Any queued messages for this
+   * domain will be dropped.
    *
-   * @param domainId  The domain identifier
-   * @returns The updated domain object
+   * @param domainId - The domain's unique identifier
    */
-  async verify(domainId: string): Promise<ApiResponse<SdkDomain>> {
-    return this.client.post<SdkDomain>(
-      `${BASE_PATH}/${encodeURIComponent(domainId)}/verify`,
+  async delete(
+    domainId: string,
+  ): Promise<Result<ApiResponse<{ deleted: true }>, ApiError | Error>> {
+    return this.client.delete<{ deleted: true }>(
+      `/domains/${encodeURIComponent(domainId)}`,
     );
   }
 
   /**
-   * Get the DNS records that must be configured for a domain.
+   * Get the required DNS records for a domain.
    *
-   * Returns DKIM, SPF, DMARC, and MX record instructions.
+   * Returns all DNS records that should be configured, including SPF, DKIM,
+   * DMARC, MX, and return-path records.
    *
-   * @param domainId  The domain identifier
-   * @returns DNS record setup instructions
+   * @param domainId - The domain's unique identifier
+   * @returns Complete DNS record set for the domain
    */
-  async getDnsRecords(domainId: string): Promise<ApiResponse<DomainDnsRecords>> {
+  async getDnsRecords(
+    domainId: string,
+  ): Promise<Result<ApiResponse<DomainDnsRecords>, ApiError | Error>> {
     return this.client.get<DomainDnsRecords>(
-      `${BASE_PATH}/${encodeURIComponent(domainId)}/dns-records`,
+      `/domains/${encodeURIComponent(domainId)}/dns-records`,
     );
   }
 
   /**
-   * Remove a domain from the account.
+   * Check the authentication status of a domain.
    *
-   * @param domainId  The domain identifier
+   * Performs a comprehensive check of SPF, DKIM, DMARC, return-path,
+   * and MTA-STS configuration, returning a score and actionable issues.
+   *
+   * @param domainId - The domain's unique identifier
+   * @returns Authentication check result with score and issues
    */
-  async remove(domainId: string): Promise<ApiResponse<{ deleted: boolean }>> {
-    return this.client.delete<{ deleted: boolean }>(
-      `${BASE_PATH}/${encodeURIComponent(domainId)}`,
-    );
-  }
-
-  /**
-   * Get the DNS records with verification status for a domain.
-   *
-   * @param domainId  The domain identifier
-   * @returns DNS records with per-record verification status
-   */
-  async getDns(domainId: string): Promise<ApiResponse<DomainDnsResponse>> {
-    return this.client.get<DomainDnsResponse>(
-      `${BASE_PATH}/${encodeURIComponent(domainId)}/dns`,
-    );
-  }
-
-  /**
-   * Get a health report for a domain.
-   *
-   * Returns a score, DKIM key age, SPF lookup count, and actionable
-   * recommendations for improving deliverability.
-   *
-   * @param domainId  The domain identifier
-   * @returns Domain health report
-   */
-  async getHealth(domainId: string): Promise<ApiResponse<DomainHealth>> {
-    return this.client.get<DomainHealth>(
-      `${BASE_PATH}/${encodeURIComponent(domainId)}/health`,
+  async checkAuthentication(
+    domainId: string,
+  ): Promise<Result<ApiResponse<AuthenticationCheckResult>, ApiError | Error>> {
+    return this.client.get<AuthenticationCheckResult>(
+      `/domains/${encodeURIComponent(domainId)}/authentication`,
     );
   }
 }
