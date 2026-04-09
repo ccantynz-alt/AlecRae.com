@@ -124,6 +124,22 @@ export {
   recallRecordsRelations,
 } from "./schema/recall.js";
 
+// Schema - Recipient Engagement (send-time optimization)
+export {
+  recipientEngagement,
+  engagementEvents,
+  recipientEngagementRelations,
+  engagementEventsRelations,
+  type HourlyDistribution,
+  type DailyDistribution,
+} from "./schema/recipient-engagement.js";
+
+// Schema - Custom Dictionaries (spell check)
+export {
+  customDictionaries,
+  customDictionariesRelations,
+} from "./schema/custom-dictionaries.js";
+
 // Schema - Screener, Commitments, Inbox Categories
 export {
   screenerDecisions,
@@ -139,6 +155,21 @@ export {
   commitmentsRelations,
   inboxCategoriesRelations,
 } from "./schema/screener.js";
+
+// Schema - Unsubscribe History
+export {
+  unsubscribeHistory,
+  unsubscribeMethodEnum,
+  unsubscribeStatusEnum,
+  unsubscribeHistoryRelations,
+} from "./schema/unsubscribe-history.js";
+
+// Schema - Email Translations
+export {
+  emailTranslations,
+  emailTranslationsRelations,
+} from "./schema/translations.js";
+export type { TranslationContent } from "./schema/translations.js";
 
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
@@ -167,6 +198,13 @@ import type {
   commitments,
   inboxCategories,
 } from "./schema/screener.js";
+import type { unsubscribeHistory } from "./schema/unsubscribe-history.js";
+import type { customDictionaries } from "./schema/custom-dictionaries.js";
+import type { emailTranslations } from "./schema/translations.js";
+import type {
+  recipientEngagement,
+  engagementEvents,
+} from "./schema/recipient-engagement.js";
 
 // Select types (what you get back from queries)
 export type Account = InferSelectModel<typeof accounts>;
@@ -219,3 +257,13 @@ export type CommitmentRecord = InferSelectModel<typeof commitments>;
 export type NewCommitmentRecord = InferInsertModel<typeof commitments>;
 export type InboxCategoryRecord = InferSelectModel<typeof inboxCategories>;
 export type NewInboxCategoryRecord = InferInsertModel<typeof inboxCategories>;
+export type RecipientEngagement = InferSelectModel<typeof recipientEngagement>;
+export type NewRecipientEngagement = InferInsertModel<typeof recipientEngagement>;
+export type EngagementEvent = InferSelectModel<typeof engagementEvents>;
+export type NewEngagementEvent = InferInsertModel<typeof engagementEvents>;
+export type UnsubscribeHistoryRecord = InferSelectModel<typeof unsubscribeHistory>;
+export type NewUnsubscribeHistoryRecord = InferInsertModel<typeof unsubscribeHistory>;
+export type EmailTranslation = InferSelectModel<typeof emailTranslations>;
+export type NewEmailTranslation = InferInsertModel<typeof emailTranslations>;
+export type CustomDictionary = InferSelectModel<typeof customDictionaries>;
+export type NewCustomDictionary = InferInsertModel<typeof customDictionaries>;

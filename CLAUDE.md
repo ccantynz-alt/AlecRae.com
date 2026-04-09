@@ -649,7 +649,7 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 **Date last updated:** 2026-04-09
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Production deployment (Vercel live, awaiting Craig's infra setup)
-**Build completion:** TIER 1-4 ALL DONE (36/36 features) + 7 bonus features
+**Build completion:** TIER 1-4 ALL DONE (36/36) + 7 bonus + 14 advanced features (S/A/B/C)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
 
@@ -680,25 +680,25 @@ If you ship something not in this file, you broke the rules.
 
 | # | Feature | Why It Wins | Status |
 |---|---|---|---|
-| S1 | **WebGPU client-side AI inference** | Llama 3.1 8B at 41 tok/sec in browser. $0/token. No competitor has this. Hooks exist (Transformers.js wired) — need to ship a model. | NOT STARTED |
+| S1 | **WebGPU client-side AI inference** | Llama 3.1 8B at 41 tok/sec in browser. $0/token. No competitor has this. Full WebLLM engine, Zod-validated API, IndexedDB cache tracking, progress events, `localInfer()` API, React status indicator. | DONE |
 | S2 | **CRDT real-time collaborative drafting** | Two people editing the same email with live cursors (Yjs). API endpoint exists, UI doesn't. Nobody has this in email. | NOT STARTED |
 | S3 | **AI inbox agent (works while you sleep)** | Wakes up overnight, triages, drafts replies, schedules sends. You approve in the morning with one tap. INDUSTRY FIRST. | NOT STARTED |
 | S4 | **Voice cloning for AI replies** | Drafts sound exactly like you (style transfer beyond voice profile). | NOT STARTED |
-| S5 | **Semantic vector search** | "Find the email where someone said something like 'we should consider the budget'" via embeddings. Beyond keyword. | NOT STARTED |
-| S6 | **Auto-summary of every newsletter** | AI reduces newsletters to 3 bullets in inbox preview. Full text on demand. | NOT STARTED |
-| S7 | **AI "Why is this in my inbox?" explainer** | Click any email → AI explains who this is, history, why it landed here, suggested action. | NOT STARTED |
+| S5 | **Semantic vector search** | "Find the email where someone said something like 'we should consider the budget'" via embeddings. Beyond keyword. | DONE |
+| S6 | **Auto-summary of every newsletter** | AI reduces newsletters to 3 bullets in inbox preview. Full text on demand. | DONE |
+| S7 | **AI "Why is this in my inbox?" explainer** | Click any email → AI explains who this is, history, why it landed here, suggested action. | DONE |
 | S8 | **One-click thread → action items in todo apps** | Native Things, Todoist, Linear, Notion integration. | NOT STARTED |
 | S9 | **Email thread → meeting transcript link** | If a thread leads to a call, auto-link the recording + transcript. | NOT STARTED |
-| S10 | **Predictive send-time optimization** | AI predicts best send time based on recipient open patterns. | NOT STARTED |
+| S10 | **Predictive send-time optimization** | AI predicts best send time based on recipient open patterns. | DONE |
 
 ### TIER A — CUTTING-EDGE UX
 
 | # | Feature | Why It Wins | Status |
 |---|---|---|---|
-| A1 | **Magic UI animations (Linear-style)** | Framer Motion + spring physics. Already installed, need to use it. | NOT STARTED |
+| A1 | **Magic UI animations (Linear-style)** | Framer Motion + spring physics. Full animation library + 8 reusable components. Wired into sidebar, inbox, compose, analytics, settings. | DONE |
 | A2 | **Spatial inbox (3D thread visualization)** | R3F-powered 3D view for power users. Optional. | NOT STARTED |
 | A3 | **Inbox heatmap** | Visual email habits (when you're most productive). | NOT STARTED |
-| A4 | **Focus mode** | Hides everything except important emails. Full screen. No distractions. | NOT STARTED |
+| A4 | **Focus mode** | Hides everything except important emails. Full screen. Timer, progress tracking, Cmd+Shift+F shortcut. | DONE |
 | A5 | **Quick-reply gestures (mobile)** | Brilliant swipe interactions. Mobile already has the pattern, needs polish. | NOT STARTED |
 | A6 | **Drag-to-snooze on mini-calendar** | Drag email to a time slot to snooze. | NOT STARTED |
 | A7 | **Inbox zero rituals (gamification)** | Streaks, achievements (optional). | NOT STARTED |
@@ -709,27 +709,27 @@ If you ship something not in this file, you broke the rules.
 |---|---|---|---|
 | B1 | **Programmable email (TypeScript snippets)** | Apps Script but better, type-safe, runs on every email. | NOT STARTED |
 | B2 | **Email-as-database (SQL over inbox)** | Treat your inbox as a queryable dataset. | NOT STARTED |
-| B3 | **AI unsubscribe agent (browser automation)** | One click → AI navigates the unsubscribe page → confirms. | NOT STARTED |
-| B4 | **Auto-translation badges** | "Translated from Spanish" badge with toggle to original. | NOT STARTED |
+| B3 | **AI unsubscribe agent (browser automation)** | One click → AI navigates the unsubscribe page → confirms. | DONE |
+| B4 | **Auto-translation badges** | "Translated from Spanish" badge with toggle to original. | DONE |
 | B5 | **Real-time sender verification** | Check sender reputation, business legitimacy, recent news inline. | NOT STARTED |
 | B6 | **Phishing protection with explainer** | "This email is suspicious because..." | NOT STARTED |
-| B7 | **AI calendar slot suggestions in compose** | Type "let's meet next week" → AI suggests slots inline. | NOT STARTED |
+| B7 | **AI calendar slot suggestions in compose** | Type "let's meet next week" → AI suggests slots inline. | DONE |
 | B8 | **Voice-to-voice replies** | Voice messages as attachments + auto-transcription for recipient. | NOT STARTED |
 
 ### TIER C — POLISH & TRUST (REQUIRED FOR LAUNCH)
 
 | # | Feature | Why It Wins | Status |
 |---|---|---|---|
-| C1 | **Status page** | status.48co.ai showing uptime | NOT STARTED |
-| C2 | **Public API docs site** | docs.48co.ai (OpenAPI exists, needs site) | NOT STARTED |
+| C1 | **Status page** | status.48co.ai showing uptime | DONE |
+| C2 | **Public API docs site** | docs.48co.ai — 22 pages, full endpoint ref, code examples, search | DONE |
 | C3 | **Admin console SSO** | SAML for enterprise sales | DONE |
 | C4 | **SOC 2 Type I → Type II** | Required for enterprise | NOT STARTED |
 | C5 | **GDPR DPA template** | Legal pages exist, need DPA workflow | NOT STARTED |
 | C6 | **Bug bounty program** | HackerOne or Intigriti | NOT STARTED |
 | C7 | **Public roadmap** | Trello/Linear public board | NOT STARTED |
 | C8 | **Changelog page** | changelog.48co.ai | NOT STARTED |
-| C9 | **Migration guides** | "From Gmail to Vienna in 5 minutes" | NOT STARTED |
-| C10 | **Spell check (multi-language)** | Native browser spell-check + custom dictionary | NOT STARTED |
+| C9 | **Migration guides** | "From Gmail to Vienna in 5 minutes" | DONE |
+| C10 | **Spell check (multi-language)** | Native browser spell-check + custom dictionary | DONE |
 
 ---
 
@@ -798,12 +798,12 @@ If you ship something not in this file, you broke the rules.
 | Vercel deployment | Configured, deploying from main | 100% |
 | Neon SQL setup | Ready | 100% |
 | CLAUDE.md Bible | Complete | 100% |
-| **Tier S features (industry firsts)** | **Not started** | **0%** |
-| **Tier A features (cutting-edge UX)** | **Not started** | **0%** |
-| **Tier B features (power user)** | **Not started** | **0%** |
-| **Tier C features (polish + trust)** | **Not started** | **0%** |
+| **Tier S features (industry firsts)** | **S1+S5+S6+S7+S10 done (5/10)** | **50%** |
+| **Tier A features (cutting-edge UX)** | **A1+A4 done (2/7)** | **29%** |
+| **Tier B features (power user)** | **B3+B4+B7 done (3/8)** | **37%** |
+| **Tier C features (polish + trust)** | **C1+C2+C3+C9+C10 done (5/10)** | **50%** |
 
-**Overall: ~90% of launch-ready product. Remaining 10% is Craig action items (Vercel verify, Neon/Upstash/Stripe setup, API keys, DNS) + Tier S/A/B/C post-launch features.**
+**Overall: ~95% of launch-ready product. Core platform 100% done. Remaining: Craig infra setup (Neon/Upstash/Stripe/DNS/API keys) + remaining Tier S/A/B/C features.**
 
 ---
 

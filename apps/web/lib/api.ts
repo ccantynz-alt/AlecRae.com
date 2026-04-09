@@ -550,6 +550,288 @@ export const accountApi = {
 
 // ─── Suppressions ──────────────────────────────────────────────────────────
 
+// ─── Calendar Slot Suggestions (B7) ───────────────────────────────────────
+
+export interface CalendarSlotSuggestionData {
+  start: string;
+  end: string;
+  formattedRange: string;
+  durationMinutes: number;
+  score: number;
+  reasoning: string;
+}
+
+export interface CalendarMeetingIntent {
+  hasIntent: boolean;
+  type: string | null;
+  confidence: number;
+  durationHint: number | null;
+  locationHint: string | null;
+  extractedTimes: Array<{ raw: string; parsed: string | null }>;
+}
+
+export interface SuggestSlotsResponse {
+  detected: boolean;
+  intent: CalendarMeetingIntent;
+  slots: CalendarSlotSuggestionData[];
+  formattedText: string | null;
+}
+
+export const calendarApi = {
+  /**
+   * Detect meeting intent in compose text and suggest available calendar slots.
+   * Combines intent detection + availability check + AI scoring in one call.
+   */
+  suggestSlots(payload: {
+    text: string;
+    timezone?: string;
+    workingHoursStart?: number;
+    workingHoursEnd?: number;
+    durationMinutes?: number;
+    recipientEmail?: string;
+    daysAhead?: number;
+  }): Promise<{ data: SuggestSlotsResponse }> {
+    return apiFetch<{ data: SuggestSlotsResponse }>(
+      "/v1/calendar/suggest-slots",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+};
+
+// ─── Predictive Send-Time Optimization (S10) ─────────────────────────────
+
+export interface RecommendedTime {
+  datetime: string;
+  confidence: number;
+  reasoning: string;
+  dayLabel: string;
+  hourLabel: string;
+}
+
+export interface RecipientPattern {
+  typicalOpenHours: number[];
+  typicalOpenDays: number[];
+  avgResponseTimeHours: number;
+  openRate: number;
+  clickRate: number;
+  replyRate: number;
+  mostActiveHour: number;
+  mostActiveDay: number;
+  sampleSize: number;
+  confidenceLevel: "none" | "low" | "medium" | "high";
+  inferredTimezone: string | null;
+}
+
+export interface SendTimeRecommendation {
+  recommendedTimes: RecommendedTime[];
+  currentlyOptimal: boolean;
+  alternativeTimes: number;
+  dataSource: "historical" | "default";
+  recipientPattern: RecipientPattern | null;
+}
+
+export interface RecipientEngagementData {
+  totalSent: number;
+  totalOpened: number;
+  totalClicked: number;
+  totalReplied: number;
+  openRate: number;
+  clickRate: number;
+  replyRate: number;
+  avgOpenDelayHours: number | null;
+  avgClickDelayHours: number | null;
+  avgReplyDelayHours: number | null;
+  peakOpenHour: number | null;
+  peakOpenDay: number | null;
+  inferredTimezone: string | null;
+}
+
+export interface RecipientPatternResponse {
+  recipientEmail: string;
+  hasData: boolean;
+  pattern: RecipientPattern | null;
+  engagement: RecipientEngagementData | null;
+}
+
+export interface OptimalSendTimeResponse {
+  recipients: Array<{
+    recipientEmail: string;
+    recommendation: SendTimeRecommendation;
+  }>;
+  consensusOptimalTime: string | null;
+  recipientCount: number;
+}
+
+export const sendTimeApi = {
+  /** Get optimal send time prediction for a single recipient. */
+  predict(payload: {
+    recipientEmail: string;
+    senderTimezone?: string;
+    urgency?: "low" | "normal" | "high";
+    windowDays?: number;
+  }): Promise<{ data: SendTimeRecommendation }> {
+    return apiFetch<{ data: SendTimeRecommendation }>(
+      "/v1/send-time/predict",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** Get full pattern analysis for a recipient. */
+  analyze(payload: {
+    recipientEmail: string;
+    lookbackDays?: number;
+  }): Promise<{
+    data: {
+      recipientEmail: string;
+      sampleSize: number;
+      source: "aggregated" | "raw_scan";
+      pattern: RecipientPattern;
+    };
+  }> {
+    return apiFetch("/v1/send-time/analyze", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Auto-schedule an email at the predicted optimal time. */
+  autoSchedule(payload: {
+    emailId: string;
+    recipientEmail: string;
+    senderTimezone?: string;
+    urgency?: "low" | "normal" | "high";
+    windowDays?: number;
+  }): Promise<{
+    data: {
+      emailId: string;
+      scheduledAt: string;
+      confidence: number;
+      reasoning: string;
+      dataSource: "historical" | "default";
+      alternatives: RecommendedTime[];
+    };
+  }> {
+    return apiFetch("/v1/send-time/auto-schedule", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Batch: get optimal send time for multiple recipients. */
+  optimalSendTime(payload: {
+    recipients: string[];
+    senderTimezone?: string;
+    urgency?: "low" | "normal" | "high";
+    windowDays?: number;
+  }): Promise<{ data: OptimalSendTimeResponse }> {
+    return apiFetch<{ data: OptimalSendTimeResponse }>(
+      "/v1/emails/optimal-send-time",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** Get engagement patterns for a specific recipient. */
+  recipientPatterns(
+    recipientEmail: string,
+  ): Promise<{ data: RecipientPatternResponse }> {
+    const qs = new URLSearchParams();
+    qs.set("recipientEmail", recipientEmail);
+    return apiFetch<{ data: RecipientPatternResponse }>(
+      `/v1/analytics/recipient-patterns?${qs.toString()}`,
+    );
+  },
+};
+
+// ─── Newsletter Summary (S6) ──────────────────────────────────────────────
+
+export interface NewsletterSummaryData {
+  headline: string;
+  bullets: string[];
+  keyLink?: string;
+  estimatedReadTime: number;
+  topics: string[];
+}
+
+export interface NewsletterSummaryResponse {
+  emailId: string;
+  summary: NewsletterSummaryData;
+}
+
+export const newsletterSummaryApi = {
+  /** Summarize a newsletter email by its ID. */
+  getByEmailId(emailId: string): Promise<{ data: NewsletterSummaryResponse }> {
+    return apiFetch<{ data: NewsletterSummaryResponse }>(
+      `/v1/emails/${emailId}/summary`,
+    );
+  },
+
+  /** Summarize newsletter content directly (POST). */
+  summarize(payload: {
+    htmlBody?: string;
+    textBody?: string;
+    subject: string;
+  }): Promise<{ data: NewsletterSummaryData }> {
+    return apiFetch<{ data: NewsletterSummaryData }>("/v1/explain/newsletter", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+// ─── Email Explainer (S7) ─────────────────────────────────────────────────
+
+export interface SuggestedActionData {
+  action: string;
+  reasoning: string;
+}
+
+export interface EmailExplanationData {
+  senderSummary: string;
+  relationshipContext: string;
+  whyItsHere: string;
+  suggestedActions: SuggestedActionData[];
+  urgencyLevel: "low" | "medium" | "high" | "urgent";
+}
+
+export interface EmailExplanationResponse {
+  emailId: string;
+  explanation: EmailExplanationData;
+}
+
+export const emailExplainerApi = {
+  /** Explain an email by its ID. */
+  getByEmailId(emailId: string): Promise<{ data: EmailExplanationResponse }> {
+    return apiFetch<{ data: EmailExplanationResponse }>(
+      `/v1/emails/${emailId}/explain`,
+    );
+  },
+
+  /** Explain email content directly (POST). */
+  explain(payload: {
+    email: {
+      from: string;
+      subject: string;
+      body: string;
+      date: string;
+    };
+    senderHistory: {
+      totalEmails: number;
+      lastContacted: string | null;
+      isKnown: boolean;
+    };
+    accountContext: {
+      inboxCategories: string[];
+    };
+  }): Promise<{ data: EmailExplanationData }> {
+    return apiFetch<{ data: EmailExplanationData }>("/v1/explain/email", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+// ─── Suppressions ──────────────────────────────────────────────────────────
+
 export const suppressionsApi = {
   add(payload: { email: string; domain: string; reason?: string }) {
     return apiFetch<{ data: unknown }>("/v1/suppressions", {
