@@ -25,7 +25,7 @@ let assistantModule: typeof import("@emailed/ai-engine/compose") | null = null;
 async function getComposeModule() {
   if (!assistantModule) {
     try {
-      assistantModule = await import("@emailed/ai-engine/compose") as any;
+      assistantModule = await import("@emailed/ai-engine/compose") as typeof import("@emailed/ai-engine/compose");
     } catch {
       // Fallback: inline minimal implementation
       return null;

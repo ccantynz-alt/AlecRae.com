@@ -44,13 +44,14 @@ export function EmailListWithGestures({
   const handleAction = useCallback(
     (id: string, action: ActionKind): void => {
       // Optimistic removal — capture for rollback.
-      let pending: PendingRemoval | null = null;
+      // Use a mutable ref-like object so TypeScript tracks mutation correctly.
+      const pendingRef: { value: PendingRemoval | null } = { value: null };
       setEmails((current) => {
         const index = current.findIndex((e) => e.id === id);
         if (index === -1) return current;
         const email = current[index];
         if (!email) return current;
-        pending = { email, index };
+        pendingRef.value = { email, index };
         const next = current.slice();
         next.splice(index, 1);
         return next;
@@ -61,8 +62,8 @@ export function EmailListWithGestures({
           await onAction(id, action);
         } catch {
           // Rollback: reinsert at the original index.
-          if (pending) {
-            const snapshot = pending;
+          const snapshot = pendingRef.value;
+          if (snapshot) {
             errorHaptic();
             setEmails((current) => {
               const next = current.slice();

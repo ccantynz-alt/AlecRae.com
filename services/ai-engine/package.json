@@ -141,6 +141,7 @@
     "@emailed/shared": "workspace:*",
     "@emailed/db": "workspace:*",
     "@anthropic-ai/sdk": "^0.30.0",
+    "drizzle-orm": "^0.36.0",
     "ioredis": "^5.4.0",
     "playwright": "^1.47.0",
     "pino": "^9.0.0",

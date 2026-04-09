@@ -63,7 +63,7 @@ snooze.post(
     await db
       .update(emails)
       .set({
-        metadata: { snoozedUntil: until.toISOString() } as any,
+        metadata: { snoozedUntil: until.toISOString() },
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -90,7 +90,7 @@ snooze.delete(
     await db
       .update(emails)
       .set({
-        metadata: {} as any,
+        metadata: {} as Record<string, string>,
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -150,7 +150,7 @@ scheduleSend.delete(
       .update(emails)
       .set({
         scheduledAt: null,
-        status: "draft" as any,
+        status: "queued", // "draft" not in email_status enum; "queued" = not yet sent
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -192,7 +192,7 @@ scheduleSend.post(
     await db
       .update(emails)
       .set({
-        status: "draft" as any,
+        status: "queued", // "draft" not in email_status enum; "queued" = not yet sent
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
