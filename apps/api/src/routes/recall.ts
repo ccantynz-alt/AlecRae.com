@@ -77,7 +77,7 @@ recall.post(
       .limit(1);
 
     if (existing) {
-      const baseUrl = process.env["API_URL"] ?? "https://api.vieanna.com";
+      const baseUrl = process.env["API_URL"] ?? "https://api.48co.ai";
       return c.json({
         data: {
           emailId: input.emailId,
@@ -105,7 +105,7 @@ recall.post(
       })
       .returning();
 
-    const baseUrl = process.env["API_URL"] ?? "https://api.vieanna.com";
+    const baseUrl = process.env["API_URL"] ?? "https://api.48co.ai";
 
     return c.json({
       data: {

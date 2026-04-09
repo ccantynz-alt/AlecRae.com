@@ -275,7 +275,7 @@ export default function LoginPage(): React.ReactElement {
             Need help? Contact your organization administrator or visit{" "}
             <Box
               as="a"
-              href="https://docs.vieanna.com/admin/sso"
+              href="https://docs.48co.ai/admin/sso"
               className="text-brand-400 hover:text-brand-300 transition-colors"
               target="_blank"
               rel="noopener noreferrer"

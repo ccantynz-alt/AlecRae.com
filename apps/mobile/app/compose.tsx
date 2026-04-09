@@ -60,7 +60,7 @@ export default function ComposeScreen(): React.ReactElement {
         .map((addr) => ({ email: addr }));
 
       await messagesApi.send({
-        from: { email: user?.email ?? "me@vieanna.com" },
+        from: { email: user?.email ?? "me@48co.ai" },
         to: toAddresses,
         cc: ccAddresses.length > 0 ? ccAddresses : undefined,
         subject,

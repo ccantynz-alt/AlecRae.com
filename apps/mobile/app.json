@@ -17,7 +17,7 @@
       "bundleIdentifier": "com.vienna.app",
       "buildNumber": "1",
       "supportsTablet": true,
-      "associatedDomains": ["applinks:vieanna.com", "applinks:mail.vieanna.com"],
+      "associatedDomains": ["applinks:48co.ai", "applinks:mail.48co.ai"],
       "infoPlist": {
         "NSFaceIDUsageDescription": "Vienna uses Face ID to quickly unlock your encrypted email.",
         "LSApplicationQueriesSchemes": ["mailto"]
@@ -43,8 +43,8 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "vieanna.com" },
-            { "scheme": "https", "host": "mail.vieanna.com" },
+            { "scheme": "https", "host": "48co.ai" },
+            { "scheme": "https", "host": "mail.48co.ai" },
             { "scheme": "mailto" }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
@@ -74,7 +74,7 @@
       "eas": {
         "projectId": "vienna-app"
       },
-      "apiUrl": "https://api.vieanna.com"
+      "apiUrl": "https://api.48co.ai"
     },
     "owner": "vienna",
     "runtimeVersion": {
