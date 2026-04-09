@@ -44,6 +44,7 @@ import { templatesRouter } from "./routes/templates.js";
 import { voice } from "./routes/voice.js";
 import { voiceClone } from "./routes/voice-clone.js";
 import { meetingLink } from "./routes/meeting-link.js";
+import { meetings } from "./routes/meetings.js";
 import { grammar } from "./routes/grammar.js";
 import { dictation } from "./routes/dictation.js";
 import { inbox } from "./routes/inbox.js";
@@ -71,6 +72,11 @@ import { sso } from "./routes/sso.js";
 import { spellcheckRouter } from "./routes/spellcheck.js";
 import { status } from "./routes/status.js";
 import { gamification } from "./routes/gamification.js";
+import { changelog } from "./routes/changelog.js";
+import { heatmapAnalytics } from "./routes/heatmap.js";
+import { voiceMessageRouter } from "./routes/voice-message.js";
+import { scripts } from "./routes/scripts.js";
+import { emailQuery } from "./routes/email-query.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
@@ -195,6 +201,12 @@ app.use("/v1/voice-clone", authMiddleware, writeRateLimit);
 // Meeting Link (S9): read-level — detection + transcript fetch
 app.use("/v1/meeting-link/*", authMiddleware, readRateLimit);
 app.use("/v1/meeting-link", authMiddleware, readRateLimit);
+// Meetings (S9 full): detect, link-recording, transcribe, summary
+app.use("/v1/meetings/detect", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/thread/*", authMiddleware, readRateLimit);
+app.use("/v1/meetings/*/link-recording", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/*/transcribe", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/*/summary", authMiddleware, readRateLimit);
 // Grammar: high-frequency read (600 req/min — real-time typing)
 app.use("/v1/grammar/*", authMiddleware, readRateLimit);
 // Dictation: write-level (200 req/min)
@@ -283,6 +295,20 @@ app.use("/v1/tasks", authMiddleware, readRateLimit);
 // Gamification (A7): read-level for stats, write-level for check-zero/track
 app.use("/v1/gamification/*", authMiddleware, readRateLimit);
 app.use("/v1/gamification", authMiddleware, readRateLimit);
+// Email Query (B2): search-level (60 req/min — AI query translation)
+app.use("/v1/query/*", authMiddleware, searchRateLimit);
+app.use("/v1/query", authMiddleware, searchRateLimit);
+// Changelog (C8): public read, admin-authed write (200 req/min)
+// Note: GET endpoints are public (no auth middleware). POST/PUT/DELETE require admin scope
+// which is enforced inside the route via requireScope("admin:write").
+app.use("/v1/changelog", readRateLimit);
+app.use("/v1/changelog/*", readRateLimit);
+// Voice Messages (B8): write-level (200 req/min — audio upload + transcription)
+app.use("/v1/voice-messages/*", authMiddleware, writeRateLimit);
+app.use("/v1/voice-messages", authMiddleware, writeRateLimit);
+// Programmable Email Scripts (B1): write-level (200 req/min)
+app.use("/v1/scripts/*", authMiddleware, writeRateLimit);
+app.use("/v1/scripts", authMiddleware, writeRateLimit);
 
 // Mount route handlers
 app.route("/v1/messages", messages);
@@ -297,6 +323,7 @@ app.route("/v1/templates", templatesRouter);
 app.route("/v1/voice", voice);
 app.route("/v1/voice-clone", voiceClone);
 app.route("/v1/meeting-link", meetingLink);
+app.route("/v1/meetings", meetings);
 app.route("/v1/grammar", grammar);
 app.route("/v1/dictation", dictation);
 app.route("/v1/inbox", inbox);
@@ -329,6 +356,8 @@ app.route("/v1/emails", emailSecurity);
 app.route("/v1/send-time", sendTime);
 app.route("/v1/emails", optimalSendTime);
 app.route("/v1/analytics", recipientPatterns);
+// A3: Inbox Heatmap analytics (heatmap grid, hourly chart, stats dashboard)
+app.route("/v1/analytics", heatmapAnalytics);
 app.route("/v1/compose-assist", composeAssist);
 app.route("/v1/compose/spellcheck", spellcheckRouter);
 app.route("/v1/todo", todo);
@@ -336,6 +365,13 @@ app.route("/v1/todo", todo);
 app.route("/v1/emails", emailTasks);
 app.route("/v1/tasks", taskRoutes);
 app.route("/v1/gamification", gamification);
+app.route("/v1/changelog", changelog);
+// B8: Voice-to-Voice Replies (recording, transcription, inline player)
+app.route("/v1/voice-messages", voiceMessageRouter);
+// B1: Programmable Email — TypeScript snippet engine
+app.route("/v1/scripts", scripts);
+// B2: Email-as-Database — SQL over inbox query engine
+app.route("/v1/query", emailQuery);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);

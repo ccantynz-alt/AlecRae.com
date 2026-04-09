@@ -127,6 +127,16 @@
       "types": "./src/voice/cloner.ts",
       "import": "./dist/voice/cloner.js"
     },
+    "./voice/voice-message": {
+      "bun": "./src/voice/voice-message.ts",
+      "types": "./src/voice/voice-message.ts",
+      "import": "./dist/voice/voice-message.js"
+    },
+    "./voice/style-cloner": {
+      "bun": "./src/voice/style-cloner.ts",
+      "types": "./src/voice/style-cloner.ts",
+      "import": "./dist/voice/style-cloner.js"
+    },
     "./meetings/transcript-linker": {
       "bun": "./src/meetings/transcript-linker.ts",
       "types": "./src/meetings/transcript-linker.ts",
@@ -156,6 +166,16 @@
       "bun": "./src/grammar/spellcheck.ts",
       "types": "./src/grammar/spellcheck.ts",
       "import": "./dist/grammar/spellcheck.js"
+    },
+    "./query/email-sql": {
+      "bun": "./src/query/email-sql.ts",
+      "types": "./src/query/email-sql.ts",
+      "import": "./dist/query/email-sql.js"
+    },
+    "./scripts/snippet-runner": {
+      "bun": "./src/scripts/snippet-runner.ts",
+      "types": "./src/scripts/snippet-runner.ts",
+      "import": "./dist/scripts/snippet-runner.js"
     }
   },
   "scripts": {

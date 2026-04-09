@@ -245,6 +245,55 @@ export type {
   NewCollaborationHistoryEntry,
 } from "./schema/collaboration.js";
 
+// Schema - Meeting Links (S9 — email thread → meeting transcript link)
+export {
+  meetingLinks,
+  meetingProviderEnum,
+  meetingLinkStatusEnum,
+  meetingLinksRelations,
+} from "./schema/meeting-links.js";
+
+// Schema - Saved Queries & Query History (B2 — email-as-database)
+export {
+  savedQueries,
+  queryHistory,
+  queryTypeEnum,
+  savedQueriesRelations,
+  queryHistoryRelations,
+} from "./schema/saved-queries.js";
+
+// Schema - Email Scripts (B1 — programmable email TypeScript snippets)
+export {
+  emailScripts,
+  scriptRuns,
+  scriptTriggerEnum,
+  scriptRunStatusEnum,
+  emailScriptsRelations,
+  scriptRunsRelations,
+} from "./schema/email-scripts.js";
+export type { ScriptAction } from "./schema/email-scripts.js";
+
+// Schema - Changelog Entries (C8 — public changelog page)
+export {
+  changelogEntries,
+  changelogCategoryEnum,
+} from "./schema/changelog.js";
+
+// Schema - Voice Clone Profiles (S4 — voice cloning for AI replies)
+export {
+  voiceStyleProfiles,
+  voiceTrainingSamples,
+  voiceStyleProfilesRelations,
+  voiceTrainingSamplesRelations,
+} from "./schema/voice-clone.js";
+export type {
+  StyleFingerprintData,
+  ExtractedFeaturesData,
+  RhythmFingerprintData,
+  VocabularyFingerprintData,
+  PunctuationStyleData,
+} from "./schema/voice-clone.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -296,6 +345,14 @@ import type {
   userAchievements,
   dailyStats,
 } from "./schema/gamification.js";
+import type { meetingLinks } from "./schema/meeting-links.js";
+import type { savedQueries, queryHistory } from "./schema/saved-queries.js";
+import type { emailScripts, scriptRuns } from "./schema/email-scripts.js";
+import type { changelogEntries } from "./schema/changelog.js";
+import type {
+  voiceStyleProfiles,
+  voiceTrainingSamples,
+} from "./schema/voice-clone.js";
 
 // Select types (what you get back from queries)
 export type Account = InferSelectModel<typeof accounts>;
@@ -374,3 +431,19 @@ export type Task = InferSelectModel<typeof tasks>;
 export type NewTask = InferInsertModel<typeof tasks>;
 export type TaskProviderConfig = InferSelectModel<typeof taskProviderConfigs>;
 export type NewTaskProviderConfig = InferInsertModel<typeof taskProviderConfigs>;
+export type MeetingLink = InferSelectModel<typeof meetingLinks>;
+export type NewMeetingLink = InferInsertModel<typeof meetingLinks>;
+export type SavedQuery = InferSelectModel<typeof savedQueries>;
+export type NewSavedQuery = InferInsertModel<typeof savedQueries>;
+export type QueryHistoryRecord = InferSelectModel<typeof queryHistory>;
+export type NewQueryHistoryRecord = InferInsertModel<typeof queryHistory>;
+export type ChangelogEntry = InferSelectModel<typeof changelogEntries>;
+export type NewChangelogEntry = InferInsertModel<typeof changelogEntries>;
+export type VoiceStyleProfile = InferSelectModel<typeof voiceStyleProfiles>;
+export type NewVoiceStyleProfile = InferInsertModel<typeof voiceStyleProfiles>;
+export type VoiceTrainingSample = InferSelectModel<typeof voiceTrainingSamples>;
+export type NewVoiceTrainingSample = InferInsertModel<typeof voiceTrainingSamples>;
+export type EmailScript = InferSelectModel<typeof emailScripts>;
+export type NewEmailScript = InferInsertModel<typeof emailScripts>;
+export type ScriptRun = InferSelectModel<typeof scriptRuns>;
+export type NewScriptRun = InferInsertModel<typeof scriptRuns>;

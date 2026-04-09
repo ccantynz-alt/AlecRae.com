@@ -494,6 +494,72 @@ export const analyticsApi = {
   },
 };
 
+// ─── Inbox Heatmap Analytics (A3) ─────────────────────────────────────────
+
+export interface HeatmapDayEntry {
+  date: string;
+  sent: number;
+  received: number;
+}
+
+export interface HourlyBucketEntry {
+  hour: number;
+  sent: number;
+  received: number;
+}
+
+export interface HeatmapStatsMetrics {
+  avgResponseTimeSec: number | null;
+  emailsPerDay: number;
+  busiestDay: string | null;
+  quietestDay: string | null;
+  inboxZeroStreak: number;
+  totalSent: number;
+  totalReceived: number;
+}
+
+export interface HeatmapStatsCompare {
+  avgResponseTimeDelta: number | null;
+  emailsPerDayDelta: number | null;
+  totalSentDelta: number | null;
+  totalReceivedDelta: number | null;
+}
+
+export type HeatmapPeriod = "7d" | "30d" | "90d" | "1y";
+
+export const heatmapApi = {
+  heatmap(params?: { period?: HeatmapPeriod; mode?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.period) qs.set("period", params.period);
+    if (params?.mode) qs.set("mode", params.mode);
+    const query = qs.toString();
+    return apiFetch<{ data: HeatmapDayEntry[]; meta: { period: string; from: string; to: string; days: number } }>(
+      `/v1/analytics/heatmap${query ? `?${query}` : ""}`,
+    );
+  },
+
+  hourly(params?: { period?: HeatmapPeriod }) {
+    const qs = new URLSearchParams();
+    if (params?.period) qs.set("period", params.period);
+    const query = qs.toString();
+    return apiFetch<{
+      data: HourlyBucketEntry[];
+      meta: { period: string; from: string; to: string; peakHour: number; peakHours: number[]; bestSendHours: number[] };
+    }>(`/v1/analytics/hourly${query ? `?${query}` : ""}`);
+  },
+
+  stats(params?: { period?: HeatmapPeriod; compare?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params?.period) qs.set("period", params.period);
+    if (params?.compare) qs.set("compare", "true");
+    const query = qs.toString();
+    return apiFetch<{
+      data: { metrics: HeatmapStatsMetrics; compare: HeatmapStatsCompare | null };
+      meta: { period: string; from: string; to: string; days: number };
+    }>(`/v1/analytics/stats${query ? `?${query}` : ""}`);
+  },
+};
+
 // ─── Webhooks ──────────────────────────────────────────────────────────────
 
 export const webhooksApi = {
@@ -1175,6 +1241,334 @@ export const collaborationApi = {
   ): Promise<{ success: boolean }> {
     return apiFetch<{ success: boolean }>(
       `/v1/collaborate/drafts/${draftId}/collaborate`,
+      { method: "DELETE" },
+    );
+  },
+};
+
+// ─── Meeting Transcript Links (S9) ──────────────────────────────────────────
+
+export type MeetingProviderType = "zoom" | "meet" | "teams" | "webex" | "generic";
+export type MeetingLinkStatusType = "detected" | "linked" | "transcribed" | "summarized";
+
+export interface MeetingLinkData {
+  id: string;
+  threadId: string;
+  emailId: string | null;
+  provider: MeetingProviderType;
+  meetingUrl: string | null;
+  scheduledAt: string | null;
+  recordingUrl: string | null;
+  transcriptUrl: string | null;
+  transcriptPreview: string | null;
+  aiSummary: string | null;
+  title: string | null;
+  confidence: number | null;
+  status: MeetingLinkStatusType;
+  participants: string | null;
+  duration: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface MeetingDetectResponse {
+  detected: boolean;
+  meeting: {
+    id: string;
+    threadId: string;
+    provider: MeetingProviderType;
+    meetingUrl: string | null;
+    scheduledAt: string | null;
+    title: string | null;
+    confidence: number;
+    detectedFrom: string;
+    status: MeetingLinkStatusType;
+  } | null;
+}
+
+export interface MeetingThreadResponse {
+  meetings: MeetingLinkData[];
+}
+
+export interface MeetingLinkRecordingResponse {
+  id: string;
+  recordingUrl: string;
+  transcriptUrl: string | null;
+  status: MeetingLinkStatusType;
+  updatedAt: string;
+}
+
+export interface MeetingTranscribeResponse {
+  id: string;
+  transcriptPreview: string;
+  transcriptLength: number;
+  status: MeetingLinkStatusType;
+  updatedAt: string;
+}
+
+export interface MeetingSummaryResponse {
+  id: string;
+  title: string | null;
+  summary: string;
+  status: MeetingLinkStatusType;
+  cached: boolean;
+}
+
+export const meetingsApi = {
+  /** Detect meetings in a thread and persist. */
+  detect(payload: {
+    threadId: string;
+    thread: {
+      messages: Array<{
+        id?: string;
+        from?: string;
+        to?: string[];
+        subject?: string;
+        textBody?: string;
+        htmlBody?: string;
+        receivedAt?: string;
+      }>;
+    };
+  }): Promise<{ data: MeetingDetectResponse }> {
+    return apiFetch<{ data: MeetingDetectResponse }>("/v1/meetings/detect", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Get meeting links for a thread. */
+  getByThread(threadId: string): Promise<{ data: MeetingThreadResponse }> {
+    return apiFetch<{ data: MeetingThreadResponse }>(
+      `/v1/meetings/thread/${encodeURIComponent(threadId)}`,
+    );
+  },
+
+  /** Manually attach a recording URL to a meeting. */
+  linkRecording(
+    meetingId: string,
+    payload: { recordingUrl: string; transcriptUrl?: string },
+  ): Promise<{ data: MeetingLinkRecordingResponse }> {
+    return apiFetch<{ data: MeetingLinkRecordingResponse }>(
+      `/v1/meetings/${encodeURIComponent(meetingId)}/link-recording`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** Trigger transcription (Whisper API or direct text). */
+  transcribe(
+    meetingId: string,
+    payload?: { transcriptText?: string; audioUrl?: string },
+  ): Promise<{ data: MeetingTranscribeResponse }> {
+    return apiFetch<{ data: MeetingTranscribeResponse }>(
+      `/v1/meetings/${encodeURIComponent(meetingId)}/transcribe`,
+      { method: "POST", body: JSON.stringify(payload ?? {}) },
+    );
+  },
+
+  /** Get AI summary of a meeting transcript. */
+  getSummary(meetingId: string): Promise<{ data: MeetingSummaryResponse }> {
+    return apiFetch<{ data: MeetingSummaryResponse }>(
+      `/v1/meetings/${encodeURIComponent(meetingId)}/summary`,
+    );
+  },
+};
+
+// ─── Voice Clone Profiles (S4) ──────────────────────────────────────────────
+
+export interface VoiceCloneProfile {
+  id: string;
+  name: string;
+  sampleCount: number;
+  confidenceScore: number;
+  isDefault: boolean;
+  isTraining: boolean;
+  lastTrainedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VoiceCloneTrainingResult {
+  profileId: string;
+  sampleCount: number;
+  confidenceScore: number;
+  formalityLevel: string;
+  emojiUsage: number;
+  signaturePhrasesFound: number;
+  characteristicWordsFound: number;
+  trainedAt: string;
+}
+
+export interface VoiceCloneComposeResult {
+  body: string;
+  profileId: string;
+  profileName: string;
+  confidenceScore: number;
+  formalityLevel: string;
+  sampleCount: number;
+}
+
+export const voiceCloneApi = {
+  /** Create a new voice style profile. */
+  createProfile(payload: {
+    name: string;
+    isDefault?: boolean;
+  }): Promise<{ data: VoiceCloneProfile }> {
+    return apiFetch<{ data: VoiceCloneProfile }>(
+      "/v1/voice-clone/profiles",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** List all voice profiles for the current account. */
+  listProfiles(): Promise<{ data: VoiceCloneProfile[] }> {
+    return apiFetch<{ data: VoiceCloneProfile[] }>(
+      "/v1/voice-clone/profiles",
+    );
+  },
+
+  /** Get a single profile by ID. */
+  getProfile(profileId: string): Promise<{ data: VoiceCloneProfile & { styleFingerprint: unknown; trainingSampleCount: number } }> {
+    return apiFetch(
+      `/v1/voice-clone/profiles/${encodeURIComponent(profileId)}`,
+    );
+  },
+
+  /** Train or retrain a profile from sent emails. */
+  trainProfile(
+    profileId: string,
+    payload: { sampleSize?: number },
+  ): Promise<{ data: VoiceCloneTrainingResult }> {
+    return apiFetch<{ data: VoiceCloneTrainingResult }>(
+      `/v1/voice-clone/profiles/${encodeURIComponent(profileId)}/train`,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** Delete a voice profile. */
+  deleteProfile(profileId: string): Promise<{ data: { deleted: boolean; id: string } }> {
+    return apiFetch<{ data: { deleted: boolean; id: string } }>(
+      `/v1/voice-clone/profiles/${encodeURIComponent(profileId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  /** Compose an email using a specific voice profile. */
+  compose(payload: {
+    profileId: string;
+    prompt: string;
+    recipient?: string;
+    threadHistory?: Array<{ from: string; body: string }>;
+    replyTo?: { from: string; subject: string; body: string };
+  }): Promise<{ data: VoiceCloneComposeResult }> {
+    return apiFetch<{ data: VoiceCloneComposeResult }>(
+      "/v1/voice-clone/compose",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+};
+
+// ─── Email Query (B2: Email-as-Database) ───────────────────────────────────
+
+export interface QueryExecuteResponse {
+  columns: string[];
+  rows: Record<string, unknown>[];
+  rowCount: number;
+  executionTimeMs: number;
+  query: {
+    original: string;
+    parsed: Record<string, unknown>;
+  };
+}
+
+export interface QueryExplainResponse {
+  description: string;
+  estimatedScope: string;
+  warnings: string[];
+  parsedQuery: Record<string, unknown>;
+}
+
+export interface QueryHistoryEntryData {
+  id: string;
+  queryText: string;
+  queryType: "natural" | "sql";
+  resultCount: number | null;
+  executionTimeMs: number | null;
+  createdAt: string;
+}
+
+export interface SavedQueryData {
+  id: string;
+  name: string;
+  queryText: string;
+  queryType: "natural" | "sql";
+  lastRunAt: string | null;
+  runCount: number;
+  createdAt: string;
+}
+
+export const emailQueryApi = {
+  /** Execute a query against the user's inbox. */
+  execute(payload: {
+    query: string;
+    queryType?: "natural" | "sql";
+    limit?: number;
+    offset?: number;
+    format?: "json" | "csv";
+  }): Promise<{ data: QueryExecuteResponse }> {
+    return apiFetch<{ data: QueryExecuteResponse }>("/v1/query", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Explain what a query would do without executing it. */
+  explain(payload: {
+    query: string;
+    queryType?: "natural" | "sql";
+  }): Promise<{ data: QueryExplainResponse }> {
+    return apiFetch<{ data: QueryExplainResponse }>("/v1/query/explain", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Get recent query history. */
+  getHistory(params?: {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ data: { entries: QueryHistoryEntryData[]; total: number } }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", params.limit.toString());
+    if (params?.offset) qs.set("offset", params.offset.toString());
+    const query = qs.toString();
+    return apiFetch(`/v1/query/history${query ? `?${query}` : ""}`);
+  },
+
+  /** Get saved queries. */
+  getSavedQueries(): Promise<{
+    data: { queries: SavedQueryData[]; total: number };
+  }> {
+    return apiFetch("/v1/query/saved");
+  },
+
+  /** Save a query. */
+  saveQuery(payload: {
+    name: string;
+    queryText: string;
+    queryType?: "natural" | "sql";
+  }): Promise<{ data: SavedQueryData }> {
+    return apiFetch<{ data: SavedQueryData }>("/v1/query/save", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Delete a saved query. */
+  deleteSavedQuery(
+    id: string,
+  ): Promise<{ data: { deleted: boolean; id: string } }> {
+    return apiFetch<{ data: { deleted: boolean; id: string } }>(
+      `/v1/query/saved/${encodeURIComponent(id)}`,
       { method: "DELETE" },
     );
   },

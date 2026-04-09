@@ -649,7 +649,7 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 **Date last updated:** 2026-04-09
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Production deployment (Vercel live, awaiting Craig's infra setup)
-**Build completion:** TIER 1-4 ALL DONE (36/36) + 7 bonus + 21 advanced features (S/A/B/C)
+**Build completion:** TIER 1-4 ALL DONE (36/36) + 7 bonus + 31 advanced features (S10/10 + A7/7 + B8/8 + C6/10)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
 
@@ -683,12 +683,12 @@ If you ship something not in this file, you broke the rules.
 | S1 | **WebGPU client-side AI inference** | Llama 3.1 8B at 41 tok/sec in browser. $0/token. No competitor has this. Full WebLLM engine, Zod-validated API, IndexedDB cache tracking, progress events, `localInfer()` API, React status indicator. | DONE |
 | S2 | **CRDT real-time collaborative drafting** | Two people editing the same email with live cursors (Yjs). Full Yjs + Awareness client, WebSocket collab service, DB persistence, UI (editor + panel + avatars), typed API client. INDUSTRY FIRST in email. | DONE |
 | S3 | **AI inbox agent (works while you sleep)** | Wakes up overnight, triages, drafts replies, schedules sends. You approve in the morning with one tap. INDUSTRY FIRST. Full InboxAgent engine (Haiku triage + Sonnet drafting + briefing), 12 API endpoints, DB-persisted runs/drafts/config, per-draft approve/reject/edit, morning briefing, confidence scoring, human-in-the-loop. | DONE |
-| S4 | **Voice cloning for AI replies** | Drafts sound exactly like you (style transfer beyond voice profile). | NOT STARTED |
+| S4 | **Voice cloning for AI replies** | Drafts sound exactly like you (style transfer beyond voice profile). Multi-profile support (professional/casual/etc), DB-persisted style fingerprints (rhythm, vocabulary, punctuation, formality, emoji), confidence scoring, per-email feature extraction, Claude-powered compose in user's voice. 6 API endpoints, Drizzle schema, UI selector + manager page. | DONE |
 | S5 | **Semantic vector search** | "Find the email where someone said something like 'we should consider the budget'" via embeddings. Beyond keyword. | DONE |
 | S6 | **Auto-summary of every newsletter** | AI reduces newsletters to 3 bullets in inbox preview. Full text on demand. | DONE |
 | S7 | **AI "Why is this in my inbox?" explainer** | Click any email → AI explains who this is, history, why it landed here, suggested action. | DONE |
 | S8 | **One-click thread → action items in todo apps** | Native Things, Todoist, Linear, Notion integration. AI thread extraction, batch create, built-in task list, DB-backed provider configs. | DONE |
-| S9 | **Email thread → meeting transcript link** | If a thread leads to a call, auto-link the recording + transcript. | NOT STARTED |
+| S9 | **Email thread → meeting transcript link** | If a thread leads to a call, auto-link the recording + transcript. DB-backed meeting_links table, 5 API endpoints, Whisper transcription, Claude Haiku summary, MeetingLinkCard UI, MeetingTranscriptPanel web component. | DONE |
 | S10 | **Predictive send-time optimization** | AI predicts best send time based on recipient open patterns. | DONE |
 
 ### TIER A — CUTTING-EDGE UX
@@ -696,25 +696,25 @@ If you ship something not in this file, you broke the rules.
 | # | Feature | Why It Wins | Status |
 |---|---|---|---|
 | A1 | **Magic UI animations (Linear-style)** | Framer Motion + spring physics. Full animation library + 8 reusable components. Wired into sidebar, inbox, compose, analytics, settings. | DONE |
-| A2 | **Spatial inbox (3D thread visualization)** | R3F-powered 3D view for power users. Optional. | NOT STARTED |
-| A3 | **Inbox heatmap** | Visual email habits (when you're most productive). | NOT STARTED |
+| A2 | **Spatial inbox (3D thread visualization)** | R3F-powered 3D view for power users. Optional. InstancedMesh for 1000+ threads, configurable axes (time/priority/category/sender), color schemes, orbit controls, hover tooltips, keyboard navigation, connection lines, cluster labels. Lazy-loaded with ErrorBoundary for WebGL failures. | DONE |
+| A3 | **Inbox heatmap** | Visual email habits (when you're most productive). GitHub-style contribution heatmap, 24h hourly activity chart, stats dashboard with period selector and comparison. 3 UI components, 3 API endpoints, web view. | DONE |
 | A4 | **Focus mode** | Hides everything except important emails. Full screen. Timer, progress tracking, Cmd+Shift+F shortcut. | DONE |
-| A5 | **Quick-reply gestures (mobile)** | Brilliant swipe interactions. Mobile already has the pattern, needs polish. | NOT STARTED |
-| A6 | **Drag-to-snooze on mini-calendar** | Drag email to a time slot to snooze. | NOT STARTED |
+| A5 | **Quick-reply gestures (mobile)** | Brilliant swipe interactions. Mobile already has the pattern, needs polish. Five-action swipe (reply/snooze/archive/flag/delete), AI quick-reply bottom sheet, web touch+hover version. | DONE |
+| A6 | **Drag-to-snooze on mini-calendar** | Drag email to a time slot to snooze. HTML5 DnD + touch long-press, mini-calendar drop zones, time slot picker, quick presets, keyboard S shortcut, undo support. | DONE |
 | A7 | **Inbox zero rituals (gamification)** | Streaks, achievements (optional). DB schema (user_streaks, user_achievements, daily_stats), 6 API endpoints, 6 React components (celebration, streak counter, achievement badge/panel, weekly stats, toggle). Respects prefers-reduced-motion. | DONE |
 
 ### TIER B — POWER FEATURES COMPETITORS DON'T HAVE
 
 | # | Feature | Why It Wins | Status |
 |---|---|---|---|
-| B1 | **Programmable email (TypeScript snippets)** | Apps Script but better, type-safe, runs on every email. | NOT STARTED |
-| B2 | **Email-as-database (SQL over inbox)** | Treat your inbox as a queryable dataset. | NOT STARTED |
+| B1 | **Programmable email (TypeScript snippets)** | Apps Script but better, type-safe, runs on every email. Sandboxed snippet runner, 8 API endpoints, DB-persisted scripts + run history, 8 templates, ScriptEditor UI, EmailScriptManager page. | DONE |
+| B2 | **Email-as-database (SQL over inbox)** | Treat your inbox as a queryable dataset. NL + SQL-like query engine via Claude Haiku, 6 API endpoints, Drizzle schemas (saved_queries, query_history), split-pane console UI, CSV export, query history + saved queries sidebar. | DONE |
 | B3 | **AI unsubscribe agent (browser automation)** | One click → AI navigates the unsubscribe page → confirms. | DONE |
 | B4 | **Auto-translation badges** | "Translated from Spanish" badge with toggle to original. | DONE |
 | B5 | **Real-time sender verification** | Check sender reputation, business legitimacy, recent news inline. SPF/DKIM/DMARC, DNS auth records, WHOIS domain age, typosquatting detection, trust badges. | DONE |
 | B6 | **Phishing protection with explainer** | "This email is suspicious because..." AI-powered multi-signal analysis, urgency/credential harvesting/URL mismatch/lookalike/homograph/attachment detection, Claude Sonnet explainer, one-click report. | DONE |
 | B7 | **AI calendar slot suggestions in compose** | Type "let's meet next week" → AI suggests slots inline. | DONE |
-| B8 | **Voice-to-voice replies** | Voice messages as attachments + auto-transcription for recipient. | NOT STARTED |
+| B8 | **Voice-to-voice replies** | Voice messages as attachments + auto-transcription for recipient. Whisper transcription, inline HTML player, waveform viz, playback speed, keyboard-accessible recorder + player. | DONE |
 
 ### TIER C — POLISH & TRUST (REQUIRED FOR LAUNCH)
 
@@ -727,7 +727,7 @@ If you ship something not in this file, you broke the rules.
 | C5 | **GDPR DPA template** | Legal pages exist, need DPA workflow | NOT STARTED |
 | C6 | **Bug bounty program** | HackerOne or Intigriti | NOT STARTED |
 | C7 | **Public roadmap** | Trello/Linear public board | NOT STARTED |
-| C8 | **Changelog page** | changelog.48co.ai | NOT STARTED |
+| C8 | **Changelog page** | changelog.48co.ai | DONE |
 | C9 | **Migration guides** | "From Gmail to Vienna in 5 minutes" | DONE |
 | C10 | **Spell check (multi-language)** | Native browser spell-check + custom dictionary | DONE |
 
@@ -798,12 +798,12 @@ If you ship something not in this file, you broke the rules.
 | Vercel deployment | Configured, deploying from main | 100% |
 | Neon SQL setup | Ready | 100% |
 | CLAUDE.md Bible | Complete | 100% |
-| **Tier S features (industry firsts)** | **S1+S2+S3+S5+S6+S7+S8+S10 done (8/10)** | **80%** |
-| **Tier A features (cutting-edge UX)** | **A1+A4+A7 done (3/7)** | **43%** |
-| **Tier B features (power user)** | **B3+B4+B5+B6+B7 done (5/8)** | **62%** |
-| **Tier C features (polish + trust)** | **C1+C2+C3+C9+C10 done (5/10)** | **50%** |
+| **Tier S features (industry firsts)** | **S1+S2+S3+S4+S5+S6+S7+S8+S9+S10 done (10/10)** | **100%** |
+| **Tier A features (cutting-edge UX)** | **A1+A2+A3+A4+A5+A6+A7 done (7/7)** | **100%** |
+| **Tier B features (power user)** | **B1+B2+B3+B4+B5+B6+B7+B8 done (8/8)** | **100%** |
+| **Tier C features (polish + trust)** | **C1+C2+C3+C8+C9+C10 done (6/10)** | **60%** |
 
-**Overall: ~95% of launch-ready product. Core platform 100% done. Remaining: Craig infra setup (Neon/Upstash/Stripe/DNS/API keys) + remaining Tier S/A/B/C features.**
+**Overall: ~98% of launch-ready product. All code features complete. Remaining: Craig infra setup (Neon/Upstash/Stripe/DNS/API keys) + C4/C5/C6/C7 (compliance/legal — not code tasks).**
 
 ---
 
