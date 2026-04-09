@@ -84,7 +84,7 @@ function ParticipantItem({
 }: {
   collaborator: Collaborator;
   isOwner: boolean;
-  onRemove?: (userId: string) => void;
+  onRemove?: ((userId: string) => void) | undefined;
 }): React.JSX.Element {
   return (
     <Box className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-surface-secondary transition-colors">

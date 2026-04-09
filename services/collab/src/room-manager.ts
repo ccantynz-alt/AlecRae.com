@@ -36,13 +36,13 @@ export interface ClientContext {
   /** Draft / room id. */
   draftId: string;
   /** Session id for collaboration tracking. */
-  sessionId?: string;
+  sessionId?: string | undefined;
   /** User display name (for awareness). */
-  userName?: string;
+  userName?: string | undefined;
   /** User avatar URL. */
-  avatarUrl?: string;
+  avatarUrl?: string | undefined;
   /** Per-connection awareness client id (set after first awareness msg). */
-  awarenessClientId?: number;
+  awarenessClientId?: number | undefined;
 }
 
 export interface Room {

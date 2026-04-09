@@ -265,7 +265,7 @@ collaborate.post(
       id: generateId(),
       emailId: input.emailId,
       authorId: auth.accountId,
-      authorName: auth.name ?? "Unknown",
+      authorName: (auth as Record<string, unknown>).name as string ?? "Unknown",
       body: input.body,
       mentions: input.mentions,
       createdAt: new Date(),

@@ -289,7 +289,7 @@ export const CollaborativeEditor = forwardRef<
                 collaborators={collaborators}
                 size="sm"
                 maxVisible={6}
-                onCollaboratorClick={onOpenPanel ? () => onOpenPanel() : undefined}
+                {...(onOpenPanel ? { onCollaboratorClick: () => onOpenPanel() } : {})}
               />
             )}
 

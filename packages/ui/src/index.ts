@@ -30,6 +30,7 @@ export { SecurityReport, type SecurityReportProps, type SecurityReportData } fro
 export { CollaboratorAvatars, type CollaboratorAvatarsProps, type Collaborator } from "./composites/collaborator-avatars";
 export { CollaborationPanel, type CollaborationPanelProps, type CollabPanelView, type CollabInvite, type CollabHistoryEntry, type CollabSessionInfo, type CollabSessionStatus } from "./composites/collaboration-panel";
 export { CollaborativeEditor, type CollaborativeEditorProps, type CollaborativeEditorConfig, type ConnectionStatus, type AwarenessUserState } from "./composites/collaborative-editor";
+export { ActionItemList, type ActionItemListProps, type ExtractedActionItem, type TaskProvider, type TaskPriority, type ExtractionState, type CreateState } from "./composites/action-item-list";
 
 // Layouts
 export { Sidebar, type SidebarProps, type SidebarNavItem, type SidebarSection } from "./layouts/sidebar";

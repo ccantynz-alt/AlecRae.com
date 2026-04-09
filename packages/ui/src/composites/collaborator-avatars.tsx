@@ -26,7 +26,7 @@ export interface CollaboratorAvatarsProps
   /** Whether to show a tooltip on hover (uses native title attr). */
   showTooltip?: boolean;
   /** Callback when an avatar is clicked. */
-  onCollaboratorClick?: (collaborator: Collaborator) => void;
+  onCollaboratorClick?: ((collaborator: Collaborator) => void) | undefined;
   className?: string;
 }
 
