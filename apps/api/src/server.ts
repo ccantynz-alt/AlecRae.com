@@ -74,6 +74,8 @@ import { status } from "./routes/status.js";
 import { gamification } from "./routes/gamification.js";
 import { changelog } from "./routes/changelog.js";
 import { heatmapAnalytics } from "./routes/heatmap.js";
+import { voiceMessageRouter } from "./routes/voice-message.js";
+import { scripts } from "./routes/scripts.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
@@ -297,6 +299,12 @@ app.use("/v1/gamification", authMiddleware, readRateLimit);
 // which is enforced inside the route via requireScope("admin:write").
 app.use("/v1/changelog", readRateLimit);
 app.use("/v1/changelog/*", readRateLimit);
+// Voice Messages (B8): write-level (200 req/min — audio upload + transcription)
+app.use("/v1/voice-messages/*", authMiddleware, writeRateLimit);
+app.use("/v1/voice-messages", authMiddleware, writeRateLimit);
+// Programmable Email Scripts (B1): write-level (200 req/min)
+app.use("/v1/scripts/*", authMiddleware, writeRateLimit);
+app.use("/v1/scripts", authMiddleware, writeRateLimit);
 
 // Mount route handlers
 app.route("/v1/messages", messages);
@@ -354,6 +362,8 @@ app.route("/v1/emails", emailTasks);
 app.route("/v1/tasks", taskRoutes);
 app.route("/v1/gamification", gamification);
 app.route("/v1/changelog", changelog);
+// B8: Voice-to-Voice Replies (recording, transcription, inline player)
+app.route("/v1/voice-messages", voiceMessageRouter);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);

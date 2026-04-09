@@ -43,6 +43,10 @@ export { EmailStatsDashboard, type EmailStatsDashboardProps, type EmailStatsMetr
 
 export { ChangelogEntry, type ChangelogEntryProps, type ChangelogEntryData, type ChangelogCategory } from "./composites/changelog-entry";
 export { ChangelogFeed, type ChangelogFeedProps } from "./composites/changelog-feed";
+export { VoiceProfileSelector, type VoiceProfileSelectorProps, type VoiceProfileData, type ConfidenceTier } from "./composites/voice-profile-selector";
+export { VoiceRecorder, type VoiceRecorderProps, type VoiceRecordingResult, type RecordingState } from "./composites/voice-recorder";
+export { VoiceMessagePlayer, type VoiceMessagePlayerProps, type VoiceMessageData, type PlaybackSpeed } from "./composites/voice-message-player";
+export { ScriptEditor, type ScriptEditorProps, type ScriptData, type ScriptTemplate, type ScriptRunEntry, type ScriptTrigger, type ScriptRunStatus, type TestResult } from "./composites/script-editor";
 
 // Layouts
 export { Sidebar, type SidebarProps, type SidebarNavItem, type SidebarSection } from "./layouts/sidebar";

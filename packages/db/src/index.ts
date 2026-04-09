@@ -253,6 +253,26 @@ export {
   meetingLinksRelations,
 } from "./schema/meeting-links.js";
 
+// Schema - Saved Queries & Query History (B2 — email-as-database)
+export {
+  savedQueries,
+  queryHistory,
+  queryTypeEnum,
+  savedQueriesRelations,
+  queryHistoryRelations,
+} from "./schema/saved-queries.js";
+
+// Schema - Email Scripts (B1 — programmable email TypeScript snippets)
+export {
+  emailScripts,
+  scriptRuns,
+  scriptTriggerEnum,
+  scriptRunStatusEnum,
+  emailScriptsRelations,
+  scriptRunsRelations,
+} from "./schema/email-scripts.js";
+export type { ScriptAction } from "./schema/email-scripts.js";
+
 // Schema - Changelog Entries (C8 — public changelog page)
 export {
   changelogEntries,
@@ -326,6 +346,7 @@ import type {
   dailyStats,
 } from "./schema/gamification.js";
 import type { meetingLinks } from "./schema/meeting-links.js";
+import type { emailScripts, scriptRuns } from "./schema/email-scripts.js";
 import type { changelogEntries } from "./schema/changelog.js";
 import type {
   voiceStyleProfiles,
@@ -417,3 +438,7 @@ export type VoiceStyleProfile = InferSelectModel<typeof voiceStyleProfiles>;
 export type NewVoiceStyleProfile = InferInsertModel<typeof voiceStyleProfiles>;
 export type VoiceTrainingSample = InferSelectModel<typeof voiceTrainingSamples>;
 export type NewVoiceTrainingSample = InferInsertModel<typeof voiceTrainingSamples>;
+export type EmailScript = InferSelectModel<typeof emailScripts>;
+export type NewEmailScript = InferInsertModel<typeof emailScripts>;
+export type ScriptRun = InferSelectModel<typeof scriptRuns>;
+export type NewScriptRun = InferInsertModel<typeof scriptRuns>;

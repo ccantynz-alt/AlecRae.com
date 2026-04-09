@@ -683,7 +683,7 @@ If you ship something not in this file, you broke the rules.
 | S1 | **WebGPU client-side AI inference** | Llama 3.1 8B at 41 tok/sec in browser. $0/token. No competitor has this. Full WebLLM engine, Zod-validated API, IndexedDB cache tracking, progress events, `localInfer()` API, React status indicator. | DONE |
 | S2 | **CRDT real-time collaborative drafting** | Two people editing the same email with live cursors (Yjs). Full Yjs + Awareness client, WebSocket collab service, DB persistence, UI (editor + panel + avatars), typed API client. INDUSTRY FIRST in email. | DONE |
 | S3 | **AI inbox agent (works while you sleep)** | Wakes up overnight, triages, drafts replies, schedules sends. You approve in the morning with one tap. INDUSTRY FIRST. Full InboxAgent engine (Haiku triage + Sonnet drafting + briefing), 12 API endpoints, DB-persisted runs/drafts/config, per-draft approve/reject/edit, morning briefing, confidence scoring, human-in-the-loop. | DONE |
-| S4 | **Voice cloning for AI replies** | Drafts sound exactly like you (style transfer beyond voice profile). | NOT STARTED |
+| S4 | **Voice cloning for AI replies** | Drafts sound exactly like you (style transfer beyond voice profile). Multi-profile support (professional/casual/etc), DB-persisted style fingerprints (rhythm, vocabulary, punctuation, formality, emoji), confidence scoring, per-email feature extraction, Claude-powered compose in user's voice. 6 API endpoints, Drizzle schema, UI selector + manager page. | DONE |
 | S5 | **Semantic vector search** | "Find the email where someone said something like 'we should consider the budget'" via embeddings. Beyond keyword. | DONE |
 | S6 | **Auto-summary of every newsletter** | AI reduces newsletters to 3 bullets in inbox preview. Full text on demand. | DONE |
 | S7 | **AI "Why is this in my inbox?" explainer** | Click any email → AI explains who this is, history, why it landed here, suggested action. | DONE |
@@ -798,7 +798,7 @@ If you ship something not in this file, you broke the rules.
 | Vercel deployment | Configured, deploying from main | 100% |
 | Neon SQL setup | Ready | 100% |
 | CLAUDE.md Bible | Complete | 100% |
-| **Tier S features (industry firsts)** | **S1+S2+S3+S5+S6+S7+S8+S9+S10 done (9/10)** | **90%** |
+| **Tier S features (industry firsts)** | **S1+S2+S3+S4+S5+S6+S7+S8+S9+S10 done (10/10)** | **100%** |
 | **Tier A features (cutting-edge UX)** | **A1+A2+A3+A4+A6+A7 done (6/7)** | **86%** |
 | **Tier B features (power user)** | **B3+B4+B5+B6+B7 done (5/8)** | **62%** |
 | **Tier C features (polish + trust)** | **C1+C2+C3+C9+C10 done (5/10)** | **50%** |

@@ -107,9 +107,9 @@ function formatDelta(delta: number | null | undefined, suffix?: string): string 
 interface MetricCardProps {
   label: string;
   value: string;
-  delta?: string;
-  trend?: TrendDirection;
-  trendColor?: string;
+  delta?: string | undefined;
+  trend?: TrendDirection | undefined;
+  trendColor?: string | undefined;
   icon: string;
 }
 
