@@ -2,11 +2,9 @@ import {
   pgTable,
   text,
   timestamp,
-  integer,
   jsonb,
   index,
   uniqueIndex,
-  real,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { accounts } from "./users.js";
@@ -15,7 +13,7 @@ import { accounts } from "./users.js";
 // Contact Stats — JSON column type
 // ---------------------------------------------------------------------------
 
-interface ContactStats {
+export interface ContactStats {
   totalEmails: number;
   lastContactedAt: string | null;
   firstContactedAt: string | null;

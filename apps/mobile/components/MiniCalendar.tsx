@@ -167,8 +167,6 @@ export function MiniCalendar({
   );
 }
 
-const CELL_SIZE = "13.2%"; // 7 cells per row with small gaps
-
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 12,
@@ -192,7 +190,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   cell: {
-    width: CELL_SIZE as unknown as number,
+    width: 40,
     aspectRatio: 0.85,
     borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.04)",

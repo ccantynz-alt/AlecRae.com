@@ -107,6 +107,7 @@ export function SnoozeMenu({
   onConfirm,
 }: SnoozeMenuProps): React.ReactElement | null {
   const { height: screenHeight } = useWindowDimensions();
+  const cardSlotRef = useRef<View>(null);
   const sheetY = useSharedValue(screenHeight);
 
   // Drag state for the email card.
@@ -256,17 +257,15 @@ export function SnoozeMenu({
         {/* Draggable email card */}
         <View
           style={styles.cardSlot}
-          onLayout={(e): void => {
+          ref={cardSlotRef}
+          onLayout={(): void => {
             // Capture absolute origin for hit-testing.
-            const target = e.target as unknown as {
-              measureInWindow?: (
-                cb: (x: number, y: number, w: number, h: number) => void,
-              ) => void;
-            };
-            target.measureInWindow?.((x, y) => {
-              cardOriginX.current = x;
-              cardOriginY.current = y;
-            });
+            cardSlotRef.current?.measureInWindow(
+              (x: number, y: number) => {
+                cardOriginX.current = x;
+                cardOriginY.current = y;
+              },
+            );
           }}
         >
           <GestureDetector gesture={cardPan}>

@@ -2,7 +2,6 @@ import {
   pgTable,
   text,
   timestamp,
-  boolean,
   integer,
   jsonb,
   pgEnum,
@@ -73,7 +72,7 @@ export const screenerDecisions = pgTable(
 // Screener Queue — Emails awaiting sender approval
 // ---------------------------------------------------------------------------
 
-interface ScreenerAiAssessment {
+export interface ScreenerAiAssessment {
   isLikelySpam: boolean;
   isLikelyNewsletter: boolean;
   isLikelyImportant: boolean;

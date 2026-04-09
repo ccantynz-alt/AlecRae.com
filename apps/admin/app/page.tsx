@@ -165,6 +165,7 @@ export default function DashboardPage() {
         <PlatformSummaryPanel stats={stats} loading={statsLoading} />
       </Box>
     </Box>
+    </AuthShell>
   );
 }
 

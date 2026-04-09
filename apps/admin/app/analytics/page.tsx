@@ -8,6 +8,7 @@ import { DataTable } from "../../components/data-table";
 import { adminApi } from "../../lib/api";
 import type { AdminStats, AdminDomain } from "../../lib/api";
 import { useApi } from "../../lib/use-api";
+import { AuthShell } from "../../components/auth-shell";
 
 function formatNumber(n: number): string {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
@@ -89,6 +90,7 @@ export default function AnalyticsPage() {
   const domainList = domains ?? [];
 
   return (
+    <AuthShell>
     <Box className="flex flex-col gap-8">
       <Box>
         <Text variant="heading-lg" className="text-content font-bold">Analytics</Text>
@@ -176,6 +178,7 @@ export default function AnalyticsPage() {
         )}
       </Box>
     </Box>
+    </AuthShell>
   );
 }
 
