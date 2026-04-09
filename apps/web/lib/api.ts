@@ -550,6 +550,96 @@ export const accountApi = {
 
 // ─── Suppressions ──────────────────────────────────────────────────────────
 
+// ─── Newsletter Summary (S6) ──────────────────────────────────────────────
+
+export interface NewsletterSummaryData {
+  headline: string;
+  bullets: string[];
+  keyLink?: string;
+  estimatedReadTime: number;
+  topics: string[];
+}
+
+export interface NewsletterSummaryResponse {
+  emailId: string;
+  summary: NewsletterSummaryData;
+}
+
+export const newsletterSummaryApi = {
+  /** Summarize a newsletter email by its ID. */
+  getByEmailId(emailId: string): Promise<{ data: NewsletterSummaryResponse }> {
+    return apiFetch<{ data: NewsletterSummaryResponse }>(
+      `/v1/emails/${emailId}/summary`,
+    );
+  },
+
+  /** Summarize newsletter content directly (POST). */
+  summarize(payload: {
+    htmlBody?: string;
+    textBody?: string;
+    subject: string;
+  }): Promise<{ data: NewsletterSummaryData }> {
+    return apiFetch<{ data: NewsletterSummaryData }>("/v1/explain/newsletter", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+// ─── Email Explainer (S7) ─────────────────────────────────────────────────
+
+export interface SuggestedActionData {
+  action: string;
+  reasoning: string;
+}
+
+export interface EmailExplanationData {
+  senderSummary: string;
+  relationshipContext: string;
+  whyItsHere: string;
+  suggestedActions: SuggestedActionData[];
+  urgencyLevel: "low" | "medium" | "high" | "urgent";
+}
+
+export interface EmailExplanationResponse {
+  emailId: string;
+  explanation: EmailExplanationData;
+}
+
+export const emailExplainerApi = {
+  /** Explain an email by its ID. */
+  getByEmailId(emailId: string): Promise<{ data: EmailExplanationResponse }> {
+    return apiFetch<{ data: EmailExplanationResponse }>(
+      `/v1/emails/${emailId}/explain`,
+    );
+  },
+
+  /** Explain email content directly (POST). */
+  explain(payload: {
+    email: {
+      from: string;
+      subject: string;
+      body: string;
+      date: string;
+    };
+    senderHistory: {
+      totalEmails: number;
+      lastContacted: string | null;
+      isKnown: boolean;
+    };
+    accountContext: {
+      inboxCategories: string[];
+    };
+  }): Promise<{ data: EmailExplanationData }> {
+    return apiFetch<{ data: EmailExplanationData }>("/v1/explain/email", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+// ─── Suppressions ──────────────────────────────────────────────────────────
+
 export const suppressionsApi = {
   add(payload: { email: string; domain: string; reason?: string }) {
     return apiFetch<{ data: unknown }>("/v1/suppressions", {

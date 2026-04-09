@@ -235,6 +235,9 @@ app.use("/v1/programs/*", authMiddleware, writeRateLimit);
 app.use("/v1/rules", authMiddleware, readRateLimit);
 // Explain (newsletter summary + "why is this in my inbox?"): read-level (600 req/min)
 app.use("/v1/explain/*", authMiddleware, readRateLimit);
+// Email-level explain/summary convenience endpoints (S6+S7)
+app.use("/v1/emails/*/summary", authMiddleware, readRateLimit);
+app.use("/v1/emails/*/explain", authMiddleware, readRateLimit);
 // AI Inbox Agent: write-level (200 req/min) — heavy operations
 app.use("/v1/agent/*", authMiddleware, writeRateLimit);
 app.use("/v1/agent", authMiddleware, writeRateLimit);
@@ -281,6 +284,8 @@ app.route("/v1/encryption", encryption);
 app.route("/v1/rules", aiRules);
 app.route("/v1/programs", programs);
 app.route("/v1/explain", explain);
+// Mount explain router again at /v1 to serve /v1/emails/:id/summary and /v1/emails/:id/explain
+app.route("/v1", explain);
 app.route("/v1/agent", agent);
 app.route("/v1/security", security);
 app.route("/v1/unsubscribe", unsubscribe);

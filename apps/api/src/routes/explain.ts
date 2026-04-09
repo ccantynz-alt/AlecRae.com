@@ -225,4 +225,135 @@ explain.get(
   },
 );
 
+// ─── GET /v1/emails/:emailId/summary ────────────────────────────────────────
+// Convenience endpoint: look up an email by ID and return a newsletter summary.
+
+explain.get(
+  "/emails/:emailId/summary",
+  requireScope("messages:read"),
+  async (c) => {
+    const emailId = c.req.param("emailId");
+    const auth = c.get("auth");
+
+    const db = getDatabase();
+
+    const [record] = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!record) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: "Email not found",
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    try {
+      const summary: NewsletterSummary = await summarizeNewsletter(
+        record.htmlBody ?? "",
+        record.textBody ?? "",
+        record.subject,
+      );
+      return c.json({
+        data: {
+          emailId: record.id,
+          summary,
+        },
+      });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+  },
+);
+
+// ─── GET /v1/emails/:emailId/explain ────────────────────────────────────────
+// Convenience endpoint: look up an email by ID and return the full explanation.
+
+explain.get(
+  "/emails/:emailId/explain",
+  requireScope("messages:read"),
+  async (c) => {
+    const emailId = c.req.param("emailId");
+    const auth = c.get("auth");
+
+    const db = getDatabase();
+
+    const [record] = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!record) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: "Email not found",
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    // Sender history: count of prior emails from the same address in this account.
+    const [historyRow] = await db
+      .select({
+        total: count(),
+        latest: max(emails.createdAt),
+      })
+      .from(emails)
+      .where(
+        and(
+          eq(emails.accountId, auth.accountId),
+          eq(emails.fromAddress, record.fromAddress),
+          lt(emails.createdAt, record.createdAt),
+        ),
+      );
+
+    const totalEmails = historyRow?.total ?? 0;
+    const lastContacted: Date | null = historyRow?.latest ?? null;
+
+    const explainerInput: ExplainEmailInput = {
+      email: {
+        from: record.fromAddress,
+        subject: record.subject,
+        body: record.textBody ?? record.htmlBody ?? "",
+        date: record.createdAt,
+      },
+      senderHistory: {
+        totalEmails,
+        lastContacted,
+        isKnown: (await getScreenerDecisionAsync(auth.accountId, record.fromAddress)) === "allow",
+      },
+      accountContext: {
+        inboxCategories: DEFAULT_CATEGORIES.map((cat) => cat.name),
+      },
+    };
+
+    try {
+      const explanation: EmailExplanation = await explainEmail(explainerInput);
+      return c.json({
+        data: {
+          emailId: record.id,
+          explanation,
+        },
+      });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+  },
+);
+
 export { explain };
