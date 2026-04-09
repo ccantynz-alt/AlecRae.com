@@ -649,7 +649,7 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 **Date last updated:** 2026-04-09
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Production deployment (Vercel live, awaiting Craig's infra setup)
-**Build completion:** TIER 1-4 ALL DONE (36/36) + 7 bonus + 21 advanced features (S/A/B/C)
+**Build completion:** TIER 1-4 ALL DONE (36/36) + 7 bonus + 31 advanced features (S10/10 + A7/7 + B8/8 + C6/10)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
 
@@ -803,7 +803,7 @@ If you ship something not in this file, you broke the rules.
 | **Tier B features (power user)** | **B1+B2+B3+B4+B5+B6+B7+B8 done (8/8)** | **100%** |
 | **Tier C features (polish + trust)** | **C1+C2+C3+C8+C9+C10 done (6/10)** | **60%** |
 
-**Overall: ~95% of launch-ready product. Core platform 100% done. Remaining: Craig infra setup (Neon/Upstash/Stripe/DNS/API keys) + remaining Tier S/A/B/C features.**
+**Overall: ~98% of launch-ready product. All code features complete. Remaining: Craig infra setup (Neon/Upstash/Stripe/DNS/API keys) + C4/C5/C6/C7 (compliance/legal — not code tasks).**
 
 ---
 
