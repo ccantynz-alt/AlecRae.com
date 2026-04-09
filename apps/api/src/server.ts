@@ -76,6 +76,7 @@ import { changelog } from "./routes/changelog.js";
 import { heatmapAnalytics } from "./routes/heatmap.js";
 import { voiceMessageRouter } from "./routes/voice-message.js";
 import { scripts } from "./routes/scripts.js";
+import { emailQuery } from "./routes/email-query.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
@@ -294,6 +295,9 @@ app.use("/v1/tasks", authMiddleware, readRateLimit);
 // Gamification (A7): read-level for stats, write-level for check-zero/track
 app.use("/v1/gamification/*", authMiddleware, readRateLimit);
 app.use("/v1/gamification", authMiddleware, readRateLimit);
+// Email Query (B2): search-level (60 req/min — AI query translation)
+app.use("/v1/query/*", authMiddleware, searchRateLimit);
+app.use("/v1/query", authMiddleware, searchRateLimit);
 // Changelog (C8): public read, admin-authed write (200 req/min)
 // Note: GET endpoints are public (no auth middleware). POST/PUT/DELETE require admin scope
 // which is enforced inside the route via requireScope("admin:write").
@@ -366,6 +370,8 @@ app.route("/v1/changelog", changelog);
 app.route("/v1/voice-messages", voiceMessageRouter);
 // B1: Programmable Email — TypeScript snippet engine
 app.route("/v1/scripts", scripts);
+// B2: Email-as-Database — SQL over inbox query engine
+app.route("/v1/query", emailQuery);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);
