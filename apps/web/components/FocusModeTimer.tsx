@@ -184,8 +184,8 @@ export function FocusModeTimer({ className }: FocusModeTimerProps): JSX.Element 
                 "px-3 py-1 rounded-full border border-white/10 hover:border-white/20",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
               ].join(" ")}
-              whileHover={reduced ? undefined : { scale: 1.05 }}
-              whileTap={reduced ? undefined : { scale: 0.95 }}
+              {...(!reduced ? { whileHover: { scale: 1.05 } } : {})}
+              {...(!reduced ? { whileTap: { scale: 0.95 } } : {})}
               transition={SPRING_SNAPPY}
               aria-label="Stop focus timer"
             >
@@ -218,8 +218,8 @@ export function FocusModeTimer({ className }: FocusModeTimerProps): JSX.Element 
                     "transition-colors",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
                   ].join(" ")}
-                  whileHover={reduced ? undefined : { scale: 1.06 }}
-                  whileTap={reduced ? undefined : { scale: 0.94 }}
+                  {...(!reduced ? { whileHover: { scale: 1.06 } } : {})}
+                  {...(!reduced ? { whileTap: { scale: 0.94 } } : {})}
                   transition={SPRING_SNAPPY}
                   aria-label={`Focus for ${minutes} minutes`}
                 >

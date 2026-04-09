@@ -374,38 +374,55 @@ export default function InboxPage(): JSX.Element {
           </AnimatePresence>
         </Box>
         <Box className="flex-1 min-w-0 flex flex-col">
-          {detailLoading ? (
-            <Box className="flex items-center justify-center h-full">
-              <Text variant="body-md" muted>Loading...</Text>
-            </Box>
-          ) : (
-            <>
-              {/* S6: Newsletter Summary Preview (shown above email viewer for newsletter emails) */}
-              {selectedEmailId && (newsletterMap.get(selectedEmailId) ?? false) && (
-                <NewsletterSummaryPreview
-                  emailId={selectedEmailId}
-                  isNewsletter={true}
-                  onShowFullEmail={() => setShowFullEmail(true)}
-                  className="px-4 pt-4"
-                />
-              )}
+          <AnimatePresence mode="wait">
+            {detailLoading ? (
+              <motion.div
+                key="detail-loading"
+                className="flex items-center justify-center h-full"
+                variants={fadeInUp}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+              >
+                <Text variant="body-md" muted>Loading...</Text>
+              </motion.div>
+            ) : (
+              <motion.div
+                key={selectedEmail?.id ?? "no-email"}
+                className="flex flex-col flex-1 min-w-0"
+                variants={threadExpand}
+                initial="initial"
+                animate="animate"
+                exit="exit"
+              >
+                {/* S6: Newsletter Summary Preview (shown above email viewer for newsletter emails) */}
+                {selectedEmailId && (newsletterMap.get(selectedEmailId) ?? false) && (
+                  <NewsletterSummaryPreview
+                    emailId={selectedEmailId}
+                    isNewsletter={true}
+                    onShowFullEmail={() => setShowFullEmail(true)}
+                    className="px-4 pt-4"
+                  />
+                )}
 
-              {/* S7: "Why is this in my inbox?" button */}
-              {selectedEmailId && selectedEmail && (
-                <Box className="px-4 pt-2 flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setExplainerOpen(true)}
-                    aria-label="Find out why this email is in your inbox"
-                  >
-                    Why is this in my inbox?
-                  </Button>
-                </Box>
-              )}
+                {/* S7: "Why is this in my inbox?" button */}
+                {selectedEmailId && selectedEmail && (
+                  <Box className="px-4 pt-2 flex items-center gap-2">
+                    <PressableScale as="button" tapScale={0.95}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setExplainerOpen(true)}
+                        aria-label="Find out why this email is in your inbox"
+                      >
+                        Why is this in my inbox?
+                      </Button>
+                    </PressableScale>
+                  </Box>
+                )}
 
-              <Box className="flex-1 min-w-0">
-                <EmailViewer
+                <Box className="flex-1 min-w-0">
+                  <EmailViewer
                   email={selectedEmail}
                   onReply={() => {
                 if (!selectedEmail) return;
@@ -456,9 +473,10 @@ export default function InboxPage(): JSX.Element {
                 }
               }}
             />
-              </Box>
-            </>
-          )}
+                </Box>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* S7: Email Explainer Panel (slide-in from right) */}
           {selectedEmailId && (

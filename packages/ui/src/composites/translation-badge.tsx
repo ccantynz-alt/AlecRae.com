@@ -39,7 +39,7 @@ export interface TranslationRecord {
 export type TranslationViewMode = "translated" | "original";
 
 export interface TranslationBadgeProps
-  extends Omit<HTMLAttributes<HTMLDivElement>, "onError"> {
+  extends Omit<HTMLAttributes<HTMLDivElement>, "onError" | "onToggle"> {
   /** The translation data (from API response). */
   translation: TranslationRecord | null;
   /** Current view mode — whether showing translated or original text. */

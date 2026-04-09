@@ -689,7 +689,7 @@ If you ship something not in this file, you broke the rules.
 | S7 | **AI "Why is this in my inbox?" explainer** | Click any email → AI explains who this is, history, why it landed here, suggested action. | DONE |
 | S8 | **One-click thread → action items in todo apps** | Native Things, Todoist, Linear, Notion integration. | NOT STARTED |
 | S9 | **Email thread → meeting transcript link** | If a thread leads to a call, auto-link the recording + transcript. | NOT STARTED |
-| S10 | **Predictive send-time optimization** | AI predicts best send time based on recipient open patterns. | NOT STARTED |
+| S10 | **Predictive send-time optimization** | AI predicts best send time based on recipient open patterns. | DONE |
 
 ### TIER A — CUTTING-EDGE UX
 
@@ -798,7 +798,7 @@ If you ship something not in this file, you broke the rules.
 | Vercel deployment | Configured, deploying from main | 100% |
 | Neon SQL setup | Ready | 100% |
 | CLAUDE.md Bible | Complete | 100% |
-| **Tier S features (industry firsts)** | **S6+S7 done** | **20%** |
+| **Tier S features (industry firsts)** | **S1+S6+S7+S10 done** | **40%** |
 | **Tier A features (cutting-edge UX)** | **Not started** | **0%** |
 | **Tier B features (power user)** | **B7 done** | **12%** |
 | **Tier C features (polish + trust)** | **Not started** | **0%** |

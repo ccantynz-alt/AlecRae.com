@@ -3,8 +3,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageLayout, ComposeEditor, type ComposeData, type AISuggestion } from "@emailed/ui";
+import { AnimatePresence, motion } from "motion/react";
 import { messagesApi, authApi, calendarApi } from "../../../lib/api";
 import { SendTimePanel } from "../../../components/SendTimePanel";
+import { AnimatedCompose } from "../../../components/AnimatedCompose";
+import {
+  composeEnter,
+  fadeInUp,
+  useViennaReducedMotion,
+  withReducedMotion,
+} from "../../../lib/animations";
 
 const sampleSuggestions: AISuggestion[] = [
   {
@@ -39,8 +47,9 @@ export default function ComposePageWrapper() {
   );
 }
 
-function ComposePage() {
+function ComposePage(): JSX.Element {
   const searchParams = useSearchParams();
+  const reduced = useViennaReducedMotion();
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");
@@ -145,61 +154,91 @@ function ComposePage() {
     }
   };
 
+  const contentVariants = withReducedMotion(composeEnter, reduced);
+  const statusVariants = withReducedMotion(fadeInUp, reduced);
+
   return (
     <PageLayout title="Compose" fullWidth>
-      {status && (
-        <div className={`mb-4 p-3 rounded text-sm ${
-          status.startsWith("Error") ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
-        }`}>
-          {status}
-        </div>
-      )}
-      <SendTimePanel
-        recipientEmail={recipientForPrediction || replyTo}
-        onScheduleAt={handleScheduleAt}
-        onSendNow={handleSendNow}
-        className="mb-4"
-      />
-      {scheduledAt && (
-        <div className="mb-4 p-3 rounded text-sm bg-blue-50 text-blue-800 flex items-center justify-between">
-          <span>
-            Scheduled: {new Date(scheduledAt).toLocaleString(undefined, {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            })}
-          </span>
-          <button
-            type="button"
-            onClick={() => { setScheduledAt(null); setStatus(null); }}
-            className="text-blue-600 hover:text-blue-800 text-xs font-medium"
-          >
-            Clear schedule
-          </button>
-        </div>
-      )}
-      <ComposeEditor
-        from={userEmail}
-        to={replyTo}
-        cc={mode === "replyAll" ? replyCc : ""}
-        subject={initialSubject}
-        body={initialBody}
-        suggestions={sampleSuggestions}
-        showAIPanel={true}
-        onSend={handleSend}
-        onSaveDraft={() => {
-          setStatus("Draft saved locally");
-        }}
-        onDiscard={() => {
-          setStatus(null);
-          window.history.back();
-        }}
-        onApplySuggestion={() => {}}
-        onRequestCalendarSlots={handleRequestCalendarSlots}
-        className="flex-1"
-      />
+      <AnimatedCompose show={true}>
+        <AnimatePresence>
+          {status && (
+            <motion.div
+              key="status"
+              className={`mb-4 p-3 rounded text-sm ${
+                status.startsWith("Error") ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"
+              }`}
+              variants={statusVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              {status}
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <SendTimePanel
+          recipientEmail={recipientForPrediction || replyTo}
+          onScheduleAt={handleScheduleAt}
+          onSendNow={handleSendNow}
+          className="mb-4"
+        />
+        <AnimatePresence>
+          {scheduledAt && (
+            <motion.div
+              key="schedule-banner"
+              className="mb-4 p-3 rounded text-sm bg-blue-50 text-blue-800 flex items-center justify-between"
+              variants={statusVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <span>
+                Scheduled: {new Date(scheduledAt).toLocaleString(undefined, {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </span>
+              <button
+                type="button"
+                onClick={() => { setScheduledAt(null); setStatus(null); }}
+                className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+              >
+                Clear schedule
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <motion.div
+          className="flex-1 flex flex-col min-h-0"
+          variants={contentVariants}
+          initial="initial"
+          animate="animate"
+        >
+          <ComposeEditor
+            from={userEmail}
+            to={replyTo}
+            cc={mode === "replyAll" ? replyCc : ""}
+            subject={initialSubject}
+            body={initialBody}
+            suggestions={sampleSuggestions}
+            showAIPanel={true}
+            onSend={handleSend}
+            onSaveDraft={() => {
+              setStatus("Draft saved locally");
+            }}
+            onDiscard={() => {
+              setStatus(null);
+              window.history.back();
+            }}
+            onApplySuggestion={() => {}}
+            onRequestCalendarSlots={handleRequestCalendarSlots}
+            className="flex-1"
+          />
+        </motion.div>
+      </AnimatedCompose>
     </PageLayout>
   );
 }

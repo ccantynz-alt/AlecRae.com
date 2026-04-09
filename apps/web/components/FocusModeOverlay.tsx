@@ -227,7 +227,7 @@ export function FocusModeOverlay({
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60",
                 ].join(" ")}
                 initial={reduced ? false : { opacity: 0, y: -8 }}
-                animate={reduced ? undefined : { opacity: 1, y: 0 }}
+                {...(!reduced ? { animate: { opacity: 1, y: 0 } } : {})}
                 transition={SPRING_SOFT}
                 aria-label="Exit focus mode (Escape)"
               >
@@ -265,7 +265,7 @@ export function FocusModeOverlay({
                 <motion.div
                   className="flex flex-col items-center justify-center py-24 text-center"
                   initial={reduced ? false : { opacity: 0, y: 12 }}
-                  animate={reduced ? undefined : { opacity: 1, y: 0 }}
+                  {...(!reduced ? { animate: { opacity: 1, y: 0 } } : {})}
                   transition={SPRING_SOFT}
                 >
                   <span className="text-5xl mb-4" aria-hidden="true">
@@ -318,7 +318,7 @@ export function FocusModeOverlay({
           <motion.footer
             className="relative z-10 flex justify-center pb-6"
             initial={reduced ? false : { opacity: 0 }}
-            animate={reduced ? undefined : { opacity: 1 }}
+            {...(!reduced ? { animate: { opacity: 1 } } : {})}
             transition={{ delay: 0.5, duration: 0.4 }}
             aria-hidden="true"
           >

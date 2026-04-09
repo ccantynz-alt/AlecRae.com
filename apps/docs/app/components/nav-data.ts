@@ -39,6 +39,14 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     ],
   },
   {
+    label: "Migration Guides",
+    items: [
+      { slug: "migrate-gmail", label: "From Gmail" },
+      { slug: "migrate-outlook", label: "From Outlook" },
+      { slug: "migrate-apple-mail", label: "From Apple Mail" },
+    ],
+  },
+  {
     label: "Platform",
     items: [
       { slug: "billing", label: "Billing" },

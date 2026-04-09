@@ -18,7 +18,7 @@
  * manually via `indexAllUnindexed()` for backfill.
  */
 
-import { sql } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import { getDatabase, emails } from "@emailed/db";
 import { embedBatch, VOYAGE_MODEL, EMBEDDING_DIMENSIONS } from "./voyage.js";
 import {
@@ -110,12 +110,7 @@ async function processBatch(jobs: AutoIndexJob[]): Promise<void> {
       createdAt: emails.createdAt,
     })
     .from(emails)
-    .where(
-      sql`${emails.id} IN (${sql.join(
-        emailIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})`,
-    );
+    .where(inArray(emails.id, emailIds));
 
   if (rows.length === 0) {
     // All emails were deleted before we got to them — mark as skipped
