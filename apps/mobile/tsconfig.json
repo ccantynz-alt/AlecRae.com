@@ -3,6 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
     "types": ["react", "jest"]
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]

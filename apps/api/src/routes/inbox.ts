@@ -75,16 +75,21 @@ export async function getCommitmentsForAccount(accountId: string): Promise<reado
     .from(commitmentsTable)
     .where(eq(commitmentsTable.accountId, accountId));
 
-  return rows.map((row): Commitment => ({
-    id: row.id,
-    actor: row.actor,
-    actorName: row.actorName,
-    description: row.description,
-    deadline: row.deadline ?? undefined,
-    status: row.status,
-    sourceEmailId: row.sourceEmailId,
-    sourceQuote: row.sourceQuote,
-  }));
+  return rows.map((row): Commitment => {
+    const base = {
+      id: row.id,
+      actor: row.actor,
+      actorName: row.actorName,
+      description: row.description,
+      status: row.status,
+      sourceEmailId: row.sourceEmailId,
+      sourceQuote: row.sourceQuote,
+    };
+    if (row.deadline !== null) {
+      return { ...base, deadline: row.deadline };
+    }
+    return base;
+  });
 }
 
 // POST /v1/inbox/classify — Classify an email
@@ -320,14 +325,19 @@ inbox.get(
       .from(inboxCategoriesTable)
       .where(eq(inboxCategoriesTable.accountId, auth.accountId));
 
-    const customAsCategories: InboxCategory[] = custom.map((row) => ({
-      id: row.id,
-      name: row.name,
-      icon: row.icon,
-      rule: row.rule ?? undefined,
-      source: row.source,
-      priority: row.priority,
-    }));
+    const customAsCategories: InboxCategory[] = custom.map((row) => {
+      const cat: InboxCategory = {
+        id: row.id,
+        name: row.name,
+        icon: row.icon,
+        source: row.source,
+        priority: row.priority,
+      };
+      if (row.rule !== null) {
+        cat.rule = row.rule;
+      }
+      return cat;
+    });
 
     const all = [...DEFAULT_CATEGORIES, ...customAsCategories].sort(
       (a, b) => a.priority - b.priority,
@@ -349,7 +359,7 @@ inbox.post(
 
     const id = `custom_${Date.now()}`;
 
-    const [row] = await db
+    const rows = await db
       .insert(inboxCategoriesTable)
       .values({
         id,
@@ -362,14 +372,24 @@ inbox.post(
       })
       .returning();
 
+    const row = rows[0];
+    if (!row) {
+      return c.json(
+        { error: { type: "server_error", message: "Failed to create category", code: "create_failed" } },
+        500,
+      );
+    }
+
     const category: InboxCategory = {
       id: row.id,
       name: row.name,
       icon: row.icon,
-      rule: row.rule ?? undefined,
       source: row.source,
       priority: row.priority,
     };
+    if (row.rule !== null) {
+      category.rule = row.rule;
+    }
 
     return c.json({ data: category }, 201);
   },
