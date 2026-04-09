@@ -721,7 +721,7 @@ If you ship something not in this file, you broke the rules.
 | # | Feature | Why It Wins | Status |
 |---|---|---|---|
 | C1 | **Status page** | status.48co.ai showing uptime | DONE |
-| C2 | **Public API docs site** | docs.48co.ai (OpenAPI exists, needs site) | NOT STARTED |
+| C2 | **Public API docs site** | docs.48co.ai — 22 pages, full endpoint ref, code examples, search | DONE |
 | C3 | **Admin console SSO** | SAML for enterprise sales | DONE |
 | C4 | **SOC 2 Type I → Type II** | Required for enterprise | NOT STARTED |
 | C5 | **GDPR DPA template** | Legal pages exist, need DPA workflow | NOT STARTED |
@@ -801,7 +801,7 @@ If you ship something not in this file, you broke the rules.
 | **Tier S features (industry firsts)** | **S1+S5+S6+S7+S10 done** | **50%** |
 | **Tier A features (cutting-edge UX)** | **A1 Magic UI done** | **14%** |
 | **Tier B features (power user)** | **B3, B4, B7 done** | **37%** |
-| **Tier C features (polish + trust)** | **3/10 done (C1, C9, C10)** | **30%** |
+| **Tier C features (polish + trust)** | **4/10 done (C1, C2, C9, C10)** | **40%** |
 
 **Overall: ~90% of launch-ready product. Remaining 10% is Craig action items (Vercel verify, Neon/Upstash/Stripe setup, API keys, DNS) + Tier S/A/B/C post-launch features.**
 
