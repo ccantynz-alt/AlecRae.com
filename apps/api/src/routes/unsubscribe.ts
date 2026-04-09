@@ -91,14 +91,14 @@ interface HistoryInsert {
   method: "one_click_post" | "http" | "mailto" | "none";
   target: string;
   status: "pending" | "success" | "failed" | "no_option";
-  confidence?: number;
-  source?: string;
-  steps?: string[];
-  finalUrl?: string;
-  confirmationText?: string;
-  error?: string;
+  confidence?: number | undefined;
+  source?: string | undefined;
+  steps?: string[] | undefined;
+  finalUrl?: string | undefined;
+  confirmationText?: string | undefined;
+  error?: string | undefined;
   startedAt: Date;
-  finishedAt?: Date;
+  finishedAt?: Date | undefined;
 }
 
 async function recordHistory(entry: HistoryInsert): Promise<string> {
@@ -131,10 +131,10 @@ async function executeOption(
   userEmail: string | undefined,
 ): Promise<{
   status: "success" | "failed";
-  error?: string;
-  finalUrl?: string;
-  steps?: string[];
-  confirmationText?: string;
+  error?: string | undefined;
+  finalUrl?: string | undefined;
+  steps?: string[] | undefined;
+  confirmationText?: string | undefined;
 }> {
   if (option.method === "one_click_post") {
     const result = await sendOneClickUnsubscribe(option.target);
@@ -167,7 +167,8 @@ async function executeOption(
   }
 
   // http — drive the browser agent.
-  const result = await runUnsubscribeFlow(option.target, { userEmail });
+  const opts = userEmail !== undefined ? { userEmail } : {};
+  const result = await runUnsubscribeFlow(option.target, opts);
   return {
     status: result.success ? "success" : "failed",
     finalUrl: result.finalUrl,

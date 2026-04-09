@@ -16,9 +16,9 @@
  * white-on-blue typography. Vienna at its most focused.
  */
 
+import type { JSX, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import type { ReactNode } from "react";
 import {
   fadeIn,
   fadeInUp,

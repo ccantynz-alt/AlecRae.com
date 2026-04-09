@@ -11,6 +11,7 @@
  * Timer ticks every second via a `setInterval` that calls `tickTimer` on the store.
  */
 
+import type { JSX } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
