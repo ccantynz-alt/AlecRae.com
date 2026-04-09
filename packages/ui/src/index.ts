@@ -48,6 +48,8 @@ export { VoiceRecorder, type VoiceRecorderProps, type VoiceRecordingResult, type
 export { VoiceMessagePlayer, type VoiceMessagePlayerProps, type VoiceMessageData, type PlaybackSpeed } from "./composites/voice-message-player";
 export { ScriptEditor, type ScriptEditorProps, type ScriptData, type ScriptTemplate, type ScriptRunEntry, type ScriptTrigger, type ScriptRunStatus, type TestResult } from "./composites/script-editor";
 export { QueryConsole, type QueryConsoleProps, type QueryMode, type QueryState, type ConsolePanelView, type QueryResultData, type QueryExplanationData, type QueryHistoryEntry, type SavedQueryEntry, type QueryResultColumn } from "./composites/query-console";
+export { SwipeableEmailRow as SwipeableEmailRowUI, type SwipeableEmailRowProps as SwipeableEmailRowUIProps, type SwipeableEmailRowData, type SwipeActionKind, type SwipeAction, type SwipeConfig } from "./composites/swipeable-email-row";
+export { QuickReplySheet as QuickReplySheetUI, type QuickReplySheetProps as QuickReplySheetUIProps, type QuickReplySuggestion, type ThreadContextMessage, type ReplyLength } from "./composites/quick-reply-sheet";
 
 // Layouts
 export { Sidebar, type SidebarProps, type SidebarNavItem, type SidebarSection } from "./layouts/sidebar";

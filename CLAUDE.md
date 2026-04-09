@@ -699,7 +699,7 @@ If you ship something not in this file, you broke the rules.
 | A2 | **Spatial inbox (3D thread visualization)** | R3F-powered 3D view for power users. Optional. InstancedMesh for 1000+ threads, configurable axes (time/priority/category/sender), color schemes, orbit controls, hover tooltips, keyboard navigation, connection lines, cluster labels. Lazy-loaded with ErrorBoundary for WebGL failures. | DONE |
 | A3 | **Inbox heatmap** | Visual email habits (when you're most productive). GitHub-style contribution heatmap, 24h hourly activity chart, stats dashboard with period selector and comparison. 3 UI components, 3 API endpoints, web view. | DONE |
 | A4 | **Focus mode** | Hides everything except important emails. Full screen. Timer, progress tracking, Cmd+Shift+F shortcut. | DONE |
-| A5 | **Quick-reply gestures (mobile)** | Brilliant swipe interactions. Mobile already has the pattern, needs polish. | NOT STARTED |
+| A5 | **Quick-reply gestures (mobile)** | Brilliant swipe interactions. Mobile already has the pattern, needs polish. Five-action swipe (reply/snooze/archive/flag/delete), AI quick-reply bottom sheet, web touch+hover version. | DONE |
 | A6 | **Drag-to-snooze on mini-calendar** | Drag email to a time slot to snooze. HTML5 DnD + touch long-press, mini-calendar drop zones, time slot picker, quick presets, keyboard S shortcut, undo support. | DONE |
 | A7 | **Inbox zero rituals (gamification)** | Streaks, achievements (optional). DB schema (user_streaks, user_achievements, daily_stats), 6 API endpoints, 6 React components (celebration, streak counter, achievement badge/panel, weekly stats, toggle). Respects prefers-reduced-motion. | DONE |
 
