@@ -7,6 +7,7 @@
 // arriving outside active hours are boosted.
 
 import type {
+  AIEngineError,
   EmailMessage,
   PriorityRankingResult,
   PriorityTier,

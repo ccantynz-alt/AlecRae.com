@@ -201,7 +201,8 @@ semanticSearch.post(
 
     let indexed = 0;
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]!;
+      const row = rows[i];
+      if (!row) continue;
       const vec = vectors[i];
       if (!vec) continue;
       const literal = toVectorLiteral(vec);

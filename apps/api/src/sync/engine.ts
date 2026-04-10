@@ -15,8 +15,6 @@
  *   5. Background worker keeps accounts in sync
  */
 
-import { getDatabase } from "@emailed/db";
-
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type AccountProvider = "gmail" | "outlook" | "imap" | "yahoo" | "icloud";
@@ -232,13 +230,24 @@ export async function syncGmailMessages(
   maxResults = 100,
 ): Promise<SyncResult> {
   const start = performance.now();
-  let token = account.accessToken!;
   const result: SyncResult = { messagesAdded: 0, messagesUpdated: 0, messagesDeleted: 0, errors: [], syncDurationMs: 0 };
+
+  if (!account.accessToken) {
+    result.errors.push("Missing access token for Gmail sync");
+    result.syncDurationMs = performance.now() - start;
+    return result;
+  }
+  let token = account.accessToken;
 
   // Refresh token if expired
   if (account.tokenExpiresAt && account.tokenExpiresAt <= new Date()) {
+    if (!account.refreshToken) {
+      result.errors.push("Missing refresh token for expired Gmail access token");
+      result.syncDurationMs = performance.now() - start;
+      return result;
+    }
     try {
-      const refreshed = await refreshGoogleToken(account.refreshToken!);
+      const refreshed = await refreshGoogleToken(account.refreshToken);
       token = refreshed.accessToken;
     } catch (err) {
       result.errors.push(`Token refresh failed: ${err}`);
@@ -394,7 +403,11 @@ function parseGmailMessage(msg: GmailMessage, accountId: string): Partial<Synced
     if (!header) return [];
     return header.split(",").map((addr) => {
       const match = addr.trim().match(/^(.+?)\s*<(.+?)>$/);
-      if (match) return { name: match[1]!.trim().replace(/^"|"$/g, ""), email: match[2]! };
+      const matchName = match?.[1];
+      const matchEmail = match?.[2];
+      if (matchName && matchEmail) {
+        return { name: matchName.trim().replace(/^"|"$/g, ""), email: matchEmail };
+      }
       return { name: null, email: addr.trim() };
     });
   };

@@ -252,7 +252,7 @@ function analyzeSentiment(text: string): SentimentResult {
   let isNegated = false;
   let intensifier = 1;
 
-  for (const word of words) {
+  for (const [i, word] of words.entries()) {
     if (!word) continue;
 
     if (NEGATION_WORDS.has(word)) {

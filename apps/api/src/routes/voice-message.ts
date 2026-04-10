@@ -8,20 +8,12 @@
  */
 
 import { Hono } from "hono";
-import { z } from "zod";
 import { requireScope } from "../middleware/auth.js";
-import {
-  validateBody,
-  getValidatedBody,
-} from "../middleware/validator.js";
 import {
   processVoiceMessage,
   transcribeAudio,
   formatDuration,
-  generateHtmlEmbed,
-  SUPPORTED_VOICE_AUDIO_TYPES,
   MAX_VOICE_AUDIO_SIZE,
-  type VoiceMessageResult,
 } from "@emailed/ai-engine/voice/voice-message";
 
 // ─── In-memory store (production: persist in Neon + R2) ─────────────────────
@@ -46,18 +38,6 @@ const voiceMessages = new Map<string, StoredVoiceMessage>();
 function generateId(): string {
   return `vm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
-
-// ─── Schemas ────────────────────────────────────────────────────────────────
-
-const TranscribeBodySchema = z.object({
-  /** Explicit language hint (ISO 639-1). Auto-detected if omitted. */
-  language: z.string().min(2).max(5).optional(),
-});
-
-const ReplyBodySchema = z.object({
-  /** Explicit language hint (ISO 639-1). Auto-detected if omitted. */
-  language: z.string().min(2).max(5).optional(),
-});
 
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
@@ -237,7 +217,7 @@ voiceMessageRouter.post(
       audioFile.type || "audio/webm",
       {
         apiKey: OPENAI_API_KEY,
-        ...(languageHint != null ? { language: languageHint } : {}),
+        ...(languageHint !== null && languageHint !== undefined ? { language: languageHint } : {}),
       },
     );
 

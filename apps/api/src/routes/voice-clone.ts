@@ -25,7 +25,7 @@ import {
   voiceStyleProfiles,
   voiceTrainingSamples,
 } from "@emailed/db";
-import type { StyleFingerprintData, ExtractedFeaturesData } from "@emailed/db";
+import type { StyleFingerprintData } from "@emailed/db";
 import {
   buildStyleFingerprint,
   extractEmailFeatures,
