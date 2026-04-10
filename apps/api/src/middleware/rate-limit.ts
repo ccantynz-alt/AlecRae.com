@@ -264,6 +264,7 @@ export function rateLimitByIp(limit: number, windowMs: number): MiddlewareHandle
     }
 
     await next();
+    return;
   });
 }
 
@@ -288,6 +289,7 @@ export function rateLimitByKey(limit: number, windowMs: number): MiddlewareHandl
     }
 
     await next();
+    return;
   });
 }
 

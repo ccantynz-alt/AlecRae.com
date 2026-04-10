@@ -15,7 +15,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, sql, like, notLike, gt, gte, lt, lte, ne, inArray, notInArray, isNull, isNotNull, asc, count as drizzleCount, avg as drizzleAvg, sum as drizzleSum } from "drizzle-orm";
+import { eq, and, desc, sql, like, notLike, gt, gte, lt, lte, ne, inArray, notInArray, isNull, isNotNull, asc, count as drizzleCount, avg as drizzleAvg, sum as drizzleSum, type AnyColumn } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -114,8 +114,9 @@ function buildWhereClause(
   }
 
   const drizzleConditions = conditions.map((cond) => {
-    const column = getColumn(cond.field);
-    if (!column) return undefined;
+    const rawColumn = getColumn(cond.field);
+    if (!rawColumn) return undefined;
+    const column = rawColumn as AnyColumn;
 
     switch (cond.operator) {
       case "eq":
@@ -240,7 +241,7 @@ function buildSelectColumns(fields: readonly QueryableField[]): Record<string, R
 /**
  * Build ORDER BY from parsed orderBy clauses.
  */
-function buildOrderBy(orderByArr: ParsedEmailQuery["orderBy"]): Array<ReturnType<typeof asc>> {
+function buildOrderBy(orderByArr: ParsedEmailQuery["orderBy"]): ReturnType<typeof asc>[] {
   return orderByArr.map((o) => {
     const dirFn = o.direction === "asc" ? asc : desc;
 
@@ -275,7 +276,7 @@ emailQuery.post(
     let parsedQuery: ParsedEmailQuery;
     try {
       parsedQuery = await translateQuery(body.query, {
-        maxLimit: body.limit ?? undefined,
+        ...(body.limit != null ? { maxLimit: body.limit } : {}),
       });
     } catch (err) {
       return c.json(

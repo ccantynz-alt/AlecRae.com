@@ -42,7 +42,11 @@ function getStreakTier(streak: number): StreakTier {
       return tier;
     }
   }
-  return STREAK_TIERS[STREAK_TIERS.length - 1]!;
+  // STREAK_TIERS ends with a minDays: 0 fallback tier, which always matches.
+  // Return the last tier explicitly; the fallback is unreachable in practice.
+  const fallback = STREAK_TIERS[STREAK_TIERS.length - 1];
+  if (fallback) return fallback;
+  return { minDays: 0, icon: "\uD83D\uDCEB", color: "text-content-tertiary", label: "No streak" };
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────

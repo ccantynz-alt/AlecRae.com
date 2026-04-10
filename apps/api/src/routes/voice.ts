@@ -70,7 +70,7 @@ async function generateWithClaude(
   }
 
   const data = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
+    content: { type: string; text?: string }[];
   };
 
   return data.content

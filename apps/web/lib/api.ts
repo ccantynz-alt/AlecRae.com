@@ -134,7 +134,7 @@ export interface PasskeyRegisterChallengeResponse {
     challenge: string;
     rp: { name: string; id: string };
     user: { id: string; name: string; displayName: string };
-    pubKeyCredParams: Array<{ alg: number; type: "public-key" }>;
+    pubKeyCredParams: { alg: number; type: "public-key" }[];
     timeout: number;
     authenticatorSelection: {
       authenticatorAttachment: "platform";
@@ -157,11 +157,11 @@ export interface PasskeyLoginChallengeResponse {
     rpId: string;
     timeout: number;
     userVerification: "preferred";
-    allowCredentials?: Array<{
+    allowCredentials?: {
       type: "public-key";
       id: string;
       transports?: string[];
-    }>;
+    }[];
   };
 }
 
@@ -255,6 +255,26 @@ export const authApi = {
 
   async me(): Promise<{ data: AuthResponse["user"] }> {
     return apiFetch<{ data: AuthResponse["user"] }>("/v1/auth/me");
+  },
+
+  async updateProfile(payload: {
+    name?: string;
+    email?: string;
+  }): Promise<{ data: AuthResponse["user"] }> {
+    return apiFetch<{ data: AuthResponse["user"] }>("/v1/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteAccount(): Promise<{
+    data: {
+      status: "scheduled_for_deletion";
+      scheduledDeletionAt: string;
+      message: string;
+    };
+  }> {
+    return apiFetch("/v1/auth/me", { method: "DELETE" });
   },
 
   /** Request a WebAuthn registration challenge from the server. */
@@ -424,13 +444,13 @@ export const messagesApi = {
     if (params.limit) qs.set("limit", String(params.limit));
     if (params.offset) qs.set("offset", String(params.offset));
     return apiFetch<{
-      data: Array<{
+      data: {
         id: string;
         subject: string;
         from: EmailAddress;
         snippet: string;
         createdAt: string;
-      }>;
+      }[];
       totalHits: number;
       processingTimeMs: number;
       query: string;
@@ -633,7 +653,7 @@ export interface CalendarMeetingIntent {
   confidence: number;
   durationHint: number | null;
   locationHint: string | null;
-  extractedTimes: Array<{ raw: string; parsed: string | null }>;
+  extractedTimes: { raw: string; parsed: string | null }[];
 }
 
 export interface SuggestSlotsResponse {
@@ -720,10 +740,10 @@ export interface RecipientPatternResponse {
 }
 
 export interface OptimalSendTimeResponse {
-  recipients: Array<{
+  recipients: {
     recipientEmail: string;
     recommendation: SendTimeRecommendation;
-  }>;
+  }[];
   consensusOptimalTime: string | null;
   recipientCount: number;
 }
@@ -967,7 +987,7 @@ export interface BatchCreateResult {
   total: number;
   succeeded: number;
   failed: number;
-  results: Array<{
+  results: {
     index: number;
     taskId: string;
     title: string;
@@ -975,7 +995,7 @@ export interface BatchCreateResult {
     externalTaskId: string | null;
     externalTaskUrl: string | null;
     error: string | null;
-  }>;
+  }[];
 }
 
 export interface TaskListItem {
@@ -1319,7 +1339,7 @@ export const meetingsApi = {
   detect(payload: {
     threadId: string;
     thread: {
-      messages: Array<{
+      messages: {
         id?: string;
         from?: string;
         to?: string[];
@@ -1327,7 +1347,7 @@ export const meetingsApi = {
         textBody?: string;
         htmlBody?: string;
         receivedAt?: string;
-      }>;
+      }[];
     };
   }): Promise<{ data: MeetingDetectResponse }> {
     return apiFetch<{ data: MeetingDetectResponse }>("/v1/meetings/detect", {
@@ -1457,7 +1477,7 @@ export const voiceCloneApi = {
     profileId: string;
     prompt: string;
     recipient?: string;
-    threadHistory?: Array<{ from: string; body: string }>;
+    threadHistory?: { from: string; body: string }[];
     replyTo?: { from: string; subject: string; body: string };
   }): Promise<{ data: VoiceCloneComposeResult }> {
     return apiFetch<{ data: VoiceCloneComposeResult }>(

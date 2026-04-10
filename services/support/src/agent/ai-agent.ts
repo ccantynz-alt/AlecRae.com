@@ -385,7 +385,7 @@ export class AiSupportAgent {
     try {
       const context: ConversationContext = {
         accountId,
-        domain,
+        ...(domain !== undefined ? { domain } : {}),
         recentErrors: [],
         previousTickets: [],
       };
@@ -505,12 +505,13 @@ export class AiSupportAgent {
 
         case "check_delivery_logs": {
           const hours = (params.hours as number) ?? 24;
+          const recipient = params.recipient as string | undefined;
           const result = await this.platform.delivery.getLogs(
             params.account_id as string,
             {
               limit: (params.limit as number) ?? 50,
               since: new Date(Date.now() - hours * 3_600_000),
-              recipient: params.recipient as string | undefined,
+              ...(recipient !== undefined ? { recipient } : {}),
             },
           );
           if (!result.ok) throw result.error;

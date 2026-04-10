@@ -287,6 +287,7 @@ export function requireScope(...requiredScopes: string[]) {
     }
 
     await next();
+    return;
   });
 }
 
@@ -349,4 +350,5 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
   c.set("auth", authContext);
   await next();
+  return;
 });

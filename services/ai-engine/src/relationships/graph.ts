@@ -557,11 +557,13 @@ export class CommunicationGraph {
     if (existing) {
       // Merge email addresses and update last contact time
       const mergedAddresses = new Set([...existing.emailAddresses, ...emailAddresses]);
+      const mergedName = name ?? existing.name;
+      const mergedOrg = organization ?? existing.organization;
       this.contacts.set(contactId, {
         ...existing,
         emailAddresses: [...mergedAddresses],
-        name: name ?? existing.name,
-        organization: organization ?? existing.organization,
+        ...(mergedName !== undefined ? { name: mergedName } : {}),
+        ...(mergedOrg !== undefined ? { organization: mergedOrg } : {}),
         lastContact: now,
         totalInteractions: existing.totalInteractions + 1,
       });
@@ -569,8 +571,8 @@ export class CommunicationGraph {
       this.contacts.set(contactId, {
         id: contactId,
         emailAddresses: [...emailAddresses],
-        name,
-        organization,
+        ...(name !== undefined ? { name } : {}),
+        ...(organization !== undefined ? { organization } : {}),
         firstContact: now,
         lastContact: now,
         totalInteractions: 1,

@@ -303,7 +303,7 @@ export class TicketSystem {
   async updateTicket(
     ticketId: string,
     updates: UpdateTicketInput,
-    updatedBy: string = "system",
+    updatedBy = "system",
   ): Promise<Result<Ticket>> {
     try {
       const ticket = await this.store.get(ticketId);
@@ -426,7 +426,7 @@ export class TicketSystem {
   async resolveTicket(
     ticketId: string,
     resolution: string,
-    resolvedBy: string = "ai-agent",
+    resolvedBy = "ai-agent",
   ): Promise<Result<Ticket>> {
     const noteResult = await this.addNote(ticketId, resolvedBy, `Resolution: ${resolution}`, {
       internal: false,
@@ -582,7 +582,7 @@ export class TicketSystem {
 // ─── In-Memory Ticket Store ─────────────────────────────────────────────────
 
 export class InMemoryTicketStore implements TicketStore {
-  private tickets: Map<string, Ticket> = new Map();
+  private tickets = new Map<string, Ticket>();
 
   async get(id: string): Promise<Ticket | undefined> {
     const ticket = this.tickets.get(id);

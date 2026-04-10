@@ -490,7 +490,7 @@ export class ReportGenerator {
         accountId: request.accountId,
         startDate: request.startDate,
         endDate: request.endDate,
-        filters: request.filters,
+        ...(request.filters !== undefined ? { filters: request.filters } : {}),
       });
 
       // Compute overall summary metrics
@@ -524,7 +524,7 @@ export class ReportGenerator {
           accountId: request.accountId,
           startDate: prevStart,
           endDate: prevEnd,
-          filters: request.filters,
+          ...(request.filters !== undefined ? { filters: request.filters } : {}),
         });
 
         const prevMetrics = initMetrics();
@@ -543,7 +543,7 @@ export class ReportGenerator {
         summary,
         timeSeries,
         breakdowns,
-        comparison,
+        ...(comparison !== undefined ? { comparison } : {}),
         generatedAt: new Date(),
         durationMs: Date.now() - startTime,
       };

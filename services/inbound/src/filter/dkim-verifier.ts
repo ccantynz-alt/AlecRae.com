@@ -443,8 +443,8 @@ function parseCanonicalization(c: string): ["simple" | "relaxed", "simple" | "re
 /**
  * Parse the raw header block into individual header entries, respecting folding.
  */
-function parseHeaders(headerBlock: string): Array<{ key: string; raw: string }> {
-  const headers: Array<{ key: string; raw: string }> = [];
+function parseHeaders(headerBlock: string): { key: string; raw: string }[] {
+  const headers: { key: string; raw: string }[] = [];
   const lines = headerBlock.split(/\r?\n/);
 
   let currentHeader = "";
@@ -488,7 +488,7 @@ function parseHeaders(headerBlock: string): Array<{ key: string; raw: string }> 
  * bottom of the header block upward, consuming each occurrence once.
  */
 function canonicalizeSignedHeaders(
-  headers: Array<{ key: string; raw: string }>,
+  headers: { key: string; raw: string }[],
   signedHeaderNames: string[],
   mode: "simple" | "relaxed",
 ): string {
@@ -497,7 +497,7 @@ function canonicalizeSignedHeaders(
   // Build a map of header occurrences (in order from top to bottom).
   // For each header name we track an index of the next occurrence to use,
   // scanning from bottom to top (RFC 6376 5.4.2).
-  const headersByKey = new Map<string, Array<{ key: string; raw: string }>>();
+  const headersByKey = new Map<string, { key: string; raw: string }[]>();
   for (const h of headers) {
     const existing = headersByKey.get(h.key) ?? [];
     existing.push(h);

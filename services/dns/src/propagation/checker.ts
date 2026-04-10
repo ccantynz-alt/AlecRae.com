@@ -8,7 +8,7 @@ import {
 } from "../types";
 
 /** Global DNS resolvers to check propagation against */
-const GLOBAL_RESOLVERS: Array<{ address: string; name: string; region: string }> = [
+const GLOBAL_RESOLVERS: { address: string; name: string; region: string }[] = [
   // North America
   { address: "8.8.8.8", name: "Google Public DNS", region: "us" },
   { address: "8.8.4.4", name: "Google Public DNS Secondary", region: "us" },
@@ -41,7 +41,7 @@ export interface PropagationCheckerConfig {
   /** Number of concurrent resolver queries */
   concurrency: number;
   /** Custom resolvers to use (overrides defaults) */
-  resolvers?: Array<{ address: string; name: string; region: string }>;
+  resolvers?: { address: string; name: string; region: string }[];
 }
 
 export interface PropagationCheckOptions {
@@ -59,7 +59,7 @@ export interface PropagationCheckOptions {
  */
 export class DnsPropagationChecker {
   private readonly config: PropagationCheckerConfig;
-  private readonly resolvers: Array<{ address: string; name: string; region: string }>;
+  private readonly resolvers: { address: string; name: string; region: string }[];
 
   constructor(config: PropagationCheckerConfig) {
     this.config = config;
@@ -158,11 +158,11 @@ export class DnsPropagationChecker {
    * Check propagation for multiple records at once.
    */
   async checkMultipleRecords(
-    checks: Array<{
+    checks: {
       domain: string;
       recordType: RecordType;
       expectedValue: string;
-    }>
+    }[]
   ): Promise<PropagationStatus[]> {
     return Promise.all(
       checks.map((check) =>
@@ -209,7 +209,7 @@ export class DnsPropagationChecker {
 
   /** Query resolvers with a concurrency limit */
   private async queryWithConcurrency(
-    resolvers: Array<{ address: string; name: string; region: string }>,
+    resolvers: { address: string; name: string; region: string }[],
     domain: string,
     recordType: RecordType,
     expectedValue: string,

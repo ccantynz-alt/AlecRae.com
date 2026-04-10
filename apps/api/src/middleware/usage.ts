@@ -75,4 +75,5 @@ export const usageEnforcement = createMiddleware(async (c, next) => {
   }
 
   await next();
+  return;
 });

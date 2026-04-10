@@ -194,7 +194,7 @@ export function VoiceReplyComposer({
 
   // Handle send from the VoiceRecorder
   const handleSend = useCallback(
-    (result: VoiceRecordingResult): void => {
+    (_result: VoiceRecordingResult): void => {
       if (attachment) {
         onAttach?.(attachment);
         resetState();

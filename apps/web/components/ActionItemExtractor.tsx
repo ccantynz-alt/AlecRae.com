@@ -115,7 +115,6 @@ export function ActionItemExtractor({
       hasExtracted.current = true;
       void handleExtract();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoExtract, emails]);
 
   const handleExtract = useCallback(async (): Promise<void> => {

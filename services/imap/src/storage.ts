@@ -24,7 +24,7 @@
  */
 
 import { eq, and, desc, asc, inArray, like, gte, lte, sql, or } from "drizzle-orm";
-import { getDatabase, emails } from "@emailed/db";
+import { getDatabase, emails, domains } from "@emailed/db";
 import type {
   ImapMessage,
   ImapEnvelope,
@@ -37,7 +37,7 @@ import type {
   FlagOperation,
   UidMapping,
   AppendData,
-} from "./handlers/messages.js";
+} from "./store-types.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -351,9 +351,29 @@ export class PostgresMessageStore implements MessageStore {
     const db = getDatabase();
     const id = crypto.randomUUID().replace(/-/g, "");
 
+    // Every email row must reference a verified domain; IMAP APPEND has no
+    // concept of a domain, so we use the account's first domain as the owner
+    // for the appended message. If the account has no domains yet, APPEND
+    // fails loudly rather than silently corrupting state.
+    const [firstDomain] = await db
+      .select({ id: domains.id })
+      .from(domains)
+      .where(eq(domains.accountId, userId))
+      .limit(1);
+
+    if (!firstDomain) {
+      throw new Error(
+        "IMAP APPEND failed: account has no domains — add a domain before appending messages",
+      );
+    }
+
+    const messageId = `<${id}@${firstDomain.id}.imap.local>`;
+
     await db.insert(emails).values({
       id,
       accountId: userId,
+      domainId: firstDomain.id,
+      messageId,
       fromAddress: "unknown@local",
       subject: "Appended message",
       textBody: message.rawMessage,

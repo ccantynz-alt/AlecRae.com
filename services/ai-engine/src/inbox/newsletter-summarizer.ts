@@ -170,7 +170,12 @@ function parseRawSummary(text: string): RawSummary {
   const topics = isStringArray(obj["topics"]) ? obj["topics"] : [];
   const keyLinkText =
     typeof obj["keyLinkText"] === "string" ? obj["keyLinkText"] : undefined;
-  return { headline, bullets, topics, keyLinkText };
+  return {
+    headline,
+    bullets,
+    topics,
+    ...(keyLinkText !== undefined ? { keyLinkText } : {}),
+  };
 }
 
 async function callHaiku(prompt: string): Promise<string> {

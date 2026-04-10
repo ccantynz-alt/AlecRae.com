@@ -307,7 +307,7 @@ Focus on real issues. Do not flag correct text. Be precise with offsets. Return 
     if (!response.ok) return [];
 
     const data = (await response.json()) as {
-      content: Array<{ type: string; text?: string }>;
+      content: { type: string; text?: string }[];
     };
 
     const responseText = data.content

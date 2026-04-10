@@ -434,11 +434,11 @@ gamification.post(
         streakUpdated = true;
 
         // Check achievements
-        const achievementsToCheck: Array<{
+        const achievementsToCheck: {
           key: AchievementKey;
           progress: number;
           target: number;
-        }> = [
+        }[] = [
           { key: "first_zero", progress: newTotal, target: 1 },
           { key: "zero_hero", progress: newTotal, target: 100 },
           { key: "week_warrior", progress: newStreak, target: 7 },

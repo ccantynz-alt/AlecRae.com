@@ -240,7 +240,7 @@ function parseReplyIntent(text: string): ReplyIntent {
     type: "reply",
     email: {
       body: remaining.replace(/^[,.\s]+/, "").trim(),
-      tone,
+      ...(tone !== undefined ? { tone } : {}),
     },
     confidence: 0.85,
   };
@@ -285,10 +285,13 @@ function parseTriageIntent(text: string): TriageIntent {
       });
     } else if (trimmed.startsWith("label") || trimmed.startsWith("move")) {
       const labelMatch = trimmed.match(/(?:label|move)\s+(?:as|to)\s+(\w+)/);
+      const labelValue = labelMatch?.[1];
       actions.push({
         action: trimmed.startsWith("label") ? "label" : "move",
         target: "this",
-        params: { label: labelMatch?.[1], folder: labelMatch?.[1] },
+        params: {
+          ...(labelValue !== undefined ? { label: labelValue, folder: labelValue } : {}),
+        },
       });
     }
   }
@@ -353,7 +356,7 @@ async function polishDictatedEmail(
     if (!response.ok) return rawBody;
 
     const data = (await response.json()) as {
-      content: Array<{ type: string; text?: string }>;
+      content: { type: string; text?: string }[];
     };
 
     const polished = data.content

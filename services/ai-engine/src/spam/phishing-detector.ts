@@ -148,7 +148,7 @@ function analyzeUrl(url: string, displayText?: string): UrlAnalysisResult {
   } catch {
     return {
       url,
-      displayText,
+      ...(displayText !== undefined ? { displayText } : {}),
       isSuspicious: true,
       reasons: ['Malformed URL'],
       usesUrlShortener: false,
@@ -239,11 +239,11 @@ function analyzeUrl(url: string, displayText?: string): UrlAnalysisResult {
 
   return {
     url,
-    displayText,
+    ...(displayText !== undefined ? { displayText } : {}),
     isSuspicious: riskScore > 0.2,
     reasons,
     usesUrlShortener,
-    levenshteinToKnownBrand,
+    ...(levenshteinToKnownBrand !== undefined ? { levenshteinToKnownBrand } : {}),
     hasIpAddress,
     hasMismatchedDisplay,
     riskScore: Math.min(riskScore, 1),
@@ -471,7 +471,7 @@ function extractUrlsFromHtml(html: string): { url: string; displayText?: string 
     const displayRaw = match[2];
     if (url) {
       const displayText = displayRaw?.replace(/<[^>]+>/g, '').trim();
-      results.push({ url, displayText: displayText || undefined });
+      results.push(displayText ? { url, displayText } : { url });
     }
   }
 
@@ -505,9 +505,12 @@ export class PhishingDetector {
         ? extractUrlsFromHtml(htmlBody)
         : extractUrlsFromText(textBody);
 
-      const urlAnalysis: UrlAnalysisResult[] = rawUrls.map((u) =>
-        analyzeUrl(u.url, 'displayText' in u ? u.displayText : undefined),
-      );
+      const urlAnalysis: UrlAnalysisResult[] = rawUrls.map((u) => {
+        const displayText = 'displayText' in u ? (u as { displayText?: string }).displayText : undefined;
+        return displayText !== undefined
+          ? analyzeUrl(u.url, displayText)
+          : analyzeUrl(u.url);
+      });
 
       // 2. Domain spoofing
       const domainSpoofing = detectDomainSpoofing(email.headers.from.domain);

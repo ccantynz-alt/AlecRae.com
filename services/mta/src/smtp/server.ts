@@ -22,7 +22,7 @@ import {
   SmtpResponses,
   isCommandValidForState,
 } from "./commands.js";
-import { TlsManager } from "../tls/manager.js";
+import type { TlsManager } from "../tls/manager.js";
 
 const DEFAULT_CONFIG: SmtpServerConfig = {
   host: "0.0.0.0",

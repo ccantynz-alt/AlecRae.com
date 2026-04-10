@@ -138,8 +138,8 @@ function formatEventJson(
 export class DataExporter {
   private readonly source: ExportEventSource;
   private readonly destination: ExportDestination;
-  private readonly jobs: Map<string, ExportJob> = new Map();
-  private readonly scheduledExports: Map<string, { request: ExportRequest; timer: ReturnType<typeof setInterval> }> = new Map();
+  private readonly jobs = new Map<string, ExportJob>();
+  private readonly scheduledExports = new Map<string, { request: ExportRequest; timer: ReturnType<typeof setInterval> }>();
 
   constructor(source: ExportEventSource, destination: ExportDestination) {
     this.source = source;
@@ -273,7 +273,7 @@ export class DataExporter {
       startDate: request.dateRange.start,
       endDate: request.dateRange.end,
       eventTypes: request.eventTypes,
-      filters: request.filters,
+      ...(request.filters !== undefined ? { filters: request.filters } : {}),
     });
 
     job.totalRows = totalRows;
@@ -303,13 +303,13 @@ export class DataExporter {
         startDate: request.dateRange.start,
         endDate: request.dateRange.end,
         eventTypes: request.eventTypes,
-        filters: request.filters,
+        ...(request.filters !== undefined ? { filters: request.filters } : {}),
         batchSize: 1000,
       });
 
       for await (const batch of eventStream) {
-        // Check if job was cancelled
-        if (job.status === "failed") break;
+        // Check if job was cancelled (status can be mutated externally)
+        if ((job.status as ExportJob["status"]) === "failed") break;
 
         for (const event of batch) {
           let line: string;
@@ -346,7 +346,9 @@ export class DataExporter {
 
       const result = await writer.close();
       job.fileSizeBytes = result.sizeBytes;
-      job.outputUrl = result.url;
+      if (result.url !== undefined) {
+        job.outputUrl = result.url;
+      }
       job.status = "completed";
       job.progress = 100;
       job.completedAt = new Date();

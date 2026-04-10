@@ -316,7 +316,6 @@ export class ComposeAssistant {
       });
 
       const primaryDraft: ComposedDraft = {
-        subject: request.type === 'draft' ? undefined : undefined,
         body: this.postProcess(primaryResponse, voiceProfile),
         tone,
         confidence: 0.85,

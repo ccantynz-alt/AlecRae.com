@@ -18,7 +18,6 @@ import {
   fadeInUp,
   scalePopIn,
   SPRING_SNAPPY,
-  SPRING_SOFT,
   useViennaReducedMotion,
   withReducedMotion,
 } from "../lib/animations";

@@ -550,7 +550,7 @@ export class ThreatIntelScanner {
       reasons,
       isDangerous: riskScore >= 0.5,
       hasDoubleExtension,
-      matchedSignature,
+      ...(matchedSignature !== undefined ? { matchedSignature } : {}),
     };
   }
 

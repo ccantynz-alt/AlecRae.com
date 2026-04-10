@@ -135,7 +135,7 @@ export default function DomainsPage() {
               addedAt={d.addedAt}
               onVerify={() => handleVerify(d.id)}
               onRemove={() => handleRemove(d.id)}
-              onViewRecords={() => {}}
+              onViewRecords={() => { /* no-op */ }}
             />
           ))}
         </Box>

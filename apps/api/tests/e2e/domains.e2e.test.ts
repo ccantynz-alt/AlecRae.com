@@ -60,12 +60,12 @@ describe("Domains API", () => {
           returnPathVerified: boolean;
           isActive: boolean;
           createdAt: string;
-          dnsRecords: Array<{
+          dnsRecords: {
             type: string;
             name: string;
             value: string;
             ttl: number;
-          }>;
+          }[];
         };
         message: string;
       }>(res);
@@ -129,13 +129,13 @@ describe("Domains API", () => {
       expect(res.status).toBe(200);
 
       const body = await jsonBody<{
-        data: Array<{
+        data: {
           id: string;
           domain: string;
           status: string;
           isActive: boolean;
           createdAt: string;
-        }>;
+        }[];
       }>(res);
 
       expect(Array.isArray(body.data)).toBe(true);
@@ -247,12 +247,12 @@ describe("Domains API", () => {
       const body = await jsonBody<{
         data: {
           domain: string;
-          records: Array<{
+          records: {
             type: string;
             name: string;
             value: string;
             ttl: number;
-          }>;
+          }[];
         };
       }>(res);
 

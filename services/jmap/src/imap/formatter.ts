@@ -86,7 +86,7 @@ export function taggedBad(tag: string, text: string): string {
 }
 
 /** Continuation request: `+ <text>\r\n` */
-export function continuation(text: string = ""): string {
+export function continuation(text = ""): string {
   return `+ ${text}\r\n`;
 }
 

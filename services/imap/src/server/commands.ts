@@ -9,11 +9,9 @@
 import type {
   ImapCommand,
   ImapCommandName,
-  ImapResponse,
   ImapResponseStatus,
   ImapFetchItem,
   ImapBodySection,
-  ImapMailbox,
   ImapEnvelope,
   ImapAddress,
   ImapBodyStructure,
@@ -55,8 +53,8 @@ export function parseCommand(line: string): ImapCommand {
     return { tag: "*", name: "UNKNOWN", args: "", rawLine: trimmed };
   }
 
-  const tag = match[1]!;
-  const rawCmd = match[2]!.toUpperCase();
+  const tag = match[1] ?? "*";
+  const rawCmd = (match[2] ?? "").toUpperCase();
   const args = match[3]?.trim() ?? "";
 
   // Validate against known commands
@@ -77,8 +75,8 @@ export function parseCommand(line: string): ImapCommand {
  * @param input - The sequence set string.
  * @returns Array of [start, end] inclusive ranges.
  */
-export function parseSequenceSet(input: string): Array<[number, number]> {
-  const ranges: Array<[number, number]> = [];
+export function parseSequenceSet(input: string): [number, number][] {
+  const ranges: [number, number][] = [];
   const parts = input.split(",");
 
   for (const part of parts) {
@@ -104,7 +102,7 @@ export function parseSequenceSet(input: string): Array<[number, number]> {
 /**
  * Check if a number is within any range in a sequence set.
  */
-export function isInSequenceSet(num: number, ranges: Array<[number, number]>): boolean {
+export function isInSequenceSet(num: number, ranges: [number, number][]): boolean {
   return ranges.some(([start, end]) => num >= start && num <= end);
 }
 
@@ -412,10 +410,10 @@ function parseBodySection(token: string): ImapBodySection | null {
 
   return {
     section: section || "",
-    headerFields,
+    ...(headerFields !== undefined ? { headerFields } : {}),
     headerFieldsNot,
-    partialStart,
-    partialCount,
+    ...(partialStart !== undefined ? { partialStart } : {}),
+    ...(partialCount !== undefined ? { partialCount } : {}),
     peek,
   };
 }

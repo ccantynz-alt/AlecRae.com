@@ -108,7 +108,7 @@ Only include fields that are mentioned or implied in the query. Return ONLY the 
 
     if (!response.ok) return { keywords: query.split(/\s+/) };
 
-    const data = (await response.json()) as { content: Array<{ type: string; text?: string }> };
+    const data = (await response.json()) as { content: { type: string; text?: string }[] };
     const text = data.content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return { keywords: query.split(/\s+/) };

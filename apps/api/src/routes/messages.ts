@@ -274,13 +274,19 @@ async function handleSend(c: Context) {
     fromName: input.from.name ?? null,
     toAddresses: input.to.map((r) => ({
       address: r.email,
-      name: r.name,
+      ...(r.name !== undefined ? { name: r.name } : {}),
     })),
     ccAddresses: input.cc
-      ? input.cc.map((r) => ({ address: r.email, name: r.name }))
+      ? input.cc.map((r) => ({
+          address: r.email,
+          ...(r.name !== undefined ? { name: r.name } : {}),
+        }))
       : null,
     bccAddresses: input.bcc
-      ? input.bcc.map((r) => ({ address: r.email, name: r.name }))
+      ? input.bcc.map((r) => ({
+          address: r.email,
+          ...(r.name !== undefined ? { name: r.name } : {}),
+        }))
       : null,
     replyToAddress: input.replyTo?.email ?? null,
     replyToName: input.replyTo?.name ?? null,
@@ -368,7 +374,7 @@ async function handleSend(c: Context) {
     fromName: input.from.name ?? null,
     toAddresses: input.to.map((r) => ({
       address: r.email,
-      name: r.name,
+      ...(r.name !== undefined ? { name: r.name } : {}),
     })),
     snippet: (input.text ?? input.html ?? "").replace(/<[^>]+>/g, " ").slice(0, 200),
     hasAttachments: false,
@@ -430,7 +436,7 @@ messages.get(
 
     try {
       const result = await searchEmails(auth.accountId, q, {
-        mailboxId: mailbox,
+        ...(mailbox !== undefined ? { mailboxId: mailbox } : {}),
         limit,
         offset,
       });

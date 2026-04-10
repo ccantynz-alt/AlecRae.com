@@ -98,10 +98,10 @@ function cosineSimilarity(
 // ─── Knowledge Base ─────────────────────────────────────────────────────────
 
 export class KnowledgeBase {
-  private articles: Map<string, KnowledgeArticle> = new Map();
-  private articleTokens: Map<string, string[]> = new Map();
-  private articleTf: Map<string, Map<string, number>> = new Map();
-  private idf: Map<string, number> = new Map();
+  private articles = new Map<string, KnowledgeArticle>();
+  private articleTokens = new Map<string, string[]>();
+  private articleTf = new Map<string, Map<string, number>>();
+  private idf = new Map<string, number>();
   private idfDirty = true;
   private readonly config: KnowledgeBaseConfig;
 
@@ -278,7 +278,7 @@ export class KnowledgeBase {
     const enhancedQuery = `${issueDescription} ${technicalTerms.join(" ")}`;
 
     return this.search(enhancedQuery, {
-      category,
+      ...(category !== undefined ? { category } : {}),
       limit: 5,
       minScore: 0.03,
     });
@@ -330,7 +330,7 @@ export class KnowledgeBase {
   private generateExcerpt(
     content: string,
     queryTerms: Set<string>,
-    maxLength: number = 200,
+    maxLength = 200,
   ): string {
     const sentences = content.split(/[.!?]+/).map((s) => s.trim()).filter(Boolean);
     const lowerTerms = new Set([...queryTerms].map((t) => t.toLowerCase()));

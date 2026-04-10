@@ -6,7 +6,7 @@ import type { DnsResolver } from '../src/blocklist/monitor.js';
 // Mock DNS resolver
 // ---------------------------------------------------------------------------
 
-function createMockResolver(listedHosts: Set<string> = new Set()): DnsResolver {
+function createMockResolver(listedHosts = new Set<string>()): DnsResolver {
   return {
     resolve4: async (hostname: string) => {
       if (listedHosts.has(hostname)) {

@@ -166,7 +166,7 @@ export function applyTheme(config: ThemeConfig): void {
  * Listen for system theme changes and re-apply if mode is "system".
  */
 export function watchSystemTheme(config: ThemeConfig, onChange: () => void): () => void {
-  if (typeof window === "undefined") return () => {};
+  if (typeof window === "undefined") return () => { /* no-op on server */ };
 
   const mql = window.matchMedia("(prefers-color-scheme: dark)");
   const handler = () => {

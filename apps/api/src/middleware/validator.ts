@@ -48,6 +48,7 @@ export function validateBody<T extends ZodSchema>(schema: T) {
 
     c.set("validatedBody" as never, result.data as never);
     await next();
+    return;
   });
 }
 
@@ -75,6 +76,7 @@ export function validateQuery<T extends ZodSchema>(schema: T) {
 
     c.set("validatedQuery" as never, result.data as never);
     await next();
+    return;
   });
 }
 
@@ -102,6 +104,7 @@ export function validateParams<T extends ZodSchema>(schema: T) {
 
     c.set("validatedParams" as never, result.data as never);
     await next();
+    return;
   });
 }
 

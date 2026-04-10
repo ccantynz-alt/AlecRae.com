@@ -38,7 +38,7 @@ export class TlsManager {
         domain,
         keyPath,
         certPath,
-        caPath,
+        ...(caPath !== undefined ? { caPath } : {}),
         expiresAt: certInfo.value.expiresAt,
         issuedAt: certInfo.value.issuedAt,
         issuer: certInfo.value.issuer,

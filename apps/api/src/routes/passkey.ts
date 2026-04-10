@@ -557,7 +557,7 @@ passkeyRouter.post(
     const challengeId = generateId();
 
     // If email provided, look up allowed credentials for that user
-    let allowCredentials: Array<{ type: "public-key"; id: string; transports?: string[] }> = [];
+    let allowCredentials: { type: "public-key"; id: string; transports?: string[] }[] = [];
 
     if (input.email) {
       const [user] = await db
@@ -575,13 +575,16 @@ passkeyRouter.post(
           .from(passkeys)
           .where(eq(passkeys.userId, user.id));
 
-        allowCredentials = userPasskeys.map((pk) => ({
-          type: "public-key" as const,
-          id: pk.credentialId,
-          transports: pk.transports
+        allowCredentials = userPasskeys.map((pk) => {
+          const transports = pk.transports
             ? (JSON.parse(pk.transports) as string[])
-            : undefined,
-        }));
+            : undefined;
+          return {
+            type: "public-key" as const,
+            id: pk.credentialId,
+            ...(transports !== undefined ? { transports } : {}),
+          };
+        });
       }
     }
 

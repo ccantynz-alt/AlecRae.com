@@ -59,7 +59,7 @@ function movingAverage(values: number[], windowSize: number): number[] {
 /**
  * Exponentially weighted moving average for trend detection.
  */
-function ewma(values: number[], alpha: number = 0.3): number[] {
+function ewma(values: number[], alpha = 0.3): number[] {
   if (values.length === 0) return [];
   const result: number[] = [values[0]!];
   for (let i = 1; i < values.length; i++) {
@@ -119,7 +119,7 @@ function linearRegression(
  */
 function detectChangePoints(
   values: number[],
-  threshold: number = 2.0,
+  threshold = 2.0,
 ): number[] {
   if (values.length < 5) return [];
 
@@ -209,7 +209,7 @@ export function detectAnomalies(
 export function analyzeTrend(
   metric: MetricType,
   values: number[],
-  forecastPeriods: number = 7,
+  forecastPeriods = 7,
 ): TrendAnalysis {
   const regression = linearRegression(values);
 
@@ -412,7 +412,7 @@ export class AiInsightsEngine {
   private readonly client: Anthropic;
   private readonly modelId: string;
 
-  constructor(modelId: string = "claude-sonnet-4-20250514") {
+  constructor(modelId = "claude-sonnet-4-20250514") {
     this.client = new Anthropic();
     this.modelId = modelId;
   }
@@ -581,11 +581,11 @@ Respond as JSON array with objects: { "index": number, "description": string, "r
         }));
       }
 
-      const enrichments = JSON.parse(jsonMatch[0]) as Array<{
+      const enrichments = JSON.parse(jsonMatch[0]) as {
         index: number;
         description: string;
         recommendation: string;
-      }>;
+      }[];
 
       return candidates.map((c, i) => {
         const enrichment = enrichments.find((e) => e.index === i + 1);

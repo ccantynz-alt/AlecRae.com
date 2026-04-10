@@ -21,7 +21,7 @@ export interface HealthMonitorConfig {
   /** Number of consecutive failures before alerting */
   failureThreshold: number;
   /** Custom resolvers to check against */
-  resolvers?: Array<{ address: string; name: string }>;
+  resolvers?: { address: string; name: string }[];
   /** Callback when a health check fails threshold */
   onAlert?: (alert: HealthAlert) => void;
 }
@@ -57,11 +57,11 @@ interface MonitoredRecord {
  */
 export class DnsHealthMonitor {
   private readonly config: HealthMonitorConfig;
-  private readonly resolvers: Array<{ address: string; name: string }>;
+  private readonly resolvers: { address: string; name: string }[];
   private monitoredRecords: MonitoredRecord[] = [];
   private checkInterval: ReturnType<typeof setInterval> | null = null;
-  private failureCounts: Map<string, number> = new Map();
-  private latencyHistory: Map<string, number[]> = new Map();
+  private failureCounts = new Map<string, number>();
+  private latencyHistory = new Map<string, number[]>();
   private results: HealthCheckResult[] = [];
   private readonly maxHistorySize = 1000;
 
@@ -151,7 +151,7 @@ export class DnsHealthMonitor {
   }
 
   /** Get recent health check results */
-  getRecentResults(limit: number = 50): HealthCheckResult[] {
+  getRecentResults(limit = 50): HealthCheckResult[] {
     return this.results.slice(-limit);
   }
 

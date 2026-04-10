@@ -425,7 +425,7 @@ function parseDnsResourceRecord(
 export function decodeName(
   buffer: Buffer,
   offset: number,
-  maxJumps: number = 64
+  maxJumps = 64
 ): { name: string; newOffset: number } {
   const labels: string[] = [];
   let currentOffset = offset;
@@ -550,7 +550,7 @@ function serializeResourceRecord(rr: DnsResourceRecord): Buffer {
   const nameBuf = encodeName(rr.name);
   const buf = Buffer.alloc(nameBuf.length + 10 + rr.rdata.length);
   nameBuf.copy(buf, 0);
-  let offset = nameBuf.length;
+  const offset = nameBuf.length;
   buf.writeUInt16BE(rr.type, offset);
   buf.writeUInt16BE(rr.class, offset + 2);
   buf.writeUInt32BE(rr.ttl, offset + 4);

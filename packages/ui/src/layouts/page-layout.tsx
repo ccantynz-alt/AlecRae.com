@@ -22,10 +22,10 @@ export const PageLayout = forwardRef<HTMLDivElement, PageLayoutProps>(function P
     <Box ref={ref} className={`flex flex-col flex-1 min-h-0 ${className}`} {...props}>
       {(title || header || actions) && (
         <PageLayoutHeader
-          title={title}
-          description={description}
-          actions={actions}
-          header={header}
+          {...(title !== undefined ? { title } : {})}
+          {...(description !== undefined ? { description } : {})}
+          {...(actions !== undefined ? { actions } : {})}
+          {...(header !== undefined ? { header } : {})}
         />
       )}
       <Box className={`flex-1 overflow-auto ${fullWidth ? "" : "px-6 py-6"}`}>

@@ -163,7 +163,7 @@ export class JmapHandler {
 
     return {
       methodResponses: responses,
-      createdIds: Object.keys(createdIds).length > 0 ? createdIds : undefined,
+      ...(Object.keys(createdIds).length > 0 ? { createdIds } : {}),
       sessionState: this.sessionState,
     };
   }

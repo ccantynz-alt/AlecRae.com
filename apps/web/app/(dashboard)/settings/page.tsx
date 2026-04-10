@@ -95,14 +95,20 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
     }
   }, [user]);
 
+  const [error, setError] = useState<string | null>(null);
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
-    // TODO: wire to profile update endpoint when available
-    await new Promise((r) => setTimeout(r, 500));
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setError(null);
+    try {
+      await authApi.updateProfile({ name, email });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save profile");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const initials = (name || "U")
@@ -146,6 +152,11 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
       </CardContent>
       <CardFooter>
         <Box className="flex items-center justify-end gap-3">
+          {error && (
+            <Text variant="body-sm" className="text-status-error">
+              {error}
+            </Text>
+          )}
           <AnimatedPresence show={saved} presenceKey="saved-indicator">
             <Text variant="body-sm" className="text-status-success">
               Saved
@@ -322,14 +333,32 @@ NotificationSection.displayName = "NotificationSection";
 
 function DangerZone() {
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!confirming) {
       setConfirming(true);
       return;
     }
-    // TODO: wire to account deletion endpoint
-    setConfirming(false);
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await authApi.deleteAccount();
+      setResult(res.data.message);
+      setConfirming(false);
+      // Log the user out after successful scheduling
+      authApi.logout();
+      // Bounce them to login after 3s so they see the confirmation
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete account");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -346,11 +375,22 @@ function DangerZone() {
               Delete Account
             </Text>
             <Text variant="body-sm" muted>
-              Permanently delete your account and all associated data. This action cannot be undone.
+              Your account will be soft-deleted. You have 30 days to log back in and
+              cancel before all data is permanently removed.
             </Text>
+            {error && (
+              <Text variant="body-sm" className="text-status-error mt-2">
+                {error}
+              </Text>
+            )}
+            {result && (
+              <Text variant="body-sm" className="text-status-success mt-2">
+                {result}
+              </Text>
+            )}
           </Box>
           <Box className="flex items-center gap-2">
-            <AnimatedPresence show={confirming} presenceKey="cancel-delete">
+            <AnimatedPresence show={confirming && !result} presenceKey="cancel-delete">
               <PressableScale as="button" tapScale={0.95}>
                 <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
                   Cancel
@@ -358,8 +398,19 @@ function DangerZone() {
               </PressableScale>
             </AnimatedPresence>
             <PressableScale as="button" tapScale={0.95}>
-              <Button variant="destructive" size="sm" onClick={handleDelete}>
-                {confirming ? "Confirm Delete" : "Delete Account"}
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDelete}
+                disabled={deleting || result !== null}
+              >
+                {deleting
+                  ? "Deleting..."
+                  : result
+                    ? "Scheduled"
+                    : confirming
+                      ? "Confirm Delete"
+                      : "Delete Account"}
               </Button>
             </PressableScale>
           </Box>

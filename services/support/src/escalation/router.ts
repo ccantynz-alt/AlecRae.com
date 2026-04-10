@@ -298,7 +298,7 @@ export class EscalationRouter {
     };
 
     matchedRules.sort(
-      (a, b) => urgencyOrder[a.urgency] - urgencyOrder[b.urgency],
+      (a, b) => (urgencyOrder[a.urgency] ?? 99) - (urgencyOrder[b.urgency] ?? 99),
     );
 
     const primaryRule = matchedRules[0]!;
@@ -336,7 +336,7 @@ export class EscalationRouter {
       context: evaluationResult.reason,
       aiSummary,
       conversationHistory: conversation.messages,
-      diagnosticReport: diagnostics,
+      ...(diagnostics !== undefined ? { diagnosticReport: diagnostics } : {}),
     };
   }
 
@@ -442,7 +442,7 @@ export class EscalationRouter {
     return {
       ticket,
       conversation,
-      diagnostics,
+      ...(diagnostics !== undefined ? { diagnostics } : {}),
       aiConfidence,
       turnCount: customerMessages.length,
       customerSentiment: sentiment,

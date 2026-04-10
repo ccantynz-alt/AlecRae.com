@@ -51,9 +51,7 @@ let _loadPromise: Promise<TransformersPipeline> | null = null;
  * compiles even if the package isn't installed. The actual import is
  * dynamic (see `loadPipeline`).
  */
-interface TransformersPipeline {
-  (input: string | string[], options?: Record<string, unknown>): Promise<TransformersOutput>;
-}
+type TransformersPipeline = (input: string | string[], options?: Record<string, unknown>) => Promise<TransformersOutput>;
 
 interface TransformersOutput {
   tolist(): number[][][];
@@ -136,7 +134,7 @@ function meanPool(data: Float32Array, dims: readonly number[]): number[][] {
 
 async function loadPipeline(
   modelId: string = DEFAULT_MODEL_ID,
-  _quantized: boolean = true,
+  _quantized = true,
 ): Promise<TransformersPipeline> {
   if (_pipeline) return _pipeline;
 

@@ -25,17 +25,10 @@ import React, {
   useState,
   type HTMLAttributes,
 } from "react";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html, Text as DreiText } from "@react-three/drei";
-import {
-  Color,
-  InstancedMesh as ThreeInstancedMesh,
-  Matrix4,
-  Object3D,
-  SphereGeometry,
-  MeshStandardMaterial,
-  Vector3,
-} from "three";
+import type { InstancedMesh as ThreeInstancedMesh } from "three";
+import { Color, Object3D, Vector3 } from "three";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -236,16 +229,6 @@ function ThreadNodes({
 }: ThreadNodesProps): React.ReactElement | null {
   const meshRef = useRef<ThreeInstancedMesh>(null);
   const dummyObj = useMemo(() => new Object3D(), []);
-  const colorArray = useMemo(() => {
-    const arr = new Float32Array(threads.length * 3);
-    for (let i = 0; i < threads.length; i++) {
-      const c = new Color(threadColors[i] ?? "#888888");
-      arr[i * 3] = c.r;
-      arr[i * 3 + 1] = c.g;
-      arr[i * 3 + 2] = c.b;
-    }
-    return arr;
-  }, [threads.length, threadColors]);
 
   // Update instance matrices
   useFrame(() => {
@@ -406,7 +389,7 @@ function ConnectionLines({ threads, positions }: ConnectionLinesProps): React.Re
       }
     }
 
-    const result: Array<{ from: Vector3; to: Vector3 }> = [];
+    const result: { from: Vector3; to: Vector3 }[] = [];
     for (const [, indices] of senderGroups) {
       // Connect sequential within same sender (limit to avoid clutter)
       const maxConnections = Math.min(indices.length - 1, 5);
@@ -429,7 +412,6 @@ function ConnectionLines({ threads, positions }: ConnectionLinesProps): React.Re
   return (
     <group>
       {lines.map((line, i) => {
-        const points = [line.from, line.to];
         return (
           <line key={i}>
             <bufferGeometry>
@@ -477,7 +459,7 @@ function ClusterLabels({ threads, positions }: ClusterLabelsProps): React.ReactE
       }
     }
 
-    const result: Array<{ label: string; position: Vector3; count: number }> = [];
+    const result: { label: string; position: Vector3; count: number }[] = [];
     for (const [category, posArr] of groups) {
       if (posArr.length < 2) continue; // skip single-item clusters
       const centroid = new Vector3();
@@ -502,7 +484,7 @@ function ClusterLabels({ threads, positions }: ClusterLabelsProps): React.ReactE
           anchorX="center"
           anchorY="bottom"
           fillOpacity={0.4}
-          font={undefined}
+          
         >
           {`${item.label} (${item.count})`}
         </DreiText>
@@ -539,7 +521,7 @@ function AxisLabels({ xAxis, yAxis, zAxis }: AxisLabelsProps): React.ReactElemen
         anchorX="left"
         anchorY="middle"
         fillOpacity={0.6}
-        font={undefined}
+        
       >
         {axisLabelMap[xAxis]}
       </DreiText>
@@ -551,7 +533,7 @@ function AxisLabels({ xAxis, yAxis, zAxis }: AxisLabelsProps): React.ReactElemen
         anchorX="center"
         anchorY="bottom"
         fillOpacity={0.6}
-        font={undefined}
+        
       >
         {axisLabelMap[yAxis]}
       </DreiText>
@@ -563,7 +545,7 @@ function AxisLabels({ xAxis, yAxis, zAxis }: AxisLabelsProps): React.ReactElemen
         anchorX="center"
         anchorY="middle"
         fillOpacity={0.6}
-        font={undefined}
+        
       >
         {axisLabelMap[zAxis]}
       </DreiText>

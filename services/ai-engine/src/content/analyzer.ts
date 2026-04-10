@@ -208,7 +208,7 @@ function classifyTopics(text: string): TopicClassification[] {
   return topicScores.slice(0, 3).map((ts) => ({
     topic: ts.topic.name,
     confidence: Math.min(1, ts.score / Math.max(maxScore, 1)),
-    subtopics: ts.topic.subtopics,
+    ...(ts.topic.subtopics !== undefined ? { subtopics: ts.topic.subtopics } : {}),
   }));
 }
 

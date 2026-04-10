@@ -192,7 +192,7 @@ const LANG_SIGNALS: ReadonlyMap<string, readonly string[]> = new Map([
 function detectLanguage(text: string): string {
   const lower = text.toLowerCase();
   const words = lower.split(/\s+/);
-  const scores: Map<string, number> = new Map();
+  const scores = new Map<string, number>();
 
   for (const [lang, signals] of LANG_SIGNALS) {
     const count = words.filter((w) => signals.includes(w)).length;
@@ -324,7 +324,7 @@ Rules:
     if (!response.ok) return [];
 
     const data = (await response.json()) as {
-      content: Array<{ type: string; text?: string }>;
+      content: { type: string; text?: string }[];
     };
 
     const responseText = data.content
@@ -451,11 +451,11 @@ function mergeSpellIssues(
 export function suggestCorrections(
   word: string,
   language: string,
-  maxSuggestions: number = 3,
+  maxSuggestions = 3,
 ): string[] {
   const dictionary = LANGUAGE_DICTIONARIES.get(language) ?? EN_MISSPELLINGS;
   const lower = word.toLowerCase();
-  const candidates: Array<{ word: string; distance: number }> = [];
+  const candidates: { word: string; distance: number }[] = [];
 
   // Get all correct words from the dictionary values
   for (const corrections of dictionary.values()) {

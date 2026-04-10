@@ -287,10 +287,14 @@ export async function processVoiceMessage(
   }
 
   // Transcribe
+  const apiKey = options?.openaiApiKey;
   const transcription = await transcribeAudio(
     input.audioData,
     input.mimeType,
-    { language: input.language, apiKey: options?.openaiApiKey },
+    {
+      ...(input.language !== undefined ? { language: input.language } : {}),
+      ...(apiKey !== undefined ? { apiKey } : {}),
+    },
   );
 
   if (!transcription.ok) {

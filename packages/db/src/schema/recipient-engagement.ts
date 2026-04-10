@@ -15,17 +15,13 @@ import { accounts } from "./users.js";
 // Hourly distribution type — maps hour (0-23) to count
 // ---------------------------------------------------------------------------
 
-export interface HourlyDistribution {
-  [hour: string]: number;
-}
+export type HourlyDistribution = Record<string, number>;
 
 // ---------------------------------------------------------------------------
 // Daily distribution type — maps day-of-week (0-6, 0=Sun) to count
 // ---------------------------------------------------------------------------
 
-export interface DailyDistribution {
-  [dayOfWeek: string]: number;
-}
+export type DailyDistribution = Record<string, number>;
 
 // ---------------------------------------------------------------------------
 // Recipient Engagement — per-account, per-recipient engagement tracking

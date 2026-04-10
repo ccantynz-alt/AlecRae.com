@@ -235,7 +235,10 @@ voiceMessageRouter.post(
     const result = await transcribeAudio(
       audioFile,
       audioFile.type || "audio/webm",
-      { language: languageHint ?? undefined, apiKey: OPENAI_API_KEY },
+      {
+        apiKey: OPENAI_API_KEY,
+        ...(languageHint != null ? { language: languageHint } : {}),
+      },
     );
 
     if (!result.ok) {

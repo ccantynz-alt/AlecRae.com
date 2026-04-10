@@ -17,7 +17,7 @@ import {
  * generation of email authentication records (SPF, DKIM, DMARC).
  */
 export class DnsRecordManager {
-  private zones: Map<string, DnsZone> = new Map();
+  private zones = new Map<string, DnsZone>();
 
   constructor(initialZones?: Map<string, DnsZone>) {
     if (initialZones) {
@@ -101,7 +101,7 @@ export class DnsRecordManager {
     }
 
     const normalized = input.domain.toLowerCase();
-    let zone = this.zones.get(normalized);
+    const zone = this.zones.get(normalized);
     if (!zone) {
       throw new Error(`Zone not found for domain: ${normalized}`);
     }
@@ -330,7 +330,7 @@ export class DnsRecordManager {
       spf: SpfConfig;
       dkim: DkimConfig;
       dmarc: DmarcPolicy;
-      mxRecords?: Array<{ value: string; priority: number }>;
+      mxRecords?: { value: string; priority: number }[];
     }
   ): { spf: DnsRecord; dkim: DnsRecord; dmarc: DnsRecord; mx: DnsRecord[] } {
     const spf = this.generateSpfRecord(domain, options.spf);
@@ -474,7 +474,7 @@ export class DnsRecordManager {
       type: input.type,
       value: input.value,
       ttl: input.ttl ?? 3600,
-      priority: input.priority,
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
       createdAt: now,
       updatedAt: now,
     };

@@ -195,6 +195,7 @@ export class PriorityRanker {
       const actionRequired = this.detectActionRequired(email);
       const suggestedActions = this.suggestActions(email, tier, profile);
 
+      const expiresAt = this.computeExpiry(tier);
       const result: PriorityRankingResult = {
         emailId: email.id,
         score: Math.round(compositeScore * 1000) / 1000,
@@ -202,7 +203,7 @@ export class PriorityRanker {
         signals,
         actionRequired,
         suggestedActions,
-        expiresAt: this.computeExpiry(tier),
+        ...(expiresAt !== undefined ? { expiresAt } : {}),
       };
 
       return { ok: true, value: result };

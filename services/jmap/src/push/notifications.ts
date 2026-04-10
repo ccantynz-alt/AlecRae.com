@@ -287,7 +287,7 @@ export class PushNotificationService {
 // --- EventSource Client ---
 
 export class EventSourceClient {
-  private listeners: Array<(data: string) => void> = [];
+  private listeners: ((data: string) => void)[] = [];
   private pingTimer?: ReturnType<typeof setInterval>;
   private closed = false;
 
@@ -346,7 +346,7 @@ export class EventSourceClient {
     this.closed = true;
     if (this.pingTimer) {
       clearInterval(this.pingTimer);
-      this.pingTimer = undefined;
+      delete this.pingTimer;
     }
     this.listeners = [];
   }
@@ -363,7 +363,7 @@ export class EventSourceClient {
 // --- WebSocket Client ---
 
 export class WebSocketClient {
-  private listeners: Array<(data: string) => void> = [];
+  private listeners: ((data: string) => void)[] = [];
   private closed = false;
 
   constructor(

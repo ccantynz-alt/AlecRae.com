@@ -102,7 +102,7 @@ async function vectorSearch(
   const rows =
     (
       result as unknown as {
-        rows: Array<{
+        rows: {
           id: string;
           account_id: string;
           subject: string;
@@ -112,7 +112,7 @@ async function vectorSearch(
           html_body: string | null;
           created_at: Date;
           distance: number;
-        }>;
+        }[];
       }
     ).rows ?? [];
 
@@ -406,7 +406,7 @@ export async function isVectorSearchAvailable(
       LIMIT 1
     `);
     const rows =
-      (result as unknown as { rows: Array<{ cnt: string }> }).rows ?? [];
+      (result as unknown as { rows: { cnt: string }[] }).rows ?? [];
     const count = parseInt(rows[0]?.cnt ?? "0", 10);
     if (count === 0) {
       return {

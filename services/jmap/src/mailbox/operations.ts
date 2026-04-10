@@ -52,7 +52,7 @@ export class MailboxOperations {
   initAccount(accountId: JmapId): void {
     if (this.mailboxes.has(accountId)) return;
 
-    const defaultMailboxes: Array<{ name: string; role: MailboxRole; sortOrder: number }> = [
+    const defaultMailboxes: { name: string; role: MailboxRole; sortOrder: number }[] = [
       { name: "Inbox", role: "inbox", sortOrder: 1 },
       { name: "Drafts", role: "drafts", sortOrder: 2 },
       { name: "Sent", role: "sent", sortOrder: 3 },
@@ -204,11 +204,13 @@ export class MailboxOperations {
         accountId: args.accountId,
         oldState,
         newState: oldState,
-        notCreated: args.create
-          ? Object.fromEntries(
-              Object.keys(args.create).map((k) => [k, { type: "stateMismatch" }]),
-            )
-          : undefined,
+        ...(args.create
+          ? {
+              notCreated: Object.fromEntries(
+                Object.keys(args.create).map((k) => [k, { type: "stateMismatch" }]),
+              ),
+            }
+          : {}),
       };
     }
 
@@ -321,12 +323,12 @@ export class MailboxOperations {
       accountId: args.accountId,
       oldState,
       newState,
-      created: Object.keys(created).length > 0 ? created : undefined,
-      updated: Object.keys(updated).length > 0 ? updated : undefined,
-      destroyed: destroyedIds.length > 0 ? destroyedIds : undefined,
-      notCreated: Object.keys(notCreated).length > 0 ? notCreated : undefined,
-      notUpdated: Object.keys(notUpdated).length > 0 ? notUpdated : undefined,
-      notDestroyed: Object.keys(notDestroyed).length > 0 ? notDestroyed : undefined,
+      ...(Object.keys(created).length > 0 ? { created } : {}),
+      ...(Object.keys(updated).length > 0 ? { updated } : {}),
+      ...(destroyedIds.length > 0 ? { destroyed: destroyedIds } : {}),
+      ...(Object.keys(notCreated).length > 0 ? { notCreated } : {}),
+      ...(Object.keys(notUpdated).length > 0 ? { notUpdated } : {}),
+      ...(Object.keys(notDestroyed).length > 0 ? { notDestroyed } : {}),
     };
   }
 
@@ -390,7 +392,7 @@ export class MailboxOperations {
       canCalculateChanges: true,
       position,
       ids: slice.map((m) => m.id),
-      total: args.calculateTotal ? total : undefined,
+      ...(args.calculateTotal ? { total } : {}),
     };
   }
 
@@ -405,7 +407,7 @@ export class MailboxOperations {
         filtered[prop] = mailbox[prop as keyof Mailbox];
       }
     }
-    return filtered as Mailbox;
+    return filtered as unknown as Mailbox;
   }
 
   private validateCreate(data: Partial<Mailbox>, store: Map<JmapId, Mailbox>): JmapSetError | null {

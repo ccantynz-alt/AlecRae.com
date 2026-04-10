@@ -151,9 +151,6 @@ export default function InboxPage(): React.ReactNode {
   const [newsletterMap, setNewsletterMap] = useState<Map<string, boolean>>(new Map());
   // S7: Email explainer panel
   const [explainerOpen, setExplainerOpen] = useState(false);
-  // Whether to show full email content (toggled from newsletter summary)
-  const [showFullEmail, setShowFullEmail] = useState(true);
-
   const fetchEmails = useCallback(async () => {
     try {
       setLoading(true);
@@ -167,8 +164,9 @@ export default function InboxPage(): React.ReactNode {
       }
       setNewsletterMap(nlMap);
       setEmailItems(items);
-      if (items.length > 0 && !selectedEmailId) {
-        setSelectedEmailId(items[0]!.id);
+      const first = items[0];
+      if (first && !selectedEmailId) {
+        setSelectedEmailId(first.id);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load emails");
@@ -400,7 +398,7 @@ export default function InboxPage(): React.ReactNode {
                   <NewsletterSummaryPreview
                     emailId={selectedEmailId}
                     isNewsletter={true}
-                    onShowFullEmail={() => setShowFullEmail(true)}
+                    onShowFullEmail={() => { /* render full email below regardless */ }}
                     className="px-4 pt-4"
                   />
                 )}

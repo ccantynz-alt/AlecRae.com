@@ -259,8 +259,8 @@ async function aiClassification(ctx: FilterContext): Promise<FilterContext> {
     from: email.from[0]?.address ?? "",
     to: email.to[0]?.address ?? "",
     subject: email.subject,
-    textBody: email.text,
-    htmlBody: email.html,
+    ...(email.text !== undefined ? { textBody: email.text } : {}),
+    ...(email.html !== undefined ? { htmlBody: email.html } : {}),
     headers: email.headers.map((h) => ({ key: h.key, value: h.value })),
   };
 
@@ -507,8 +507,8 @@ export class FilterPipeline {
   async process(
     envelope: SmtpEnvelope,
     email: ParsedEmail,
-    senderIp: string = "",
-    rawHeaders: string = "",
+    senderIp = "",
+    rawHeaders = "",
     rawBody: Uint8Array = new Uint8Array(0),
   ): Promise<FilterVerdict> {
     let ctx: FilterContext = {

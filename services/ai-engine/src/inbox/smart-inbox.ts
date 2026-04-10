@@ -355,14 +355,14 @@ function parseRelativeDate(relative: string): Date | undefined {
 // ─── Follow-Up Detection ─────────────────────────────────────────────────────
 
 export function detectFollowUpNeeded(
-  sentEmails: Array<{
+  sentEmails: {
     id: string;
     toAddress: string;
     subject: string;
     sentAt: Date;
     hasReply: boolean;
-  }>,
-  thresholdDays: number = 3,
+  }[],
+  thresholdDays = 3,
 ): FollowUpNudge[] {
   const nudges: FollowUpNudge[] = [];
   const now = new Date();
@@ -404,7 +404,7 @@ export function classifyEmail(
   subject: string,
   body: string,
   headers?: Record<string, string>,
-  isSentByUser: boolean = false,
+  isSentByUser = false,
 ): EmailClassification {
   const text = `${subject} ${body}`.toLowerCase();
   const headerText = headers ? Object.values(headers).join(" ").toLowerCase() : "";
