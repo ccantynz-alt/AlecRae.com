@@ -44,8 +44,8 @@ function generateChallenge(): string {
 
 function bufferToBase64Url(buffer: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < buffer.length; i++) {
-    binary += String.fromCharCode(buffer[i]!);
+  for (const byte of buffer) {
+    binary += String.fromCharCode(byte);
   }
   return btoa(binary)
     .replace(/\+/g, "-")
@@ -89,7 +89,7 @@ function parseAuthenticatorData(authDataB64: string): {
 } {
   const authData = base64UrlToBuffer(authDataB64);
   const rpIdHash = authData.slice(0, 32);
-  const flags = authData[32]!;
+  const flags = authData[32] ?? 0;
   const signCountView = new DataView(authData.buffer, authData.byteOffset + 33, 4);
   const signCount = signCountView.getUint32(0, false);
   return { rpIdHash, flags, signCount };
