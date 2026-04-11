@@ -10,10 +10,14 @@ export {
   WarmupOrchestrator,
   getWarmupOrchestrator,
   WARMUP_SCHEDULES,
+  AUTO_WARMUP_SCHEDULE,
+  WARMUP_LIMIT_EXCEEDED,
   type WarmupScheduleType,
   type WarmupStatus,
   type WarmupSignals,
+  type WarmupCheckResult,
   type ScheduleStep,
+  type AutoWarmupStep,
 } from "./warmup/orchestrator.js";
 
 export {

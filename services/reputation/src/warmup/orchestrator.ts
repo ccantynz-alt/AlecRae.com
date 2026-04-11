@@ -34,6 +34,97 @@ export interface ScheduleStep {
 // Warm-up Schedule Templates
 // ---------------------------------------------------------------------------
 
+/**
+ * Auto-trigger warm-up schedule — hardcoded per the reputation-protection
+ * spec. This is the schedule that every new sender is placed on when they
+ * have no existing warm-up row. It is conservative by design: new domains
+ * ramping faster than this will have their reputation permanently damaged
+ * by Gmail/Outlook, which cannot be recovered for months.
+ *
+ * Schema: `{ day, dailyLimit, advanceBounceRate }`
+ *
+ *  - `day` is the warm-up day that first unlocks `dailyLimit` sends/day
+ *  - `advanceBounceRate` is the MAX bounce rate that allows the step to
+ *    advance to the next one. If the observed bounce rate over the last
+ *    24h exceeds this value the domain stays pinned at the current step.
+ */
+export interface AutoWarmupStep {
+  day: number;
+  dailyLimit: number;
+  advanceBounceRate: number;
+}
+
+export const AUTO_WARMUP_SCHEDULE: readonly AutoWarmupStep[] = [
+  { day: 1, dailyLimit: 50, advanceBounceRate: 0.05 },
+  { day: 2, dailyLimit: 100, advanceBounceRate: 0.05 },
+  { day: 3, dailyLimit: 500, advanceBounceRate: 0.05 },
+  { day: 4, dailyLimit: 1_000, advanceBounceRate: 0.04 },
+  { day: 7, dailyLimit: 5_000, advanceBounceRate: 0.03 },
+  { day: 14, dailyLimit: 25_000, advanceBounceRate: 0.02 },
+  { day: 30, dailyLimit: 100_000, advanceBounceRate: 0.01 },
+  // day 60+ is effectively "unlimited (plan-capped)" — represented as a
+  // very large limit so plan-level caps become the binding constraint.
+  { day: 60, dailyLimit: Number.MAX_SAFE_INTEGER, advanceBounceRate: 0.01 },
+] as const;
+
+/**
+ * Pure helper — resolves which `AutoWarmupStep` applies to a given
+ * `currentDay`. Returns the highest step whose `day` ≤ `currentDay`.
+ * Exported so unit tests can cover the schedule without a DB.
+ */
+export function resolveAutoStep(currentDay: number): AutoWarmupStep {
+  let step: AutoWarmupStep = AUTO_WARMUP_SCHEDULE[0]!;
+  for (const s of AUTO_WARMUP_SCHEDULE) {
+    if (s.day <= currentDay) step = s;
+    else break;
+  }
+  return step;
+}
+
+/**
+ * Pure helper — decides whether a session should advance to a new auto
+ * step based on elapsed wall-clock days and the observed 24h bounce rate.
+ *
+ * Returns the NEW `currentDay` the session should sit at. A session
+ * cannot advance past its current step if its `bounceRate24h` exceeds
+ * the current step's `advanceBounceRate` threshold — in that case the
+ * domain is pinned until bounces recover.
+ */
+export function computeNextAutoDay(args: {
+  currentDay: number;
+  elapsedDays: number;
+  bounceRate24h: number;
+}): number {
+  const currentStep = resolveAutoStep(args.currentDay);
+  const naturalStep = resolveAutoStep(args.elapsedDays);
+
+  // Not ready to advance yet on wall-clock — stay put.
+  if (naturalStep.day <= currentStep.day) return args.currentDay;
+
+  // Bounce rate gate: only advance if under the CURRENT step's threshold.
+  if (args.bounceRate24h > currentStep.advanceBounceRate) {
+    return args.currentDay;
+  }
+
+  return naturalStep.day;
+}
+
+/**
+ * Error codes returned from `ensureWarmupAndCheck` to the API layer.
+ * Callers should map these to a 429 response with a human-readable message.
+ */
+export const WARMUP_LIMIT_EXCEEDED = "WARMUP_LIMIT_EXCEEDED" as const;
+
+export interface WarmupCheckResult {
+  allowed: boolean;
+  code?: typeof WARMUP_LIMIT_EXCEEDED | "WARMUP_PAUSED";
+  message?: string;
+  currentDay?: number;
+  dailyLimit?: number;
+  sentToday?: number;
+  retryAfter?: Date;
+}
+
 export const WARMUP_SCHEDULES: Record<
   "conservative" | "moderate" | "aggressive",
   ScheduleStep[]
@@ -303,6 +394,137 @@ export class WarmupOrchestrator {
   }
 
   /**
+   * Auto-trigger guard — call this at queue-accept time BEFORE enqueueing
+   * any outbound email. This is the single entry point that enforces the
+   * reputation-protection warm-up mandate:
+   *
+   *  1. If no active/paused session exists for the domain, one is created
+   *     on-the-fly using AUTO_WARMUP_SCHEDULE. New senders CANNOT bypass
+   *     the warm-up by "not starting one" — the platform enrols them
+   *     automatically on first send.
+   *
+   *  2. The current auto step is recomputed on every call from
+   *     days-since-start + the most recent bounce rate. A step is only
+   *     advanced when the current step's `advanceBounceRate` threshold
+   *     is met; otherwise the domain stays pinned at the current step.
+   *
+   *  3. If today's send count is already at the current step's daily
+   *     limit, this method returns `{ allowed: false, code:
+   *     "WARMUP_LIMIT_EXCEEDED" }` with a human-readable message. The
+   *     API layer MUST hard-reject — no silent drop.
+   */
+  async ensureWarmupAndCheck(
+    domainId: string,
+    accountId: string,
+  ): Promise<WarmupCheckResult> {
+    const db = getDatabase();
+
+    // Look up existing session (active or paused)
+    let session = await this.getActiveSession(domainId);
+
+    // Auto-create if none exists
+    if (!session) {
+      const schedule = AUTO_WARMUP_SCHEDULE.map((s) => ({
+        day: s.day,
+        dailyLimit: s.dailyLimit,
+      }));
+      const id = crypto.randomUUID().replace(/-/g, "");
+      const now = new Date();
+      const todayStr = now.toISOString().split("T")[0]!;
+
+      try {
+        await db.insert(warmupSessions).values({
+          id,
+          accountId,
+          domainId,
+          scheduleType: "conservative",
+          status: "active",
+          startedAt: now,
+          currentDay: 1,
+          sentToday: 0,
+          sentTodayDate: todayStr,
+          extensionDays: 0,
+          schedule,
+          totalSent: 0,
+          totalDelivered: 0,
+          totalBounced: 0,
+          totalComplaints: 0,
+          bounceRate24h: 0,
+          complaintRate24h: 0,
+          consecutiveHealthyDays: 0,
+          createdAt: now,
+          updatedAt: now,
+        });
+      } catch {
+        // Race condition: another worker may have inserted the row between
+        // our read and write. Re-fetch and fall through.
+      }
+
+      session = await this.getActiveSession(domainId);
+      if (!session) {
+        // Something is deeply wrong — return a soft-block so we don't
+        // leak reputation while we investigate.
+        return {
+          allowed: false,
+          code: WARMUP_LIMIT_EXCEEDED,
+          message:
+            "Unable to establish a warm-up session for your domain. Please retry in a few seconds.",
+        };
+      }
+    }
+
+    // Paused session — hard block
+    if (session.status === "paused") {
+      return {
+        allowed: false,
+        code: "WARMUP_PAUSED",
+        message:
+          "Warm-up for this domain is paused due to elevated bounce or complaint rates. Resume it from the dashboard after investigating.",
+      };
+    }
+
+    if (session.status !== "active") {
+      // Completed / cancelled — no warm-up limit applies.
+      return { allowed: true };
+    }
+
+    // Ensure per-day counter is fresh and advance the schedule step if
+    // bounce signals permit.
+    await this.maybeResetDailyCounter(session);
+    await this.maybeAdvanceAutoStep(session);
+
+    // Refresh the in-memory session after possible mutations above.
+    const refreshed = await this.getSession(session.id);
+
+    const { dailyLimit, currentStep } = this.computeAutoStep(refreshed);
+
+    if (refreshed.sentToday >= dailyLimit) {
+      const tomorrow = new Date();
+      tomorrow.setUTCHours(24, 0, 0, 0);
+
+      const humanLimit =
+        dailyLimit >= Number.MAX_SAFE_INTEGER ? "unlimited" : String(dailyLimit);
+
+      return {
+        allowed: false,
+        code: WARMUP_LIMIT_EXCEEDED,
+        message: `Your domain is in warmup day ${currentStep.day}. Limit: ${humanLimit} sends/day. Current: ${refreshed.sentToday}. Resets at midnight UTC.`,
+        currentDay: currentStep.day,
+        dailyLimit,
+        sentToday: refreshed.sentToday,
+        retryAfter: tomorrow,
+      };
+    }
+
+    return {
+      allowed: true,
+      currentDay: currentStep.day,
+      dailyLimit,
+      sentToday: refreshed.sentToday,
+    };
+  }
+
+  /**
    * Increment the sent counter for a domain's warm-up session.
    * Call this after successfully queuing an email.
    */
@@ -569,6 +791,63 @@ export class WarmupOrchestrator {
       .limit(1);
 
     return paused ?? null;
+  }
+
+  /**
+   * Compute the auto-schedule step that currently applies to a session,
+   * based on `currentDay`. Returns the step and its daily limit.
+   *
+   * This is separate from `computeDailyLimit` because the auto schedule
+   * uses strict step thresholds: a domain cannot advance to the next step
+   * unless its observed bounce rate is under the current step's threshold.
+   */
+  private computeAutoStep(session: WarmupSession): {
+    currentStep: AutoWarmupStep;
+    dailyLimit: number;
+  } {
+    const step = resolveAutoStep(session.currentDay);
+    return { currentStep: step, dailyLimit: step.dailyLimit };
+  }
+
+  /**
+   * Advance the session's `currentDay` to the next auto-schedule step IF:
+   *
+   *  1. Enough wall-clock days have elapsed since `startedAt`
+   *  2. The bounce rate over the last 24h is below the current step's
+   *     `advanceBounceRate` threshold
+   *
+   * If bounces are too high, `currentDay` is frozen at the current step
+   * until they recover. This is hard-enforcement — no soft limits.
+   */
+  private async maybeAdvanceAutoStep(session: WarmupSession): Promise<void> {
+    if (session.status !== "active") return;
+
+    const startDate = new Date(session.startedAt);
+    const now = new Date();
+    const elapsedMs = now.getTime() - startDate.getTime();
+    const elapsedDays = Math.max(
+      1,
+      Math.floor(elapsedMs / (24 * 60 * 60 * 1000)) + 1,
+    );
+
+    const nextDay = computeNextAutoDay({
+      currentDay: session.currentDay,
+      elapsedDays,
+      bounceRate24h: session.bounceRate24h,
+    });
+
+    if (nextDay === session.currentDay) return;
+
+    const db = getDatabase();
+    await db
+      .update(warmupSessions)
+      .set({
+        currentDay: nextDay,
+        updatedAt: new Date(),
+      })
+      .where(eq(warmupSessions.id, session.id));
+
+    session.currentDay = nextDay;
   }
 
   /**

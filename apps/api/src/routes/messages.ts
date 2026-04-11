@@ -27,7 +27,7 @@ import { getDatabase, emails, deliveryResults, domains, accounts } from "@emaile
 import { getSendQueue } from "../lib/queue.js";
 import { indexEmail, searchEmails } from "@emailed/shared";
 import { usageEnforcement } from "../middleware/usage.js";
-import { getWarmupOrchestrator } from "@emailed/reputation";
+import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED } from "@emailed/reputation";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -234,18 +234,35 @@ async function handleSend(c: Context) {
     );
   }
 
-  // ── 1b. Check warm-up sending limits ──────────────────────────────
+  // ── 1b. Auto-enrol the domain in warm-up + hard-enforce day limit ─
+  // `ensureWarmupAndCheck` creates a session on-the-fly for any domain
+  // that doesn't have one, so new customers cannot bypass warm-up by
+  // "not starting one". Reputation destruction is permanent — this
+  // gate MUST hard-reject. No silent drops.
   const warmupOrchestrator = getWarmupOrchestrator();
-  const warmupCheck = await warmupOrchestrator.canSend(domainRecord.id);
+  const warmupCheck = await warmupOrchestrator.ensureWarmupAndCheck(
+    domainRecord.id,
+    auth.accountId,
+  );
 
   if (!warmupCheck.allowed) {
     return c.json(
       {
         error: {
           type: "rate_limit",
-          message: warmupCheck.reason ?? "Domain warm-up sending limit reached",
-          code: "warmup_limit_reached",
+          message:
+            warmupCheck.message ??
+            "Domain warm-up sending limit reached",
+          code: warmupCheck.code ?? WARMUP_LIMIT_EXCEEDED,
           retryAfter: warmupCheck.retryAfter?.toISOString() ?? null,
+          warmup: {
+            currentDay: warmupCheck.currentDay ?? null,
+            dailyLimit:
+              warmupCheck.dailyLimit === Number.MAX_SAFE_INTEGER
+                ? null
+                : warmupCheck.dailyLimit ?? null,
+            sentToday: warmupCheck.sentToday ?? null,
+          },
         },
       },
       429,
