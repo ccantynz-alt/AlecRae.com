@@ -27,6 +27,12 @@ export {
   type WarmupReport,
 } from "./warmup/monitor.js";
 
+// Feedback Loops — Complaint Rate Monitor
+export {
+  getComplaintRate,
+  type ComplaintRateResult,
+} from "./feedback-loops/complaint-rate.js";
+
 // Types
 export type {
   IspProvider,

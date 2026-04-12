@@ -77,6 +77,7 @@ import { heatmapAnalytics } from "./routes/heatmap.js";
 import { voiceMessageRouter } from "./routes/voice-message.js";
 import { scripts } from "./routes/scripts.js";
 import { emailQuery } from "./routes/email-query.js";
+import { fbl } from "./routes/fbl.js";
 import { closeConnection } from "@emailed/db";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
@@ -372,6 +373,9 @@ app.route("/v1/voice-messages", voiceMessageRouter);
 app.route("/v1/scripts", scripts);
 // B2: Email-as-Database — SQL over inbox query engine
 app.route("/v1/query", emailQuery);
+// FBL: ISP Feedback Loop — complaint reports (no auth — ISPs call this)
+app.use("/v1/fbl/*", webhookRateLimit);
+app.route("/v1/fbl", fbl);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);
