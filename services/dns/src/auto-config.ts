@@ -9,7 +9,7 @@
 import * as crypto from "node:crypto";
 import { promisify } from "node:util";
 import * as dns from "node:dns/promises";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   getDatabase,
   domains as domainsTable,
@@ -28,7 +28,8 @@ const SPF_MAX_LOOKUPS = 10;
 const MX_SERVERS = [
   { host: "mx1.emailed.dev", priority: 10 },
   { host: "mx2.emailed.dev", priority: 20 },
-];
+] as const;
+const [MX_PRIMARY, MX_SECONDARY] = MX_SERVERS;
 
 const SPF_VALUE = "v=spf1 include:spf.emailed.dev ~all";
 const DMARC_VALUE =
@@ -227,9 +228,9 @@ export async function generateDomainConfig(
       domainId,
       type: "MX",
       name: domain,
-      value: MX_SERVERS[0]!.host,
+      value: MX_PRIMARY.host,
       ttl: 3600,
-      priority: MX_SERVERS[0]!.priority,
+      priority: MX_PRIMARY.priority,
       verified: false,
       purpose: "mx",
     },
@@ -238,9 +239,9 @@ export async function generateDomainConfig(
       domainId,
       type: "MX",
       name: domain,
-      value: MX_SERVERS[1]!.host,
+      value: MX_SECONDARY.host,
       ttl: 3600,
-      priority: MX_SERVERS[1]!.priority,
+      priority: MX_SECONDARY.priority,
       verified: false,
       purpose: "mx",
     },
@@ -530,7 +531,15 @@ async function verifyDKIM(
 
   // If we have the stored public key, verify the published key matches
   if (expectedKeyBase64) {
-    const publishedRecord = dkimRecords[0]!;
+    const publishedRecord = dkimRecords[0];
+    if (!publishedRecord) {
+      return {
+        verified: false,
+        expected: `v=DKIM1 with matching public key`,
+        found: null,
+        error: "No DKIM record found",
+      };
+    }
     const pMatch = publishedRecord.match(/p=([A-Za-z0-9+/=]+)/);
     const publishedKey = pMatch ? pMatch[1] : null;
 
@@ -583,7 +592,15 @@ async function verifyDMARC(domain: string): Promise<RecordVerification> {
     };
   }
 
-  const record = dmarcRecords[0]!;
+  const record = dmarcRecords[0];
+  if (!record) {
+    return {
+      verified: false,
+      expected: "v=DMARC1 record",
+      found: null,
+      error: "No DMARC record found",
+    };
+  }
   // Verify it has a valid policy
   const policyMatch = record.match(/;\s*p=(none|quarantine|reject)/);
   if (!policyMatch) {

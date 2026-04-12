@@ -101,7 +101,7 @@ Return ONLY the JSON object.`;
 
     if (!response.ok) return null;
 
-    const data = (await response.json()) as { content: Array<{ type: string; text?: string }> };
+    const data = (await response.json()) as { content: { type: string; text?: string }[] };
     const output = data.content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
     const jsonMatch = output.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;

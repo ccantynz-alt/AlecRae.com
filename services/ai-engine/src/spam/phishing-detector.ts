@@ -14,7 +14,6 @@ import type {
   PhishingIndicator,
   ConfidenceScore,
   Result,
-  AIEngineError,
 } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -148,7 +147,7 @@ function analyzeUrl(url: string, displayText?: string): UrlAnalysisResult {
   } catch {
     return {
       url,
-      displayText,
+      ...(displayText !== undefined ? { displayText } : {}),
       isSuspicious: true,
       reasons: ['Malformed URL'],
       usesUrlShortener: false,
@@ -239,11 +238,11 @@ function analyzeUrl(url: string, displayText?: string): UrlAnalysisResult {
 
   return {
     url,
-    displayText,
+    ...(displayText !== undefined ? { displayText } : {}),
     isSuspicious: riskScore > 0.2,
     reasons,
     usesUrlShortener,
-    levenshteinToKnownBrand,
+    ...(levenshteinToKnownBrand !== undefined ? { levenshteinToKnownBrand } : {}),
     hasIpAddress,
     hasMismatchedDisplay,
     riskScore: Math.min(riskScore, 1),
@@ -258,7 +257,7 @@ function detectDomainSpoofing(senderDomain: string): DomainSpoofingResult {
   const domainLower = senderDomain.toLowerCase();
   const domainBase = domainLower.replace(/^www\./, '');
 
-  for (const [brand, domains] of KNOWN_BRANDS) {
+  for (const [, domains] of KNOWN_BRANDS) {
     for (const legitDomain of domains) {
       if (domainBase === legitDomain) {
         return { isSpoofed: false, similarity: 1.0 };
@@ -328,8 +327,9 @@ function containsHomoglyphs(candidate: string, target: string): boolean {
 
   let homoglyphCount = 0;
   for (let i = 0; i < candidate.length; i++) {
-    const candidateChar = candidate[i]!;
-    const targetChar = target[i]!;
+    const candidateChar = candidate[i];
+    const targetChar = target[i];
+    if (candidateChar === undefined || targetChar === undefined) continue;
     if (candidateChar === targetChar) continue;
 
     const substitutes = HOMOGLYPHS.get(targetChar);
@@ -471,7 +471,7 @@ function extractUrlsFromHtml(html: string): { url: string; displayText?: string 
     const displayRaw = match[2];
     if (url) {
       const displayText = displayRaw?.replace(/<[^>]+>/g, '').trim();
-      results.push({ url, displayText: displayText || undefined });
+      results.push(displayText ? { url, displayText } : { url });
     }
   }
 
@@ -493,8 +493,6 @@ export class PhishingDetector {
    * Returns a composite result with per-signal breakdown.
    */
   async detect(email: EmailMessage): Promise<Result<PhishingDetectionResult>> {
-    const startTime = performance.now();
-
     try {
       const textBody = email.content.textBody ?? '';
       const htmlBody = email.content.htmlBody ?? '';
@@ -505,9 +503,12 @@ export class PhishingDetector {
         ? extractUrlsFromHtml(htmlBody)
         : extractUrlsFromText(textBody);
 
-      const urlAnalysis: UrlAnalysisResult[] = rawUrls.map((u) =>
-        analyzeUrl(u.url, 'displayText' in u ? u.displayText : undefined),
-      );
+      const urlAnalysis: UrlAnalysisResult[] = rawUrls.map((u) => {
+        const displayText = 'displayText' in u ? (u as { displayText?: string }).displayText : undefined;
+        return displayText !== undefined
+          ? analyzeUrl(u.url, displayText)
+          : analyzeUrl(u.url);
+      });
 
       // 2. Domain spoofing
       const domainSpoofing = detectDomainSpoofing(email.headers.from.domain);

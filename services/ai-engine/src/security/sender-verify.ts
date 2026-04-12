@@ -160,6 +160,7 @@ function levenshtein(a: string, b: string): number {
 }
 
 function containsNonAscii(s: string): boolean {
+  // eslint-disable-next-line no-control-regex
   return /[^\x00-\x7f]/.test(s);
 }
 
@@ -390,7 +391,7 @@ function parseCreationDate(text: string): Date | null {
 
 function parseReferralServer(text: string): string | null {
   const m =
-    /(?:Registrar WHOIS Server|whois):\s*([a-z0-9.\-]+)/i.exec(text) ?? null;
+    /(?:Registrar WHOIS Server|whois):\s*([a-z0-9.-]+)/i.exec(text) ?? null;
   return m && m[1] ? m[1].trim() : null;
 }
 

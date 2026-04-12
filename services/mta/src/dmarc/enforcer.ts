@@ -182,7 +182,7 @@ async function lookupDmarcTxt(domain: string): Promise<string | null> {
       .map((parts) => parts.join(""))
       .filter((txt) => txt.startsWith("v=DMARC1"));
 
-    return dmarcRecords.length > 0 ? dmarcRecords[0]! : null;
+    return dmarcRecords[0] ?? null;
   } catch {
     return null;
   }

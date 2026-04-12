@@ -17,23 +17,6 @@ import {
 } from "../middleware/validator.js";
 import { getDatabase, emails } from "@emailed/db";
 
-// ─── Lazy import the AI compose module ───────────────────────────────────────
-// The ai-engine is a separate service; we import its core classes directly.
-
-let assistantModule: typeof import("@emailed/ai-engine/compose") | null = null;
-
-async function getComposeModule() {
-  if (!assistantModule) {
-    try {
-      assistantModule = await import("@emailed/ai-engine/compose") as typeof import("@emailed/ai-engine/compose");
-    } catch {
-      // Fallback: inline minimal implementation
-      return null;
-    }
-  }
-  return assistantModule;
-}
-
 // ─── In-memory voice profile cache (production: use DB or Redis) ─────────────
 
 const voiceProfiles = new Map<string, unknown>();
@@ -70,7 +53,7 @@ async function generateWithClaude(
   }
 
   const data = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
+    content: { type: string; text?: string }[];
   };
 
   return data.content

@@ -150,7 +150,7 @@ async function fetchSpfRecord(ctx: SpfContext, domain: string): Promise<string |
       throw new Error(`Multiple SPF records found for ${domain}`);
     }
 
-    return spfRecords[0]!;
+    return spfRecords[0] ?? null;
   } catch (error) {
     if (error instanceof Error && error.message.includes("Multiple SPF")) {
       throw error;
@@ -160,7 +160,7 @@ async function fetchSpfRecord(ctx: SpfContext, domain: string): Promise<string |
     if (dnsErr.code === "ENOTFOUND" || dnsErr.code === "ENODATA") {
       ctx.voidLookupCount++;
       if (ctx.voidLookupCount > MAX_VOID_LOOKUPS) {
-        throw new Error("Too many void DNS lookups");
+        throw new Error("Too many void DNS lookups", { cause: error });
       }
       return null;
     }
@@ -269,9 +269,12 @@ function ipv6InSubnet(ip: string, network: string, prefix: number): boolean {
 
   let bitsToCheck = prefix;
   for (let i = 0; i < 16 && bitsToCheck > 0; i++) {
+    const ipByte = ipBytes[i];
+    const netByte = netBytes[i];
+    if (ipByte === undefined || netByte === undefined) return false;
     const bitsInByte = Math.min(bitsToCheck, 8);
     const mask = (~0 << (8 - bitsInByte)) & 0xff;
-    if ((ipBytes[i]! & mask) !== (netBytes[i]! & mask)) return false;
+    if ((ipByte & mask) !== (netByte & mask)) return false;
     bitsToCheck -= 8;
   }
   return true;
@@ -412,20 +415,20 @@ function parseDomainCidr(value: string): {
   cidr6: number;
 } {
   // Format: domain/cidr4//cidr6 or domain/cidr4 or domain
-  const dualCidr = value.match(/^(.+?)\/(\d+)\/\/(\d+)$/);
-  if (dualCidr) {
+  const dualCidr = /^(.+?)\/(\d+)\/\/(\d+)$/.exec(value);
+  if (dualCidr?.[1] !== undefined && dualCidr[2] !== undefined && dualCidr[3] !== undefined) {
     return {
-      hostname: dualCidr[1]!,
-      cidr4: parseInt(dualCidr[2]!, 10),
-      cidr6: parseInt(dualCidr[3]!, 10),
+      hostname: dualCidr[1],
+      cidr4: parseInt(dualCidr[2], 10),
+      cidr6: parseInt(dualCidr[3], 10),
     };
   }
 
-  const singleCidr = value.match(/^(.+?)\/(\d+)$/);
-  if (singleCidr) {
+  const singleCidr = /^(.+?)\/(\d+)$/.exec(value);
+  if (singleCidr?.[1] !== undefined && singleCidr[2] !== undefined) {
     return {
-      hostname: singleCidr[1]!,
-      cidr4: parseInt(singleCidr[2]!, 10),
+      hostname: singleCidr[1],
+      cidr4: parseInt(singleCidr[2], 10),
       cidr6: 128,
     };
   }
@@ -444,12 +447,12 @@ function parseMechanism(part: string): SpfMechanism | null {
   }
 
   // Handle redirect and exp modifiers
-  const modifierMatch = rest.match(/^(redirect|exp)=(.+)$/i);
-  if (modifierMatch) {
+  const modifierMatch = /^(redirect|exp)=(.+)$/i.exec(rest);
+  if (modifierMatch?.[1] !== undefined && modifierMatch[2] !== undefined) {
     return {
       qualifier: "+",
-      type: modifierMatch[1]!.toLowerCase() as SpfMechanismType,
-      value: modifierMatch[2]!,
+      type: modifierMatch[1].toLowerCase() as SpfMechanismType,
+      value: modifierMatch[2],
     };
   }
 

@@ -12,7 +12,7 @@ import { z } from "zod";
 import { eq, and, gte, lte, sql, count } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateQuery, getValidatedQuery } from "../middleware/validator.js";
-import { getDatabase, emails, events } from "@emailed/db";
+import { getDatabase, emails } from "@emailed/db";
 
 // ─── Validation Schemas ─────────────────────────────────────────────────────
 
@@ -307,7 +307,6 @@ heatmapAnalytics.get(
 
     if (dayTotals.size === 0) {
       quietestDay = null;
-      quietestCount = 0;
     }
 
     // Average response time: compute from delivery_results if available,

@@ -11,6 +11,7 @@
  *   <MeetingTranscriptPanel threadId="msg-123" />
  */
 
+import * as React from "react";
 import { useState, useEffect, useCallback } from "react";
 import {
   MeetingLinkCard,
@@ -72,7 +73,7 @@ function mapApiMeeting(m: ApiMeetingLinkData): MeetingLinkData {
 export function MeetingTranscriptPanel({
   threadId,
   className = "",
-}: MeetingTranscriptPanelProps): JSX.Element | null {
+}: MeetingTranscriptPanelProps): React.ReactElement | null {
   const [state, setState] = useState<PanelState>(INITIAL_STATE);
 
   // Fetch meetings for this thread on mount

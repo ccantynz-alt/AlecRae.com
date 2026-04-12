@@ -5,10 +5,16 @@
 
 import * as net from "node:net";
 import * as dns from "node:dns/promises";
+
+/** RFC 5321 MX record shape. node:dns/promises doesn't re-export MxRecord. */
+interface MxRecord {
+  readonly priority: number;
+  readonly exchange: string;
+}
 import { EventEmitter } from "node:events";
 import type { SmtpClientConfig, Result } from "../types.js";
 import { ok, err } from "../types.js";
-import { TlsManager } from "../tls/manager.js";
+import type { TlsManager } from "../tls/manager.js";
 
 const DEFAULT_CLIENT_CONFIG: SmtpClientConfig = {
   host: "",
@@ -45,7 +51,7 @@ export class SmtpClient extends EventEmitter {
   /**
    * Resolve MX records for a domain and return them sorted by priority.
    */
-  static async resolveMx(domain: string): Promise<dns.MxRecord[]> {
+  static async resolveMx(domain: string): Promise<MxRecord[]> {
     try {
       const records = await dns.resolveMx(domain);
       return records.sort((a, b) => a.priority - b.priority);
@@ -73,7 +79,7 @@ export class SmtpClient extends EventEmitter {
       return err(new Error(`Invalid recipient address: ${to}`));
     }
 
-    let mxRecords: dns.MxRecord[];
+    let mxRecords: MxRecord[];
     try {
       mxRecords = await SmtpClient.resolveMx(recipientDomain);
     } catch (error) {
@@ -220,7 +226,8 @@ export class SmtpClient extends EventEmitter {
     // Parse extensions from multi-line response
     this.extensions.clear();
     for (let i = 1; i < response.lines.length; i++) {
-      const line = response.lines[i]!;
+      const line = response.lines[i];
+      if (line === undefined) continue;
       const spaceIndex = line.indexOf(" ");
       if (spaceIndex > 0) {
         this.extensions.set(
@@ -260,8 +267,9 @@ export class SmtpClient extends EventEmitter {
     }
 
     try {
+      const rejectUnauthorized = this.config.tlsOptions?.rejectUnauthorized;
       const tlsSocket = await this.tlsManager.upgradeClientToTls(this.socket, host, {
-        rejectUnauthorized: this.config.tlsOptions?.rejectUnauthorized,
+        ...(rejectUnauthorized !== undefined ? { rejectUnauthorized } : {}),
       });
       this.socket = tlsSocket as unknown as net.Socket;
       this.tls = true;

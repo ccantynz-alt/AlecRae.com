@@ -5,6 +5,8 @@ const variantStyles = {
     "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 focus-visible:ring-brand-500",
   secondary:
     "bg-surface-secondary text-content border border-border hover:bg-surface-tertiary active:bg-surface-tertiary focus-visible:ring-brand-500",
+  outline:
+    "bg-transparent text-content border border-border hover:bg-surface-secondary active:bg-surface-tertiary focus-visible:ring-brand-500",
   ghost:
     "bg-transparent text-content hover:bg-surface-tertiary active:bg-surface-tertiary focus-visible:ring-brand-500",
   destructive:

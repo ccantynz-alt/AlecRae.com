@@ -70,8 +70,8 @@ spellcheckRouter.post(
 
     const result = await spellCheck({
       text: input.text,
-      language: input.language,
       customWords,
+      ...(input.language !== undefined ? { language: input.language } : {}),
     });
 
     return c.json({ data: result });
@@ -83,7 +83,7 @@ spellcheckRouter.get(
   "/languages",
   requireScope("grammar:read"),
   (c) => {
-    const languages: Array<{ code: string; name: string }> = [];
+    const languages: { code: string; name: string }[] = [];
     for (const [code, name] of SUPPORTED_LANGUAGES) {
       languages.push({ code, name });
     }

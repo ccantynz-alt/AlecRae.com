@@ -13,7 +13,6 @@ import type {
   SenderProfile,
   ReputationSnapshot,
   Result,
-  AIEngineError,
 } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -43,15 +42,18 @@ const FACTOR_WEIGHTS = {
 function applyTransferFunction(value: number, breakpoints: readonly [number, number][]): number {
   if (breakpoints.length === 0) return 50;
 
-  const first = breakpoints[0]!;
+  const first = breakpoints[0];
+  if (!first) return 50;
   if (value <= first[0]) return first[1];
 
-  const last = breakpoints[breakpoints.length - 1]!;
+  const last = breakpoints[breakpoints.length - 1];
+  if (!last) return 50;
   if (value >= last[0]) return last[1];
 
   for (let i = 1; i < breakpoints.length; i++) {
-    const prev = breakpoints[i - 1]!;
-    const curr = breakpoints[i]!;
+    const prev = breakpoints[i - 1];
+    const curr = breakpoints[i];
+    if (!prev || !curr) continue;
     if (value <= curr[0]) {
       const t = (value - prev[0]) / (curr[0] - prev[0]);
       return prev[1] + t * (curr[1] - prev[1]);

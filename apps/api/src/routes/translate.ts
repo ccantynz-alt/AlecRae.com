@@ -116,7 +116,7 @@ Rules:
   }
 
   const data = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
+    content: { type: string; text?: string }[];
   };
 
   const fullOutput = data.content
@@ -163,7 +163,7 @@ async function detectLanguage(text: string): Promise<{ code: string; name: strin
   }
 
   const data = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
+    content: { type: string; text?: string }[];
   };
 
   const code = data.content

@@ -21,7 +21,6 @@ import {
   domains as domainsTable,
   accounts,
   users,
-  dnsRecords,
 } from "@emailed/db";
 
 const admin = new Hono();

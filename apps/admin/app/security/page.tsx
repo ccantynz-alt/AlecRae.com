@@ -3,7 +3,6 @@
 import { useCallback } from "react";
 import { Box, Text } from "@emailed/ui";
 import { MetricCard } from "../../components/metric-card";
-import { StatusBadge } from "../../components/status-badge";
 import { DataTable } from "../../components/data-table";
 import { AuthShell } from "../../components/auth-shell";
 import { adminApi } from "../../lib/api";
@@ -111,8 +110,6 @@ export default function SecurityPage() {
 
   const eventList = events ?? [];
   const bounceEvents = eventList.filter((e) => e.type === "email.bounced");
-  const complaintEvents = eventList.filter((e) => e.type === "email.complained");
-  const failedEvents = eventList.filter((e) => e.type === "email.failed");
 
   // Group bounces by category
   const bounceCategoryCounts: Record<string, number> = {};

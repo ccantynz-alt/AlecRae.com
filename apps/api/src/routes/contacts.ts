@@ -18,10 +18,6 @@ import { getDatabase, contacts as contactsTable } from "@emailed/db";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function generateId(): string {
-  return crypto.randomUUID().replace(/-/g, "");
-}
-
 function getGravatarUrl(email: string): string {
   // Simple hash for gravatar — production would use actual MD5
   const hash = email.trim().toLowerCase();

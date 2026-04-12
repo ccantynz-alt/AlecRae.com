@@ -7,6 +7,7 @@
 // arriving outside active hours are boosted.
 
 import type {
+  AIEngineError,
   EmailMessage,
   PriorityRankingResult,
   PriorityTier,
@@ -14,17 +15,12 @@ import type {
   SuggestedAction,
   UserBehaviorProfile,
   WeightedSender,
-  WeightedKeyword,
-  ConfidenceScore,
   Result,
-  AIEngineError,
 } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const MODEL_VERSION = '1.0.0';
 
 /** Weight factors for each signal category */
 const SIGNAL_WEIGHTS = {
@@ -154,8 +150,6 @@ export class PriorityRanker {
    * Returns a composite score, tier, contributing signals, and suggested actions.
    */
   rank(email: EmailMessage, userId: string): Result<PriorityRankingResult> {
-    const startTime = performance.now();
-
     try {
       const profile = this.behaviorProfiles.get(userId);
       const signals: PrioritySignal[] = [];
@@ -195,6 +189,7 @@ export class PriorityRanker {
       const actionRequired = this.detectActionRequired(email);
       const suggestedActions = this.suggestActions(email, tier, profile);
 
+      const expiresAt = this.computeExpiry(tier);
       const result: PriorityRankingResult = {
         emailId: email.id,
         score: Math.round(compositeScore * 1000) / 1000,
@@ -202,7 +197,7 @@ export class PriorityRanker {
         signals,
         actionRequired,
         suggestedActions,
-        expiresAt: this.computeExpiry(tier),
+        ...(expiresAt !== undefined ? { expiresAt } : {}),
       };
 
       return { ok: true, value: result };

@@ -120,7 +120,7 @@ async function processBatch(jobs: AutoIndexJob[]): Promise<void> {
 
   // Build documents for embedding
   const rowMap = new Map(rows.map((r) => [r.id, r]));
-  const validJobs: Array<{ job: AutoIndexJob; row: EmbeddableEmail; doc: string }> = [];
+  const validJobs: { job: AutoIndexJob; row: EmbeddableEmail; doc: string }[] = [];
 
   for (const job of jobs) {
     const row = rowMap.get(job.emailId);
@@ -143,7 +143,8 @@ async function processBatch(jobs: AutoIndexJob[]): Promise<void> {
 
   // Upsert into pgvector
   for (let i = 0; i < validJobs.length; i++) {
-    const entry = validJobs[i]!;
+    const entry = validJobs[i];
+    if (!entry) continue;
     const vec = vectors[i];
     if (!vec || vec.length !== EMBEDDING_DIMENSIONS) {
       _totalFailed += 1;
@@ -218,7 +219,7 @@ export function enqueueEmail(emailId: string, accountId: string): void {
  * Enqueue multiple emails for background embedding.
  */
 export function enqueueEmails(
-  items: ReadonlyArray<{ emailId: string; accountId: string }>,
+  items: readonly { emailId: string; accountId: string }[],
 ): void {
   for (const item of items) {
     _queue.push({
@@ -290,7 +291,7 @@ export async function indexAllUnindexed(accountId: string): Promise<number> {
   let enqueued = 0;
   let offset = 0;
 
-  // eslint-disable-next-line no-constant-condition
+   
   while (true) {
     const unindexed = await db.execute<{ id: string }>(sql`
       SELECT e.id
@@ -304,7 +305,7 @@ export async function indexAllUnindexed(accountId: string): Promise<number> {
     `);
 
     const rows =
-      (unindexed as unknown as { rows: Array<{ id: string }> }).rows ?? [];
+      (unindexed as unknown as { rows: { id: string }[] }).rows ?? [];
 
     if (rows.length === 0) break;
 

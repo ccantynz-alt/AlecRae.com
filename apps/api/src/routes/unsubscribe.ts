@@ -221,14 +221,15 @@ unsubscribe.post(
 
     let chosen: UnsubscribeOption | null;
     if (input.option) {
+      const { method: optMethod, target: optTarget } = input.option;
       // Re-extract so we have the full option metadata if possible.
       const all = await extractUnsubscribeOptions(toExtractInput(input.email));
       chosen =
         all.find(
-          (o) => o.method === input.option!.method && o.target === input.option!.target,
+          (o) => o.method === optMethod && o.target === optTarget,
         ) ?? {
-          method: input.option.method,
-          target: input.option.target,
+          method: optMethod,
+          target: optTarget,
           source: "list_unsubscribe_header",
           priority: 99,
           confidence: 0.5,
@@ -451,13 +452,14 @@ emailUnsubscribe.post(
     // Pick the best option (or use the caller-specified one).
     let chosen: UnsubscribeOption | null;
     if (input.option) {
+      const { method: optMethod, target: optTarget } = input.option;
       const all = await extractUnsubscribeOptions(extractInput);
       chosen =
         all.find(
-          (o) => o.method === input.option!.method && o.target === input.option!.target,
+          (o) => o.method === optMethod && o.target === optTarget,
         ) ?? {
-          method: input.option.method,
-          target: input.option.target,
+          method: optMethod,
+          target: optTarget,
           source: "list_unsubscribe_header",
           priority: 99,
           confidence: 0.5,
@@ -492,7 +494,20 @@ emailUnsubscribe.post(
           },
         });
       }
-      chosen = allOptions[0]!;
+      const firstOption = allOptions[0];
+      if (!firstOption) {
+        return c.json(
+          {
+            error: {
+              type: "internal_error",
+              message: "Failed to select unsubscribe option",
+              code: "option_selection_failed",
+            },
+          },
+          500,
+        );
+      }
+      chosen = firstOption;
     }
 
     // Execute the unsubscribe.

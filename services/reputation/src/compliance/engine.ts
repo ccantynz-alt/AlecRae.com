@@ -27,19 +27,11 @@ import type {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Required headers for CAN-SPAM compliance */
-const CAN_SPAM_REQUIRED_HEADERS = [
-  'List-Unsubscribe',
-] as const;
-
 /** RFC 8058 one-click unsubscribe header format */
 const ONE_CLICK_UNSUBSCRIBE_PATTERN = /List-Unsubscribe-Post:\s*List-Unsubscribe=One-Click/i;
 
 /** Maximum consent age for implied consent under CASL (6 months) */
 const CASL_IMPLIED_CONSENT_MAX_DAYS = 180;
-
-/** Maximum consent age for implied consent from inquiry under CASL (6 months) */
-const CASL_INQUIRY_CONSENT_MAX_DAYS = 180;
 
 /** Maximum consent age for implied consent from business relationship under CASL (24 months) */
 const CASL_BUSINESS_CONSENT_MAX_DAYS = 730;
@@ -99,13 +91,13 @@ export class ComplianceEngine {
   private readonly config: Required<ComplianceEngineConfig>;
 
   /** Consent records keyed by "email::domain" */
-  private readonly consentRecords: Map<string, ConsentRecord> = new Map();
+  private readonly consentRecords = new Map<string, ConsentRecord>();
 
   /** Global suppression list keyed by lowercase email */
-  private readonly globalSuppressions: Map<string, SuppressionListEntry> = new Map();
+  private readonly globalSuppressions = new Map<string, SuppressionListEntry>();
 
   /** Per-domain suppression lists keyed by "domain::email" */
-  private readonly domainSuppressions: Map<string, SuppressionListEntry> = new Map();
+  private readonly domainSuppressions = new Map<string, SuppressionListEntry>();
 
   constructor(config: ComplianceEngineConfig = {}) {
     this.config = {

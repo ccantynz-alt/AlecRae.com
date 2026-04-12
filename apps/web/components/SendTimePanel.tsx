@@ -16,6 +16,7 @@
  *   />
  */
 
+import * as React from "react";
 import { useState, useEffect, useCallback } from "react";
 import {
   SendTimeSuggestion,
@@ -61,7 +62,7 @@ export function SendTimePanel({
   onScheduleAt,
   onSendNow,
   className = "",
-}: SendTimePanelProps): JSX.Element | null {
+}: SendTimePanelProps): React.ReactElement | null {
   const [state, setState] = useState<PanelState>(INITIAL_STATE);
 
   // Detect email validity
@@ -152,7 +153,7 @@ export function SendTimePanel({
       sampleSize={sampleSize}
       onSelectTime={handleSelectTime}
       onDismiss={handleDismiss}
-      onSendNow={onSendNow}
+      {...(onSendNow !== undefined ? { onSendNow } : {})}
       onRefresh={handleRefresh}
       className={className}
     />

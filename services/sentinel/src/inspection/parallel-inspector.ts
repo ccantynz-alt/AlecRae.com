@@ -196,7 +196,9 @@ export class ParallelInspector {
       }, timeoutMs);
 
       for (let i = 0; i < promises.length; i++) {
-        promises[i]!
+        const promise = promises[i];
+        if (!promise) continue;
+        promise
           .then((result) => {
             results[i] = result;
           })

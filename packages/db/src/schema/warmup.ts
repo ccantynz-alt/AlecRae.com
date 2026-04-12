@@ -89,7 +89,7 @@ export const warmupSessions = pgTable(
      */
     schedule: jsonb("schedule")
       .notNull()
-      .$type<Array<{ day: number; dailyLimit: number }>>(),
+      .$type<{ day: number; dailyLimit: number }[]>(),
 
     /** Aggregate metrics for the warm-up session */
     totalSent: integer("total_sent").notNull().default(0),

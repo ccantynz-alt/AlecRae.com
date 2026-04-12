@@ -10,8 +10,6 @@ import type {
   TrackingEvent,
   TrackingPixel,
   TrackedLink,
-  EventType,
-  EventMetadata,
   EventBatch,
   IngestionStats,
   IngestionConfig,
@@ -72,7 +70,7 @@ export function rewriteLink(
     originalUrl,
     trackingUrl,
     linkIndex,
-    tag,
+    ...(tag !== undefined ? { tag } : {}),
     createdAt: new Date(),
   };
 }
@@ -169,8 +167,8 @@ export function createDeliveryEvent(
       smtpResponse: metadata.smtpResponse,
       mxHost: metadata.mxHost,
       deliveryTimeMs: metadata.deliveryTimeMs,
-      campaignId: metadata.campaignId,
-      tags: metadata.tags,
+      ...(metadata.campaignId !== undefined ? { campaignId: metadata.campaignId } : {}),
+      ...(metadata.tags !== undefined ? { tags: metadata.tags } : {}),
     },
   };
 }
@@ -225,9 +223,9 @@ export function createOpenEvent(
       ipAddress: metadata.ipAddress,
       deviceType: parsed.deviceType,
       emailClient: parsed.emailClient,
-      geolocation: metadata.geolocation,
-      campaignId: metadata.campaignId,
-      tags: metadata.tags,
+      ...(metadata.geolocation !== undefined ? { geolocation: metadata.geolocation } : {}),
+      ...(metadata.campaignId !== undefined ? { campaignId: metadata.campaignId } : {}),
+      ...(metadata.tags !== undefined ? { tags: metadata.tags } : {}),
     },
   };
 }
@@ -259,14 +257,14 @@ export function createClickEvent(
     metadata: {
       url: metadata.url,
       linkIndex: metadata.linkIndex,
-      linkTag: metadata.linkTag,
+      ...(metadata.linkTag !== undefined ? { linkTag: metadata.linkTag } : {}),
       userAgent: metadata.userAgent,
       ipAddress: metadata.ipAddress,
       deviceType: parsed.deviceType,
       emailClient: parsed.emailClient,
-      geolocation: metadata.geolocation,
-      campaignId: metadata.campaignId,
-      tags: metadata.tags,
+      ...(metadata.geolocation !== undefined ? { geolocation: metadata.geolocation } : {}),
+      ...(metadata.campaignId !== undefined ? { campaignId: metadata.campaignId } : {}),
+      ...(metadata.tags !== undefined ? { tags: metadata.tags } : {}),
     },
   };
 }
@@ -305,7 +303,7 @@ export interface EventSink {
  */
 export class EventIngestionPipeline {
   private buffer: TrackingEvent[] = [];
-  private readonly seen: Map<string, number> = new Map(); // eventId -> timestamp for dedup
+  private readonly seen = new Map<string, number>(); // eventId -> timestamp for dedup
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private readonly sinks: EventSink[];
   private readonly config: IngestionConfig;
@@ -461,7 +459,7 @@ export class EventIngestionPipeline {
       // Running average of processing time
       this.stats.avgProcessingTimeMs =
         this.stats.avgProcessingTimeMs * 0.9 + duration * 0.1;
-    } catch (error) {
+    } catch {
       this.stats.eventsFailed += batch.length;
       // On failure, put events back in buffer for retry (at the front)
       this.buffer.unshift(...batch);
@@ -489,12 +487,14 @@ export function decodeTrackingToken(
   try {
     const decoded = Buffer.from(token, "base64url").toString("utf-8");
     const parts = decoded.split("|");
-    if (parts.length < 3) {
+    const messageId = parts[0];
+    const accountId = parts[1];
+    if (parts.length < 3 || messageId === undefined || accountId === undefined) {
       return err(new Error("Invalid tracking token format"));
     }
     return ok({
-      messageId: parts[0]!,
-      accountId: parts[1]!,
+      messageId,
+      accountId,
       payload: parts.slice(2).join("|"),
     });
   } catch (error) {

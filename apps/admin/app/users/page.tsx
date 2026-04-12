@@ -3,7 +3,6 @@
 import { useCallback } from "react";
 import { Box, Text } from "@emailed/ui";
 import { MetricCard } from "../../components/metric-card";
-import { StatusBadge } from "../../components/status-badge";
 import { DataTable } from "../../components/data-table";
 import { adminApi } from "../../lib/api";
 import type { AdminUser } from "../../lib/api";

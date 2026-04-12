@@ -182,7 +182,8 @@ class SmtpRelay {
     }
     this.extensions.clear();
     for (let i = 1; i < resp.lines.length; i++) {
-      const line = resp.lines[i]!;
+      const line = resp.lines[i];
+      if (line === undefined) continue;
       const sp = line.indexOf(" ");
       if (sp > 0) {
         this.extensions.set(line.substring(0, sp).toUpperCase(), line.substring(sp + 1));
@@ -619,14 +620,23 @@ export class RelayClient {
    */
   async send(from: string, to: string[], rawMessage: string): Promise<RelaySendResult> {
     switch (this.config.provider) {
-      case "ses":
-        return sendViaSes(this.config.ses!, from, to, rawMessage);
+      case "ses": {
+        const ses = this.config.ses;
+        if (!ses) return { success: false, error: "SES config missing" };
+        return sendViaSes(ses, from, to, rawMessage);
+      }
 
-      case "mailchannels":
-        return sendViaMailchannels(this.config.mailchannels!, from, to, rawMessage);
+      case "mailchannels": {
+        const mc = this.config.mailchannels;
+        if (!mc) return { success: false, error: "Mailchannels config missing" };
+        return sendViaMailchannels(mc, from, to, rawMessage);
+      }
 
-      case "smtp":
-        return sendViaSmtpRelay(this.config.smtp!, from, to, rawMessage);
+      case "smtp": {
+        const smtp = this.config.smtp;
+        if (!smtp) return { success: false, error: "SMTP config missing" };
+        return sendViaSmtpRelay(smtp, from, to, rawMessage);
+      }
 
       default:
         return { success: false, error: `Unknown relay provider: ${this.config.provider as string}` };

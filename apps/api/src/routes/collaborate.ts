@@ -511,12 +511,12 @@ collaborate.get(
       );
 
     // Fetch connected users from collab service.
-    let connectedUsers: Array<{
+    let connectedUsers: {
       userId: string;
       name: string;
       avatarUrl: string | undefined;
       joinedAt: string;
-    }> = [];
+    }[] = [];
     try {
       const adminToken = await mintAdminToken();
       const res = await fetch(

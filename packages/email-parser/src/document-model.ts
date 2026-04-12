@@ -269,17 +269,17 @@ export function htmlToDocument(html: string): EmailDocument {
   );
 
   // Process block-level elements
-  const blockPatterns: Array<{
+  const blockPatterns: {
     regex: RegExp;
     handler: (match: RegExpMatchArray) => EmailBlock | null;
-  }> = [
+  }[] = [
     // Headings
     {
       regex: /<h([1-4])[^>]*>([\s\S]*?)<\/h[1-4]>/gi,
       handler: (match) => ({
         id: nextId(),
         type: 'heading' as const,
-        level: parseInt(match[1]!, 10) as 1 | 2 | 3 | 4,
+        level: parseInt(match[1] ?? '1', 10) as 1 | 2 | 3 | 4,
         content: parseInlineContent(match[2] ?? ''),
       }),
     },
@@ -349,7 +349,7 @@ export function htmlToDocument(html: string): EmailDocument {
   ];
 
   // Apply block-level parsing
-  let remaining = cleaned;
+  const remaining = cleaned;
 
   for (const { regex, handler } of blockPatterns) {
     let match: RegExpExecArray | null;
@@ -570,23 +570,10 @@ export function plainTextToDocument(text: string): EmailDocument {
 
 function parseInlineContent(html: string): InlineContent[] {
   const content: InlineContent[] = [];
-  let remaining = html;
 
-  // Simple inline parsing — handles bold, italic, links, code
-  const inlinePatterns = [
-    { regex: /<strong[^>]*>([\s\S]*?)<\/strong>/i, type: 'bold' as const },
-    { regex: /<b[^>]*>([\s\S]*?)<\/b>/i, type: 'bold' as const },
-    { regex: /<em[^>]*>([\s\S]*?)<\/em>/i, type: 'italic' as const },
-    { regex: /<i[^>]*>([\s\S]*?)<\/i>/i, type: 'italic' as const },
-    { regex: /<code[^>]*>([\s\S]*?)<\/code>/i, type: 'inline_code' as const },
-    {
-      regex: /<a[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i,
-      type: 'inline_link' as const,
-    },
-  ];
-
-  // For simplicity, extract plain text with basic inline formatting
-  const stripped = remaining
+  // For simplicity, extract plain text with basic inline formatting.
+  // TODO: implement proper inline pattern parsing for bold/italic/link/code.
+  const stripped = html
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<[^>]+>/g, '')
     .trim();

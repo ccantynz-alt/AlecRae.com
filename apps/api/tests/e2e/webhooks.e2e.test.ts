@@ -128,14 +128,14 @@ describe("Webhooks API", () => {
       expect(res.status).toBe(200);
 
       const body = await jsonBody<{
-        data: Array<{
+        data: {
           id: string;
           url: string;
           events: string[];
           secret: string;
           active: boolean;
           createdAt: string;
-        }>;
+        }[];
       }>(res);
 
       expect(Array.isArray(body.data)).toBe(true);
@@ -353,14 +353,14 @@ describe("Webhooks API", () => {
       expect(res.status).toBe(200);
 
       const body = await jsonBody<{
-        data: Array<{
+        data: {
           id: string;
           eventId: string;
           statusCode: number | null;
           success: boolean;
           attemptCount: number;
           createdAt: string;
-        }>;
+        }[];
         limit: number;
         offset: number;
       }>(res);

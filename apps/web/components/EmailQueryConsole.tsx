@@ -12,8 +12,8 @@
  */
 
 import type { ReactElement } from "react";
-import { useState, useCallback, useEffect, useRef } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { useState, useCallback, useEffect } from "react";
+import { motion } from "motion/react";
 import {
   QueryConsole,
   type QueryMode,

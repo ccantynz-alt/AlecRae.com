@@ -201,7 +201,8 @@ semanticSearch.post(
 
     let indexed = 0;
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]!;
+      const row = rows[i];
+      if (!row) continue;
       const vec = vectors[i];
       if (!vec) continue;
       const literal = toVectorLiteral(vec);
@@ -275,11 +276,11 @@ semanticSearch.post(
       LIMIT ${input.limit}
     `);
 
-    const rows = (result as unknown as { rows: Array<{
+    const rows = (result as unknown as { rows: {
       id: string; account_id: string; subject: string; from_address: string;
       from_name: string | null; text_body: string | null; html_body: string | null;
       created_at: Date; distance: number;
-    }> }).rows ?? [];
+    }[] }).rows ?? [];
 
     const hits: SemanticSearchHit[] = rows.map((r) =>
       rowToHit(
@@ -333,7 +334,7 @@ semanticSearch.post(
       LIMIT 1
     `);
 
-    const sourceRows = (sourceResult as unknown as { rows: Array<{ embedding_vector: string }> }).rows ?? [];
+    const sourceRows = (sourceResult as unknown as { rows: { embedding_vector: string }[] }).rows ?? [];
     const source = sourceRows[0];
     if (!source) {
       return c.json(
@@ -367,10 +368,10 @@ semanticSearch.post(
       LIMIT ${input.limit}
     `);
 
-    const rows = (result as unknown as { rows: Array<{
+    const rows = (result as unknown as { rows: {
       id: string; subject: string; from_address: string; from_name: string | null;
       text_body: string | null; html_body: string | null; created_at: Date; distance: number;
-    }> }).rows ?? [];
+    }[] }).rows ?? [];
 
     const hits: SemanticSearchHit[] = rows.map((r) =>
       rowToHit(

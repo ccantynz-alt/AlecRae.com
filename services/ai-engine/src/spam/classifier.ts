@@ -708,7 +708,7 @@ export class SpamClassifier {
           bayesian: bayesianResult,
           contentAnalysis: contentResult,
           headerAnalysis: headerResult,
-          claudeAnalysis: claudeResult,
+          ...(claudeResult !== undefined ? { claudeAnalysis: claudeResult } : {}),
         },
         reasons,
         processingTimeMs: performance.now() - startTime,

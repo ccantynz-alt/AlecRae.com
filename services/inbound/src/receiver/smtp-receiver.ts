@@ -34,7 +34,7 @@ const DEFAULT_CONFIG: SmtpReceiverConfig = {
   dataTimeout: 600_000, // 10 minutes
   requireTls: false,
   bannerDelay: 0,
-  onMessage: async () => {},
+  onMessage: async () => { /* no-op */ },
 };
 
 /**
@@ -148,7 +148,7 @@ export class SmtpConnectionHandler {
 
     try {
       const envelope: SmtpEnvelope = {
-        mailFrom: this.session.mailFrom!,
+        mailFrom: this.session.mailFrom ?? "",
         rcptTo: [...this.session.rcptTo],
       };
 
@@ -204,12 +204,12 @@ export class SmtpConnectionHandler {
       return { code: 503, message: "Bad sequence of commands" };
     }
 
-    const match = args.match(/^FROM:\s*<([^>]*)>/i);
-    if (!match) {
+    const match = /^FROM:\s*<([^>]*)>/i.exec(args);
+    if (!match || match[1] === undefined) {
       return { code: 501, message: "Syntax error in MAIL FROM" };
     }
 
-    const sender = match[1]!;
+    const sender = match[1];
 
     // Validate sender domain if restrictions are configured
     if (this.config.allowedSenderDomains && sender) {
@@ -230,8 +230,8 @@ export class SmtpConnectionHandler {
       return { code: 503, message: "Bad sequence of commands" };
     }
 
-    const match = args.match(/^TO:\s*<([^>]+)>/i);
-    if (!match) {
+    const match = /^TO:\s*<([^>]+)>/i.exec(args);
+    if (!match || match[1] === undefined) {
       return { code: 501, message: "Syntax error in RCPT TO" };
     }
 
@@ -239,7 +239,7 @@ export class SmtpConnectionHandler {
       return { code: 452, message: "Too many recipients" };
     }
 
-    const recipient = match[1]!;
+    const recipient = match[1];
 
     // Basic email validation
     if (!recipient.includes("@")) {
@@ -341,7 +341,8 @@ export class SmtpConnectionHandler {
       ) {
         i++; // Skip the stuffed dot
       }
-      result.push(data[i]!);
+      const byte = data[i];
+      if (byte !== undefined) result.push(byte);
       i++;
     }
     return new Uint8Array(result);
@@ -506,9 +507,10 @@ export class SmtpReceiver {
     this.activeConnections.clear();
 
     // Close the server
-    if (this.server) {
+    const srv = this.server;
+    if (srv) {
       await new Promise<void>((resolve) => {
-        this.server!.close(() => resolve());
+        srv.close(() => { resolve(); });
       });
       this.server = null;
     }

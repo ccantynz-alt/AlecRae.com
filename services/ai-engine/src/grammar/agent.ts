@@ -208,13 +208,15 @@ function runLocalChecks(text: string, level: "basic" | "standard" | "advanced"):
   let match: RegExpExecArray | null;
   const doubleRegex = new RegExp(DOUBLE_WORD_REGEX.source, "gi");
   while ((match = doubleRegex.exec(text)) !== null) {
+    const word = match[1];
+    if (!word) continue;
     issues.push({
       offset: match.index,
       length: match[0].length,
       original: match[0],
-      suggestions: [match[1]!],
+      suggestions: [word],
       category: "grammar",
-      message: `Repeated word "${match[1]}"`,
+      message: `Repeated word "${word}"`,
       confidence: 0.98,
       severity: "error",
     });
@@ -307,7 +309,7 @@ Focus on real issues. Do not flag correct text. Be precise with offsets. Return 
     if (!response.ok) return [];
 
     const data = (await response.json()) as {
-      content: Array<{ type: string; text?: string }>;
+      content: { type: string; text?: string }[];
     };
 
     const responseText = data.content
@@ -363,9 +365,11 @@ function applySuggestions(text: string, issues: GrammarIssue[]): string {
 
   let result = text;
   for (const issue of sorted) {
+    const suggestion = issue.suggestions[0];
+    if (suggestion === undefined) continue;
     const before = result.slice(0, issue.offset);
     const after = result.slice(issue.offset + issue.length);
-    result = before + issue.suggestions[0]! + after;
+    result = before + suggestion + after;
   }
 
   return result;
@@ -391,7 +395,8 @@ function detectTone(text: string): string {
   }
 
   const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-  return sorted[0]?.[1]! > 0 ? sorted[0]![0] : "neutral";
+  const top = sorted[0];
+  return top && top[1] > 0 ? top[0] : "neutral";
 }
 
 // ─── Language Detection (basic) ──────────────────────────────────────────────
@@ -419,7 +424,8 @@ function detectLanguage(text: string): string {
   }
 
   const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-  return sorted[0]?.[1]! > 0 ? sorted[0]![0] : "en";
+  const top = sorted[0];
+  return top && top[1] > 0 ? top[0] : "en";
 }
 
 // ─── Main Grammar Check Function ─────────────────────────────────────────────

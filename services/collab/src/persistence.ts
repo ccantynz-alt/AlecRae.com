@@ -197,16 +197,16 @@ export class DraftPersistence {
    */
   async getHistory(
     sessionId: string,
-    limit: number = 50,
-    offset: number = 0,
+    limit = 50,
+    offset = 0,
   ): Promise<
-    Array<{
+    {
       id: string;
       version: number;
       editedBy: string | null;
       updateSize: number;
       createdAt: Date;
-    }>
+    }[]
   > {
     const db = getDb();
     const rows = await db

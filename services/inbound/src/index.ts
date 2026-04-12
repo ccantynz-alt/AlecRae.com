@@ -8,11 +8,8 @@ import { createHttpInbound } from "./http-inbound.js";
 import {
   initTelemetry,
   shutdownTelemetry,
-  getTracer,
   recordEmailReceived,
   recordEmailFilterDuration,
-  recordActiveConnection,
-  SpanKind,
 } from "@emailed/shared";
 import type { SmtpSession, SmtpEnvelope } from "./types.js";
 
@@ -196,7 +193,7 @@ async function shutdown(signal: string): Promise<void> {
   console.log(`[Inbound] Received ${signal} — shutting down...`);
   if (enableSmtp) await receiver.stop();
   if (httpServer) httpServer.stop();
-  await shutdownTelemetry().catch(() => {});
+  await shutdownTelemetry().catch(() => { /* no-op */ });
   console.log("[Inbound] Shutdown complete");
   process.exit(0);
 }

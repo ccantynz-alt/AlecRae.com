@@ -67,17 +67,18 @@ async function start(): Promise<void> {
       lazyConnect: false,
     });
 
+    const redisInstance = redis;
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error("Redis connection timeout"));
       }, 10_000);
 
-      redis!.once("ready", () => {
+      redisInstance.once("ready", () => {
         clearTimeout(timeout);
         resolve();
       });
 
-      redis!.once("error", (err) => {
+      redisInstance.once("error", (err) => {
         clearTimeout(timeout);
         reject(err);
       });
@@ -114,7 +115,7 @@ async function start(): Promise<void> {
     );
   });
 
-  smtpServer.on("message", (envelope, session) => {
+  smtpServer.on("message", (envelope, _session) => {
     console.log(
       `[mta] Received message from ${envelope.mailFrom?.address ?? "unknown"} ` +
         `to ${envelope.rcptTo.map((r) => r.address).join(", ")} ` +

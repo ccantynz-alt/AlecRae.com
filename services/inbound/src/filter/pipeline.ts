@@ -81,7 +81,11 @@ async function authenticationCheck(ctx: FilterContext): Promise<FilterContext> {
   }
 
   // The best result is first (sorted by verifyDkim)
-  const bestDkim = dkimResults[0]!;
+  const bestDkim = dkimResults[0] ?? {
+    status: "none" as const,
+    domain: "",
+    selector: "",
+  };
   const dkimDomain: string | undefined = bestDkim.domain || undefined;
   const dkimSelector: string | undefined = bestDkim.selector || undefined;
   const dkimStatus: AuthenticationResult["result"] = bestDkim.status === "none"
@@ -259,8 +263,8 @@ async function aiClassification(ctx: FilterContext): Promise<FilterContext> {
     from: email.from[0]?.address ?? "",
     to: email.to[0]?.address ?? "",
     subject: email.subject,
-    textBody: email.text,
-    htmlBody: email.html,
+    ...(email.text !== undefined ? { textBody: email.text } : {}),
+    ...(email.html !== undefined ? { htmlBody: email.html } : {}),
     headers: email.headers.map((h) => ({ key: h.key, value: h.value })),
   };
 
@@ -327,8 +331,9 @@ async function phishingFilter(ctx: FilterContext): Promise<FilterContext> {
     const linkRegex = /<a[^>]+href=["']([^"']+)["'][^>]*>([^<]+)<\/a>/gi;
     let match: RegExpExecArray | null;
     while ((match = linkRegex.exec(email.html)) !== null) {
-      const href = match[1]!;
-      const displayText = match[2]!.trim();
+      const href = match[1];
+      const displayText = match[2]?.trim();
+      if (href === undefined || displayText === undefined) continue;
 
       // If display text looks like a URL but points elsewhere
       if (displayText.match(/^https?:\/\//)) {
@@ -507,8 +512,8 @@ export class FilterPipeline {
   async process(
     envelope: SmtpEnvelope,
     email: ParsedEmail,
-    senderIp: string = "",
-    rawHeaders: string = "",
+    senderIp = "",
+    rawHeaders = "",
     rawBody: Uint8Array = new Uint8Array(0),
   ): Promise<FilterVerdict> {
     let ctx: FilterContext = {

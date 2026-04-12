@@ -29,6 +29,12 @@ export const userRoleEnum = pgEnum("user_role", [
   "viewer",
 ]);
 
+export const accountStatusEnum = pgEnum("account_status", [
+  "active",
+  "suspended",
+  "scheduled_for_deletion",
+]);
+
 // ---------------------------------------------------------------------------
 // Accounts
 // ---------------------------------------------------------------------------
@@ -48,6 +54,10 @@ export const accounts = pgTable(
     billingEmail: text("billing_email").notNull(),
     stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
+    status: accountStatusEnum("status").notNull().default("active"),
+    scheduledDeletionAt: timestamp("scheduled_deletion_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -202,9 +202,9 @@ async function validateBearerToken(
 ): Promise<AuthContext | null> {
   try {
     const parts = token.split(".");
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3 || !parts[1]) return null;
 
-    const payload = JSON.parse(atob(parts[1]!));
+    const payload = JSON.parse(atob(parts[1]));
     const now = Math.floor(Date.now() / 1000);
 
     if (payload.exp && payload.exp < now) return null;
@@ -287,6 +287,7 @@ export function requireScope(...requiredScopes: string[]) {
     }
 
     await next();
+    return;
   });
 }
 
@@ -311,7 +312,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     );
   }
 
-  let authContext: AuthContext | null = null;
+  let authContext: AuthContext | null;
 
   if (credential.type === "api_key") {
     // Try database lookup first, fall back to dev mode
@@ -349,4 +350,5 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
   c.set("auth", authContext);
   await next();
+  return;
 });

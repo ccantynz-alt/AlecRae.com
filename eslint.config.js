@@ -28,6 +28,7 @@ export default tseslint.config(
       "**/dist/**",
       "**/.next/**",
       "**/coverage/**",
+      "**/*.d.ts",
       "**/*.js",
       "!eslint.config.js",
     ],
