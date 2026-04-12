@@ -33,6 +33,7 @@ import {
   validateCustomHeaders,
   HEADER_INJECTION_REJECTED,
 } from "@emailed/mta/lib";
+import { scanAttachment, isSafe } from "@emailed/security";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -384,6 +385,33 @@ async function handleSend(c: Context) {
     messageId,
     id,
   );
+
+  // ── 2a. Virus scan attachments (before persist + enqueue) ─────────
+  if (input.attachments && input.attachments.length > 0) {
+    for (const attachment of input.attachments) {
+      try {
+        const buffer = Buffer.from(attachment.content, "base64");
+        const scanResult = await scanAttachment(buffer, attachment.filename);
+
+        if (!isSafe(scanResult)) {
+          return c.json(
+            {
+              error: "ATTACHMENT_MALWARE_DETECTED",
+              filename: attachment.filename,
+              threats: scanResult.threats,
+            },
+            422,
+          );
+        }
+      } catch (scanError) {
+        // VirusTotal unavailable — degrade gracefully, allow send
+        console.warn(
+          `[messages] Virus scan failed for "${attachment.filename}", allowing send:`,
+          scanError instanceof Error ? scanError.message : scanError,
+        );
+      }
+    }
+  }
 
   // ── 3. Collect all recipient addresses (to + cc + bcc) ────────────
   const allRecipients = [

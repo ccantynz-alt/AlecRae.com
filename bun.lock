@@ -48,6 +48,7 @@
         "@emailed/dns": "workspace:*",
         "@emailed/mta": "workspace:*",
         "@emailed/reputation": "workspace:*",
+        "@emailed/security": "workspace:*",
         "@emailed/shared": "workspace:*",
         "@hono/zod-validator": "^0.4.0",
         "bullmq": "^5.0.0",
@@ -456,6 +457,19 @@
         "@emailed/shared": "workspace:*",
         "drizzle-orm": "^0.36.0",
         "pino": "^9.0.0",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.2.0",
+        "typescript": "^5.7.0",
+        "vitest": "^2.1.0",
+      },
+    },
+    "services/security": {
+      "name": "@emailed/security",
+      "version": "0.1.0",
+      "dependencies": {
+        "@emailed/db": "workspace:*",
+        "@emailed/shared": "workspace:*",
       },
       "devDependencies": {
         "@types/bun": "^1.2.0",
@@ -874,6 +888,8 @@
     "@emailed/reputation": ["@emailed/reputation@workspace:services/reputation"],
 
     "@emailed/sdk": ["@emailed/sdk@workspace:packages/sdk"],
+
+    "@emailed/security": ["@emailed/security@workspace:services/security"],
 
     "@emailed/sentinel": ["@emailed/sentinel@workspace:services/sentinel"],
 

@@ -24,7 +24,8 @@
       "@emailed/crypto": ["./packages/crypto/src/index.ts"],
       "@emailed/sdk": ["./packages/sdk/src/index.ts"],
       "@emailed/email-parser": ["./packages/email-parser/src/index.ts"],
-      "@emailed/dns": ["./services/dns/src/index.ts"]
+      "@emailed/dns": ["./services/dns/src/index.ts"],
+      "@emailed/security": ["./services/security/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist", ".next", "coverage"]

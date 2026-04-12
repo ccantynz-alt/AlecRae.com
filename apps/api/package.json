@@ -22,6 +22,7 @@
     "@emailed/dns": "workspace:*",
     "@emailed/mta": "workspace:*",
     "@emailed/reputation": "workspace:*",
+    "@emailed/security": "workspace:*",
     "@emailed/shared": "workspace:*",
     "@hono/zod-validator": "^0.4.0",
     "bullmq": "^5.0.0",

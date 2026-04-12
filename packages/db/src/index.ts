@@ -31,6 +31,7 @@ export {
   deliveryResults,
   emailStatusEnum,
   attachmentDispositionEnum,
+  virusScanStatusEnum,
   emailsRelations,
   attachmentsRelations,
   deliveryResultsRelations,
