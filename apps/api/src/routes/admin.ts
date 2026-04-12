@@ -23,6 +23,7 @@ import {
   users,
   dnsRecords,
 } from "@emailed/db";
+import { getDlqRecords, getDlqStats, clearDlqRecord, clearPermanentlyFailed } from "../lib/dlq-processor.js";
 
 const admin = new Hono();
 
@@ -363,6 +364,53 @@ admin.get("/users", async (c) => {
   });
 
   return c.json({ data });
+});
+
+// ─── GET /v1/admin/dlq — Dead letter queue inspection ────────────────────
+
+admin.get("/dlq", async (c) => {
+  const stats = getDlqStats();
+  const records = getDlqRecords();
+
+  // Optional status filter
+  const statusFilter = c.req.query("status");
+  const filtered = statusFilter
+    ? records.filter((r) => r.status === statusFilter)
+    : records;
+
+  return c.json({
+    data: {
+      stats,
+      records: filtered.map((r) => ({
+        jobId: r.jobId,
+        jobName: r.jobName,
+        failedReason: r.failedReason,
+        attemptsMade: r.attemptsMade,
+        timestamp: r.timestamp,
+        status: r.status,
+        retryScheduledAt: r.retryScheduledAt ?? null,
+      })),
+    },
+  });
+});
+
+// ─── DELETE /v1/admin/dlq/:jobId — Clear a DLQ record ───────────────────
+
+admin.delete("/dlq/:jobId", async (c) => {
+  const jobId = c.req.param("jobId");
+  if (!jobId) {
+    return c.json({ error: { type: "validation_error", message: "Missing jobId", code: "missing_param" } }, 400);
+  }
+
+  const cleared = clearDlqRecord(jobId);
+  return c.json({ data: { cleared } });
+});
+
+// ─── POST /v1/admin/dlq/clear — Clear all permanently failed ────────────
+
+admin.post("/dlq/clear", async (c) => {
+  const count = clearPermanentlyFailed();
+  return c.json({ data: { cleared: count } });
 });
 
 export { admin };

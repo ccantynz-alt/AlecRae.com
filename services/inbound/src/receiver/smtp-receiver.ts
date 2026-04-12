@@ -1,6 +1,54 @@
 import * as net from "node:net";
 import type { SmtpSession, SmtpEnvelope } from "../types.js";
 
+// ─── Domain verification callback ────────────────────────────────────────────
+
+export interface DomainCheckResult {
+  registered: boolean;
+  active: boolean;
+  dnsStale: boolean;
+}
+
+/**
+ * Callback to check whether a recipient domain is registered and verified.
+ * When provided, RCPT TO will reject mail for unregistered domains.
+ */
+export type DomainVerifier = (domain: string) => Promise<DomainCheckResult>;
+
+// ─── Rate limiting for inbound messages per domain ───────────────────────────
+
+class InboundRateLimiter {
+  private counters = new Map<string, { count: number; windowStart: number }>();
+  private readonly maxPerHour: number;
+
+  constructor(maxPerHour: number) {
+    this.maxPerHour = maxPerHour;
+  }
+
+  check(domain: string): boolean {
+    const now = Date.now();
+    const oneHourMs = 60 * 60 * 1000;
+    const entry = this.counters.get(domain);
+
+    if (!entry || now - entry.windowStart > oneHourMs) {
+      this.counters.set(domain, { count: 1, windowStart: now });
+      return true;
+    }
+
+    if (entry.count >= this.maxPerHour) {
+      return false;
+    }
+
+    entry.count++;
+    return true;
+  }
+
+  /** For testing: reset all counters */
+  reset(): void {
+    this.counters.clear();
+  }
+}
+
 /**
  * SMTP command types supported by the receiver.
  */
@@ -22,6 +70,10 @@ interface SmtpReceiverConfig {
   requireTls: boolean;
   bannerDelay: number;
   allowedSenderDomains?: Set<string>;
+  /** Callback to verify recipient domain is registered and active */
+  domainVerifier?: DomainVerifier;
+  /** Max inbound messages per domain per hour (default: 100) */
+  maxInboundPerDomainPerHour?: number;
   onMessage: (session: SmtpSession, envelope: SmtpEnvelope, data: Uint8Array) => Promise<void>;
 }
 
@@ -34,6 +86,7 @@ const DEFAULT_CONFIG: SmtpReceiverConfig = {
   dataTimeout: 600_000, // 10 minutes
   requireTls: false,
   bannerDelay: 0,
+  maxInboundPerDomainPerHour: 100,
   onMessage: async () => {},
 };
 
@@ -45,13 +98,16 @@ export class SmtpConnectionHandler {
   private state: "greeting" | "ready" | "mail" | "rcpt" | "data" | "closed";
   private dataBuffer: Uint8Array[] = [];
   private dataSize = 0;
+  private rateLimiter: InboundRateLimiter;
 
   constructor(
     private readonly config: SmtpReceiverConfig,
     remoteAddress: string,
     remotePort: number,
+    rateLimiter?: InboundRateLimiter,
   ) {
     this.state = "greeting";
+    this.rateLimiter = rateLimiter ?? new InboundRateLimiter(config.maxInboundPerDomainPerHour ?? 100);
     this.session = {
       id: this.generateSessionId(),
       remoteAddress,
@@ -105,7 +161,7 @@ export class SmtpConnectionHandler {
       case "MAIL":
         return this.handleMailFrom(args);
       case "RCPT":
-        return this.handleRcptTo(args);
+        return await this.handleRcptTo(args);
       case "DATA":
         return this.handleDataStart();
       case "RSET":
@@ -225,7 +281,7 @@ export class SmtpConnectionHandler {
     return { code: 250, message: "OK" };
   }
 
-  private handleRcptTo(args: string): SmtpResponse {
+  private async handleRcptTo(args: string): Promise<SmtpResponse> {
     if (this.state !== "mail" && this.state !== "rcpt") {
       return { code: 503, message: "Bad sequence of commands" };
     }
@@ -244,6 +300,40 @@ export class SmtpConnectionHandler {
     // Basic email validation
     if (!recipient.includes("@")) {
       return { code: 550, message: "Invalid recipient address" };
+    }
+
+    // Extract recipient domain
+    const recipientDomain = recipient.split("@")[1];
+    if (!recipientDomain) {
+      return { code: 550, message: "Invalid recipient address — missing domain" };
+    }
+
+    // Domain verification: check if this domain is registered and active
+    if (this.config.domainVerifier) {
+      try {
+        const result = await this.config.domainVerifier(recipientDomain);
+
+        if (!result.registered) {
+          return { code: 550, message: `Relay not permitted for domain ${recipientDomain}` };
+        }
+
+        if (result.dnsStale) {
+          return { code: 450, message: "Try again later — domain DNS verification pending" };
+        }
+
+        if (!result.active) {
+          return { code: 550, message: `Domain ${recipientDomain} is not active` };
+        }
+      } catch (err) {
+        // On verifier error, temp-fail rather than silently accept
+        console.error(`[SmtpReceiver] Domain verification error for ${recipientDomain}:`, err);
+        return { code: 450, message: "Temporary failure — try again later" };
+      }
+    }
+
+    // Rate limiting: max N inbound messages per domain per hour
+    if (!this.rateLimiter.check(recipientDomain)) {
+      return { code: 452, message: `Rate limit exceeded for domain ${recipientDomain} — try again later` };
     }
 
     this.session.rcptTo.push(recipient);
@@ -361,9 +451,11 @@ export class SmtpReceiver {
   private running = false;
   private server: net.Server | null = null;
   private activeConnections = new Set<net.Socket>();
+  private rateLimiter: InboundRateLimiter;
 
   constructor(config: Partial<SmtpReceiverConfig> & Pick<SmtpReceiverConfig, "onMessage">) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.rateLimiter = new InboundRateLimiter(this.config.maxInboundPerDomainPerHour ?? 100);
   }
 
   async start(): Promise<void> {
@@ -400,6 +492,7 @@ export class SmtpReceiver {
       this.config,
       remoteAddress,
       remotePort,
+      this.rateLimiter,
     );
 
     // Send SMTP greeting
@@ -528,6 +621,10 @@ export class SmtpReceiver {
    * Create a connection handler for testing or manual connection management.
    */
   createHandler(remoteAddress: string, remotePort: number): SmtpConnectionHandler {
-    return new SmtpConnectionHandler(this.config, remoteAddress, remotePort);
+    return new SmtpConnectionHandler(this.config, remoteAddress, remotePort, this.rateLimiter);
   }
 }
+
+// Re-export for testing
+export { InboundRateLimiter };
+export type { SmtpReceiverConfig, DomainCheckResult, DomainVerifier };

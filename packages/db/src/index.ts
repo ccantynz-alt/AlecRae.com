@@ -295,6 +295,12 @@ export type {
   PunctuationStyleData,
 } from "./schema/voice-clone.js";
 
+// Schema - Refresh Tokens (JWT rotation with theft detection)
+export {
+  refreshTokens,
+  refreshTokensRelations,
+} from "./schema/refresh-tokens.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -354,6 +360,7 @@ import type {
   voiceStyleProfiles,
   voiceTrainingSamples,
 } from "./schema/voice-clone.js";
+import type { refreshTokens } from "./schema/refresh-tokens.js";
 
 // Select types (what you get back from queries)
 export type Account = InferSelectModel<typeof accounts>;
@@ -448,3 +455,5 @@ export type EmailScript = InferSelectModel<typeof emailScripts>;
 export type NewEmailScript = InferInsertModel<typeof emailScripts>;
 export type ScriptRun = InferSelectModel<typeof scriptRuns>;
 export type NewScriptRun = InferInsertModel<typeof scriptRuns>;
+export type RefreshToken = InferSelectModel<typeof refreshTokens>;
+export type NewRefreshToken = InferInsertModel<typeof refreshTokens>;

@@ -80,10 +80,12 @@ import { emailQuery } from "./routes/email-query.js";
 import { fbl } from "./routes/fbl.js";
 import { closeConnection } from "@emailed/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
-import { closeSendQueue } from "./lib/queue.js";
+import { closeSendQueue, getSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
 import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@emailed/shared";
 import { startAutoIndexer, stopAutoIndexer } from "@emailed/ai-engine/embeddings/auto-indexer";
+import { processDLQ } from "./lib/dlq-processor.js";
+import { reconcileStorageUsage } from "./lib/storage-quota.js";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -448,6 +450,22 @@ startWebhookWorker();
 
 // Start the semantic search auto-indexer (embeds new emails in background)
 startAutoIndexer();
+
+// Register DLQ processor repeat job (every 15 minutes)
+const dlqInterval = setInterval(() => {
+  processDLQ().catch((err) => {
+    console.warn("[api] DLQ processing error:", err);
+  });
+}, 15 * 60 * 1000);
+dlqInterval.unref();
+
+// Register storage reconciliation repeat job (weekly — every 7 days)
+const storageReconcileInterval = setInterval(() => {
+  reconcileStorageUsage().catch((err) => {
+    console.warn("[api] Storage reconciliation error:", err);
+  });
+}, 7 * 24 * 60 * 60 * 1000);
+storageReconcileInterval.unref();
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 

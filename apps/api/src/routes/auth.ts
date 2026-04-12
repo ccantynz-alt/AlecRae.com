@@ -1,8 +1,10 @@
 /**
  * Authentication Routes
  *
- * POST /v1/auth/login     — Email + password login, returns session token
- * POST /v1/auth/register  — Create account + user, returns session token
+ * POST /v1/auth/login     — Email + password login, returns access + refresh tokens
+ * POST /v1/auth/register  — Create account + user, returns access + refresh tokens
+ * POST /v1/auth/refresh   — Rotate refresh token, returns new token pair
+ * POST /v1/auth/logout    — Revoke all refresh tokens for the user
  * GET  /v1/auth/me        — Get current user from session token
  */
 
@@ -11,6 +13,14 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { getDatabase, users, accounts } from "@emailed/db";
+import {
+  issueTokenPair,
+  rotateRefreshToken,
+  revokeAllUserTokens,
+  verifyAccessToken,
+  TokenError,
+} from "../lib/jwt.js";
+import type { TokenPayload } from "../lib/jwt.js";
 
 const auth = new Hono();
 
@@ -27,25 +37,6 @@ async function hashPassword(password: string): Promise<string> {
   return Array.from(new Uint8Array(hash))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
-}
-
-/**
- * Create a minimal JWT (no external library required).
- * In production, use a proper JWT library with RS256.
- */
-function createToken(payload: Record<string, unknown>): string {
-  const secret = process.env["JWT_SECRET"] ?? "dev_secret";
-  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const body = btoa(
-    JSON.stringify({
-      ...payload,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 86400 * 7, // 7 days
-    }),
-  );
-  // Simplified HMAC — in production use crypto.subtle.sign
-  const signature = btoa(`${header}.${body}.${secret}`);
-  return `${header}.${body}.${signature}`;
 }
 
 // ─── Schemas ───────────────────────────────────────────────────────────────
@@ -106,16 +97,32 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
     .set({ lastLoginAt: new Date() })
     .where(eq(users.id, user.id));
 
-  const token = createToken({
+  // Look up account tier
+  let tier = "free";
+  try {
+    const [account] = await db
+      .select({ planTier: accounts.planTier })
+      .from(accounts)
+      .where(eq(accounts.id, user.accountId))
+      .limit(1);
+    if (account) tier = account.planTier ?? "free";
+  } catch {
+    // fall through
+  }
+
+  const tokenPair = await issueTokenPair({
     sub: user.accountId,
     userId: user.id,
     email: user.email,
     role: user.role,
+    tier,
   });
 
   return c.json({
     data: {
-      token,
+      token: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
+      expiresIn: tokenPair.expiresIn,
       user: {
         id: user.id,
         email: user.email,
@@ -186,17 +193,20 @@ auth.post("/register", validateBody(RegisterSchema), async (c) => {
     },
   });
 
-  const token = createToken({
+  const tokenPair = await issueTokenPair({
     sub: accountId,
     userId,
     email: input.email.toLowerCase(),
     role: "owner",
+    tier: "free",
   });
 
   return c.json(
     {
       data: {
-        token,
+        token: tokenPair.accessToken,
+        refreshToken: tokenPair.refreshToken,
+        expiresIn: tokenPair.expiresIn,
         user: {
           id: userId,
           email: input.email.toLowerCase(),
@@ -208,6 +218,94 @@ auth.post("/register", validateBody(RegisterSchema), async (c) => {
     },
     201,
   );
+});
+
+// ─── Schemas for new endpoints ────────────��───────────────────────────────
+
+const RefreshSchema = z.object({
+  refreshToken: z.string().min(1),
+});
+
+// POST /v1/auth/refresh — Rotate refresh token, return new token pair
+auth.post("/refresh", validateBody(RefreshSchema), async (c) => {
+  const input = getValidatedBody<z.infer<typeof RefreshSchema>>(c);
+
+  try {
+    const tokenPair = await rotateRefreshToken(input.refreshToken);
+
+    return c.json({
+      data: {
+        token: tokenPair.accessToken,
+        refreshToken: tokenPair.refreshToken,
+        expiresIn: tokenPair.expiresIn,
+      },
+    });
+  } catch (err) {
+    const code = err instanceof TokenError ? err.code : "invalid_refresh_token";
+    const message = err instanceof Error ? err.message : "Invalid refresh token";
+
+    return c.json(
+      {
+        error: {
+          type: "authentication_error",
+          message,
+          code,
+        },
+      },
+      401,
+    );
+  }
+});
+
+// POST /v1/auth/logout — Revoke all refresh tokens for the authenticated user
+auth.post("/logout", async (c) => {
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    return c.json(
+      {
+        error: {
+          type: "authentication_error",
+          message: "Missing token",
+          code: "unauthenticated",
+        },
+      },
+      401,
+    );
+  }
+
+  const token = authHeader.slice(7);
+  try {
+    const payload = await verifyAccessToken(token);
+    const userId = payload.userId as string;
+
+    await revokeAllUserTokens(userId);
+
+    return c.json({ data: { message: "All sessions revoked" } });
+  } catch {
+    // Try legacy decode as fallback
+    try {
+      const parts = token.split(".");
+      if (parts.length !== 3) throw new Error("Invalid token");
+      const payload = JSON.parse(atob(parts[1]!));
+      if (payload.userId) {
+        await revokeAllUserTokens(payload.userId as string);
+        return c.json({ data: { message: "All sessions revoked" } });
+      }
+    } catch {
+      // fall through
+    }
+
+    return c.json(
+      {
+        error: {
+          type: "authentication_error",
+          message: "Invalid or expired token",
+          code: "invalid_token",
+        },
+      },
+      401,
+    );
+  }
 });
 
 // GET /v1/auth/me — Get current user from bearer token
@@ -228,13 +326,23 @@ auth.get("/me", async (c) => {
 
   const token = authHeader.slice(7);
   try {
-    const parts = token.split(".");
-    if (parts.length !== 3) throw new Error("Invalid token");
-
-    const payload = JSON.parse(atob(parts[1]!));
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      throw new Error("Token expired");
+    // Try verified JWT first
+    let userId: string | undefined;
+    try {
+      const payload = await verifyAccessToken(token);
+      userId = payload.userId as string;
+    } catch {
+      // Fallback to raw decode for legacy tokens
+      const parts = token.split(".");
+      if (parts.length !== 3) throw new Error("Invalid token");
+      const payload = JSON.parse(atob(parts[1]!));
+      if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+        throw new Error("Token expired");
+      }
+      userId = payload.userId as string;
     }
+
+    if (!userId) throw new Error("No userId in token");
 
     const db = getDatabase();
     const [user] = await db
@@ -246,7 +354,7 @@ auth.get("/me", async (c) => {
         accountId: users.accountId,
       })
       .from(users)
-      .where(eq(users.id, payload.userId as string))
+      .where(eq(users.id, userId))
       .limit(1);
 
     if (!user) throw new Error("User not found");

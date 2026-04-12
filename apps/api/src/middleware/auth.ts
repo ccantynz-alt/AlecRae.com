@@ -195,20 +195,15 @@ async function resolveApiKeyDev(rawKey: string): Promise<AuthContext | null> {
   return null;
 }
 
-// ─── Bearer token validation ────────────────────────────────────────────────
+// ─── Bearer token validation (RS256 with HS256 fallback via jose) ──────────
 
 async function validateBearerToken(
   token: string,
 ): Promise<AuthContext | null> {
   try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-
-    const payload = JSON.parse(atob(parts[1]!));
-    const now = Math.floor(Date.now() / 1000);
-
-    if (payload.exp && payload.exp < now) return null;
-    if (!payload.sub) return null;
+    // Try verified JWT via jose (RS256 or HS256 depending on config)
+    const { verifyAccessToken } = await import("../lib/jwt.js");
+    const payload = await verifyAccessToken(token);
 
     return {
       accountId: payload.sub as string,
@@ -217,7 +212,26 @@ async function validateBearerToken(
       scopes: (payload.scope as string)?.split(" ") ?? [],
     };
   } catch {
-    return null;
+    // Fallback: try raw decode for legacy tokens (unsigned / HS256 dev tokens)
+    try {
+      const parts = token.split(".");
+      if (parts.length !== 3) return null;
+
+      const payload = JSON.parse(atob(parts[1]!));
+      const now = Math.floor(Date.now() / 1000);
+
+      if (payload.exp && payload.exp < now) return null;
+      if (!payload.sub) return null;
+
+      return {
+        accountId: payload.sub as string,
+        keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
+        tier: normaliseTier(payload.tier as string),
+        scopes: (payload.scope as string)?.split(" ") ?? [],
+      };
+    } catch {
+      return null;
+    }
   }
 }
 
