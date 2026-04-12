@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile -- QuickReplySheet
+ * AlecRae Mobile -- QuickReplySheet
  *
  * A bottom sheet that appears when the user swipes right to reply.
  * Presents:

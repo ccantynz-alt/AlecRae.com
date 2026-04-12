@@ -39,9 +39,9 @@ const CARD_GROUPS: readonly CardGroup[] = [
   {
     label: "Migration Guides",
     cards: [
-      { slug: "migrate-gmail", title: "From Gmail", description: "Switch from Gmail to Vienna in 5 minutes — import labels, contacts, and all.", icon: "migrate" },
+      { slug: "migrate-gmail", title: "From Gmail", description: "Switch from Gmail to AlecRae in 5 minutes — import labels, contacts, and all.", icon: "migrate" },
       { slug: "migrate-outlook", title: "From Outlook", description: "Migrate from Outlook / Microsoft 365 with full history and calendar.", icon: "migrate" },
-      { slug: "migrate-apple-mail", title: "From Apple Mail", description: "Export MBOX from Apple Mail and import into Vienna seamlessly.", icon: "migrate" },
+      { slug: "migrate-apple-mail", title: "From Apple Mail", description: "Export MBOX from Apple Mail and import into AlecRae seamlessly.", icon: "migrate" },
     ],
   },
   {
@@ -55,14 +55,14 @@ const CARD_GROUPS: readonly CardGroup[] = [
   },
 ];
 
-const QUICK_EXAMPLE = `curl https://api.48co.ai/v1/messages \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+const QUICK_EXAMPLE = `curl https://api.alecrae.com/v1/messages \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "from": "you@yourdomain.com",
     "to": ["customer@example.com"],
-    "subject": "Welcome to Vienna",
-    "text": "Hello from the Vienna API."
+    "subject": "Welcome to AlecRae",
+    "text": "Hello from the AlecRae API."
   }'`;
 
 export default function DocsLanding(): React.JSX.Element {
@@ -77,10 +77,10 @@ export default function DocsLanding(): React.JSX.Element {
           <span className="text-xs font-medium text-blue-100 tracking-wide uppercase">v0.1 Beta</span>
         </div>
         <h1 className="text-5xl md:text-6xl font-bold tracking-tighter bg-gradient-to-r from-white via-blue-200 to-cyan-300 bg-clip-text text-transparent mb-4">
-          Vienna API
+          AlecRae API
         </h1>
         <p className="text-xl text-blue-100/70 max-w-2xl leading-relaxed font-light">
-          Send transactional and bulk email through the same infrastructure that powers Vienna.
+          Send transactional and bulk email through the same infrastructure that powers AlecRae.
           Type-safe, edge-deployed, and built for developers who hate mailing-list plumbing.
         </p>
         <div className="flex gap-3 mt-6">
@@ -138,11 +138,11 @@ export default function DocsLanding(): React.JSX.Element {
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 rounded-lg bg-slate-900/80 border border-white/10 px-4 py-3">
             <div className="text-xs text-blue-200/40 mb-1">Production</div>
-            <code className="text-sm text-cyan-300 font-mono">https://api.48co.ai</code>
+            <code className="text-sm text-cyan-300 font-mono">https://api.alecrae.com</code>
           </div>
           <div className="flex-1 rounded-lg bg-slate-900/80 border border-white/10 px-4 py-3">
             <div className="text-xs text-blue-200/40 mb-1">Staging</div>
-            <code className="text-sm text-cyan-300 font-mono">https://api.staging.48co.ai</code>
+            <code className="text-sm text-cyan-300 font-mono">https://api.staging.alecrae.com</code>
           </div>
           <div className="flex-1 rounded-lg bg-slate-900/80 border border-white/10 px-4 py-3">
             <div className="text-xs text-blue-200/40 mb-1">Local</div>

@@ -1,8 +1,8 @@
 {
-  "name": "@emailed/sentinel",
+  "name": "@alecrae/sentinel",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-powered zero-latency validation pipeline \u2014 the immune system of Emailed",
+  "description": "AI-powered zero-latency validation pipeline \u2014 the immune system of AlecRae",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,7 +15,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@emailed/shared": "workspace:*"
+    "@alecrae/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

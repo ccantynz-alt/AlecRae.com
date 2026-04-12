@@ -1,19 +1,19 @@
-# Vienna.com — Cloudflare Pages Configuration
+# AlecRae.com — Cloudflare Pages Configuration
 # Deploy the web app (apps/web) to Cloudflare Pages
 
-name = "vienna-web"
+name = "alecrae-web"
 compatibility_date = "2025-01-01"
 
 # Pages-specific settings
 pages_build_output_dir = "apps/web/.next"
 
 [vars]
-NEXT_PUBLIC_API_URL = "https://api.48co.ai"
-NEXT_PUBLIC_APP_NAME = "Vienna"
-NEXT_PUBLIC_APP_URL = "https://mail.48co.ai"
+NEXT_PUBLIC_API_URL = "https://api.alecrae.com"
+NEXT_PUBLIC_APP_NAME = "AlecRae"
+NEXT_PUBLIC_APP_URL = "https://mail.alecrae.com"
 NODE_ENV = "production"
 
 # Custom domains (configure in Cloudflare Pages dashboard)
-# - 48co.ai (landing/marketing)
-# - mail.48co.ai (email app)
-# - admin.48co.ai (admin dashboard)
+# - alecrae.com (landing/marketing)
+# - mail.alecrae.com (email app)
+# - admin.alecrae.com (admin dashboard)

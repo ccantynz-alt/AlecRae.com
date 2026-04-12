@@ -1,7 +1,7 @@
 /**
- * @emailed/support - AI Support Service
+ * @alecrae/support - AI Support Service
  *
- * Autonomous AI-powered customer support for the Emailed platform.
+ * Autonomous AI-powered customer support for the AlecRae platform.
  * Handles ticket management, automated diagnostics, knowledge base
  * search, and smart escalation routing.
  */

@@ -1,7 +1,7 @@
 /**
- * Vienna Status Page
+ * AlecRae Status Page
  *
- * Real-time system health dashboard for status.48co.ai.
+ * Real-time system health dashboard for status.alecrae.com.
  * Fetches live health data from /v1/status/health and auto-refreshes
  * every 30 seconds. Falls back to static data when the API is unreachable.
  */

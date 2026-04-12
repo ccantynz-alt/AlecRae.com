@@ -55,7 +55,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.ECR_REGISTRY }}/emailed-${{ matrix.image }}
+          images: ${{ env.ECR_REGISTRY }}/alecrae-${{ matrix.image }}
           tags: |
             type=sha,prefix=
             type=raw,value=latest
@@ -93,23 +93,23 @@ jobs:
         uses: azure/setup-kubectl@v4
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name emailed-cluster --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name alecrae-cluster --region ${{ env.AWS_REGION }}
 
       - name: Deploy to staging
         run: |
           echo "Deploying to staging with image tag: ${{ github.sha }}"
-          kubectl set image deployment/emailed-web web=${{ env.ECR_REGISTRY }}/emailed-web:${{ github.sha }} --namespace=staging
-          kubectl set image deployment/emailed-api api=${{ env.ECR_REGISTRY }}/emailed-api:${{ github.sha }} --namespace=staging
-          kubectl set image deployment/emailed-mta mta=${{ env.ECR_REGISTRY }}/emailed-mta:${{ github.sha }} --namespace=staging
+          kubectl set image deployment/alecrae-web web=${{ env.ECR_REGISTRY }}/alecrae-web:${{ github.sha }} --namespace=staging
+          kubectl set image deployment/alecrae-api api=${{ env.ECR_REGISTRY }}/alecrae-api:${{ github.sha }} --namespace=staging
+          kubectl set image deployment/alecrae-mta mta=${{ env.ECR_REGISTRY }}/alecrae-mta:${{ github.sha }} --namespace=staging
 
           echo "Waiting for rollouts..."
-          kubectl rollout status deployment/emailed-web --namespace=staging --timeout=300s
-          kubectl rollout status deployment/emailed-api --namespace=staging --timeout=300s
-          kubectl rollout status deployment/emailed-mta --namespace=staging --timeout=300s
+          kubectl rollout status deployment/alecrae-web --namespace=staging --timeout=300s
+          kubectl rollout status deployment/alecrae-api --namespace=staging --timeout=300s
+          kubectl rollout status deployment/alecrae-mta --namespace=staging --timeout=300s
 
       - name: Verify staging deployment
         run: |
-          STAGING_URL=$(kubectl get svc emailed-api -n staging -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          STAGING_URL=$(kubectl get svc alecrae-api -n staging -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
           echo "Running health check against $STAGING_URL..."
 
           for i in 1 2 3 4 5; do
@@ -144,23 +144,23 @@ jobs:
         uses: azure/setup-kubectl@v4
 
       - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name emailed-cluster --region ${{ env.AWS_REGION }}
+        run: aws eks update-kubeconfig --name alecrae-cluster --region ${{ env.AWS_REGION }}
 
       - name: Deploy to production
         run: |
           echo "Deploying to production with image tag: ${{ github.sha }}"
-          kubectl set image deployment/emailed-web web=${{ env.ECR_REGISTRY }}/emailed-web:${{ github.sha }} --namespace=production
-          kubectl set image deployment/emailed-api api=${{ env.ECR_REGISTRY }}/emailed-api:${{ github.sha }} --namespace=production
-          kubectl set image deployment/emailed-mta mta=${{ env.ECR_REGISTRY }}/emailed-mta:${{ github.sha }} --namespace=production
+          kubectl set image deployment/alecrae-web web=${{ env.ECR_REGISTRY }}/alecrae-web:${{ github.sha }} --namespace=production
+          kubectl set image deployment/alecrae-api api=${{ env.ECR_REGISTRY }}/alecrae-api:${{ github.sha }} --namespace=production
+          kubectl set image deployment/alecrae-mta mta=${{ env.ECR_REGISTRY }}/alecrae-mta:${{ github.sha }} --namespace=production
 
           echo "Waiting for rollouts..."
-          kubectl rollout status deployment/emailed-web --namespace=production --timeout=300s
-          kubectl rollout status deployment/emailed-api --namespace=production --timeout=300s
-          kubectl rollout status deployment/emailed-mta --namespace=production --timeout=300s
+          kubectl rollout status deployment/alecrae-web --namespace=production --timeout=300s
+          kubectl rollout status deployment/alecrae-api --namespace=production --timeout=300s
+          kubectl rollout status deployment/alecrae-mta --namespace=production --timeout=300s
 
       - name: Verify production deployment
         run: |
-          PROD_URL=$(kubectl get svc emailed-api -n production -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          PROD_URL=$(kubectl get svc alecrae-api -n production -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
           echo "Running health check against $PROD_URL..."
 
           for i in 1 2 3 4 5; do

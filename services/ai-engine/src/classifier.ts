@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — AI-Powered Email Classifier (Claude API)
+// @alecrae/ai-engine — AI-Powered Email Classifier (Claude API)
 // =============================================================================
 // Fast email classification using Claude Haiku. Includes an in-memory LRU cache
 // keyed by SHA-256 content hash, a 2-second hard timeout, and graceful fallback

@@ -1,5 +1,5 @@
 # ─── Dockerfile.web ──────────────────────────────────────────────────────────
-# Next.js web application image for the Emailed frontend.
+# Next.js web application image for the AlecRae frontend.
 # Extends the base image with Next.js standalone output optimization.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -29,9 +29,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build shared dependencies first
-RUN bun run --filter @emailed/shared build
-RUN bun run --filter @emailed/ui build
-RUN bun run --filter @emailed/${APP_NAME} build
+RUN bun run --filter @alecrae/shared build
+RUN bun run --filter @alecrae/ui build
+RUN bun run --filter @alecrae/${APP_NAME} build
 
 # Stage 3: Production runtime
 FROM oven/bun:1.2-alpine AS runner
@@ -46,13 +46,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=${APP_PORT}
 
 # Create non-root user
-RUN addgroup --system --gid 1001 emailed && \
-    adduser --system --uid 1001 --ingroup emailed web
+RUN addgroup --system --gid 1001 alecrae && \
+    adduser --system --uid 1001 --ingroup alecrae web
 
 # Copy Next.js standalone output
-COPY --from=builder --chown=web:emailed /app/apps/${APP_NAME}/.next/standalone ./
-COPY --from=builder --chown=web:emailed /app/apps/${APP_NAME}/.next/static ./apps/${APP_NAME}/.next/static
-COPY --from=builder --chown=web:emailed /app/apps/${APP_NAME}/public ./apps/${APP_NAME}/public
+COPY --from=builder --chown=web:alecrae /app/apps/${APP_NAME}/.next/standalone ./
+COPY --from=builder --chown=web:alecrae /app/apps/${APP_NAME}/.next/static ./apps/${APP_NAME}/.next/static
+COPY --from=builder --chown=web:alecrae /app/apps/${APP_NAME}/public ./apps/${APP_NAME}/public
 
 USER web
 

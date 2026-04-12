@@ -1,7 +1,7 @@
 /**
  * Webhook signature verification for securing inbound webhook deliveries.
  *
- * The Emailed platform signs webhook payloads using HMAC-SHA256. This module
+ * The AlecRae platform signs webhook payloads using HMAC-SHA256. This module
  * provides utilities to verify those signatures and parse event payloads.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -12,10 +12,10 @@ import type { WebhookEvent, WebhookVerifyOptions, WebhookEventType } from "../ty
 const DEFAULT_TOLERANCE_SECONDS = 300;
 
 /** Header name containing the webhook signature. */
-export const SIGNATURE_HEADER = "x-emailed-signature";
+export const SIGNATURE_HEADER = "x-alecrae-signature";
 
 /** Header name containing the event timestamp. */
-export const TIMESTAMP_HEADER = "x-emailed-timestamp";
+export const TIMESTAMP_HEADER = "x-alecrae-timestamp";
 
 /**
  * Error thrown when webhook verification fails.
@@ -109,9 +109,9 @@ export function verifyWebhook<T = unknown>(
  * Useful when you need to verify authenticity but handle parsing separately.
  *
  * @param payload    Raw request body
- * @param signature  Signature from the `X-Emailed-Signature` header
+ * @param signature  Signature from the `X-AlecRae-Signature` header
  * @param secret     Webhook signing secret
- * @param timestamp  Timestamp from the `X-Emailed-Timestamp` header
+ * @param timestamp  Timestamp from the `X-AlecRae-Timestamp` header
  * @returns `true` if the signature is valid
  */
 export function verifySignature(

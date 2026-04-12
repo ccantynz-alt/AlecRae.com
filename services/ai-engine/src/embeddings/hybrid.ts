@@ -18,8 +18,8 @@
  */
 
 import { sql } from "drizzle-orm";
-import { getDatabase } from "@emailed/db";
-import { searchEmails } from "@emailed/shared";
+import { getDatabase } from "@alecrae/db";
+import { searchEmails } from "@alecrae/shared";
 import { embedQuery, VOYAGE_MODEL, EMBEDDING_DIMENSIONS } from "./voyage.js";
 import {
   type SemanticSearchHit,

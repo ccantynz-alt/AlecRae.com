@@ -13,7 +13,7 @@ import { eq } from "drizzle-orm";
 import {
   getDatabase,
   domains as domainsTable,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -63,9 +63,9 @@ async function checkSpf(domain: string): Promise<{ ok: boolean; detail: string }
     return { ok: false, detail: "No SPF record found" };
   }
 
-  const hasInclude = spfRecords.some((r) => r.includes("include:spf.emailed.dev"));
+  const hasInclude = spfRecords.some((r) => r.includes("include:spf.alecrae.dev"));
   if (!hasInclude) {
-    return { ok: false, detail: "SPF record does not include spf.emailed.dev" };
+    return { ok: false, detail: "SPF record does not include spf.alecrae.dev" };
   }
 
   return { ok: true, detail: "" };

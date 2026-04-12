@@ -5,19 +5,19 @@ import { vpc, privateSubnets, dbSecurityGroup } from "./networking";
 
 // ─── RDS Subnet Group ───────────────────────────────────────────────────────
 
-const dbSubnetGroup = new aws.rds.SubnetGroup("emailed-db-subnet", {
+const dbSubnetGroup = new aws.rds.SubnetGroup("alecrae-db-subnet", {
   subnetIds: privateSubnets.map((s) => s.id),
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-db-subnet`,
+    Name: `alecrae-${environment}-db-subnet`,
   },
 });
 
 // ─── RDS Parameter Group ────────────────────────────────────────────────────
 
-const dbParameterGroup = new aws.rds.ParameterGroup("emailed-db-params", {
+const dbParameterGroup = new aws.rds.ParameterGroup("alecrae-db-params", {
   family: "postgres15",
-  description: `Emailed ${environment} PostgreSQL 15 parameter group`,
+  description: `AlecRae ${environment} PostgreSQL 15 parameter group`,
   parameters: [
     // Performance
     { name: "shared_buffers", value: "{DBInstanceClassMemory/4}" },
@@ -60,10 +60,10 @@ const dbParameterGroup = new aws.rds.ParameterGroup("emailed-db-params", {
 
 // ─── RDS Instance ───────────────────────────────────────────────────────────
 
-const dbPassword = new pulumi.Config("emailed").requireSecret("dbPassword");
+const dbPassword = new pulumi.Config("alecrae").requireSecret("dbPassword");
 
-export const rdsInstance = new aws.rds.Instance("emailed-db", {
-  identifier: `emailed-${environment}`,
+export const rdsInstance = new aws.rds.Instance("alecrae-db", {
+  identifier: `alecrae-${environment}`,
   engine: "postgres",
   engineVersion: "15.7",
   instanceClass: envConfig.rdsInstanceClass,
@@ -75,8 +75,8 @@ export const rdsInstance = new aws.rds.Instance("emailed-db", {
   storageEncrypted: true,
 
   // Database
-  dbName: "emailed",
-  username: "emailed",
+  dbName: "alecrae",
+  username: "alecrae",
   password: dbPassword,
   parameterGroupName: dbParameterGroup.name,
 
@@ -91,7 +91,7 @@ export const rdsInstance = new aws.rds.Instance("emailed-db", {
   backupWindow: "03:00-04:00",
   maintenanceWindow: "sun:04:30-sun:05:30",
   copyTagsToSnapshot: true,
-  finalSnapshotIdentifier: `emailed-${environment}-final`,
+  finalSnapshotIdentifier: `alecrae-${environment}-final`,
   skipFinalSnapshot: environment === "dev",
 
   // Monitoring
@@ -108,7 +108,7 @@ export const rdsInstance = new aws.rds.Instance("emailed-db", {
 
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-postgres`,
+    Name: `alecrae-${environment}-postgres`,
   },
 });
 

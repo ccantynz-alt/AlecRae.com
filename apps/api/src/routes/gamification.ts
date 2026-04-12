@@ -27,7 +27,7 @@ import {
   userStreaks,
   userAchievements,
   dailyStats,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 // ─── Achievement definitions ─────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 /**
- * @emailed/mta — Email Queue Manager
+ * @alecrae/mta — Email Queue Manager
  *
  * BullMQ-backed priority queue for outbound email delivery. Supports five
  * priority tiers, domain-based grouping for ISP throttling, delayed/scheduled

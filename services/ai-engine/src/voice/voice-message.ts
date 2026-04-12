@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Voice Message Processing (B8)
+// @alecrae/ai-engine — Voice Message Processing (B8)
 // =============================================================================
 // Handles audio voice messages: transcription via Whisper, HTML embed generation,
 // accessible transcript output, multi-language auto-detection.

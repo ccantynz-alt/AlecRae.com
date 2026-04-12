@@ -1,5 +1,5 @@
 /**
- * @emailed/analytics - Report Generation
+ * @alecrae/analytics - Report Generation
  *
  * Daily/weekly/monthly reports. Deliverability rates, engagement metrics,
  * reputation trends. Export to multiple formats (JSON, CSV, HTML).
@@ -356,7 +356,7 @@ export function formatReportAsCsv(report: Report): string {
   const lines: string[] = [];
 
   // Header section
-  lines.push("Emailed Analytics Report");
+  lines.push("AlecRae Analytics Report");
   lines.push(`Period,${report.request.startDate.toISOString()},${report.request.endDate.toISOString()}`);
   lines.push(`Generated,${report.generatedAt.toISOString()}`);
   lines.push("");
@@ -414,7 +414,7 @@ export function formatReportAsHtml(report: Report): string {
 <html>
 <head>
 <meta charset="utf-8">
-<title>Emailed Analytics Report</title>
+<title>AlecRae Analytics Report</title>
 <style>
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #1a1a1a; }
   h1 { color: #0f172a; }

@@ -20,11 +20,11 @@ import {
   webhooks as webhooksTable,
   webhookDeliveries,
   events,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 // ─── Configuration ─────────────────────────────────────────────────────────
 
-const WEBHOOK_QUEUE_NAME = "emailed:webhooks";
+const WEBHOOK_QUEUE_NAME = "alecrae:webhooks";
 const REDIS_URL =
   process.env["REDIS_URL"] ??
   process.env["UPSTASH_REDIS_URL"] ??
@@ -310,10 +310,10 @@ async function processWebhookJob(job: Job<WebhookJobData>): Promise<void> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Emailed-Signature": signature,
-        "X-Emailed-Timestamp": timestamp,
-        "X-Emailed-Event": event.type,
-        "X-Emailed-Delivery": deliveryId,
+        "X-AlecRae-Signature": signature,
+        "X-AlecRae-Timestamp": timestamp,
+        "X-AlecRae-Event": event.type,
+        "X-AlecRae-Delivery": deliveryId,
       },
       body: payload,
       signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),

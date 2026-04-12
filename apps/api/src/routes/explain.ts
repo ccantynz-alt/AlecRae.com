@@ -15,14 +15,14 @@ import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
   summarizeNewsletter,
   type NewsletterSummary,
-} from "@emailed/ai-engine/inbox/newsletter-summarizer";
+} from "@alecrae/ai-engine/inbox/newsletter-summarizer";
 import {
   explainEmail,
   type EmailExplanation,
   type ExplainEmailInput,
-} from "@emailed/ai-engine/inbox/email-explainer";
-import { DEFAULT_CATEGORIES, getScreenerDecisionAsync } from "@emailed/ai-engine/inbox";
-import { getDatabase, emails } from "@emailed/db";
+} from "@alecrae/ai-engine/inbox/email-explainer";
+import { DEFAULT_CATEGORIES, getScreenerDecisionAsync } from "@alecrae/ai-engine/inbox";
+import { getDatabase, emails } from "@alecrae/db";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 

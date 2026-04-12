@@ -15,7 +15,7 @@ import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, emails } from "@emailed/db";
+import { getDatabase, emails } from "@alecrae/db";
 
 // ─── Undo Send Config ────────────────────────────────────────────────────────
 // Emails are held for this many seconds before actual delivery.
@@ -170,7 +170,7 @@ scheduleSend.post(
     const undoable = undoableEmails.get(emailId);
     if (!undoable) {
       return c.json(
-        { error: { message: "Email cannot be undone. The undo window has expired or email was not sent through Vienna.", code: "undo_expired" } },
+        { error: { message: "Email cannot be undone. The undo window has expired or email was not sent through AlecRae.", code: "undo_expired" } },
         410,
       );
     }

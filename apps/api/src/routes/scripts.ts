@@ -24,13 +24,13 @@ import {
   getValidatedBody,
   getValidatedQuery,
 } from "../middleware/validator.js";
-import { getDatabase, emailScripts, scriptRuns } from "@emailed/db";
+import { getDatabase, emailScripts, scriptRuns } from "@alecrae/db";
 import {
   runSnippet,
   createSampleEmailContext,
   SCRIPT_TEMPLATES,
-} from "@emailed/ai-engine/scripts/snippet-runner";
-import type { EmailContextData } from "@emailed/ai-engine/scripts/snippet-runner";
+} from "@alecrae/ai-engine/scripts/snippet-runner";
+import type { EmailContextData } from "@alecrae/ai-engine/scripts/snippet-runner";
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -424,7 +424,7 @@ scripts.post(
       ? createSampleEmailContext({
           id: body.sampleEmail.id ?? "test_email_001",
           from: body.sampleEmail.from,
-          to: body.sampleEmail.to ?? [{ address: "you@48co.ai" }],
+          to: body.sampleEmail.to ?? [{ address: "you@alecrae.com" }],
           cc: body.sampleEmail.cc ?? [],
           subject: body.sampleEmail.subject,
           body: body.sampleEmail.body,

@@ -7,13 +7,13 @@ import {
   StatCard,
   AnalyticsChart,
   type ChartDataPoint,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import { motion } from "motion/react";
 import { analyticsApi, type OverviewStats } from "../../../lib/api";
 import {
   staggerGrid,
   fadeInUp,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../../../lib/animations";
 
@@ -29,7 +29,7 @@ const fallbackDeliverability: ChartDataPoint[] = [
 ];
 
 export default function AnalyticsPage(): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [loading, setLoading] = useState(true);
 

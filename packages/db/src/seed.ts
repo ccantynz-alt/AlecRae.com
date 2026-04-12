@@ -57,7 +57,7 @@ async function main() {
       id: accountId,
       name: "Test Organization",
       planTier: "professional",
-      billingEmail: "billing@test.emailed.dev",
+      billingEmail: "billing@test.alecrae.dev",
     })
     .onConflictDoNothing();
   console.log(`  Account: ${accountId}  (Test Organization)`);
@@ -72,7 +72,7 @@ async function main() {
     .values({
       id: userId,
       accountId,
-      email: "admin@test.emailed.dev",
+      email: "admin@test.alecrae.dev",
       name: "Test Admin",
       passwordHash,
       role: "owner",
@@ -89,7 +89,7 @@ async function main() {
       emailVerified: true,
     })
     .onConflictDoNothing();
-  console.log(`  User:    ${userId}  (admin@test.emailed.dev / password123)`);
+  console.log(`  User:    ${userId}  (admin@test.alecrae.dev / password123)`);
 
   // ── Domain ──────────────────────────────────────────────────────────────
   const domainId = generateId();
@@ -98,25 +98,25 @@ async function main() {
     .values({
       id: domainId,
       accountId,
-      domain: "test.emailed.dev",
+      domain: "test.alecrae.dev",
       verificationStatus: "verified",
       verifiedAt: new Date(),
       spfVerified: true,
-      spfRecord: "v=spf1 include:_spf.emailed.dev ~all",
+      spfRecord: "v=spf1 include:_spf.alecrae.dev ~all",
       dkimVerified: true,
       dkimSelector: "default",
       dkimPublicKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...(placeholder)",
       dkimPrivateKey: "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC...(placeholder)",
       dmarcVerified: true,
       dmarcPolicy: "reject",
-      dmarcRecord: "v=DMARC1; p=reject; rua=mailto:dmarc@test.emailed.dev",
+      dmarcRecord: "v=DMARC1; p=reject; rua=mailto:dmarc@test.alecrae.dev",
       returnPathVerified: true,
-      returnPathDomain: "bounce.test.emailed.dev",
+      returnPathDomain: "bounce.test.alecrae.dev",
       isActive: true,
       isDefault: true,
     })
     .onConflictDoNothing();
-  console.log(`  Domain:  ${domainId}  (test.emailed.dev — verified)`);
+  console.log(`  Domain:  ${domainId}  (test.alecrae.dev — verified)`);
 
   // ── API Key ─────────────────────────────────────────────────────────────
   const apiKeyId = generateId();

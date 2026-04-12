@@ -125,7 +125,7 @@ export {
   SmtpConnectionError,
   WebhookDeliveryError,
   InternalError,
-  isEmailedError,
+  isAlecRaeError,
   ERROR_CODE_MAP,
 } from "./errors/index.js";
 export type { ErrorContext } from "./errors/index.js";

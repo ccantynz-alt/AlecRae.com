@@ -19,7 +19,7 @@
  */
 
 import { sql, inArray } from "drizzle-orm";
-import { getDatabase, emails } from "@emailed/db";
+import { getDatabase, emails } from "@alecrae/db";
 import { embedBatch, VOYAGE_MODEL, EMBEDDING_DIMENSIONS } from "./voyage.js";
 import {
   type AutoIndexJob,

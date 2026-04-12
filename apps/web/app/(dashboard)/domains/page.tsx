@@ -11,7 +11,7 @@ import {
   PageLayout,
   DomainCard,
   type DnsRecord,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import { domainsApi, type Domain } from "../../../lib/api";
 
 function mapDomain(d: Domain): {
@@ -29,10 +29,10 @@ function mapDomain(d: Domain): {
     domain: d.domain,
     verificationState: (d.verificationStatus === "verifying" ? "pending" : d.verificationStatus) as "pending" | "verified" | "failed",
     dnsRecords: [
-      { type: "TXT", name: `_emailed-verify.${d.domain}`, value: `emailed-verify=${d.id.slice(0, 8)}`, verified: d.spfVerified },
-      { type: "TXT", name: d.domain, value: `v=spf1 include:spf.emailed.dev ~all`, verified: d.spfVerified },
-      { type: "CNAME", name: `em._domainkey.${d.domain}`, value: "dkim.emailed.dev", verified: d.dkimVerified },
-      { type: "TXT", name: `_dmarc.${d.domain}`, value: `v=DMARC1; p=reject; rua=mailto:dmarc@emailed.dev`, verified: d.dmarcVerified },
+      { type: "TXT", name: `_alecrae-verify.${d.domain}`, value: `alecrae-verify=${d.id.slice(0, 8)}`, verified: d.spfVerified },
+      { type: "TXT", name: d.domain, value: `v=spf1 include:spf.alecrae.dev ~all`, verified: d.spfVerified },
+      { type: "CNAME", name: `em._domainkey.${d.domain}`, value: "dkim.alecrae.dev", verified: d.dkimVerified },
+      { type: "TXT", name: `_dmarc.${d.domain}`, value: `v=DMARC1; p=reject; rua=mailto:dmarc@alecrae.dev`, verified: d.dmarcVerified },
     ],
     spfVerified: d.spfVerified,
     dkimVerified: d.dkimVerified,

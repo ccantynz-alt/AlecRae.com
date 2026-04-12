@@ -24,15 +24,15 @@ import {
   emails,
   voiceStyleProfiles,
   voiceTrainingSamples,
-} from "@emailed/db";
-import type { StyleFingerprintData, ExtractedFeaturesData } from "@emailed/db";
+} from "@alecrae/db";
+import type { StyleFingerprintData, ExtractedFeaturesData } from "@alecrae/db";
 import {
   buildStyleFingerprint,
   extractEmailFeatures,
   calculateConfidence,
   composeInVoice,
   type VoiceCloneAIClient,
-} from "@emailed/ai-engine/voice/style-cloner";
+} from "@alecrae/ai-engine/voice/style-cloner";
 
 // ─── Claude client ───────────────────────────────────────────────────────────
 

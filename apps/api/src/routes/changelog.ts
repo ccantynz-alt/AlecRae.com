@@ -1,7 +1,7 @@
 /**
  * Changelog Route (C8) — Public Release Notes
  *
- * Public listing of Vienna releases and updates. Read endpoints are public
+ * Public listing of AlecRae releases and updates. Read endpoints are public
  * (no auth). Write endpoints (create/update/delete) require admin scope.
  *
  * GET    /v1/changelog          — List published changelog entries (paginated)
@@ -23,7 +23,7 @@ import {
   getValidatedQuery,
   getValidatedParams,
 } from "../middleware/validator.js";
-import { getDatabase, changelogEntries } from "@emailed/db";
+import { getDatabase, changelogEntries } from "@alecrae/db";
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -55,7 +55,7 @@ const CreateSchema = z.object({
   content: z.string().min(1),
   category: ChangelogCategorySchema,
   isPublished: z.boolean().default(false),
-  authorName: z.string().min(1).max(200).default("Vienna Team"),
+  authorName: z.string().min(1).max(200).default("AlecRae Team"),
   publishedAt: z.string().datetime().optional(),
 });
 

@@ -5,8 +5,8 @@ import { Table } from "../components/table";
 import { Callout } from "../components/callout";
 
 export const metadata: Metadata = {
-  title: "Billing — Vienna API Docs",
-  description: "Plans, checkout, billing portal, usage tracking, and Stripe integration for the Vienna API.",
+  title: "Billing — AlecRae API Docs",
+  description: "Plans, checkout, billing portal, usage tracking, and Stripe integration for the AlecRae API.",
 };
 
 export default function BillingPage(): React.JSX.Element {
@@ -45,21 +45,21 @@ export default function BillingPage(): React.JSX.Element {
           ]}
           requestBody={`{
   "planId": "pro",
-  "successUrl": "https://mail.48co.ai/settings/billing?success=true",
-  "cancelUrl": "https://mail.48co.ai/settings/billing?cancelled=true"
+  "successUrl": "https://mail.alecrae.com/settings/billing?success=true",
+  "cancelUrl": "https://mail.alecrae.com/settings/billing?cancelled=true"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/billing/checkout \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/billing/checkout \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "planId": "pro",
-    "successUrl": "https://mail.48co.ai/settings/billing?success=true",
-    "cancelUrl": "https://mail.48co.ai/settings/billing?cancelled=true"
+    "successUrl": "https://mail.alecrae.com/settings/billing?success=true",
+    "cancelUrl": "https://mail.alecrae.com/settings/billing?cancelled=true"
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/billing/checkout", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/billing/checkout", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -72,15 +72,15 @@ export default function BillingPage(): React.JSX.Element {
 const { url } = await response.json();
 window.location.href = url; // Redirect to Stripe checkout`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/billing/checkout",
+    "https://api.alecrae.com/v1/billing/checkout",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
         "planId": "pro",
-        "successUrl": "https://mail.48co.ai/settings/billing?success=true",
-        "cancelUrl": "https://mail.48co.ai/settings/billing?cancelled=true",
+        "successUrl": "https://mail.alecrae.com/settings/billing?success=true",
+        "cancelUrl": "https://mail.alecrae.com/settings/billing?cancelled=true",
     },
 )
 
@@ -100,16 +100,16 @@ checkout_url = response.json()["url"]
             { name: "returnUrl", type: "string", required: true, description: "URL to redirect when user returns from the portal" },
           ]}
           requestBody={`{
-  "returnUrl": "https://mail.48co.ai/settings/billing"
+  "returnUrl": "https://mail.alecrae.com/settings/billing"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/billing/portal \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/billing/portal \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{ "returnUrl": "https://mail.48co.ai/settings/billing" }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/billing/portal", {
+  -d '{ "returnUrl": "https://mail.alecrae.com/settings/billing" }'`}
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/billing/portal", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -120,12 +120,12 @@ checkout_url = response.json()["url"]
 const { url } = await response.json();
 window.location.href = url;`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/billing/portal",
+    "https://api.alecrae.com/v1/billing/portal",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
-    json={"returnUrl": "https://mail.48co.ai/settings/billing"},
+    json={"returnUrl": "https://mail.alecrae.com/settings/billing"},
 )
 
 portal_url = response.json()["url"]`}
@@ -139,17 +139,17 @@ portal_url = response.json()["url"]`}
           path="/v1/billing/usage"
           description="Get current billing period usage statistics including emails sent, quota limits, and percentage used."
           scopes={["billing:read"]}
-          curlExample={`curl "https://api.48co.ai/v1/billing/usage" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/billing/usage", {
-  headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+          curlExample={`curl "https://api.alecrae.com/v1/billing/usage" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/billing/usage", {
+  headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
 });
 
 const { data } = await response.json();
 console.log(data.emailsSent + " / " + data.emailsLimit);`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/billing/usage",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/billing/usage",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 usage = response.json()["data"]
@@ -172,16 +172,16 @@ print(f"{usage['emailsSent']} / {usage['emailsLimit']}")`}
           path="/v1/billing/plan"
           description="Get the current subscription plan details, including features and limits."
           scopes={["billing:read"]}
-          curlExample={`curl "https://api.48co.ai/v1/billing/plan" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/billing/plan", {
-  headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+          curlExample={`curl "https://api.alecrae.com/v1/billing/plan" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/billing/plan", {
+  headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
 });
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/billing/plan",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/billing/plan",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 plan = response.json()["data"]`}
@@ -208,7 +208,7 @@ plan = response.json()["data"]`}
         />
 
         <Callout type="warning" title="Stripe webhook">
-          Vienna uses Stripe webhooks to track subscription changes. The webhook endpoint at{" "}
+          AlecRae uses Stripe webhooks to track subscription changes. The webhook endpoint at{" "}
           <code className="text-cyan-300 font-mono text-xs">POST /v1/billing/webhook</code> is
           called by Stripe directly and does not require API key authentication. It verifies the
           Stripe signature header instead.

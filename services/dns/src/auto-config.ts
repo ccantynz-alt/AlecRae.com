@@ -14,26 +14,26 @@ import {
   getDatabase,
   domains as domainsTable,
   dnsRecords as dnsRecordsTable,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const DKIM_KEY_SIZE = 2048;
-const DKIM_SELECTOR_PREFIX = "emailed";
+const DKIM_SELECTOR_PREFIX = "alecrae";
 const DKIM_ROTATION_DAYS = 90;
 const SPF_MAX_LOOKUPS = 10;
 
 const MX_SERVERS = [
-  { host: "mx1.emailed.dev", priority: 10 },
-  { host: "mx2.emailed.dev", priority: 20 },
+  { host: "mx1.alecrae.dev", priority: 10 },
+  { host: "mx2.alecrae.dev", priority: 20 },
 ];
 
-const SPF_VALUE = "v=spf1 include:spf.emailed.dev ~all";
+const SPF_VALUE = "v=spf1 include:spf.alecrae.dev ~all";
 const DMARC_VALUE =
-  "v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@emailed.dev; pct=100";
-const RETURN_PATH_CNAME = "bounce.emailed.dev";
+  "v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@alecrae.dev; pct=100";
+const RETURN_PATH_CNAME = "bounce.alecrae.dev";
 
 const generateKeyPairAsync = promisify(crypto.generateKeyPair);
 
@@ -475,7 +475,7 @@ export async function verifyDomainConfig(
 // ---------------------------------------------------------------------------
 
 async function verifySPF(domain: string): Promise<RecordVerification> {
-  const expected = "include:spf.emailed.dev";
+  const expected = "include:spf.alecrae.dev";
   const txtRecords = await safeResolve(domain, "TXT");
 
   if (!txtRecords) {
@@ -487,12 +487,12 @@ async function verifySPF(domain: string): Promise<RecordVerification> {
     return { verified: false, expected, found: null, error: "No SPF record found" };
   }
 
-  const hasOurInclude = spfRecords.some((r) => r.includes("include:spf.emailed.dev"));
+  const hasOurInclude = spfRecords.some((r) => r.includes("include:spf.alecrae.dev"));
   return {
     verified: hasOurInclude,
     expected,
     found: spfRecords[0] ?? null,
-    error: hasOurInclude ? null : "SPF record does not include spf.emailed.dev",
+    error: hasOurInclude ? null : "SPF record does not include spf.alecrae.dev",
   };
 }
 
@@ -733,7 +733,7 @@ export async function checkDomainHealth(
 
   // Verification score (up to 70 points)
   if (verification.spf.verified) score += 15;
-  else recommendations.push("Configure SPF record: add TXT record with 'v=spf1 include:spf.emailed.dev ~all'");
+  else recommendations.push("Configure SPF record: add TXT record with 'v=spf1 include:spf.alecrae.dev ~all'");
 
   if (verification.dkim.verified) score += 20;
   else recommendations.push(`Configure DKIM record: add TXT record at ${domainRecord.dkimSelector}._domainkey.${domainRecord.domain}`);
@@ -742,10 +742,10 @@ export async function checkDomainHealth(
   else recommendations.push("Configure DMARC record: add TXT record at _dmarc with 'v=DMARC1; p=quarantine; ...'");
 
   if (verification.mx.verified) score += 10;
-  else recommendations.push("Configure MX records: point to mx1.emailed.dev (priority 10) and mx2.emailed.dev (priority 20)");
+  else recommendations.push("Configure MX records: point to mx1.alecrae.dev (priority 10) and mx2.alecrae.dev (priority 20)");
 
   if (verification.returnPath.verified) score += 10;
-  else recommendations.push("Configure Return-Path: add CNAME record 'bounce' pointing to bounce.emailed.dev");
+  else recommendations.push("Configure Return-Path: add CNAME record 'bounce' pointing to bounce.alecrae.dev");
 
   // Key rotation score (up to 15 points)
   if (dkimKeyAge !== null) {

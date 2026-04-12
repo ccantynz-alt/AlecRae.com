@@ -1,5 +1,5 @@
 /**
- * @emailed/reputation — Domain Warm-up Orchestrator
+ * @alecrae/reputation — Domain Warm-up Orchestrator
  *
  * Manages the gradual ramp-up of sending volume for new domains/IPs.
  * Stores all state in PostgreSQL via the `warmup_sessions` table so
@@ -18,8 +18,8 @@ import {
   getDatabase,
   warmupSessions,
   domains as domainsTable,
-} from "@emailed/db";
-import type { WarmupSession } from "@emailed/db";
+} from "@alecrae/db";
+import type { WarmupSession } from "@alecrae/db";
 
 // ---------------------------------------------------------------------------
 // Schedule step: { day, dailyLimit }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─── deploy.sh ───────────────────────────────────────────────────────────────
-# Production deployment script for the Emailed platform.
+# Production deployment script for the AlecRae platform.
 # Builds Docker images, pushes to container registry, and applies
 # Kubernetes manifests.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -13,8 +13,8 @@ DOCKER_DIR="${PROJECT_ROOT}/infrastructure/docker"
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
-REGISTRY="${REGISTRY:-registry.emailed.dev}"
-NAMESPACE="${NAMESPACE:-emailed}"
+REGISTRY="${REGISTRY:-registry.alecrae.dev}"
+NAMESPACE="${NAMESPACE:-alecrae}"
 ENVIRONMENT="${ENVIRONMENT:-staging}"
 TAG="${TAG:-$(git -C "${PROJECT_ROOT}" rev-parse --short HEAD)}"
 TIMESTAMP="$(date +%Y%m%d%H%M%S)"
@@ -41,7 +41,7 @@ usage() {
     echo "Options:"
     echo "  -e, --environment   Target environment (dev|staging|prod). Default: staging"
     echo "  -t, --tag           Docker image tag. Default: git short SHA"
-    echo "  -r, --registry      Container registry. Default: registry.emailed.dev"
+    echo "  -r, --registry      Container registry. Default: registry.alecrae.dev"
     echo "  -s, --service       Deploy specific service only (web|api|mta)"
     echo "  --dry-run           Print commands without executing"
     echo "  -h, --help          Show this help"
@@ -120,8 +120,8 @@ log_info "Building Docker images (tag: ${FULL_TAG})..."
 cd "${PROJECT_ROOT}"
 
 for service in "${SERVICES[@]}"; do
-    IMAGE="${REGISTRY}/emailed/${service}:${FULL_TAG}"
-    IMAGE_LATEST="${REGISTRY}/emailed/${service}:latest"
+    IMAGE="${REGISTRY}/alecrae/${service}:${FULL_TAG}"
+    IMAGE_LATEST="${REGISTRY}/alecrae/${service}:latest"
     DOCKERFILE="${DOCKER_DIR}/Dockerfile.${service}"
 
     if [[ ! -f "$DOCKERFILE" ]]; then
@@ -146,8 +146,8 @@ done
 log_info "Pushing images to ${REGISTRY}..."
 
 for service in "${SERVICES[@]}"; do
-    IMAGE="${REGISTRY}/emailed/${service}:${FULL_TAG}"
-    IMAGE_LATEST="${REGISTRY}/emailed/${service}:latest"
+    IMAGE="${REGISTRY}/alecrae/${service}:${FULL_TAG}"
+    IMAGE_LATEST="${REGISTRY}/alecrae/${service}:latest"
 
     log_info "Pushing ${service}..."
     run_cmd docker push "$IMAGE"
@@ -177,7 +177,7 @@ fi
 # Update image tags in deployments and apply
 for service in "${SERVICES[@]}"; do
     MANIFEST="${K8S_DIR}/${service}-deployment.yml"
-    IMAGE="${REGISTRY}/emailed/${service}:${FULL_TAG}"
+    IMAGE="${REGISTRY}/alecrae/${service}:${FULL_TAG}"
 
     if [[ ! -f "$MANIFEST" ]]; then
         log_warn "Manifest not found: ${MANIFEST}. Skipping."

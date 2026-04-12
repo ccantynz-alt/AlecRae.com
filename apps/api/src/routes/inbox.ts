@@ -23,14 +23,14 @@ import {
   DEFAULT_CATEGORIES,
   type InboxCategory,
   type Commitment,
-} from "@emailed/ai-engine/inbox";
+} from "@alecrae/ai-engine/inbox";
 import {
   getDatabase,
   screenerQueue as screenerQueueTable,
   commitments as commitmentsTable,
   inboxCategories as inboxCategoriesTable,
   screenerDecisions as screenerDecisionsTable,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

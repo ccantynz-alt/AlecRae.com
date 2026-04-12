@@ -23,7 +23,7 @@ import {
   type EmailStatsCompare,
   Box,
   Text,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import {
   heatmapApi,
   type HeatmapPeriod,

@@ -1,5 +1,5 @@
 /**
- * @emailed/support - AI Support Agent
+ * @alecrae/support - AI Support Agent
  *
  * Uses Claude API to handle customer inquiries with full platform access.
  * Can check delivery logs, DNS status, reputation scores, account settings.
@@ -200,7 +200,7 @@ const AGENT_TOOLS: Anthropic.Tool[] = [
 
 function buildSystemPrompt(context: ConversationContext): string {
   const parts = [
-    `You are an expert AI support agent for Emailed, an email infrastructure platform. You help customers diagnose and resolve email delivery issues.`,
+    `You are an expert AI support agent for AlecRae, an email infrastructure platform. You help customers diagnose and resolve email delivery issues.`,
     ``,
     `## Your capabilities`,
     `- Check and update DNS records (SPF, DKIM, DMARC, MX)`,

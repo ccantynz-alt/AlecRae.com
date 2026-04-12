@@ -5,7 +5,7 @@ import { Callout } from "../components/callout";
 import { Table } from "../components/table";
 
 export const metadata: Metadata = {
-  title: "AI — Vienna API Docs",
+  title: "AI — AlecRae API Docs",
   description: "AI compose, voice profile, grammar checking, translation, reply suggestions, and thread summary.",
 };
 
@@ -19,7 +19,7 @@ export default function AIPage(): React.JSX.Element {
       />
 
       <Callout type="info" title="AI model selection">
-        Vienna automatically selects the optimal AI model based on task complexity and your plan tier.
+        AlecRae automatically selects the optimal AI model based on task complexity and your plan tier.
         Free plans use Haiku 4.5, Pro plans get Sonnet 4.6, and Enterprise plans access Opus 4.6.
         All AI calls have fallback behavior if the primary model is unavailable.
       </Callout>
@@ -50,14 +50,14 @@ export default function AIPage(): React.JSX.Element {
           requestBody={`{
   "sampleSize": 100
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/voice/analyze \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/voice/analyze \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "sampleSize": 100 }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/voice/analyze", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/voice/analyze", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({ sampleSize: 100 }),
@@ -66,9 +66,9 @@ export default function AIPage(): React.JSX.Element {
 const { data } = await response.json();
 console.log("Voice profile built:", data.profileId);`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/voice/analyze",
+    "https://api.alecrae.com/v1/voice/analyze",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={"sampleSize": 100},
@@ -97,16 +97,16 @@ print(f"Voice profile built: {profile['profileId']}")`}
           path="/v1/voice/profile"
           description="Retrieve your current voice profile data, including detected traits and writing patterns."
           scopes={["messages:read"]}
-          curlExample={`curl "https://api.48co.ai/v1/voice/profile" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/voice/profile", {
-  headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+          curlExample={`curl "https://api.alecrae.com/v1/voice/profile" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/voice/profile", {
+  headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
 });
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/voice/profile",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/voice/profile",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 profile = response.json()["data"]`}
@@ -149,8 +149,8 @@ profile = response.json()["data"]`}
     "body": "Can we meet tomorrow at 2pm to discuss the project?"
   }
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/voice/draft \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/voice/draft \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "instructions": "Decline the meeting politely. Suggest next week instead.",
@@ -162,10 +162,10 @@ profile = response.json()["data"]`}
       "body": "Can we meet tomorrow at 2pm?"
     }
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/voice/draft", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/voice/draft", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -183,9 +183,9 @@ profile = response.json()["data"]`}
 const { data } = await response.json();
 console.log(data.subject, data.body);`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/voice/draft",
+    "https://api.alecrae.com/v1/voice/draft",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
@@ -225,17 +225,17 @@ print(draft["body"])`}
   "body": "I need this done by Friday. No excuses.",
   "tone": "empathetic"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/voice/adjust \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/voice/adjust \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "body": "I need this done by Friday. No excuses.",
     "tone": "empathetic"
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/voice/adjust", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/voice/adjust", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -246,9 +246,9 @@ print(draft["body"])`}
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/voice/adjust",
+    "https://api.alecrae.com/v1/voice/adjust",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
@@ -282,14 +282,14 @@ adjusted = response.json()["data"]`}
   "text": "Their going to the meeting tommorrow and they dont have the report ready.",
   "language": "en"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/grammar/check \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/grammar/check \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "text": "Their going to the meeting tommorrow.", "language": "en" }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/grammar/check", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/grammar/check", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -300,9 +300,9 @@ adjusted = response.json()["data"]`}
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/grammar/check",
+    "https://api.alecrae.com/v1/grammar/check",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={"text": "Their going to the meeting tommorrow.", "language": "en"},
@@ -354,18 +354,18 @@ suggestions = response.json()["data"]["suggestions"]`}
   "targetLanguage": "es",
   "formality": "formal"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/translate \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/translate \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "text": "Thank you for your prompt response.",
     "targetLanguage": "es",
     "formality": "formal"
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/translate", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/translate", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -377,9 +377,9 @@ suggestions = response.json()["data"]["suggestions"]`}
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/translate",
+    "https://api.alecrae.com/v1/translate",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={

@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import {
   SPRING_HEAVY,
   SPRING_SNAPPY,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
 } from "../lib/animations";
 
 export type DragAxis = "x" | "y" | "both" | false;
@@ -55,7 +55,7 @@ export function AnimatedDragItem({
   layoutId,
   ariaLabel,
 }: AnimatedDragItemProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const y = useMotionValue(0);
   const x = useMotionValue(0);
 
@@ -141,7 +141,7 @@ export function AnimatedDropZone({
   className,
   ariaLabel,
 }: AnimatedDropZoneProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
 
   return (
     <motion.div

@@ -1,10 +1,10 @@
 # Authentication
 
-The Vienna API uses bearer tokens (API keys) for authentication. Every request must include a valid key in the `Authorization` header.
+The AlecRae API uses bearer tokens (API keys) for authentication. Every request must include a valid key in the `Authorization` header.
 
 ## API keys
 
-API keys are created from the [dashboard](https://mail.48co.ai/settings/api). Keys come in two flavors:
+API keys are created from the [dashboard](https://mail.alecrae.com/settings/api). Keys come in two flavors:
 
 - **`vn_live_*`** — production keys that send real email
 - **`vn_test_*`** — sandbox keys that simulate sends without delivery
@@ -12,8 +12,8 @@ API keys are created from the [dashboard](https://mail.48co.ai/settings/api). Ke
 ## Sending a key
 
 ```bash
-curl https://api.48co.ai/v1/messages \
-  -H "Authorization: Bearer $VIENNA_API_KEY"
+curl https://api.alecrae.com/v1/messages \
+  -H "Authorization: Bearer $ALECRAE_API_KEY"
 ```
 
 ## Scopes
@@ -37,4 +37,4 @@ Rotate keys at least every 90 days. The dashboard shows the last-used timestamp 
 
 ## Never commit keys
 
-Use environment variables or a secrets manager. Vienna scans public GitHub for leaked keys and revokes them automatically.
+Use environment variables or a secrets manager. AlecRae scans public GitHub for leaked keys and revokes them automatically.

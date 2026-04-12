@@ -6,7 +6,7 @@ import { randomUUID, createHash } from "node:crypto";
 import postgres from "postgres";
 
 const DATABASE_URL =
-  process.env["DATABASE_URL"] ?? "postgres://emailed:dev_password@localhost:5432/emailed";
+  process.env["DATABASE_URL"] ?? "postgres://alecrae:dev_password@localhost:5432/alecrae";
 
 const sql = postgres(DATABASE_URL);
 

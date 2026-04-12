@@ -18,8 +18,8 @@ const BASE_PATH = "/v1/contacts";
  *
  * Usage:
  * ```ts
- * const emailed = new Emailed({ auth: { type: "apiKey", key: "em_live_..." } });
- * await emailed.contacts.upsert({ email: "alice@example.com", name: "Alice" });
+ * const alecrae = new AlecRae({ auth: { type: "apiKey", key: "em_live_..." } });
+ * await alecrae.contacts.upsert({ email: "alice@example.com", name: "Alice" });
  * ```
  */
 export class Contacts {

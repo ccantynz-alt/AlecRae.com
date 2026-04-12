@@ -22,7 +22,7 @@ import {
   type SendTimeSlot,
   type ConfidenceLevel,
   type DataSource,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import { sendTimeApi, type SendTimeRecommendation } from "../lib/api";
 
 // ─── Props ─────────────────────────────────────────────────────────────────

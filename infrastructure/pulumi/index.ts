@@ -18,12 +18,12 @@ import {
 
 // ─── S3 Buckets ─────────────────────────────────────────────────────────────
 
-const attachmentsBucket = new aws.s3.BucketV2("emailed-attachments", {
-  bucket: `emailed-${environment}-attachments`,
+const attachmentsBucket = new aws.s3.BucketV2("alecrae-attachments", {
+  bucket: `alecrae-${environment}-attachments`,
   forceDestroy: environment === "dev",
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-attachments`,
+    Name: `alecrae-${environment}-attachments`,
   },
 });
 
@@ -75,12 +75,12 @@ new aws.s3.BucketPublicAccessBlock("attachments-public-access", {
 });
 
 // Backup bucket
-const backupBucket = new aws.s3.BucketV2("emailed-backups", {
-  bucket: `emailed-${environment}-backups`,
+const backupBucket = new aws.s3.BucketV2("alecrae-backups", {
+  bucket: `alecrae-${environment}-backups`,
   forceDestroy: environment === "dev",
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-backups`,
+    Name: `alecrae-${environment}-backups`,
   },
 });
 
@@ -115,14 +115,14 @@ new aws.s3.BucketPublicAccessBlock("backups-public-access", {
 
 import { redisSecurityGroup } from "./networking";
 
-const redisSubnetGroup = new aws.elasticache.SubnetGroup("emailed-redis-subnet", {
+const redisSubnetGroup = new aws.elasticache.SubnetGroup("alecrae-redis-subnet", {
   subnetIds: privateSubnets.map((s) => s.id),
   tags: baseTags,
 });
 
-const redisParameterGroup = new aws.elasticache.ParameterGroup("emailed-redis-params", {
+const redisParameterGroup = new aws.elasticache.ParameterGroup("alecrae-redis-params", {
   family: "redis7",
-  description: `Emailed ${environment} Redis 7 parameter group`,
+  description: `AlecRae ${environment} Redis 7 parameter group`,
   parameters: [
     { name: "maxmemory-policy", value: "allkeys-lru" },
     { name: "notify-keyspace-events", value: "Ex" },
@@ -132,9 +132,9 @@ const redisParameterGroup = new aws.elasticache.ParameterGroup("emailed-redis-pa
   tags: baseTags,
 });
 
-const redisCluster = new aws.elasticache.ReplicationGroup("emailed-redis", {
-  replicationGroupId: `emailed-${environment}`,
-  description: `Emailed ${environment} Redis cluster`,
+const redisCluster = new aws.elasticache.ReplicationGroup("alecrae-redis", {
+  replicationGroupId: `alecrae-${environment}`,
+  description: `AlecRae ${environment} Redis cluster`,
   nodeType: envConfig.redisNodeType,
   numCacheClusters: 1 + envConfig.redisNumReplicas,
   parameterGroupName: redisParameterGroup.name,
@@ -151,20 +151,20 @@ const redisCluster = new aws.elasticache.ReplicationGroup("emailed-redis", {
   autoMinorVersionUpgrade: true,
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-redis`,
+    Name: `alecrae-${environment}-redis`,
   },
 });
 
 // ─── Route53 DNS ────────────────────────────────────────────────────────────
 
-const hostedZone = new aws.route53.Zone("emailed-zone", {
+const hostedZone = new aws.route53.Zone("alecrae-zone", {
   name: domain,
-  comment: `Emailed ${environment} DNS zone`,
+  comment: `AlecRae ${environment} DNS zone`,
   tags: baseTags,
 });
 
 // MX record for inbound mail
-new aws.route53.Record("emailed-mx", {
+new aws.route53.Record("alecrae-mx", {
   zoneId: hostedZone.zoneId,
   name: domain,
   type: "MX",
@@ -176,7 +176,7 @@ new aws.route53.Record("emailed-mx", {
 });
 
 // SPF record
-new aws.route53.Record("emailed-spf", {
+new aws.route53.Record("alecrae-spf", {
   zoneId: hostedZone.zoneId,
   name: domain,
   type: "TXT",
@@ -185,7 +185,7 @@ new aws.route53.Record("emailed-spf", {
 });
 
 // DMARC record
-new aws.route53.Record("emailed-dmarc", {
+new aws.route53.Record("alecrae-dmarc", {
   zoneId: hostedZone.zoneId,
   name: `_dmarc.${domain}`,
   type: "TXT",
@@ -197,13 +197,13 @@ new aws.route53.Record("emailed-dmarc", {
 
 // ─── ACM Certificates ───────────────────────────────────────────────────────
 
-const certificate = new aws.acm.Certificate("emailed-cert", {
+const certificate = new aws.acm.Certificate("alecrae-cert", {
   domainName: domain,
   subjectAlternativeNames: [`*.${domain}`],
   validationMethod: "DNS",
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-cert`,
+    Name: `alecrae-${environment}-cert`,
   },
   lifecycle: {
     createBeforeDestroy: true,
@@ -211,7 +211,7 @@ const certificate = new aws.acm.Certificate("emailed-cert", {
 });
 
 // DNS validation records
-const certValidation = new aws.route53.Record("emailed-cert-validation", {
+const certValidation = new aws.route53.Record("alecrae-cert-validation", {
   zoneId: hostedZone.zoneId,
   name: certificate.domainValidationOptions[0].resourceRecordName,
   type: certificate.domainValidationOptions[0].resourceRecordType,
@@ -219,15 +219,15 @@ const certValidation = new aws.route53.Record("emailed-cert-validation", {
   ttl: 60,
 });
 
-const certValidated = new aws.acm.CertificateValidation("emailed-cert-validated", {
+const certValidated = new aws.acm.CertificateValidation("alecrae-cert-validated", {
   certificateArn: certificate.arn,
   validationRecordFqdns: [certValidation.fqdn],
 });
 
 // ─── Application Load Balancer ──────────────────────────────────────────────
 
-const alb = new aws.lb.LoadBalancer("emailed-alb", {
-  name: `emailed-${environment}`,
+const alb = new aws.lb.LoadBalancer("alecrae-alb", {
+  name: `alecrae-${environment}`,
   internal: false,
   loadBalancerType: "application",
   securityGroups: [albSecurityGroup.id],
@@ -238,12 +238,12 @@ const alb = new aws.lb.LoadBalancer("emailed-alb", {
   dropInvalidHeaderFields: true,
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-alb`,
+    Name: `alecrae-${environment}-alb`,
   },
 });
 
 // HTTPS listener
-const httpsListener = new aws.lb.Listener("emailed-https", {
+const httpsListener = new aws.lb.Listener("alecrae-https", {
   loadBalancerArn: alb.arn,
   port: 443,
   protocol: "HTTPS",
@@ -263,7 +263,7 @@ const httpsListener = new aws.lb.Listener("emailed-https", {
 });
 
 // HTTP -> HTTPS redirect
-new aws.lb.Listener("emailed-http-redirect", {
+new aws.lb.Listener("alecrae-http-redirect", {
   loadBalancerArn: alb.arn,
   port: 80,
   protocol: "HTTP",
@@ -281,7 +281,7 @@ new aws.lb.Listener("emailed-http-redirect", {
 });
 
 // Route53 alias for ALB
-new aws.route53.Record("emailed-app-alias", {
+new aws.route53.Record("alecrae-app-alias", {
   zoneId: hostedZone.zoneId,
   name: `app.${domain}`,
   type: "A",
@@ -294,7 +294,7 @@ new aws.route53.Record("emailed-app-alias", {
   ],
 });
 
-new aws.route53.Record("emailed-api-alias", {
+new aws.route53.Record("alecrae-api-alias", {
   zoneId: hostedZone.zoneId,
   name: `api.${domain}`,
   type: "A",

@@ -5,8 +5,8 @@ import { Table } from "../components/table";
 import { Callout } from "../components/callout";
 
 export const metadata: Metadata = {
-  title: "Rate Limits — Vienna API Docs",
-  description: "Rate limits, quotas, retry strategies, and idempotency for the Vienna API.",
+  title: "Rate Limits — AlecRae API Docs",
+  description: "Rate limits, quotas, retry strategies, and idempotency for the AlecRae API.",
 };
 
 export default function RateLimitsPage(): React.JSX.Element {
@@ -14,7 +14,7 @@ export default function RateLimitsPage(): React.JSX.Element {
     <div className="px-6 md:px-8 py-12 md:py-16 max-w-4xl mx-auto">
       <PageHeader
         title="Rate Limits"
-        description="The Vienna API enforces rate limits per API key to ensure fair usage and platform stability."
+        description="The AlecRae API enforces rate limits per API key to ensure fair usage and platform stability."
       />
 
       <section className="space-y-10">
@@ -131,8 +131,8 @@ Content-Type: application/json
             The API stores the response for each idempotency key for 24 hours.
           </p>
           <CodeBlock
-            code={`curl https://api.48co.ai/v1/messages \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+            code={`curl https://api.alecrae.com/v1/messages \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Idempotency-Key: unique-request-id-12345" \\
   -H "Content-Type: application/json" \\
   -d '{ "from": "you@example.com", "to": ["user@example.com"], "subject": "Test" }'`}

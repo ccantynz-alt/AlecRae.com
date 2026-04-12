@@ -12,7 +12,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, users, accounts } from "@emailed/db";
+import { getDatabase, users, accounts } from "@alecrae/db";
 import {
   issueTokenPair,
   rotateRefreshToken,

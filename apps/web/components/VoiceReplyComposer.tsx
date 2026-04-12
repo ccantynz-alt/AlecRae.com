@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, type HTMLAttributes } from "react";
-import { Box, Text, Button, VoiceRecorder, VoiceMessagePlayer, type VoiceRecordingResult, type VoiceMessageData } from "@emailed/ui";
+import { Box, Text, Button, VoiceRecorder, VoiceMessagePlayer, type VoiceRecordingResult, type VoiceMessageData } from "@alecrae/ui";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

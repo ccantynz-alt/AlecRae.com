@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — SnoozeMenu
+ * AlecRae Mobile — SnoozeMenu
  *
  * Bottom sheet that hosts:
  *   1. Quick presets ("Later today", "Tomorrow morning", "This weekend", "Next week")

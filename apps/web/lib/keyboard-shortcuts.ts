@@ -1,7 +1,7 @@
 /**
- * Vienna Keyboard Shortcuts — Cmd+K Command Palette + Global Shortcuts
+ * AlecRae Keyboard Shortcuts — Cmd+K Command Palette + Global Shortcuts
  *
- * Makes Vienna feel faster than Superhuman ($30/mo — ours is free).
+ * Makes AlecRae feel faster than Superhuman ($30/mo — ours is free).
  *
  * Shortcut modes:
  *   - Default (Gmail-compatible)

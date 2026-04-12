@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 
-const config = new pulumi.Config("emailed");
+const config = new pulumi.Config("alecrae");
 
 export type Environment = "dev" | "staging" | "prod";
 
@@ -66,7 +66,7 @@ const configs: Record<Environment, EnvironmentConfig> = {
     enhancedMonitoring: false,
     tags: {
       Environment: "dev",
-      Project: "emailed",
+      Project: "alecrae",
       ManagedBy: "pulumi",
     },
   },
@@ -90,7 +90,7 @@ const configs: Record<Environment, EnvironmentConfig> = {
     enhancedMonitoring: true,
     tags: {
       Environment: "staging",
-      Project: "emailed",
+      Project: "alecrae",
       ManagedBy: "pulumi",
     },
   },
@@ -114,7 +114,7 @@ const configs: Record<Environment, EnvironmentConfig> = {
     enhancedMonitoring: true,
     tags: {
       Environment: "prod",
-      Project: "emailed",
+      Project: "alecrae",
       ManagedBy: "pulumi",
     },
   },

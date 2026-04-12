@@ -14,7 +14,7 @@ import { AnimatePresence, motion, type Variants } from "motion/react";
 import type { ReactNode } from "react";
 import {
   fadeInUp,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 
@@ -47,7 +47,7 @@ export function AnimatedPresence({
   ariaLabel,
   animateOnMount = true,
 }: AnimatedPresenceProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const baseVariants = customVariants ?? fadeInUp;
   const variants = withReducedMotion(baseVariants, reduced);
 

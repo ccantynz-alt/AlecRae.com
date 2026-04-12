@@ -1,5 +1,5 @@
 /**
- * @emailed/reputation — Compliance Enforcement Engine
+ * @alecrae/reputation — Compliance Enforcement Engine
  *
  * Validates outbound email against major regulatory frameworks:
  *

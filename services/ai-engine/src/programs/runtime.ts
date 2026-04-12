@@ -1,5 +1,5 @@
 /**
- * Vienna Programmable Email — Sandbox Runtime
+ * AlecRae Programmable Email — Sandbox Runtime
  *
  * Executes user-authored TypeScript snippets safely inside a QuickJS
  * (WebAssembly) sandbox via `quickjs-emscripten`. The sandbox provides:

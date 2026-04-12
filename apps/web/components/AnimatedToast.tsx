@@ -17,7 +17,7 @@ import {
   toastEnterBottom,
   toastEnterRight,
   toastEnterTop,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 
@@ -67,7 +67,7 @@ export function AnimatedToast({
   position = "bottom-right",
   onDismiss,
 }: AnimatedToastProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const baseVariants = getVariantsForPosition(position);
   const variants = withReducedMotion(baseVariants, reduced);
   const duration = toast.duration ?? 4000;

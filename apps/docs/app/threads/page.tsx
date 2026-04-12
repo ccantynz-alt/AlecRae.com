@@ -3,7 +3,7 @@ import { PageHeader } from "../components/page-header";
 import { EndpointCard } from "../components/endpoint-card";
 
 export const metadata: Metadata = {
-  title: "Threads — Vienna API Docs",
+  title: "Threads — AlecRae API Docs",
   description: "Thread-level operations, conversation view, thread summaries, and labeling.",
 };
 
@@ -29,21 +29,21 @@ export default function ThreadsPage(): React.JSX.Element {
             { name: "label", type: "string", required: false, description: "Filter by label" },
             { name: "unread", type: "boolean", required: false, description: "Filter by unread status" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/threads?mailbox=inbox&unread=true&limit=20" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/threads?mailbox=inbox&unread=true&limit=20" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/threads?mailbox=inbox&unread=true&limit=20",
+  "https://api.alecrae.com/v1/threads?mailbox=inbox&unread=true&limit=20",
   {
     headers: {
-      "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+      "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     },
   }
 );
 
 const { data, cursor, hasMore } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/threads",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/threads",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
     params={"mailbox": "inbox", "unread": "true", "limit": 20},
 )
 
@@ -76,13 +76,13 @@ threads = result["data"]`}
           parameters={[
             { name: "id", type: "string", required: true, description: "Thread ID (path parameter)" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/threads/thr_01HXab" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/threads/thr_01HXab" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/threads/thr_01HXab",
+  "https://api.alecrae.com/v1/threads/thr_01HXab",
   {
     headers: {
-      "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+      "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     },
   }
 );
@@ -90,8 +90,8 @@ threads = result["data"]`}
 const { data } = await response.json();
 console.log(data.subject, data.messages.length);`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/threads/thr_01HXab",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/threads/thr_01HXab",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 thread = response.json()["data"]
@@ -134,17 +134,17 @@ print(thread["subject"], len(thread["messages"]))`}
           parameters={[
             { name: "id", type: "string", required: true, description: "Thread ID (path parameter)" },
           ]}
-          curlExample={`curl -X POST "https://api.48co.ai/v1/threads/thr_01HXab/archive" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`await fetch("https://api.48co.ai/v1/threads/thr_01HXab/archive", {
+          curlExample={`curl -X POST "https://api.alecrae.com/v1/threads/thr_01HXab/archive" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`await fetch("https://api.alecrae.com/v1/threads/thr_01HXab/archive", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
   },
 });`}
           pythonExample={`requests.post(
-    "https://api.48co.ai/v1/threads/thr_01HXab/archive",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/threads/thr_01HXab/archive",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )`}
           responseExample={`{
   "success": true,
@@ -164,22 +164,22 @@ print(thread["subject"], len(thread["messages"]))`}
           requestBody={`{
   "labels": ["work", "important", "project-x"]
 }`}
-          curlExample={`curl -X PUT "https://api.48co.ai/v1/threads/thr_01HXab/labels" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X PUT "https://api.alecrae.com/v1/threads/thr_01HXab/labels" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "labels": ["work", "important", "project-x"] }'`}
-          jsExample={`await fetch("https://api.48co.ai/v1/threads/thr_01HXab/labels", {
+          jsExample={`await fetch("https://api.alecrae.com/v1/threads/thr_01HXab/labels", {
   method: "PUT",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({ labels: ["work", "important", "project-x"] }),
 });`}
           pythonExample={`requests.put(
-    "https://api.48co.ai/v1/threads/thr_01HXab/labels",
+    "https://api.alecrae.com/v1/threads/thr_01HXab/labels",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={"labels": ["work", "important", "project-x"]},
@@ -200,13 +200,13 @@ print(thread["subject"], len(thread["messages"]))`}
           parameters={[
             { name: "id", type: "string", required: true, description: "Thread ID (path parameter)" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/threads/thr_01HXab/summary" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/threads/thr_01HXab/summary" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/threads/thr_01HXab/summary",
+  "https://api.alecrae.com/v1/threads/thr_01HXab/summary",
   {
     headers: {
-      "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+      "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     },
   }
 );
@@ -214,8 +214,8 @@ print(thread["subject"], len(thread["messages"]))`}
 const { data } = await response.json();
 console.log(data.summary, data.actionItems);`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/threads/thr_01HXab/summary",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/threads/thr_01HXab/summary",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 summary = response.json()["data"]

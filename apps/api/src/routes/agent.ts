@@ -1,7 +1,7 @@
 /**
  * AI Inbox Agent — REST API (S3: Industry First)
  *
- * Vienna's flagship overnight agent. While the user sleeps, the agent
+ * AlecRae's flagship overnight agent. While the user sleeps, the agent
  * triages every new email, drafts replies in the user's voice, identifies
  * commitments, flags suspicious senders, and produces a one-tap morning
  * briefing.
@@ -41,7 +41,7 @@ import {
   type AgentEmail,
   type AgentReport,
   type DraftedReply,
-} from "@emailed/ai-engine/agent";
+} from "@alecrae/ai-engine/agent";
 import {
   getDatabase,
   agentRuns,
@@ -53,7 +53,7 @@ import {
   type StoredAgentSuggestion,
   type AgentCategoryRule,
   type AgentScheduleConfig,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -245,7 +245,7 @@ function getAgent(): InboxAgent {
     _since: Date,
     _limit: number,
   ): Promise<AgentEmail[]> => {
-    // TODO: integrate with @emailed/db messages query.
+    // TODO: integrate with @alecrae/db messages query.
     return [];
   };
 

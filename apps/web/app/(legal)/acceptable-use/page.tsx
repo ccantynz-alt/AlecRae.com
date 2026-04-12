@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Box, Text, Card, CardContent } from "@emailed/ui";
+import { Box, Text, Card, CardContent } from "@alecrae/ui";
 
 export const metadata: Metadata = {
-  title: "Acceptable Use Policy | Emailed",
-  description: "Acceptable Use Policy for the Emailed AI-native email infrastructure platform.",
+  title: "Acceptable Use Policy | AlecRae",
+  description: "Acceptable Use Policy for the AlecRae AI-native email infrastructure platform.",
 };
 
 function Section({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
@@ -46,14 +46,14 @@ export default function AcceptableUsePage() {
       <Card className="mb-8 border-red-500/30 bg-red-500/5">
         <CardContent className="p-4">
           <Text className="font-semibold text-red-600">
-            Violations of this policy may result in immediate account suspension or termination without refund. Emailed actively monitors all sending activity using AI-based automated enforcement systems.
+            Violations of this policy may result in immediate account suspension or termination without refund. AlecRae actively monitors all sending activity using AI-based automated enforcement systems.
           </Text>
         </CardContent>
       </Card>
 
       <Section number="1" title="Purpose">
-        <Text>This Acceptable Use Policy (&quot;AUP&quot;) governs acceptable use of the Emailed platform and all associated services. This AUP supplements our Terms of Service and applies to all users, including those using the API or SDK. Emailed&apos;s mission is to maintain the highest deliverability and reputation standards for all customers. Violations by any single user can damage the platform&apos;s shared infrastructure and reputation, impacting all users.</Text>
-        <Text>Emailed reserves the right to determine, in its sole discretion, whether any use violates this AUP and to take action accordingly, including suspension or termination of the offending account.</Text>
+        <Text>This Acceptable Use Policy (&quot;AUP&quot;) governs acceptable use of the AlecRae platform and all associated services. This AUP supplements our Terms of Service and applies to all users, including those using the API or SDK. AlecRae&apos;s mission is to maintain the highest deliverability and reputation standards for all customers. Violations by any single user can damage the platform&apos;s shared infrastructure and reputation, impacting all users.</Text>
+        <Text>AlecRae reserves the right to determine, in its sole discretion, whether any use violates this AUP and to take action accordingly, including suspension or termination of the offending account.</Text>
       </Section>
 
       <Section number="2" title="Prohibited Content">
@@ -64,7 +64,7 @@ export default function AcceptableUsePage() {
         <Sub label="(d) Illegal Content.">Content that violates any applicable law, including but not limited to content promoting illegal activities, drug trafficking, weapons trafficking, or human trafficking.</Sub>
         <Sub label="(e) Harassment.">Threats, intimidation, stalking, hate speech, or content intended to harass, abuse, or harm any individual or group.</Sub>
         <Sub label="(f) Fraud.">Advance-fee scams, lottery/prize scams, investment fraud, identity theft schemes, or any content designed to deceive recipients for financial gain.</Sub>
-        <Sub label="(g) Impersonation.">Falsely representing yourself as another individual, company, or organization, including Emailed or its employees.</Sub>
+        <Sub label="(g) Impersonation.">Falsely representing yourself as another individual, company, or organization, including AlecRae or its employees.</Sub>
         <Sub label="(h) Child Safety Violations.">Any content that exploits, endangers, or sexualizes minors, or that distributes adult content to individuals under 18.</Sub>
         <Sub label="(i) Pyramid and MLM Schemes.">Content promoting pyramid schemes, multi-level marketing schemes with primary emphasis on recruitment, or Ponzi schemes.</Sub>
         <Sub label="(j) Counterfeit Goods.">Marketing or selling counterfeit, pirated, or stolen goods or services.</Sub>
@@ -111,19 +111,19 @@ export default function AcceptableUsePage() {
 
       <Section number="5" title="Authentication Requirements">
         <Text>All sending domains must maintain proper email authentication. Failure to maintain authentication may result in immediate suspension of sending privileges.</Text>
-        <Sub label="(a) SPF.">You MUST publish a valid SPF record for every domain used to send email through the Service that authorizes Emailed&apos;s sending infrastructure.</Sub>
+        <Sub label="(a) SPF.">You MUST publish a valid SPF record for every domain used to send email through the Service that authorizes AlecRae&apos;s sending infrastructure.</Sub>
         <Sub label="(b) DKIM.">All outbound email MUST be signed with a valid DKIM signature using keys provisioned by the Service.</Sub>
         <Sub label="(c) DMARC.">You MUST publish a DMARC policy for every sending domain (minimum p=none for initial setup, with a path toward p=quarantine or p=reject).</Sub>
         <Sub label="(d) Domain Verification.">You MUST use only verified sending domains. Sending from unverified domains is prohibited.</Sub>
-        <Sub label="(e) Reverse DNS.">Sending IPs must have valid reverse DNS (PTR) records. Emailed manages this for shared IPs; dedicated IP customers must verify reverse DNS configuration.</Sub>
-        <Sub label="(f) Automated Configuration.">Emailed provides automated authentication configuration. If you opt out of automated configuration, you assume full responsibility for maintaining valid records.</Sub>
+        <Sub label="(e) Reverse DNS.">Sending IPs must have valid reverse DNS (PTR) records. AlecRae manages this for shared IPs; dedicated IP customers must verify reverse DNS configuration.</Sub>
+        <Sub label="(f) Automated Configuration.">AlecRae provides automated authentication configuration. If you opt out of automated configuration, you assume full responsibility for maintaining valid records.</Sub>
       </Section>
 
       <Section number="6" title="List Hygiene Requirements">
         <Text>Maintaining clean mailing lists is essential for platform deliverability. You must:</Text>
         <Sub label="(a)">Remove hard-bounced email addresses immediately after the first hard bounce. Continued sending to hard-bounced addresses is grounds for suspension.</Sub>
         <Sub label="(b)">Remove soft-bounced email addresses after three (3) consecutive soft bounce failures within a 30-day period.</Sub>
-        <Sub label="(c)">Process and honor unsubscribe requests within 24 hours for automated systems, or within 10 business days for manual processing. Emailed provides automated unsubscribe handling — use it.</Sub>
+        <Sub label="(c)">Process and honor unsubscribe requests within 24 hours for automated systems, or within 10 business days for manual processing. AlecRae provides automated unsubscribe handling — use it.</Sub>
         <Sub label="(d)">Maintain a global suppression list that includes all unsubscribed, bounced, and complained addresses. Never re-add suppressed addresses without fresh, verifiable consent.</Sub>
         <Sub label="(e)">Conduct regular list cleaning at minimum quarterly intervals, removing inactive subscribers and invalid addresses.</Sub>
         <Sub label="(f)">Implement engagement-based sunsetting: remove recipients who have not opened or clicked any email in 12 months, or conduct a re-permission campaign before continuing to send.</Sub>
@@ -140,12 +140,12 @@ export default function AcceptableUsePage() {
 
       <Section number="8" title="Network Security">
         <Text>You must not use the Service to conduct or facilitate any of the following:</Text>
-        <Sub label="(a)">Port scanning, network enumeration, or network reconnaissance of Emailed infrastructure or any third-party systems.</Sub>
-        <Sub label="(b)">Vulnerability testing, penetration testing, or security testing of the Service without prior written authorization from Emailed. Report vulnerabilities responsibly to security@emailed.dev.</Sub>
+        <Sub label="(a)">Port scanning, network enumeration, or network reconnaissance of AlecRae infrastructure or any third-party systems.</Sub>
+        <Sub label="(b)">Vulnerability testing, penetration testing, or security testing of the Service without prior written authorization from AlecRae. Report vulnerabilities responsibly to security@alecrae.dev.</Sub>
         <Sub label="(c)">Distributed denial of service (DDoS) attacks, traffic flooding, or any activity intended to disrupt the availability of the Service or any third-party service.</Sub>
         <Sub label="(d)">IP address spoofing, ARP spoofing, or DNS spoofing.</Sub>
         <Sub label="(e)">Unauthorized interception, monitoring, or collection of network traffic.</Sub>
-        <Sub label="(f)">Exploitation of any vulnerability in the Service. If you discover a vulnerability, you must report it immediately to security@emailed.dev and must not exploit or disclose it.</Sub>
+        <Sub label="(f)">Exploitation of any vulnerability in the Service. If you discover a vulnerability, you must report it immediately to security@alecrae.dev and must not exploit or disclose it.</Sub>
       </Section>
 
       <Section number="9" title="AI System Integrity">
@@ -165,17 +165,17 @@ export default function AcceptableUsePage() {
       </Section>
 
       <Section number="10" title="Monitoring and Enforcement">
-        <Text>Emailed actively monitors all email traffic for compliance with this AUP. By using the Service, you acknowledge and consent to this monitoring.</Text>
+        <Text>AlecRae actively monitors all email traffic for compliance with this AUP. By using the Service, you acknowledge and consent to this monitoring.</Text>
         <Sub label="(a) Automated Monitoring.">AI-based systems continuously analyze outbound email for content policy violations, sending pattern anomalies, bounce rate spikes, complaint rate increases, and authentication failures.</Sub>
-        <Sub label="(b) Graduated Enforcement.">For most violations, Emailed follows a graduated enforcement process:</Sub>
+        <Sub label="(b) Graduated Enforcement.">For most violations, AlecRae follows a graduated enforcement process:</Sub>
         <Box className="ml-12 space-y-1">
           <Text><Text as="span" className="font-semibold">Step 1:</Text> Written warning with 48-hour remediation window.</Text>
           <Text><Text as="span" className="font-semibold">Step 2:</Text> Sending volume throttled to 50% of plan limits.</Text>
           <Text><Text as="span" className="font-semibold">Step 3:</Text> Sending suspended pending review and remediation plan.</Text>
           <Text><Text as="span" className="font-semibold">Step 4:</Text> Account terminated.</Text>
         </Box>
-        <Sub label="(c) Immediate Termination.">Emailed reserves the right to bypass the graduated process and immediately terminate accounts engaged in phishing, malware distribution, fraud, child exploitation, or any activity posing an immediate threat to platform infrastructure or users.</Sub>
-        <Sub label="(d) Discretion.">Emailed reserves the right to skip steps in the graduated process based on the severity, intent, and impact of the violation.</Sub>
+        <Sub label="(c) Immediate Termination.">AlecRae reserves the right to bypass the graduated process and immediately terminate accounts engaged in phishing, malware distribution, fraud, child exploitation, or any activity posing an immediate threat to platform infrastructure or users.</Sub>
+        <Sub label="(d) Discretion.">AlecRae reserves the right to skip steps in the graduated process based on the severity, intent, and impact of the violation.</Sub>
       </Section>
 
       <Section number="11" title="Bounce and Complaint Thresholds">
@@ -211,21 +211,21 @@ export default function AcceptableUsePage() {
       </Section>
 
       <Section number="12" title="Reporting Abuse">
-        <Text>To report violations of this AUP or any abuse originating from the Emailed platform:</Text>
+        <Text>To report violations of this AUP or any abuse originating from the AlecRae platform:</Text>
         <Box className="ml-6 mt-2 space-y-1">
-          <Text>Email: abuse@emailed.dev</Text>
+          <Text>Email: abuse@alecrae.dev</Text>
           <Text>Include: full email headers, message content, timestamps, and any other relevant evidence.</Text>
         </Box>
-        <Text className="mt-3">Emailed will investigate all reports within 24 hours of receipt. Reporter identity is kept confidential. Emailed participates in feedback loops (FBLs) with all major ISPs and processes complaints automatically.</Text>
+        <Text className="mt-3">AlecRae will investigate all reports within 24 hours of receipt. Reporter identity is kept confidential. AlecRae participates in feedback loops (FBLs) with all major ISPs and processes complaints automatically.</Text>
       </Section>
 
       <Section number="13" title="Consequences of Violation">
         <Sub label="(a)">Immediate suspension or termination of sending privileges and/or account access.</Sub>
         <Sub label="(b)">No refund of prepaid fees for accounts terminated due to AUP violations.</Sub>
         <Sub label="(c)">Data retained for 30 days post-termination for legal and compliance purposes, then permanently deleted.</Sub>
-        <Sub label="(d)">Emailed reserves the right to report violations to law enforcement, regulatory authorities, and industry anti-abuse organizations including MAAWG (Messaging, Malware, and Mobile Anti-Abuse Working Group), Spamhaus, and relevant ISP abuse teams.</Sub>
+        <Sub label="(d)">AlecRae reserves the right to report violations to law enforcement, regulatory authorities, and industry anti-abuse organizations including MAAWG (Messaging, Malware, and Mobile Anti-Abuse Working Group), Spamhaus, and relevant ISP abuse teams.</Sub>
         <Sub label="(e)">Domains and IPs associated with terminated accounts may be permanently blocklisted from the platform.</Sub>
-        <Sub label="(f)">Emailed may seek damages and injunctive relief for violations that cause harm to the platform, its infrastructure, or its users.</Sub>
+        <Sub label="(f)">AlecRae may seek damages and injunctive relief for violations that cause harm to the platform, its infrastructure, or its users.</Sub>
       </Section>
 
       <Section number="14" title="ISP-Specific Requirements">
@@ -237,16 +237,16 @@ export default function AcceptableUsePage() {
       </Section>
 
       <Section number="15" title="Cooperation and Accountability">
-        <Sub label="(a)">You must cooperate fully with any Emailed investigation into potential AUP violations, including providing information about your sending practices, list sources, and consent records within 48 hours of request.</Sub>
-        <Sub label="(b)">You must respond to abuse complaints forwarded by Emailed within 48 hours and take corrective action as directed.</Sub>
-        <Sub label="(c)">You must implement corrective measures recommended or required by Emailed within the specified timeframe.</Sub>
+        <Sub label="(a)">You must cooperate fully with any AlecRae investigation into potential AUP violations, including providing information about your sending practices, list sources, and consent records within 48 hours of request.</Sub>
+        <Sub label="(b)">You must respond to abuse complaints forwarded by AlecRae within 48 hours and take corrective action as directed.</Sub>
+        <Sub label="(c)">You must implement corrective measures recommended or required by AlecRae within the specified timeframe.</Sub>
         <Sub label="(d)">Failure to cooperate with investigations or implement corrective measures constitutes an independent ground for immediate account termination.</Sub>
-        <Sub label="(e)">You acknowledge that your sending practices affect the deliverability and reputation of all Emailed users on shared infrastructure, and you accept responsibility for maintaining sending practices that protect the platform community.</Sub>
+        <Sub label="(e)">You acknowledge that your sending practices affect the deliverability and reputation of all AlecRae users on shared infrastructure, and you accept responsibility for maintaining sending practices that protect the platform community.</Sub>
       </Section>
 
       <Box className="mt-12 pt-6 border-t border-border">
         <Text className="text-content-tertiary text-sm">
-          Questions about this Acceptable Use Policy should be directed to abuse@emailed.dev or legal@emailed.dev. This policy is reviewed and updated regularly to address evolving threats and regulatory requirements.
+          Questions about this Acceptable Use Policy should be directed to abuse@alecrae.dev or legal@alecrae.dev. This policy is reviewed and updated regularly to address evolving threats and regulatory requirements.
         </Text>
       </Box>
     </Box>

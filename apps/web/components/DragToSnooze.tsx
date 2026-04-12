@@ -16,7 +16,7 @@ import { useCallback, useState, useRef, useEffect } from "react";
 import {
   SnoozeDropOverlay,
   type DraggableEmailData,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 

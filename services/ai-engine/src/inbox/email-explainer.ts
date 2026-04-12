@@ -94,7 +94,7 @@ function buildPrompt(input: ExplainEmailInput): string {
     : email.body;
 
   return [
-    "You are Vienna's inbox explainer. Given an email and context about the",
+    "You are AlecRae's inbox explainer. Given an email and context about the",
     "recipient's inbox, explain who the sender is, the relationship, why this",
     "email is in the inbox, and what the user should do about it. Consider the",
     "email content, sender history, time of day, and the user's existing inbox",

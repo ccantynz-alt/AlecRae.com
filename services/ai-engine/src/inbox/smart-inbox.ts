@@ -15,7 +15,7 @@ import { eq, and } from "drizzle-orm";
 import {
   getDatabase,
   screenerDecisions as screenerDecisionsTable,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 

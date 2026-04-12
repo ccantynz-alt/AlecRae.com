@@ -75,7 +75,7 @@ the question: "Will this still be the right choice in 15 years?"
 ## The 15-Year Vision
 
 ### Years 0-2: Foundation
-- Emailed: email that's better, cheaper, and smarter than the
+- AlecRae: email that's better, cheaper, and smarter than the
   big guys
 - Hosted: backend + frontend servers that anyone can use
 - Identity: authentication so simple it's invisible

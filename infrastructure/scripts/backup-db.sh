@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─── backup-db.sh ────────────────────────────────────────────────────────────
-# Database backup script for the Emailed platform.
+# Database backup script for the AlecRae platform.
 # Creates a pg_dump backup and uploads it to S3 with encryption.
 # Supports both local (Docker) and production (RDS) databases.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -14,16 +14,16 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
-DB_NAME="${DB_NAME:-emailed}"
-DB_USER="${DB_USER:-emailed}"
+DB_NAME="${DB_NAME:-alecrae}"
+DB_USER="${DB_USER:-alecrae}"
 DB_PASSWORD="${DB_PASSWORD:-dev_password}"
-S3_BUCKET="${S3_BUCKET:-emailed-${ENVIRONMENT}-backups}"
+S3_BUCKET="${S3_BUCKET:-alecrae-${ENVIRONMENT}-backups}"
 S3_PREFIX="${S3_PREFIX:-database}"
 S3_ENDPOINT="${S3_ENDPOINT:-}"
 RETENTION_DAYS="${RETENTION_DAYS:-30}"
-BACKUP_DIR="${BACKUP_DIR:-/tmp/emailed-backups}"
+BACKUP_DIR="${BACKUP_DIR:-/tmp/alecrae-backups}"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-BACKUP_FILE="emailed_${ENVIRONMENT}_${TIMESTAMP}.sql.gz"
+BACKUP_FILE="alecrae_${ENVIRONMENT}_${TIMESTAMP}.sql.gz"
 
 # Colors
 RED='\033[0;31m'
@@ -44,9 +44,9 @@ usage() {
     echo "  -e, --environment   Environment (dev|staging|prod). Default: dev"
     echo "  -h, --host          Database host. Default: localhost"
     echo "  -p, --port          Database port. Default: 5432"
-    echo "  -d, --database      Database name. Default: emailed"
-    echo "  -u, --user          Database user. Default: emailed"
-    echo "  -b, --bucket        S3 bucket name. Default: emailed-{env}-backups"
+    echo "  -d, --database      Database name. Default: alecrae"
+    echo "  -u, --user          Database user. Default: alecrae"
+    echo "  -b, --bucket        S3 bucket name. Default: alecrae-{env}-backups"
     echo "  --no-upload         Create backup locally without S3 upload"
     echo "  --retention         Days to keep backups (for cleanup). Default: 30"
     echo "  --help              Show this help"

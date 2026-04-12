@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Email Sentiment Analyzer
+// @alecrae/ai-engine — Email Sentiment Analyzer
 // =============================================================================
 // Detects emotional tone in emails, tracks sentiment across conversation
 // threads, identifies urgency levels, and alerts on significant tone shifts

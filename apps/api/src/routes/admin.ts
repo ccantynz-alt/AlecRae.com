@@ -22,7 +22,7 @@ import {
   accounts,
   users,
   dnsRecords,
-} from "@emailed/db";
+} from "@alecrae/db";
 import { getDlqRecords, getDlqStats, clearDlqRecord, clearPermanentlyFailed } from "../lib/dlq-processor.js";
 
 const admin = new Hono();

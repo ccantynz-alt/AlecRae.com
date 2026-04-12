@@ -4,8 +4,8 @@ import { CodeBlock } from "../components/code-block";
 import { Table } from "../components/table";
 
 export const metadata: Metadata = {
-  title: "Errors — Vienna API Docs",
-  description: "Error codes, HTTP status codes, error shapes, and retry guidance for the Vienna API.",
+  title: "Errors — AlecRae API Docs",
+  description: "Error codes, HTTP status codes, error shapes, and retry guidance for the AlecRae API.",
 };
 
 export default function ErrorsPage(): React.JSX.Element {
@@ -63,7 +63,7 @@ export default function ErrorsPage(): React.JSX.Element {
               ["`429`", "Too Many Requests", "Rate limit or quota exceeded"],
               ["`500`", "Internal Server Error", "Unexpected server error"],
               ["`502`", "Bad Gateway", "Upstream service failure (SMTP, DNS)"],
-              ["`503`", "Service Unavailable", "Vienna is degraded — see status.48co.ai"],
+              ["`503`", "Service Unavailable", "AlecRae is degraded — see status.alecrae.com"],
             ]}
           />
         </div>
@@ -182,10 +182,10 @@ export default function ErrorsPage(): React.JSX.Element {
           <h2 className="text-2xl font-bold text-white mb-3">Error handling example</h2>
           <CodeBlock
             code={`async function sendEmail(payload) {
-  const response = await fetch("https://api.48co.ai/v1/messages", {
+  const response = await fetch("https://api.alecrae.com/v1/messages", {
     method: "POST",
     headers: {
-      "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+      "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
@@ -222,9 +222,9 @@ export default function ErrorsPage(): React.JSX.Element {
 
 def send_email(payload):
     response = requests.post(
-        "https://api.48co.ai/v1/messages",
+        "https://api.alecrae.com/v1/messages",
         headers={
-            "Authorization": f"Bearer {VIENNA_API_KEY}",
+            "Authorization": f"Bearer {ALECRAE_API_KEY}",
             "Content-Type": "application/json",
         },
         json=payload,

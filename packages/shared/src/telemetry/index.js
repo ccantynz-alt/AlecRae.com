@@ -1,7 +1,7 @@
 /**
- * @emailed/shared — OpenTelemetry Instrumentation
+ * @alecrae/shared — OpenTelemetry Instrumentation
  *
- * Provides unified telemetry (traces + metrics) for all Emailed services.
+ * Provides unified telemetry (traces + metrics) for all AlecRae services.
  *
  * Configuration via environment variables:
  *   OTEL_ENABLED          — "true" to enable (default: "false")
@@ -9,8 +9,8 @@
  *   OTEL_SERVICE_NAME     — Override the service name passed to initTelemetry()
  *
  * Usage:
- *   import { initTelemetry, getTracer, getMeter, shutdownTelemetry } from "@emailed/shared/telemetry";
- *   await initTelemetry("emailed-api");
+ *   import { initTelemetry, getTracer, getMeter, shutdownTelemetry } from "@alecrae/shared/telemetry";
+ *   await initTelemetry("alecrae-api");
  *   const tracer = getTracer();
  *   const meter  = getMeter();
  */
@@ -24,7 +24,7 @@ import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { ConsoleSpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
 // ─── State ──────────────────────────────────────────────────────────────────
 let sdk = null;
-let serviceName = "emailed";
+let serviceName = "alecrae";
 let initialized = false;
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function isEnabled() {
@@ -38,7 +38,7 @@ function getEndpoint() {
  * Initialize OpenTelemetry SDK for the calling service.
  * Safe to call multiple times — subsequent calls are no-ops.
  *
- * @param name - Logical service name (e.g. "emailed-api", "emailed-mta")
+ * @param name - Logical service name (e.g. "alecrae-api", "alecrae-mta")
  */
 export async function initTelemetry(name) {
     if (initialized)

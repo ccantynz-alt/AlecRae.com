@@ -23,14 +23,14 @@ import {
   type QueryExplanationData,
   type QueryHistoryEntry,
   type SavedQueryEntry,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import {
   emailQueryApi,
 } from "../lib/api";
 import {
   fadeInUp,
   SPRING_BOUNCY,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 
@@ -53,7 +53,7 @@ export function EmailQueryConsole(): ReactElement {
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
-  const prefersReducedMotion = useViennaReducedMotion();
+  const prefersReducedMotion = useAlecRaeReducedMotion();
 
   // ── Load history and saved queries on mount ─────────────────────────
   useEffect(() => {

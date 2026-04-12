@@ -11,7 +11,7 @@
  */
 
 import { eq, sql, sum } from "drizzle-orm";
-import { getDatabase, accounts, attachments, emails } from "@emailed/db";
+import { getDatabase, accounts, attachments, emails } from "@alecrae/db";
 import type { PlanId } from "./billing.js";
 
 // ─── Storage limits per plan (in bytes) ──────────────────────────────────────

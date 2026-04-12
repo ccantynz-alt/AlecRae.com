@@ -11,7 +11,7 @@ import {
   CardHeader,
   CardFooter,
   PageLayout,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import { motion } from "motion/react";
 import { authApi, accountApi } from "../../../lib/api";
 import { PressableScale } from "../../../components/PressableScale";
@@ -19,7 +19,7 @@ import { AnimatedPresence } from "../../../components/AnimatedPresence";
 import {
   staggerSlow,
   fadeInUp,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../../../lib/animations";
 
@@ -34,7 +34,7 @@ interface AccountData {
 }
 
 export default function SettingsPage(): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const [user, setUser] = useState<UserData | null>(null);
   const [account, setAccount] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);

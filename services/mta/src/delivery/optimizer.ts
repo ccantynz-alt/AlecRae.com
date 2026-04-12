@@ -1,5 +1,5 @@
 /**
- * @emailed/mta — Delivery Optimizer
+ * @alecrae/mta — Delivery Optimizer
  *
  * Orchestrates outbound email delivery with ISP-aware throttling,
  * MX preference ordering, exponential back-off with jitter, connection

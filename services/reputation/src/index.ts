@@ -1,5 +1,5 @@
 /**
- * @emailed/reputation — Reputation Management Service
+ * @alecrae/reputation — Reputation Management Service
  *
  * Exports the warm-up orchestrator, monitor, and other reputation
  * management modules.

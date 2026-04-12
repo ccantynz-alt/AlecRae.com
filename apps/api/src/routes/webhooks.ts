@@ -9,7 +9,7 @@ import {
   webhooks as webhooksTable,
   webhookDeliveries,
   events,
-} from "@emailed/db";
+} from "@alecrae/db";
 import { enqueueWebhookDeliveryForWebhook } from "../lib/webhook-dispatcher.js";
 
 const webhooks = new Hono();

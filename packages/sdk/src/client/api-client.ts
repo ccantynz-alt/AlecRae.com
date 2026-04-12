@@ -1,5 +1,5 @@
 /**
- * Core HTTP API client for the Emailed SDK.
+ * Core HTTP API client for the AlecRae SDK.
  *
  * Handles authentication, automatic retries with exponential backoff,
  * rate limit awareness, and structured error handling.
@@ -13,7 +13,7 @@ import type {
   ApiErrorBody,
 } from "../types.js";
 
-const DEFAULT_BASE_URL = "https://api.48co.ai";
+const DEFAULT_BASE_URL = "https://api.alecrae.com";
 const DEFAULT_TIMEOUT = 30_000;
 const DEFAULT_MAX_RETRIES = 3;
 
@@ -24,7 +24,7 @@ const RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([408, 429, 500, 502,
 const BACKOFF_BASE_MS = 500;
 
 /**
- * Error thrown when the Emailed API returns a non-success response.
+ * Error thrown when the AlecRae API returns a non-success response.
  */
 export class ApiError extends Error {
   readonly status: number;
@@ -125,7 +125,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * The core HTTP client for the Emailed API.
+ * The core HTTP client for the AlecRae API.
  *
  * Usage:
  * ```ts
@@ -148,7 +148,7 @@ export class ApiClient {
   }
 
   /**
-   * Execute an HTTP request against the Emailed API.
+   * Execute an HTTP request against the AlecRae API.
    *
    * Automatically retries on transient failures with exponential backoff.
    * Respects `Retry-After` headers on 429 responses.
@@ -165,7 +165,7 @@ export class ApiClient {
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: authHeader(this.config),
-      "User-Agent": "@emailed/sdk/0.1.0",
+      "User-Agent": "@alecrae/sdk/0.1.0",
       ...this.config.headers,
       ...options.headers,
     };
@@ -187,9 +187,9 @@ export class ApiClient {
 
       try {
         if (this.config.debug) {
-          console.log(`[emailed-sdk] ${options.method} ${url}${attempt > 0 ? ` (retry ${attempt})` : ""}`);
+          console.log(`[alecrae-sdk] ${options.method} ${url}${attempt > 0 ? ` (retry ${attempt})` : ""}`);
           if (options.body !== undefined) {
-            console.log(`[emailed-sdk] Request body:`, JSON.stringify(options.body, null, 2));
+            console.log(`[alecrae-sdk] Request body:`, JSON.stringify(options.body, null, 2));
           }
         }
 
@@ -212,7 +212,7 @@ export class ApiClient {
           });
 
           if (this.config.debug) {
-            console.log(`[emailed-sdk] Response ${response.status}:`, JSON.stringify(data, null, 2));
+            console.log(`[alecrae-sdk] Response ${response.status}:`, JSON.stringify(data, null, 2));
           }
 
           return {

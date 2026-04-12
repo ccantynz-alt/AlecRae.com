@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Email Content Analyzer
+// @alecrae/ai-engine — Email Content Analyzer
 // =============================================================================
 // Language detection, topic classification (TF-IDF based), sentiment analysis,
 // toxicity scoring, promotional content detection, readability metrics, and

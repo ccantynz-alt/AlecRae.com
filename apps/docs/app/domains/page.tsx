@@ -5,8 +5,8 @@ import { Table } from "../components/table";
 import { Callout } from "../components/callout";
 
 export const metadata: Metadata = {
-  title: "Domains — Vienna API Docs",
-  description: "Domain management, DNS verification, SPF, DKIM, and DMARC configuration for the Vienna API.",
+  title: "Domains — AlecRae API Docs",
+  description: "Domain management, DNS verification, SPF, DKIM, and DMARC configuration for the AlecRae API.",
 };
 
 export default function DomainsPage(): React.JSX.Element {
@@ -21,19 +21,19 @@ export default function DomainsPage(): React.JSX.Element {
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-white mb-3">Required DNS records</h2>
         <p className="text-blue-100/70 mb-4 leading-relaxed">
-          After adding a domain, Vienna provides DNS records you must add to your DNS provider.
+          After adding a domain, AlecRae provides DNS records you must add to your DNS provider.
         </p>
         <Table
           headers={["Type", "Name", "Value"]}
           rows={[
-            ["`TXT`", "yourdomain.com", "v=spf1 include:_spf.48co.ai ~all"],
-            ["`TXT`", "vienna._domainkey.yourdomain.com", "v=DKIM1; k=rsa; p=..."],
+            ["`TXT`", "yourdomain.com", "v=spf1 include:_spf.alecrae.com ~all"],
+            ["`TXT`", "alecrae._domainkey.yourdomain.com", "v=DKIM1; k=rsa; p=..."],
             ["`TXT`", "_dmarc.yourdomain.com", "v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com"],
-            ["`MX`", "yourdomain.com", "10 mx1.48co.ai / 20 mx2.48co.ai (only if receiving inbound)"],
+            ["`MX`", "yourdomain.com", "10 mx1.alecrae.com / 20 mx2.alecrae.com (only if receiving inbound)"],
           ]}
         />
         <Callout type="tip" title="Tracking subdomain">
-          To improve deliverability, set up a CNAME for tracking: <code className="text-cyan-300 font-mono text-xs">track.yourdomain.com CNAME t.48co.ai</code>.
+          To improve deliverability, set up a CNAME for tracking: <code className="text-cyan-300 font-mono text-xs">track.yourdomain.com CNAME t.alecrae.com</code>.
           This avoids third-party domains in your emails.
         </Callout>
       </div>
@@ -50,14 +50,14 @@ export default function DomainsPage(): React.JSX.Element {
           requestBody={`{
   "domain": "yourdomain.com"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/domains \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/domains \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "domain": "yourdomain.com" }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/domains", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/domains", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({ domain: "yourdomain.com" }),
@@ -67,9 +67,9 @@ const { data, message } = await response.json();
 console.log(message); // "Domain added. Configure the DNS records below, then verify."
 console.log(data.dnsRecords); // Records to add to your DNS`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/domains",
+    "https://api.alecrae.com/v1/domains",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={"domain": "yourdomain.com"},
@@ -84,8 +84,8 @@ for record in result["data"]["dnsRecords"]:
     "domain": "yourdomain.com",
     "status": "pending",
     "dnsRecords": [
-      { "type": "TXT", "host": "yourdomain.com", "value": "v=spf1 include:_spf.48co.ai ~all" },
-      { "type": "TXT", "host": "vienna._domainkey.yourdomain.com", "value": "v=DKIM1; k=rsa; p=MIIBIj..." },
+      { "type": "TXT", "host": "yourdomain.com", "value": "v=spf1 include:_spf.alecrae.com ~all" },
+      { "type": "TXT", "host": "alecrae._domainkey.yourdomain.com", "value": "v=DKIM1; k=rsa; p=MIIBIj..." },
       { "type": "TXT", "host": "_dmarc.yourdomain.com", "value": "v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com" }
     ],
     "spfVerified": false,
@@ -106,12 +106,12 @@ for record in result["data"]["dnsRecords"]:
           parameters={[
             { name: "id", type: "string", required: true, description: "Domain ID (path parameter)" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/domains/dom_01HXab" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/domains/dom_01HXab" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/domains/dom_01HXab",
+  "https://api.alecrae.com/v1/domains/dom_01HXab",
   {
-    headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+    headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
   }
 );
 
@@ -119,8 +119,8 @@ const { data } = await response.json();
 console.log("Status:", data.status);
 console.log("SPF:", data.spfVerified, "DKIM:", data.dkimVerified);`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/domains/dom_01HXab",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/domains/dom_01HXab",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 domain = response.json()["data"]
@@ -142,26 +142,26 @@ print(f"Status: {domain['status']}")`}
         <EndpointCard
           method="POST"
           path="/v1/domains/{id}/verify"
-          description="Initiate DNS verification for the domain. Vienna checks SPF, DKIM, DMARC, and MX records. DNS propagation may take up to 48 hours."
+          description="Initiate DNS verification for the domain. AlecRae checks SPF, DKIM, DMARC, and MX records. DNS propagation may take up to 48 hours."
           scopes={["domains:write"]}
           parameters={[
             { name: "id", type: "string", required: true, description: "Domain ID (path parameter)" },
           ]}
-          curlExample={`curl -X POST "https://api.48co.ai/v1/domains/dom_01HXab/verify" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl -X POST "https://api.alecrae.com/v1/domains/dom_01HXab/verify" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/domains/dom_01HXab/verify",
+  "https://api.alecrae.com/v1/domains/dom_01HXab/verify",
   {
     method: "POST",
-    headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+    headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
   }
 );
 
 const { data, message } = await response.json();
 console.log(message);`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/domains/dom_01HXab/verify",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/domains/dom_01HXab/verify",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 result = response.json()
@@ -188,15 +188,15 @@ print(result["message"])`}
           parameters={[
             { name: "id", type: "string", required: true, description: "Domain ID (path parameter)" },
           ]}
-          curlExample={`curl -X DELETE "https://api.48co.ai/v1/domains/dom_01HXab" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`await fetch("https://api.48co.ai/v1/domains/dom_01HXab", {
+          curlExample={`curl -X DELETE "https://api.alecrae.com/v1/domains/dom_01HXab" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`await fetch("https://api.alecrae.com/v1/domains/dom_01HXab", {
   method: "DELETE",
-  headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+  headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
 });`}
           pythonExample={`requests.delete(
-    "https://api.48co.ai/v1/domains/dom_01HXab",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/domains/dom_01HXab",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )`}
           responseExample={`{
   "success": true,

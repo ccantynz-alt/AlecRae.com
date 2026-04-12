@@ -25,7 +25,7 @@ import {
   type TaskProvider,
   type ExtractionState,
   type CreateState,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import {
   taskApi,
   type ExtractedTaskData,
@@ -34,7 +34,7 @@ import {
 import {
   fadeInUp,
   SPRING_BOUNCY,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 
@@ -78,7 +78,7 @@ export function ActionItemExtractor({
   const [selectedProvider, setSelectedProvider] = useState<string>("builtin");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [createdCount, setCreatedCount] = useState<number>(0);
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const hasExtracted = useRef(false);
 
   // Fetch providers on mount
@@ -101,7 +101,7 @@ export function ActionItemExtractor({
         // Fallback: just show builtin
         setProviders([{
           name: "builtin",
-          displayName: "Vienna Tasks",
+          displayName: "AlecRae Tasks",
           connected: true,
           isDefault: true,
         }]);

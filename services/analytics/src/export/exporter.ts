@@ -1,5 +1,5 @@
 /**
- * @emailed/analytics - Data Export
+ * @alecrae/analytics - Data Export
  *
  * Supports CSV, JSON, NDJSON export formats.
  * Scheduled exports and real-time streaming.

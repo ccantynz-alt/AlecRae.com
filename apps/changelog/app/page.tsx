@@ -84,7 +84,7 @@ export default async function ChangelogPage(): Promise<React.JSX.Element> {
         <header className="mb-12">
           <div className="flex items-center gap-3 mb-4">
             <div className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-blue-200 to-cyan-300 bg-clip-text text-transparent">
-              Vienna
+              AlecRae
             </div>
             <span className="text-sm uppercase tracking-wider text-blue-200/60">Changelog</span>
           </div>
@@ -99,7 +99,7 @@ export default async function ChangelogPage(): Promise<React.JSX.Element> {
         <ChangelogList releases={releases} />
 
         <footer className="text-center text-xs text-blue-200/40 pt-16 mt-16 border-t border-white/5">
-          2026 Vienna - changelog.48co.ai
+          2026 AlecRae - changelog.alecrae.com
         </footer>
       </div>
     </main>

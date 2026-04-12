@@ -5,12 +5,12 @@
  *
  * Used by feature cards, settings panels, dashboard tiles, and anywhere
  * a surface needs to feel tactile. Matches the dark gradient aesthetic of
- * the Vienna landing page (translucent surface, white border, blur).
+ * the AlecRae landing page (translucent surface, white border, blur).
  */
 
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
-import { SPRING_SNAPPY, useViennaReducedMotion } from "../lib/animations";
+import { SPRING_SNAPPY, useAlecRaeReducedMotion } from "../lib/animations";
 
 export interface AnimatedCardProps {
   children: ReactNode;
@@ -31,7 +31,7 @@ export function AnimatedCard({
   role,
   ariaLabel,
 }: AnimatedCardProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const interactive = !disabled && Boolean(onClick);
 
   const baseClass =

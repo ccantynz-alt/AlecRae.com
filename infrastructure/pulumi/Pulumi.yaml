@@ -1,13 +1,13 @@
-name: emailed-infrastructure
+name: alecrae-infrastructure
 runtime:
   name: nodejs
   options:
     typescript: true
-description: Emailed AI-native email infrastructure platform — AWS cloud resources
+description: AlecRae AI-native email infrastructure platform — AWS cloud resources
 config:
   aws:region:
     default: us-east-1
-  emailed:environment:
+  alecrae:environment:
     default: dev
-  emailed:domain:
-    default: emailed.dev
+  alecrae:domain:
+    default: alecrae.dev

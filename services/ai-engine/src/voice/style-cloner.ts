@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Style Cloner (S4 — Voice Cloning for AI Replies)
+// @alecrae/ai-engine — Style Cloner (S4 — Voice Cloning for AI Replies)
 // =============================================================================
 // Extends the basic VoiceClone in cloner.ts with:
 // 1. Multi-profile support (professional, casual, etc.)
@@ -20,7 +20,7 @@ import {
 import type {
   StyleFingerprintData,
   ExtractedFeaturesData,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 

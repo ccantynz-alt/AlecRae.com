@@ -31,8 +31,8 @@ function toQuery(
  *
  * Usage:
  * ```ts
- * const emailed = new Emailed({ auth: { type: "apiKey", key: "em_live_..." } });
- * const stats = await emailed.analytics.delivery({
+ * const alecrae = new AlecRae({ auth: { type: "apiKey", key: "em_live_..." } });
+ * const stats = await alecrae.analytics.delivery({
  *   startDate: "2026-03-01",
  *   endDate: "2026-03-31",
  * });

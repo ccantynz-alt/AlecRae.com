@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
-import { Box, Text, Card, CardContent } from "@emailed/ui";
+import { Box, Text, Card, CardContent } from "@alecrae/ui";
 
 export const metadata: Metadata = {
-  title: "Data Processing Agreement | Emailed",
-  description: "GDPR-compliant Data Processing Agreement for Emailed business customers.",
+  title: "Data Processing Agreement | AlecRae",
+  description: "GDPR-compliant Data Processing Agreement for AlecRae business customers.",
 };
 
 function Section({ number, title, children }: { number: string; title: string; children: React.ReactNode }) {
@@ -46,14 +46,14 @@ export default function DpaPage() {
       <Card className="mb-8 border-blue-500/30 bg-blue-500/5">
         <CardContent className="p-4">
           <Text className="text-sm text-blue-700">
-            This Data Processing Agreement (&quot;DPA&quot;) forms part of the Terms of Service between Emailed, Inc. (&quot;Processor&quot; or &quot;Emailed&quot;) and the Customer (&quot;Controller&quot;) and governs the processing of personal data by Emailed on behalf of the Customer in connection with the Emailed email infrastructure platform.
+            This Data Processing Agreement (&quot;DPA&quot;) forms part of the Terms of Service between AlecRae, Inc. (&quot;Processor&quot; or &quot;AlecRae&quot;) and the Customer (&quot;Controller&quot;) and governs the processing of personal data by AlecRae on behalf of the Customer in connection with the AlecRae email infrastructure platform.
           </Text>
         </CardContent>
       </Card>
 
       <Section number="1" title="Definitions">
         <DefItem term="Controller">The Customer entity that determines the purposes and means of processing personal data through the Service, as defined in GDPR Article 4(7).</DefItem>
-        <DefItem term="Processor">Emailed, Inc., which processes personal data on behalf of the Controller, as defined in GDPR Article 4(8).</DefItem>
+        <DefItem term="Processor">AlecRae, Inc., which processes personal data on behalf of the Controller, as defined in GDPR Article 4(8).</DefItem>
         <DefItem term="Sub-processor">Any third party engaged by the Processor to process personal data on behalf of the Controller.</DefItem>
         <DefItem term="Data Subject">An identified or identifiable natural person whose personal data is processed through the Service.</DefItem>
         <DefItem term="Personal Data">Any information relating to a Data Subject, as defined in GDPR Article 4(1), that is processed through the Service.</DefItem>
@@ -213,7 +213,7 @@ export default function DpaPage() {
 
       <Box className="mt-12 pt-6 border-t border-border">
         <Text className="text-content-tertiary text-sm mb-4">
-          This Data Processing Agreement is effective as of the date the Controller begins using the Service. For questions about this DPA or to request a signed copy, contact legal@emailed.dev or dpo@emailed.dev.
+          This Data Processing Agreement is effective as of the date the Controller begins using the Service. For questions about this DPA or to request a signed copy, contact legal@alecrae.dev or dpo@alecrae.dev.
         </Text>
       </Box>
     </Box>

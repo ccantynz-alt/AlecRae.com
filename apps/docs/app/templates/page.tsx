@@ -3,8 +3,8 @@ import { PageHeader } from "../components/page-header";
 import { EndpointCard } from "../components/endpoint-card";
 
 export const metadata: Metadata = {
-  title: "Templates — Vienna API Docs",
-  description: "Email template CRUD, variable rendering, and template management through the Vienna API.",
+  title: "Templates — AlecRae API Docs",
+  description: "Email template CRUD, variable rendering, and template management through the AlecRae API.",
 };
 
 export default function TemplatesPage(): React.JSX.Element {
@@ -35,8 +35,8 @@ export default function TemplatesPage(): React.JSX.Element {
   "htmlBody": "<h1>Welcome, {{first_name}}</h1><p>Click <a href='{{verify_url}}'>here</a> to verify.</p>",
   "textBody": "Welcome, {{first_name}}! Verify your account: {{verify_url}}"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/templates \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/templates \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "name": "welcome_v3",
@@ -44,10 +44,10 @@ export default function TemplatesPage(): React.JSX.Element {
     "htmlBody": "<h1>Welcome, {{first_name}}</h1>",
     "textBody": "Welcome, {{first_name}}!"
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/templates", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/templates", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -60,9 +60,9 @@ export default function TemplatesPage(): React.JSX.Element {
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/templates",
+    "https://api.alecrae.com/v1/templates",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
@@ -94,17 +94,17 @@ template = response.json()["data"]`}
             { name: "limit", type: "integer", required: false, description: "Max items to return (1-100, default 20)" },
             { name: "name", type: "string", required: false, description: "Filter by template name (partial match)" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/templates?limit=10" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/templates?limit=10" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/templates?limit=10",
-  { headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY } }
+  "https://api.alecrae.com/v1/templates?limit=10",
+  { headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY } }
 );
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/templates",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/templates",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
     params={"limit": 10},
 )
 
@@ -138,18 +138,18 @@ templates = response.json()["data"]`}
     "verify_url": "https://yourdomain.com/verify?t=abc123"
   }
 }`}
-          curlExample={`curl -X POST "https://api.48co.ai/v1/templates/tmpl_01HXab/render" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST "https://api.alecrae.com/v1/templates/tmpl_01HXab/render" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "variables": { "first_name": "Ada", "company": "Acme Corp" }
   }'`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/templates/tmpl_01HXab/render",
+  "https://api.alecrae.com/v1/templates/tmpl_01HXab/render",
   {
     method: "POST",
     headers: {
-      "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+      "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -161,9 +161,9 @@ templates = response.json()["data"]`}
 const { data } = await response.json();
 console.log(data.subject); // "Welcome to Acme Corp, Ada!"`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/templates/tmpl_01HXab/render",
+    "https://api.alecrae.com/v1/templates/tmpl_01HXab/render",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={"variables": {"first_name": "Ada", "company": "Acme Corp"}},
@@ -192,22 +192,22 @@ print(rendered["subject"])`}
   "subject": "Welcome aboard, {{first_name}}!",
   "htmlBody": "<h1>Welcome aboard, {{first_name}}</h1>"
 }`}
-          curlExample={`curl -X PUT "https://api.48co.ai/v1/templates/tmpl_01HXab" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X PUT "https://api.alecrae.com/v1/templates/tmpl_01HXab" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "subject": "Welcome aboard, {{first_name}}!" }'`}
-          jsExample={`await fetch("https://api.48co.ai/v1/templates/tmpl_01HXab", {
+          jsExample={`await fetch("https://api.alecrae.com/v1/templates/tmpl_01HXab", {
   method: "PUT",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({ subject: "Welcome aboard, {{first_name}}!" }),
 });`}
           pythonExample={`requests.put(
-    "https://api.48co.ai/v1/templates/tmpl_01HXab",
+    "https://api.alecrae.com/v1/templates/tmpl_01HXab",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={"subject": "Welcome aboard, {{first_name}}!"},
@@ -230,15 +230,15 @@ print(rendered["subject"])`}
           parameters={[
             { name: "id", type: "string", required: true, description: "Template ID (path parameter)" },
           ]}
-          curlExample={`curl -X DELETE "https://api.48co.ai/v1/templates/tmpl_01HXab" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`await fetch("https://api.48co.ai/v1/templates/tmpl_01HXab", {
+          curlExample={`curl -X DELETE "https://api.alecrae.com/v1/templates/tmpl_01HXab" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`await fetch("https://api.alecrae.com/v1/templates/tmpl_01HXab", {
   method: "DELETE",
-  headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+  headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
 });`}
           pythonExample={`requests.delete(
-    "https://api.48co.ai/v1/templates/tmpl_01HXab",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/templates/tmpl_01HXab",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )`}
           responseExample={`{
   "success": true,

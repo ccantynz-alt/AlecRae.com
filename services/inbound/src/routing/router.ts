@@ -53,7 +53,7 @@ export class MailboxRouter {
     // Try database lookup
     if (process.env["DATABASE_URL"]) {
       try {
-        const { getDatabase, domains: domainsTable } = await import("@emailed/db");
+        const { getDatabase, domains: domainsTable } = await import("@alecrae/db");
         const db = getDatabase();
         const [row] = await db
           .select({

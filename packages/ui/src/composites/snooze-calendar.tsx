@@ -379,7 +379,7 @@ export const SnoozeCalendar = forwardRef<HTMLDivElement, SnoozeCalendarProps>(
         e.preventDefault();
         setDragOverDate(null);
 
-        const emailId = e.dataTransfer.getData("application/x-vienna-email-id") || dragEmailId;
+        const emailId = e.dataTransfer.getData("application/x-alecrae-email-id") || dragEmailId;
         if (!emailId) return;
 
         setSelectedDate(date);

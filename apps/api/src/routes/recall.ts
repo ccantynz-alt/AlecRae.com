@@ -16,7 +16,7 @@ import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, emails, recallRecords } from "@emailed/db";
+import { getDatabase, emails, recallRecords } from "@alecrae/db";
 import * as crypto from "node:crypto";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ recall.post(
       .limit(1);
 
     if (existing) {
-      const baseUrl = process.env["API_URL"] ?? "https://api.48co.ai";
+      const baseUrl = process.env["API_URL"] ?? "https://api.alecrae.com";
       return c.json({
         data: {
           emailId: input.emailId,
@@ -105,7 +105,7 @@ recall.post(
       })
       .returning();
 
-    const baseUrl = process.env["API_URL"] ?? "https://api.48co.ai";
+    const baseUrl = process.env["API_URL"] ?? "https://api.alecrae.com";
 
     return c.json({
       data: {
@@ -291,7 +291,7 @@ recall.get(
   </div>
   <div class="body">${body}</div>
   <div class="footer">
-    Sent via Vienna &middot; This email may be recalled by the sender at any time.
+    Sent via AlecRae &middot; This email may be recalled by the sender at any time.
   </div>
 </body>
 </html>`);

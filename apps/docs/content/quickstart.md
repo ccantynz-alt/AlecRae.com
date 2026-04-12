@@ -1,31 +1,31 @@
 # Quickstart
 
-Send your first email through the Vienna API in under five minutes.
+Send your first email through the AlecRae API in under five minutes.
 
 ## 1. Get an API key
 
-Sign in to the [Vienna dashboard](https://mail.48co.ai/settings/api), create a new API key, and copy it. Treat it like a password — anyone with the key can send mail on your behalf.
+Sign in to the [AlecRae dashboard](https://mail.alecrae.com/settings/api), create a new API key, and copy it. Treat it like a password — anyone with the key can send mail on your behalf.
 
 ```bash
-export VIENNA_API_KEY=vn_live_xxxxxxxxxxxxxxxxxxxxxxxx
+export ALECRAE_API_KEY=vn_live_xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ## 2. Verify a sending domain
 
-Before you can send from `you@yourdomain.com`, you need to verify the domain. Vienna will give you SPF, DKIM, and DMARC records to add to your DNS.
+Before you can send from `you@yourdomain.com`, you need to verify the domain. AlecRae will give you SPF, DKIM, and DMARC records to add to your DNS.
 
 See [Domains](/domains) for the full walkthrough.
 
 ## 3. Send a message
 
 ```bash
-curl https://api.48co.ai/v1/messages \
-  -H "Authorization: Bearer $VIENNA_API_KEY" \
+curl https://api.alecrae.com/v1/messages \
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "from": "you@yourdomain.com",
     "to": ["customer@example.com"],
-    "subject": "Hello from Vienna",
+    "subject": "Hello from AlecRae",
     "text": "It worked.",
     "html": "<p>It worked.</p>"
   }'

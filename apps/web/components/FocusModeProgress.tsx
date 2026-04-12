@@ -13,7 +13,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   SPRING_BOUNCY,
   scalePopIn,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 import { useFocusMode } from "../lib/focus-mode";
@@ -23,7 +23,7 @@ export interface FocusModeProgressProps {
 }
 
 export function FocusModeProgress({ className }: FocusModeProgressProps): JSX.Element {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const totalImportant = useFocusMode((s) => s.totalImportant);
   const reviewedCount = useFocusMode((s) => s.reviewedCount);
 

@@ -1,23 +1,23 @@
 openapi: 3.1.0
 info:
-  title: Emailed API
+  title: AlecRae API
   description: |
-    The Emailed API provides programmatic access to the Emailed email
+    The AlecRae API provides programmatic access to the AlecRae email
     infrastructure platform. Send transactional and bulk emails, manage
     domains, configure webhooks, and query analytics.
   version: 0.1.0
   contact:
-    name: Vienna Support
-    url: https://48co.ai/support
-    email: support@48co.ai
+    name: AlecRae Support
+    url: https://alecrae.com/support
+    email: support@alecrae.com
   license:
     name: Proprietary
-    url: https://emailed.dev/terms
+    url: https://alecrae.dev/terms
 
 servers:
-  - url: https://api.48co.ai
+  - url: https://api.alecrae.com
     description: Production
-  - url: https://api.staging.48co.ai
+  - url: https://api.staging.alecrae.com
     description: Staging
   - url: http://localhost:3001
     description: Local development
@@ -80,7 +80,7 @@ paths:
                     example: ok
                   service:
                     type: string
-                    example: emailed-api
+                    example: alecrae-api
                   version:
                     type: string
                     example: 0.1.0
@@ -1267,7 +1267,7 @@ components:
           type: string
           maxLength: 998
           description: Email subject line
-          example: Welcome to Emailed
+          example: Welcome to AlecRae
         textBody:
           type: string
           description: Plain text body
@@ -1392,7 +1392,7 @@ components:
           type: string
           format: uri
           description: The HTTPS URL to receive webhook events
-          example: https://example.com/webhooks/emailed
+          example: https://example.com/webhooks/alecrae
         events:
           type: array
           items:

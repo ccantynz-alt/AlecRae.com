@@ -1,11 +1,11 @@
 /**
- * Vienna Mobile — Root Layout
+ * AlecRae Mobile — Root Layout
  *
  * Handles:
  *   - Theme (light/dark/system)
  *   - Auth state (redirect to login if not authenticated)
  *   - Push notifications setup
- *   - Deep linking (mailto:, vienna://)
+ *   - Deep linking (mailto:, alecrae://)
  *   - Splash screen hold until auth is resolved
  */
 

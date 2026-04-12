@@ -13,7 +13,7 @@
  *   - Escape key to exit
  *
  * The aesthetic: dark gradient, ambient blurred blobs, translucent surfaces,
- * white-on-blue typography. Vienna at its most focused.
+ * white-on-blue typography. AlecRae at its most focused.
  */
 
 import type { JSX, ReactNode } from "react";
@@ -25,7 +25,7 @@ import {
   modalEnter,
   SPRING_SOFT,
   staggerChildren,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 import {
@@ -80,7 +80,7 @@ export function FocusModeOverlay({
   const markReviewed = useFocusMode((s) => s.markReviewed);
   const selectEmail = useFocusMode((s) => s.selectEmail);
   const selectedEmailId = useFocusMode((s) => s.selectedEmailId);
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
 
   // Track which emails have been reviewed in this session
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());

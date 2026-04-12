@@ -60,7 +60,7 @@ function createMockDb() {
 
 let mockDb = createMockDb();
 
-vi.mock("@emailed/db", () => ({
+vi.mock("@alecrae/db", () => ({
   getDatabase: () => mockDb,
   events: {
     id: "id",

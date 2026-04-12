@@ -1,9 +1,9 @@
 /**
- * Vienna Programmable Email — Public Types
+ * AlecRae Programmable Email — Public Types
  *
  * These types are exposed to user-authored TypeScript snippets that run
- * inside the Vienna sandbox on every email. They are also published as a
- * standalone declaration package (`@vienna/programs`) so users get full
+ * inside the AlecRae sandbox on every email. They are also published as a
+ * standalone declaration package (`@alecrae/programs`) so users get full
  * IntelliSense in their editor.
  *
  * @example A minimal user program

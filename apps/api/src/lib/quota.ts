@@ -10,7 +10,7 @@
 
 import Redis from "ioredis";
 import { eq, and, gte, sql } from "drizzle-orm";
-import { getDatabase, accounts, events } from "@emailed/db";
+import { getDatabase, accounts, events } from "@alecrae/db";
 import { PLANS } from "./billing.js";
 import type { PlanId } from "./billing.js";
 

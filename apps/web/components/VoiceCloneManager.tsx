@@ -21,7 +21,7 @@ import {
   Card,
   CardHeader,
   CardContent,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import { voiceCloneApi } from "../lib/api";
 
 // ─── Types ──────────────────────────────────────────────────────────────────

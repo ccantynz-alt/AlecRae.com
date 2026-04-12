@@ -2,7 +2,7 @@
  * AI Unsubscribe Agent Routes
  *
  * One-click, AI-driven unsubscribe. The user clicks "Unsubscribe" once and
- * Vienna's agent does the rest:
+ * AlecRae's agent does the rest:
  *
  *   POST /v1/unsubscribe/extract  — Inspect an email, list every option
  *   POST /v1/unsubscribe/execute  — Run the best option for one email
@@ -26,9 +26,9 @@ import {
   sendOneClickUnsubscribe,
   type UnsubscribeOption,
   type ExtractEmailInput,
-} from "@emailed/ai-engine/unsubscribe";
+} from "@alecrae/ai-engine/unsubscribe";
 import { getSendQueue } from "../lib/queue.js";
-import { getDatabase, unsubscribeHistory, emails } from "@emailed/db";
+import { getDatabase, unsubscribeHistory, emails } from "@alecrae/db";
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 

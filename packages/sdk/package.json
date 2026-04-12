@@ -1,7 +1,7 @@
 {
-  "name": "@emailed/sdk",
+  "name": "@alecrae/sdk",
   "version": "0.1.0",
-  "description": "Official Node.js SDK for the Emailed email infrastructure platform",
+  "description": "Official Node.js SDK for the AlecRae email infrastructure platform",
   "type": "module",
   "exports": {
     ".": {
@@ -27,13 +27,13 @@
     "smtp",
     "api",
     "sdk",
-    "emailed",
+    "alecrae",
     "transactional-email",
     "email-api"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/emailed/emailed",
+    "url": "https://github.com/alecrae/alecrae",
     "directory": "packages/sdk"
   },
   "license": "MIT",
@@ -50,7 +50,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@emailed/shared": "workspace:*"
+    "@alecrae/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

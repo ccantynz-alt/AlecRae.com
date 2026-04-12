@@ -1,5 +1,5 @@
 /**
- * @emailed/analytics - AI-Generated Insights
+ * @alecrae/analytics - AI-Generated Insights
  *
  * Automatically identifies trends, anomalies, and opportunities.
  * Uses statistical methods for anomaly detection and trend analysis,

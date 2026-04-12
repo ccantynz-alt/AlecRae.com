@@ -1,5 +1,5 @@
 /**
- * AI Inbox Agent — Vienna's Flagship Overnight Brain
+ * AI Inbox Agent — AlecRae's Flagship Overnight Brain
  * =====================================================================
  *
  * WHAT IT IS
@@ -269,7 +269,7 @@ export class InboxAgent {
    */
   private async triageBatchWithClaude(batch: AgentEmail[]): Promise<TriageDecision[]> {
     const system = [
-      "You are Vienna's Inbox Agent — an autonomous email triage system.",
+      "You are AlecRae's Inbox Agent — an autonomous email triage system.",
       "You will receive a batch of emails and must classify each one.",
       "Be skeptical of senders. Be conservative with `needsReply`. Be honest about confidence.",
       "Phishing red flags: spoofed sender domains, urgent money requests, mismatched display names,",
@@ -389,7 +389,7 @@ export class InboxAgent {
     morningHour: number,
   ): Promise<DraftedReply> {
     const system = [
-      "You are Vienna's drafting agent. Write a reply to the email below.",
+      "You are AlecRae's drafting agent. Write a reply to the email below.",
       "Match the user's voice profile EXACTLY — greeting, signoff, sentence length, formality.",
       "Be concise. Do not invent facts. If you can't honestly write a reply without more info,",
       "respond with the literal token NEED_MORE_INFO and nothing else.",
@@ -515,7 +515,7 @@ export class InboxAgent {
 
     try {
       const system = [
-        "You are Vienna's morning briefing writer.",
+        "You are AlecRae's morning briefing writer.",
         "Compose a SHORT, scannable markdown briefing for the user.",
         "Open with the most important things. Use H2 sections, bullet points, and bold sparingly.",
         "Never invent emails or commitments — only use what's in the structured report below.",
@@ -644,7 +644,7 @@ function buildBriefingHeader(report: AgentReport): string {
   return [
     `# Morning Briefing — ${date}`,
     "",
-    `_Vienna's Inbox Agent processed **${report.totalProcessed}** emails overnight in ${(report.durationMs / 1000).toFixed(1)}s._`,
+    `_AlecRae's Inbox Agent processed **${report.totalProcessed}** emails overnight in ${(report.durationMs / 1000).toFixed(1)}s._`,
     "",
     `**${report.stats.urgent}** urgent · **${report.stats.needsReply}** need reply · ` +
     `**${report.stats.drafted}** drafted · **${report.stats.suspicious}** suspicious · ` +

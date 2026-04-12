@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Vienna UI — SwipeableEmailRow
+ * AlecRae UI — SwipeableEmailRow
  *
  * A platform-agnostic email list row with swipe gesture support for
  * quick actions. On touch devices it responds to horizontal swipe gestures;

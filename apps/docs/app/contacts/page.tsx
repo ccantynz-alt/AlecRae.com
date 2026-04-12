@@ -3,8 +3,8 @@ import { PageHeader } from "../components/page-header";
 import { EndpointCard } from "../components/endpoint-card";
 
 export const metadata: Metadata = {
-  title: "Contacts — Vienna API Docs",
-  description: "Contact management, address book, and contact search through the Vienna API.",
+  title: "Contacts — AlecRae API Docs",
+  description: "Contact management, address book, and contact search through the AlecRae API.",
 };
 
 export default function ContactsPage(): React.JSX.Element {
@@ -29,21 +29,21 @@ export default function ContactsPage(): React.JSX.Element {
             { name: "group", type: "string", required: false, description: "Filter by contact group" },
             { name: "sort", type: "string", required: false, description: "Sort by: name, email, lastContacted, createdAt" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/contacts?q=alice&limit=10" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/contacts?q=alice&limit=10" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/contacts?q=alice&limit=10",
+  "https://api.alecrae.com/v1/contacts?q=alice&limit=10",
   {
     headers: {
-      "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+      "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     },
   }
 );
 
 const { data, cursor, hasMore } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/contacts",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/contacts",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
     params={"q": "alice", "limit": 10},
 )
 
@@ -90,8 +90,8 @@ contacts = response.json()["data"]`}
   "groups": ["work", "vip"],
   "notes": "Met at the conference in March"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/contacts \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/contacts \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "email": "alice@example.com",
@@ -99,10 +99,10 @@ contacts = response.json()["data"]`}
     "company": "Acme Corp",
     "groups": ["work"]
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/contacts", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/contacts", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -115,9 +115,9 @@ contacts = response.json()["data"]`}
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/contacts",
+    "https://api.alecrae.com/v1/contacts",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
@@ -149,19 +149,19 @@ contact = response.json()["data"]`}
           parameters={[
             { name: "id", type: "string", required: true, description: "Contact ID (path parameter)" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/contacts/ct_01HXab" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/contacts/ct_01HXab" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/contacts/ct_01HXab",
+  "https://api.alecrae.com/v1/contacts/ct_01HXab",
   {
-    headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+    headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
   }
 );
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/contacts/ct_01HXab",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/contacts/ct_01HXab",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 contact = response.json()["data"]`}
@@ -194,14 +194,14 @@ contact = response.json()["data"]`}
   "company": "New Corp",
   "groups": ["work", "vip", "partners"]
 }`}
-          curlExample={`curl -X PUT "https://api.48co.ai/v1/contacts/ct_01HXab" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X PUT "https://api.alecrae.com/v1/contacts/ct_01HXab" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "company": "New Corp", "groups": ["work", "vip", "partners"] }'`}
-          jsExample={`await fetch("https://api.48co.ai/v1/contacts/ct_01HXab", {
+          jsExample={`await fetch("https://api.alecrae.com/v1/contacts/ct_01HXab", {
   method: "PUT",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -210,9 +210,9 @@ contact = response.json()["data"]`}
   }),
 });`}
           pythonExample={`requests.put(
-    "https://api.48co.ai/v1/contacts/ct_01HXab",
+    "https://api.alecrae.com/v1/contacts/ct_01HXab",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={"company": "New Corp", "groups": ["work", "vip", "partners"]},
@@ -237,15 +237,15 @@ contact = response.json()["data"]`}
           parameters={[
             { name: "id", type: "string", required: true, description: "Contact ID (path parameter)" },
           ]}
-          curlExample={`curl -X DELETE "https://api.48co.ai/v1/contacts/ct_01HXab" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`await fetch("https://api.48co.ai/v1/contacts/ct_01HXab", {
+          curlExample={`curl -X DELETE "https://api.alecrae.com/v1/contacts/ct_01HXab" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`await fetch("https://api.alecrae.com/v1/contacts/ct_01HXab", {
   method: "DELETE",
-  headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+  headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
 });`}
           pythonExample={`requests.delete(
-    "https://api.48co.ai/v1/contacts/ct_01HXab",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/contacts/ct_01HXab",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )`}
           responseExample={`{
   "success": true,

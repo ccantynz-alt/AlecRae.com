@@ -17,7 +17,7 @@ let mockAccountPlanTier = "free";
 let mockStorageUsedBytes = 0;
 let lastSetValues: Record<string, unknown> = {};
 
-vi.mock("@emailed/db", () => {
+vi.mock("@alecrae/db", () => {
   return {
     getDatabase: vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
@@ -130,7 +130,7 @@ describe("Per-User R2 Storage Quota Enforcement", () => {
   describe("incrementStorageUsage / decrementStorageUsage", () => {
     it("should call update with correct increment", async () => {
       const { incrementStorageUsage } = await import("../src/lib/storage-quota.js");
-      const { getDatabase } = await import("@emailed/db");
+      const { getDatabase } = await import("@alecrae/db");
 
       await incrementStorageUsage("acct_001", 5000);
 
@@ -139,7 +139,7 @@ describe("Per-User R2 Storage Quota Enforcement", () => {
 
     it("should call update with correct decrement", async () => {
       const { decrementStorageUsage } = await import("../src/lib/storage-quota.js");
-      const { getDatabase } = await import("@emailed/db");
+      const { getDatabase } = await import("@alecrae/db");
 
       await decrementStorageUsage("acct_001", 3000);
 

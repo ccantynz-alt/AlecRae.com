@@ -4,8 +4,8 @@ import { EndpointCard } from "../components/endpoint-card";
 import { Callout } from "../components/callout";
 
 export const metadata: Metadata = {
-  title: "Search — Vienna API Docs",
-  description: "Full-text search, AI-powered natural language search, and semantic search through the Vienna API.",
+  title: "Search — AlecRae API Docs",
+  description: "Full-text search, AI-powered natural language search, and semantic search through the AlecRae API.",
 };
 
 export default function SearchPage(): React.JSX.Element {
@@ -18,7 +18,7 @@ export default function SearchPage(): React.JSX.Element {
       />
 
       <Callout type="tip" title="Three search modes">
-        Vienna offers three search modes: keyword (fast full-text), natural language (AI interprets your intent), and semantic (meaning-based vector search).
+        AlecRae offers three search modes: keyword (fast full-text), natural language (AI interprets your intent), and semantic (meaning-based vector search).
         The API automatically selects the best mode based on your query, or you can specify one explicitly.
       </Callout>
 
@@ -39,25 +39,25 @@ export default function SearchPage(): React.JSX.Element {
             { name: "limit", type: "integer", required: false, description: "Max results (1-100, default 20)" },
             { name: "offset", type: "integer", required: false, description: "Offset for pagination (default 0)" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/messages/search?q=invoice+Q1&mailbox=inbox&has_attachment=true&limit=10" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/messages/search?q=invoice+Q1&mailbox=inbox&has_attachment=true&limit=10" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/messages/search?" + new URLSearchParams({
+  "https://api.alecrae.com/v1/messages/search?" + new URLSearchParams({
     q: "invoice Q1",
     mailbox: "inbox",
     has_attachment: "true",
     limit: "10",
   }),
   {
-    headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+    headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
   }
 );
 
 const { data, totalHits, processingTimeMs } = await response.json();
 console.log("Found " + totalHits + " results in " + processingTimeMs + "ms");`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/messages/search",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/messages/search",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
     params={
         "q": "invoice Q1",
         "mailbox": "inbox",
@@ -100,16 +100,16 @@ print(f"Found {result['totalHits']} in {result['processingTimeMs']}ms")`}
   "query": "emails from Alice about the budget that had attachments, sent last week",
   "limit": 10
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/search/natural \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/search/natural \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "query": "emails from Alice about the budget that had attachments, sent last week"
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/search/natural", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/search/natural", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -119,9 +119,9 @@ print(f"Found {result['totalHits']} in {result['processingTimeMs']}ms")`}
 
 const { data, interpretation } = await response.json();`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/search/natural",
+    "https://api.alecrae.com/v1/search/natural",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
@@ -168,17 +168,17 @@ print(result["interpretation"])  # Shows how AI parsed the query`}
   "limit": 5,
   "threshold": 0.6
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/search/semantic \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/search/semantic \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "query": "someone mentioned we should reconsider the quarterly spending plan",
     "threshold": 0.6
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/search/semantic", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/search/semantic", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -189,9 +189,9 @@ print(result["interpretation"])  # Shows how AI parsed the query`}
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/search/semantic",
+    "https://api.alecrae.com/v1/search/semantic",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={

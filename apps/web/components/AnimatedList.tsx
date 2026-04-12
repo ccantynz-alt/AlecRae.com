@@ -19,7 +19,7 @@ import {
   staggerFast,
   staggerListItems,
   staggerSlow,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 
@@ -59,7 +59,7 @@ export function AnimatedList({
   layoutAnimated = true,
   itemVariants: customItemVariants,
 }: AnimatedListProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const parentVariants = staggerPresets[speed];
   const baseItemVariants = customItemVariants ?? (emailMode ? emailListItem : listItemEnter);
   const childVariants = withReducedMotion(baseItemVariants, reduced);

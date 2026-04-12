@@ -14,8 +14,8 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@emailed/ui": ["../../packages/ui/src"],
-      "@emailed/ui/*": ["../../packages/ui/src/*"]
+      "@alecrae/ui": ["../../packages/ui/src"],
+      "@alecrae/ui/*": ["../../packages/ui/src/*"]
     }
   },
   "include": [

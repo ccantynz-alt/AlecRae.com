@@ -9,7 +9,7 @@
 
 import * as jose from "jose";
 import { eq, and, isNull } from "drizzle-orm";
-import { getDatabase, refreshTokens, users, accounts } from "@emailed/db";
+import { getDatabase, refreshTokens, users, accounts } from "@alecrae/db";
 
 // ─── Key management ──────────────────────────────────────────────────────────
 

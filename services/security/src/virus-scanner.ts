@@ -1,5 +1,5 @@
 /**
- * @emailed/security — VirusTotal Attachment Scanner
+ * @alecrae/security — VirusTotal Attachment Scanner
  *
  * Integrates with VirusTotal API v3 for async attachment virus scanning.
  * Uses SHA-256 hash lookups first (cache hit), then uploads unknown files.

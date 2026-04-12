@@ -14,7 +14,7 @@ import { motion } from "motion/react";
 import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import {
   SPRING_MICRO,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
 } from "../lib/animations";
 
 export interface PressableScaleProps {
@@ -51,7 +51,7 @@ export function PressableScale({
   tabIndex,
   type = "button",
 }: PressableScaleProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
 
   const handleKeyDown = (e: KeyboardEvent<HTMLElement>): void => {
     if (onClick && (e.key === "Enter" || e.key === " ")) {

@@ -32,7 +32,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Check for auth token in cookies
-  const token = request.cookies.get("emailed_session")?.value;
+  const token = request.cookies.get("alecrae_session")?.value;
 
   if (!token) {
     // Redirect to login with return URL

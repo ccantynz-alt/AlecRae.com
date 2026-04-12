@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Entry Screen
+ * AlecRae Mobile — Entry Screen
  *
  * Routes the user to the appropriate destination:
  *   - If authenticated: redirect to inbox tabs
@@ -57,7 +57,7 @@ function ComingSoonContent(): React.ReactElement {
     <View style={styles.container}>
       <View style={styles.content}>
         {/* Logo */}
-        <Text style={styles.logo}>Vienna</Text>
+        <Text style={styles.logo}>AlecRae</Text>
 
         {/* Tagline */}
         <Text style={styles.tagline}>Email, finally.</Text>
@@ -88,7 +88,7 @@ function ComingSoonContent(): React.ReactElement {
         </View>
 
         {/* Footer */}
-        <Text style={styles.footer}>2026 Vienna. The reinvention of email.</Text>
+        <Text style={styles.footer}>2026 AlecRae. The reinvention of email.</Text>
       </View>
     </View>
   );

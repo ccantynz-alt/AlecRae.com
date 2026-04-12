@@ -36,7 +36,7 @@ const FILTERS: ReadonlyArray<{ readonly id: ReleaseType | "all"; readonly label:
 
 // ─── Last visit tracking ────────────────────────────────────────────────────
 
-const LAST_VISIT_KEY = "vienna_changelog_last_visit";
+const LAST_VISIT_KEY = "alecrae_changelog_last_visit";
 
 function getLastVisitedAt(): string | null {
   if (typeof window === "undefined") return null;

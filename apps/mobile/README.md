@@ -1,4 +1,4 @@
-# Vienna Mobile
+# AlecRae Mobile
 
 Native iOS and Android email client built with Expo + React Native.
 
@@ -9,7 +9,7 @@ Native iOS and Android email client built with Expo + React Native.
 - **Push notifications** via Expo / FCM / APNs
 - **Biometric unlock** (Face ID, Touch ID, Android fingerprint)
 - **Haptic feedback** on actions
-- **Deep linking** (mailto:, vienna://)
+- **Deep linking** (mailto:, alecrae://)
 - **Offline support** via local cache
 - **OTA updates** via Expo EAS Update
 

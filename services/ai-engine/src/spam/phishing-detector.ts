@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Phishing Detection Engine
+// @alecrae/ai-engine — Phishing Detection Engine
 // =============================================================================
 // Multi-signal phishing detector: URL analysis, domain spoofing detection,
 // content pattern matching, and urgency language detection.

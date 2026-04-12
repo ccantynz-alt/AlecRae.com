@@ -1,5 +1,5 @@
 {
-  "name": "@emailed/imap",
+  "name": "@alecrae/imap",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,8 +15,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@emailed/shared": "workspace:*",
-    "@emailed/db": "workspace:*"
+    "@alecrae/shared": "workspace:*",
+    "@alecrae/db": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",

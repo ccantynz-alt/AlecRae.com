@@ -1,10 +1,10 @@
 /**
  * PostgreSQL-backed email storage for inbound emails.
- * Implements the EmailStore interface using @emailed/db (Drizzle ORM).
+ * Implements the EmailStore interface using @alecrae/db (Drizzle ORM).
  */
 
 import { eq, and, desc, sql } from "drizzle-orm";
-import { getDatabase, emails, attachments, domains } from "@emailed/db";
+import { getDatabase, emails, attachments, domains } from "@alecrae/db";
 import type {
   ParsedEmail,
   StoredEmail,
@@ -12,7 +12,7 @@ import type {
   FilterVerdict,
 } from "../types.js";
 import type { EmailStore } from "./store.js";
-import { indexEmail } from "@emailed/shared";
+import { indexEmail } from "@alecrae/shared";
 
 function generateId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));

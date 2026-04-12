@@ -51,7 +51,7 @@ const TEST_ACCOUNT = {
   planTier: "pro",
 };
 
-vi.mock("@emailed/db", () => {
+vi.mock("@alecrae/db", () => {
   const mockInsert = vi.fn().mockImplementation(() => ({
     values: vi.fn().mockImplementation((values: Record<string, unknown>) => {
       if (values["tokenHash"]) {

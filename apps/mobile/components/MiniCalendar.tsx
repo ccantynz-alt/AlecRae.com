@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — MiniCalendar
+ * AlecRae Mobile — MiniCalendar
  *
  * Compact 30-day forward calendar grid used as a drop target for the
  * drag-to-snooze interaction. Each cell exposes its layout (page-relative

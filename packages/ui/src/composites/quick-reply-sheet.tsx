@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Vienna UI — QuickReplySheet
+ * AlecRae UI — QuickReplySheet
  *
  * A bottom sheet overlay for quick email replies. Appears when the user
  * swipes to reply, presenting:

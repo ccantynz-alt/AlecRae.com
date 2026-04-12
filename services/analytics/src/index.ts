@@ -1,8 +1,8 @@
 /**
- * @emailed/analytics - Analytics Service
+ * @alecrae/analytics - Analytics Service
  *
  * Event tracking, reporting, AI-generated insights, and data export
- * for the Emailed email infrastructure platform.
+ * for the AlecRae email infrastructure platform.
  */
 
 export {

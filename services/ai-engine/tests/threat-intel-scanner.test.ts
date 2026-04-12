@@ -17,7 +17,7 @@ function makeEmail(overrides: Record<string, unknown> = {}) {
         domain: 'example.com',
         name: 'Sender',
       },
-      to: [{ address: 'user@emailed.com', domain: 'emailed.com', name: 'User' }],
+      to: [{ address: 'user@alecrae.com', domain: 'alecrae.com', name: 'User' }],
       receivedChain: (overrides['receivedChain'] as unknown[]) ?? [
         { from: '10.0.0.1', by: '10.0.0.2', timestamp: new Date(), tlsVersion: 'TLSv1.3' },
       ],

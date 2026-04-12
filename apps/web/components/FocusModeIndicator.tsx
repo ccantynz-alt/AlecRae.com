@@ -12,7 +12,7 @@
 
 import type { JSX } from "react";
 import { motion } from "motion/react";
-import { SPRING_SNAPPY, useViennaReducedMotion } from "../lib/animations";
+import { SPRING_SNAPPY, useAlecRaeReducedMotion } from "../lib/animations";
 import { useFocusMode } from "../lib/focus-mode";
 
 export interface FocusModeIndicatorProps {
@@ -26,7 +26,7 @@ export function FocusModeIndicator({ className }: FocusModeIndicatorProps): JSX.
   const reviewedCount = useFocusMode((s) => s.reviewedCount);
   const totalImportant = useFocusMode((s) => s.totalImportant);
   const timerRunning = useFocusMode((s) => s.timerRunning);
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
 
   const baseClass =
     "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium " +

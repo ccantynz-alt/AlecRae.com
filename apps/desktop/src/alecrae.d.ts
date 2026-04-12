@@ -1,11 +1,11 @@
 /**
- * Vienna Desktop — Global type declarations
+ * AlecRae Desktop — Global type declarations
  *
- * Extends the Window interface with the `vienna` API
+ * Extends the Window interface with the `alecrae` API
  * exposed via contextBridge in the preload script.
  */
 
-interface ViennaDesktopAPI {
+interface AlecRaeDesktopAPI {
   /** Update the dock/taskbar badge with unread count */
   updateBadge: (count: number) => void;
 
@@ -65,8 +65,8 @@ interface ViennaDesktopAPI {
 
 declare global {
   interface Window {
-    vienna?: ViennaDesktopAPI;
+    alecrae?: AlecRaeDesktopAPI;
   }
 }
 
-export type { ViennaDesktopAPI };
+export type { AlecRaeDesktopAPI };

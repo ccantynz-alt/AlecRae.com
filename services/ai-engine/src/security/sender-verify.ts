@@ -1,5 +1,5 @@
 /**
- * @emailed/ai-engine — Real-Time Sender Verification (B5)
+ * @alecrae/ai-engine — Real-Time Sender Verification (B5)
  *
  * Verifies a sender's legitimacy using SPF/DKIM/DMARC headers, domain age via
  * WHOIS, MX presence via DNS, a known-services registry, and a heuristic

@@ -80,17 +80,17 @@ import { Events } from "./resources/events.js";
 import { Billing } from "./resources/billing.js";
 
 /**
- * Configuration accepted by the `Emailed` convenience client.
+ * Configuration accepted by the `AlecRae` convenience client.
  *
  * Supports both the full `ClientConfig` format and the simpler
  * `{ apiKey: string }` shorthand.
  */
-export type EmailedConfig = ClientConfig | SimpleClientConfig;
+export type AlecRaeConfig = ClientConfig | SimpleClientConfig;
 
 /**
  * Normalise a user-supplied config into a full `ClientConfig`.
  */
-function normaliseConfig(config: EmailedConfig): ClientConfig {
+function normaliseConfig(config: AlecRaeConfig): ClientConfig {
   if ("apiKey" in config) {
     const result: ClientConfig = {
       auth: { type: "apiKey", key: config.apiKey },
@@ -109,40 +109,40 @@ function normaliseConfig(config: EmailedConfig): ClientConfig {
 }
 
 /**
- * The main Emailed SDK client.
+ * The main AlecRae SDK client.
  *
  * Provides access to all API resources through a single entry point.
  *
  * Usage:
  * ```ts
- * import { Emailed } from "@emailed/sdk";
+ * import { AlecRae } from "@alecrae/sdk";
  *
  * // Simple — just pass an API key
- * const emailed = new Emailed({ apiKey: "em_live_..." });
+ * const alecrae = new AlecRae({ apiKey: "em_live_..." });
  *
  * // Full config
- * const emailed2 = new Emailed({
+ * const alecrae2 = new AlecRae({
  *   auth: { type: "apiKey", key: "em_live_..." },
- *   baseUrl: "https://api.48co.ai",
+ *   baseUrl: "https://api.alecrae.com",
  *   debug: true,
  * });
  *
  * // Send an email
- * const result = await emailed.messages.send({
+ * const result = await alecrae.messages.send({
  *   from: { address: "hello@example.com" },
  *   to: [{ address: "alice@example.com" }],
- *   subject: "Hello from Emailed",
+ *   subject: "Hello from AlecRae",
  *   textBody: "Welcome to the platform!",
  * });
  *
  * // Check delivery analytics
- * const stats = await emailed.analytics.delivery({
+ * const stats = await alecrae.analytics.delivery({
  *   startDate: "2026-03-01",
  *   endDate: "2026-03-31",
  * });
  * ```
  */
-export class Emailed {
+export class AlecRae {
   private readonly client: ApiClient;
 
   /** Email message operations (send, retrieve, list, search). */
@@ -166,7 +166,7 @@ export class Emailed {
   /** Billing usage and plan information. */
   readonly billing: Billing;
 
-  constructor(config: EmailedConfig) {
+  constructor(config: AlecRaeConfig) {
     this.client = new ApiClient(normaliseConfig(config));
     this.messages = new Messages(this.client);
     this.domains = new Domains(this.client);

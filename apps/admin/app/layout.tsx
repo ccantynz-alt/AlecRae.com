@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import { ThemeProvider, Box } from "@emailed/ui";
+import { ThemeProvider, Box } from "@alecrae/ui";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vienna Admin - AI-Powered Email Infrastructure Dashboard",
-  description: "Monitor and manage the Vienna platform. AI-powered insights, reputation management, and real-time operational intelligence.",
+  title: "AlecRae Admin - AI-Powered Email Infrastructure Dashboard",
+  description: "Monitor and manage the AlecRae platform. AI-powered insights, reputation management, and real-time operational intelligence.",
 };
 
 export default function AdminLayout({

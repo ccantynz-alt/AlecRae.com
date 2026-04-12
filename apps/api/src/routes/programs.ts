@@ -114,7 +114,7 @@ const SampleAddressSchema = z.object({
 
 const SampleEmailSchema = z.object({
   id: z.string().default(() => generateId()),
-  messageId: z.string().default(() => `<${generateId()}@vienna.local>`),
+  messageId: z.string().default(() => `<${generateId()}@alecrae.local>`),
   threadId: z.string().nullable().default(null),
   from: SampleAddressSchema,
   to: z.array(SampleAddressSchema).default([]),

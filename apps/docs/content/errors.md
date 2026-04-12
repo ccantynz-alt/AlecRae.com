@@ -1,6 +1,6 @@
 # Errors
 
-The Vienna API uses conventional HTTP status codes and a consistent JSON error shape.
+The AlecRae API uses conventional HTTP status codes and a consistent JSON error shape.
 
 ## Error shape
 
@@ -31,8 +31,8 @@ Always include the `request_id` when contacting support.
 | `409 Conflict` | Idempotency key reused with a different payload |
 | `422 Unprocessable Entity` | Semantically invalid (e.g. unverified domain) |
 | `429 Too Many Requests` | Rate limit exceeded — see `Retry-After` |
-| `500 Internal Server Error` | Vienna's fault — retry with backoff |
-| `503 Service Unavailable` | Vienna is degraded — see status.48co.ai |
+| `500 Internal Server Error` | AlecRae's fault — retry with backoff |
+| `503 Service Unavailable` | AlecRae is degraded — see status.alecrae.com |
 
 ## Common error codes
 

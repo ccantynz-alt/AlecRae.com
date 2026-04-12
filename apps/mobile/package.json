@@ -1,8 +1,8 @@
 {
-  "name": "@vienna/mobile",
+  "name": "@alecrae/mobile",
   "version": "0.1.0",
   "private": true,
-  "description": "Vienna Mobile — iOS and Android email client built with Expo + React Native",
+  "description": "AlecRae Mobile — iOS and Android email client built with Expo + React Native",
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",

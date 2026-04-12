@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Box, Text, Button, Input } from "@emailed/ui";
+import { Box, Text, Button, Input } from "@alecrae/ui";
 import { ssoClient } from "../../lib/sso";
 
 function SsoIcon(): React.ReactElement {
@@ -91,7 +91,7 @@ export default function LoginPage(): React.ReactElement {
 
     // Store the API key and redirect
     if (typeof window !== "undefined") {
-      localStorage.setItem("emailed_admin_key", apiKey.trim());
+      localStorage.setItem("alecrae_admin_key", apiKey.trim());
     }
     window.location.href = "/";
   }, [apiKey]);
@@ -119,7 +119,7 @@ export default function LoginPage(): React.ReactElement {
             </Text>
           </Box>
           <Text variant="heading-lg" className="text-content font-bold">
-            Vienna Admin
+            AlecRae Admin
           </Text>
           <Text variant="body-sm" className="text-content-secondary mt-1">
             Sign in to the administration dashboard
@@ -275,7 +275,7 @@ export default function LoginPage(): React.ReactElement {
             Need help? Contact your organization administrator or visit{" "}
             <Box
               as="a"
-              href="https://docs.48co.ai/admin/sso"
+              href="https://docs.alecrae.com/admin/sso"
               className="text-brand-400 hover:text-brand-300 transition-colors"
               target="_blank"
               rel="noopener noreferrer"

@@ -11,7 +11,7 @@
 
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
-import { getDatabase, emails, events } from "@emailed/db";
+import { getDatabase, emails, events } from "@alecrae/db";
 import { enqueueWebhookDelivery } from "../lib/webhook-dispatcher.js";
 
 const tracking = new Hono();

@@ -19,7 +19,7 @@ import {
   scalePopIn,
   SPRING_SNAPPY,
   SPRING_SOFT,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 import { FOCUS_TIMER_PRESETS, useFocusMode } from "../lib/focus-mode";
@@ -106,7 +106,7 @@ export interface FocusModeTimerProps {
 }
 
 export function FocusModeTimer({ className }: FocusModeTimerProps): JSX.Element {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const timerDuration = useFocusMode((s) => s.timerDuration);
   const timerRemaining = useFocusMode((s) => s.timerRemaining);
   const timerRunning = useFocusMode((s) => s.timerRunning);

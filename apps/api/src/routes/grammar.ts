@@ -9,7 +9,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { checkGrammar } from "@emailed/ai-engine/grammar";
+import { checkGrammar } from "@alecrae/ai-engine/grammar";
 
 const GrammarCheckSchema = z.object({
   text: z.string().min(1).max(50000),

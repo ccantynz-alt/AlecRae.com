@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { SPRING_SNAPPY, useViennaReducedMotion } from "../lib/animations";
+import { SPRING_SNAPPY, useAlecRaeReducedMotion } from "../lib/animations";
 import {
   initLocalAI,
   getLocalAIState,
@@ -258,7 +258,7 @@ export function LocalAIStatusIndicator({
   const [downloadProgress, setDownloadProgress] =
     useState<ModelDownloadProgress | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const initStartedRef = useRef(false);
 
   // Subscribe to download progress events
@@ -547,7 +547,7 @@ function LocalAIDetailPanel({
       {indicatorState.phase === "unavailable" && (
         <div className="border-t border-white/5 pt-2">
           <span className="text-[10px] text-white/40">
-            {indicatorState.detail}. Vienna uses cloud AI as a fallback.
+            {indicatorState.detail}. AlecRae uses cloud AI as a fallback.
           </span>
         </div>
       )}

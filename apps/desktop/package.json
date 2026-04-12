@@ -1,8 +1,8 @@
 {
-  "name": "@emailed/desktop",
+  "name": "@alecrae/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Vienna Desktop \u2014 Native email client for Mac, Windows, Linux",
+  "description": "AlecRae Desktop \u2014 Native email client for Mac, Windows, Linux",
   "type": "module",
   "main": "dist/main.cjs",
   "scripts": {
@@ -32,9 +32,9 @@
     "vite": "^6.0.0"
   },
   "build": {
-    "appId": "com.vienna.desktop",
-    "productName": "Vienna",
-    "copyright": "Copyright \u00a9 2026 Vienna",
+    "appId": "com.alecrae.desktop",
+    "productName": "AlecRae",
+    "copyright": "Copyright \u00a9 2026 AlecRae",
     "directories": {
       "buildResources": "build",
       "output": "out"
@@ -112,7 +112,7 @@
     "publish": {
       "provider": "github",
       "owner": "ccantynz-alt",
-      "repo": "emailed"
+      "repo": "alecrae"
     }
   },
   "engines": {

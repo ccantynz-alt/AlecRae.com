@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Login Screen
+ * AlecRae Mobile — Login Screen
  *
  * Authentication screen with email/password login.
  * Passkey/WebAuthn support will be added when the backend is wired.
@@ -65,7 +65,7 @@ export default function LoginScreen(): React.ReactElement {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.content}>
-        <Text style={styles.logo}>Vienna</Text>
+        <Text style={styles.logo}>AlecRae</Text>
         <Text style={styles.subtitle}>Sign in to your account</Text>
 
         {authError ? (

@@ -5,11 +5,11 @@ export type AuthMethod =
   | { readonly type: "apiKey"; readonly key: string }
   | { readonly type: "bearer"; readonly token: string };
 
-/** Configuration for the Emailed API client. */
+/** Configuration for the AlecRae API client. */
 export interface ClientConfig {
   /** API key or bearer token */
   readonly auth: AuthMethod;
-  /** Base URL for the API. Default: "https://api.48co.ai" */
+  /** Base URL for the API. Default: "https://api.alecrae.com" */
   readonly baseUrl?: string;
   /** Request timeout in milliseconds. Default: 30000 */
   readonly timeout?: number;
@@ -26,13 +26,13 @@ export interface ClientConfig {
  *
  * Usage:
  * ```ts
- * new Emailed({ apiKey: "em_live_...", baseUrl: "https://api.48co.ai" });
+ * new AlecRae({ apiKey: "em_live_...", baseUrl: "https://api.alecrae.com" });
  * ```
  */
 export interface SimpleClientConfig {
   /** The API key for authentication */
   readonly apiKey: string;
-  /** Base URL for the API. Default: "https://api.48co.ai" */
+  /** Base URL for the API. Default: "https://api.alecrae.com" */
   readonly baseUrl?: string;
   /** Request timeout in milliseconds. Default: 30000 */
   readonly timeout?: number;
@@ -310,7 +310,7 @@ export interface WebhookEvent<T = unknown> {
 export interface WebhookVerifyOptions {
   /** The raw request body (string or Buffer) */
   readonly payload: string | Buffer;
-  /** The signature from the `X-Emailed-Signature` header */
+  /** The signature from the `X-AlecRae-Signature` header */
   readonly signature: string;
   /** The webhook signing secret */
   readonly secret: string;
@@ -448,7 +448,7 @@ export interface DomainDnsRecord {
 
 // ─── Error Types ─────────────────────────────────────────────────────────────
 
-/** Structured API error returned by the Emailed API. */
+/** Structured API error returned by the AlecRae API. */
 export interface ApiErrorBody {
   readonly code: string;
   readonly message: string;

@@ -1,5 +1,5 @@
 /**
- * @emailed/imap - TypeScript type definitions
+ * @alecrae/imap - TypeScript type definitions
  * IMAP4rev2 (RFC 9051) and IMAP4rev1 (RFC 3501) compatibility types.
  * This service acts as a compatibility bridge: speaks IMAP to clients
  * but uses the same underlying mailbox storage as JMAP.

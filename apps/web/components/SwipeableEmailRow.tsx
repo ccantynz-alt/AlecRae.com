@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Vienna Web -- SwipeableEmailRow
+ * AlecRae Web -- SwipeableEmailRow
  *
  * Web version of the swipeable inbox row, adapted for both touch
  * (mobile web) and pointer (desktop) interactions.
@@ -30,7 +30,7 @@ import {
   SPRING_SNAPPY,
   SPRING_BOUNCY,
   SPRING_MICRO,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   selectTransition,
 } from "../lib/animations";
 
@@ -117,7 +117,7 @@ export function SwipeableEmailRow({
   onUndoRequest,
   className = "",
 }: SwipeableEmailRowProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
 
   // Swipe state
   const [translateX, setTranslateX] = useState(0);

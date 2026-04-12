@@ -28,9 +28,9 @@ const SEARCH_INDEX: readonly SearchResult[] = [
   { slug: "/analytics", title: "Analytics", description: "Delivery and engagement analytics", category: "Endpoints" },
   { slug: "/suppressions", title: "Suppressions", description: "Suppression list management", category: "Endpoints" },
   { slug: "/api-reference", title: "OpenAPI Spec", description: "Download the full OpenAPI 3.1 specification", category: "Reference" },
-  { slug: "/migrate-gmail", title: "From Gmail", description: "Switch from Gmail to Vienna in 5 minutes", category: "Migration" },
+  { slug: "/migrate-gmail", title: "From Gmail", description: "Switch from Gmail to AlecRae in 5 minutes", category: "Migration" },
   { slug: "/migrate-outlook", title: "From Outlook", description: "Migrate from Outlook / Microsoft 365", category: "Migration" },
-  { slug: "/migrate-apple-mail", title: "From Apple Mail", description: "Export MBOX from Apple Mail and import into Vienna", category: "Migration" },
+  { slug: "/migrate-apple-mail", title: "From Apple Mail", description: "Export MBOX from Apple Mail and import into AlecRae", category: "Migration" },
 ];
 
 export function Search(): React.JSX.Element {

@@ -22,7 +22,7 @@ import {
   SUPPORTED_VOICE_AUDIO_TYPES,
   MAX_VOICE_AUDIO_SIZE,
   type VoiceMessageResult,
-} from "@emailed/ai-engine/voice/voice-message";
+} from "@alecrae/ai-engine/voice/voice-message";
 
 // ─── In-memory store (production: persist in Neon + R2) ─────────────────────
 

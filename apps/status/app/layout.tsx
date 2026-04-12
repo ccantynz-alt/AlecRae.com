@@ -2,16 +2,16 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vienna Status — System Status & Uptime",
+  title: "AlecRae Status — System Status & Uptime",
   description:
-    "Real-time status, uptime, and incident history for the Vienna email platform.",
-  applicationName: "Vienna Status",
+    "Real-time status, uptime, and incident history for the AlecRae email platform.",
+  applicationName: "AlecRae Status",
   robots: { index: true, follow: true },
   openGraph: {
-    title: "Vienna Status",
-    description: "Real-time system status for Vienna.",
-    url: "https://status.48co.ai",
-    siteName: "Vienna Status",
+    title: "AlecRae Status",
+    description: "Real-time system status for AlecRae.",
+    url: "https://status.alecrae.com",
+    siteName: "AlecRae Status",
     type: "website",
   },
 };

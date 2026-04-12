@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
-  namespace: emailed
+  namespace: alecrae
   labels:
     app.kubernetes.io/name: postgres
     app.kubernetes.io/component: database
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/part-of: alecrae-platform
 spec:
   serviceName: postgres
   replicas: 1
@@ -18,7 +18,7 @@ spec:
       labels:
         app.kubernetes.io/name: postgres
         app.kubernetes.io/component: database
-        app.kubernetes.io/part-of: emailed-platform
+        app.kubernetes.io/part-of: alecrae-platform
     spec:
       securityContext:
         runAsUser: 999
@@ -33,16 +33,16 @@ spec:
               protocol: TCP
           env:
             - name: POSTGRES_DB
-              value: emailed
+              value: alecrae
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: emailed-secrets
+                  name: alecrae-secrets
                   key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: emailed-secrets
+                  name: alecrae-secrets
                   key: POSTGRES_PASSWORD
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
@@ -92,9 +92,9 @@ spec:
               command:
                 - pg_isready
                 - -U
-                - emailed
+                - alecrae
                 - -d
-                - emailed
+                - alecrae
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
@@ -104,9 +104,9 @@ spec:
               command:
                 - pg_isready
                 - -U
-                - emailed
+                - alecrae
                 - -d
-                - emailed
+                - alecrae
             initialDelaySeconds: 5
             periodSeconds: 5
             timeoutSeconds: 3
@@ -135,11 +135,11 @@ apiVersion: v1
 kind: Service
 metadata:
   name: postgres
-  namespace: emailed
+  namespace: alecrae
   labels:
     app.kubernetes.io/name: postgres
     app.kubernetes.io/component: database
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/part-of: alecrae-platform
 spec:
   type: ClusterIP
   ports:

@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Vienna",
-    "slug": "vienna",
+    "name": "AlecRae",
+    "slug": "alecrae",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "vienna",
+    "scheme": "alecrae",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -14,17 +14,17 @@
       "backgroundColor": "#0f172a"
     },
     "ios": {
-      "bundleIdentifier": "com.vienna.app",
+      "bundleIdentifier": "com.alecrae.app",
       "buildNumber": "1",
       "supportsTablet": true,
-      "associatedDomains": ["applinks:48co.ai", "applinks:mail.48co.ai"],
+      "associatedDomains": ["applinks:alecrae.com", "applinks:mail.alecrae.com"],
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Vienna uses Face ID to quickly unlock your encrypted email.",
+        "NSFaceIDUsageDescription": "AlecRae uses Face ID to quickly unlock your encrypted email.",
         "LSApplicationQueriesSchemes": ["mailto"]
       }
     },
     "android": {
-      "package": "com.vienna.app",
+      "package": "com.alecrae.app",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -43,8 +43,8 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "48co.ai" },
-            { "scheme": "https", "host": "mail.48co.ai" },
+            { "scheme": "https", "host": "alecrae.com" },
+            { "scheme": "https", "host": "mail.alecrae.com" },
             { "scheme": "mailto" }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
@@ -72,16 +72,16 @@
     },
     "extra": {
       "eas": {
-        "projectId": "vienna-app"
+        "projectId": "alecrae-app"
       },
-      "apiUrl": "https://api.48co.ai"
+      "apiUrl": "https://api.alecrae.com"
     },
-    "owner": "vienna",
+    "owner": "alecrae",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/vienna-app"
+      "url": "https://u.expo.dev/alecrae-app"
     }
   }
 }

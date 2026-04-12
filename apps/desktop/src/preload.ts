@@ -1,5 +1,5 @@
 /**
- * Vienna Desktop — Preload Script
+ * AlecRae Desktop — Preload Script
  *
  * Runs in an isolated context with access to both Node.js and the web page.
  * Exposes a safe API to the web app via contextBridge.
@@ -41,7 +41,7 @@ type ReceiveChannel = (typeof RECEIVE_CHANNELS)[number];
 
 // ─── Exposed API ─────────────────────────────────────────────────────────────
 
-contextBridge.exposeInMainWorld("vienna", {
+contextBridge.exposeInMainWorld("alecrae", {
   // Badge management
   updateBadge: (count: number): void => {
     ipcRenderer.send("update-badge", count);

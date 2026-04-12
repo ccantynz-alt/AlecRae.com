@@ -1,5 +1,5 @@
 /**
- * @emailed/support - Knowledge Base Management
+ * @alecrae/support - Knowledge Base Management
  *
  * Stores articles, troubleshooting guides, FAQs.
  * Supports semantic search for relevant articles during support conversations.
@@ -388,7 +388,7 @@ export function loadDefaultArticles(): KnowledgeArticle[] {
     {
       id: "kb-001",
       title: "Setting up SPF records for your domain",
-      content: `SPF (Sender Policy Framework) is an email authentication method that specifies which mail servers are authorized to send email on behalf of your domain. To set up SPF, add a TXT record to your DNS with the value: v=spf1 include:spf.emailed.dev ~all. If you already have an SPF record, add include:spf.emailed.dev before the ~all mechanism. Never create multiple SPF records for the same domain - this will cause authentication failures. Common issues include exceeding the 10 DNS lookup limit, which can be resolved by flattening nested includes.`,
+      content: `SPF (Sender Policy Framework) is an email authentication method that specifies which mail servers are authorized to send email on behalf of your domain. To set up SPF, add a TXT record to your DNS with the value: v=spf1 include:spf.alecrae.dev ~all. If you already have an SPF record, add include:spf.alecrae.dev before the ~all mechanism. Never create multiple SPF records for the same domain - this will cause authentication failures. Common issues include exceeding the 10 DNS lookup limit, which can be resolved by flattening nested includes.`,
       category: "dns_setup",
       tags: ["spf", "dns", "setup", "authentication"],
       viewCount: 1523,
@@ -399,7 +399,7 @@ export function loadDefaultArticles(): KnowledgeArticle[] {
     {
       id: "kb-002",
       title: "Configuring DKIM signing for email authentication",
-      content: `DKIM (DomainKeys Identified Mail) adds a digital signature to outgoing emails, allowing receiving servers to verify the message wasn't altered in transit. Emailed generates a 2048-bit RSA key pair for DKIM signing. You need to publish the public key as a CNAME record: selector._domainkey.yourdomain.com pointing to selector._domainkey.emailed.dev. The selector is assigned to your account and can be found in your domain settings. After publishing the record, it may take up to 48 hours for DNS propagation. You can verify your DKIM setup using our diagnostic tools.`,
+      content: `DKIM (DomainKeys Identified Mail) adds a digital signature to outgoing emails, allowing receiving servers to verify the message wasn't altered in transit. AlecRae generates a 2048-bit RSA key pair for DKIM signing. You need to publish the public key as a CNAME record: selector._domainkey.yourdomain.com pointing to selector._domainkey.alecrae.dev. The selector is assigned to your account and can be found in your domain settings. After publishing the record, it may take up to 48 hours for DNS propagation. You can verify your DKIM setup using our diagnostic tools.`,
       category: "authentication",
       tags: ["dkim", "dns", "authentication", "signing"],
       viewCount: 1245,
@@ -465,7 +465,7 @@ export function loadDefaultArticles(): KnowledgeArticle[] {
     {
       id: "kb-008",
       title: "API rate limits and best practices",
-      content: `Emailed API rate limits depend on your plan: Free (100 requests/minute), Starter (500/minute), Professional (2000/minute), Enterprise (custom). Rate limit headers are included in every response: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset. When you hit the limit, you'll receive a 429 status code. Best practices: implement exponential backoff, cache responses where possible, use batch endpoints for bulk operations, use webhooks instead of polling, and spread requests evenly over time. The /v1/messages/batch endpoint accepts up to 1000 messages per call.`,
+      content: `AlecRae API rate limits depend on your plan: Free (100 requests/minute), Starter (500/minute), Professional (2000/minute), Enterprise (custom). Rate limit headers are included in every response: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset. When you hit the limit, you'll receive a 429 status code. Best practices: implement exponential backoff, cache responses where possible, use batch endpoints for bulk operations, use webhooks instead of polling, and spread requests evenly over time. The /v1/messages/batch endpoint accepts up to 1000 messages per call.`,
       category: "api_usage",
       tags: ["api", "rate-limit", "batch", "webhooks"],
       viewCount: 1678,

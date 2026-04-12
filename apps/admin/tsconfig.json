@@ -14,10 +14,10 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@emailed/ui": ["../../packages/ui/src"],
-      "@emailed/ui/*": ["../../packages/ui/src/*"],
-      "@emailed/shared": ["../../packages/shared/src"],
-      "@emailed/shared/*": ["../../packages/shared/src/*"]
+      "@alecrae/ui": ["../../packages/ui/src"],
+      "@alecrae/ui/*": ["../../packages/ui/src/*"],
+      "@alecrae/shared": ["../../packages/shared/src"],
+      "@alecrae/shared/*": ["../../packages/shared/src/*"]
     }
   },
   "include": [

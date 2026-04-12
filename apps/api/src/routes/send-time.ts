@@ -19,7 +19,7 @@ import {
   emails,
   recipientEngagement,
   engagementEvents,
-} from "@emailed/db";
+} from "@alecrae/db";
 import {
   analyzeRecipientPatterns,
   predictBestSendTime,
@@ -29,7 +29,7 @@ import {
   type EngagementRow,
   type RecipientPattern,
   type SendTimeRecommendation,
-} from "@emailed/ai-engine/send-time";
+} from "@alecrae/ai-engine/send-time";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 

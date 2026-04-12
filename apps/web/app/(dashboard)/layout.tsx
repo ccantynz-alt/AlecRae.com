@@ -3,7 +3,7 @@
 import type { JSX } from "react";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Box, Text, type SidebarSection } from "@emailed/ui";
+import { Box, Text, type SidebarSection } from "@alecrae/ui";
 import { AnimatedSidebar, type AnimatedSidebarSection } from "../../components/AnimatedSidebar";
 import { AnimatedPage } from "../../components/AnimatedPage";
 import { FocusModeOverlay, type FocusModeOverlayEmail } from "../../components/FocusModeOverlay";
@@ -91,7 +91,7 @@ export default function DashboardLayout({
   const brand = (
     <Box className="flex items-center justify-between">
       <Text variant="heading-md" className="text-brand-600 font-bold">
-        Vienna
+        AlecRae
       </Text>
       <Box
         as="button"

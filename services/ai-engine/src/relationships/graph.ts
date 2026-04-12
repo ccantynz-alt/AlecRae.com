@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Communication Intelligence Graph
+// @alecrae/ai-engine — Communication Intelligence Graph
 // =============================================================================
 // Builds and maintains a knowledge graph of user relationships from email
 // activity. Scores relationship strength, detects communication patterns,

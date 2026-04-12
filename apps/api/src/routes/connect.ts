@@ -118,7 +118,7 @@ connect.get(
       });
 
       // Redirect to web app
-      const webUrl = process.env["WEB_URL"] ?? "https://mail.48co.ai";
+      const webUrl = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
       return c.redirect(`${webUrl}/settings/accounts?connected=gmail&email=${encodeURIComponent(tokens.email)}`);
     } catch (err) {
       return c.json({ error: { message: `Gmail auth failed: ${err}` } }, 500);
@@ -162,7 +162,7 @@ connect.get(
         console.error(`[connect] Initial Outlook sync failed for ${account.email}:`, err);
       });
 
-      const webUrl = process.env["WEB_URL"] ?? "https://mail.48co.ai";
+      const webUrl = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
       return c.redirect(`${webUrl}/settings/accounts?connected=outlook&email=${encodeURIComponent(tokens.email)}`);
     } catch (err) {
       return c.json({ error: { message: `Outlook auth failed: ${err}` } }, 500);

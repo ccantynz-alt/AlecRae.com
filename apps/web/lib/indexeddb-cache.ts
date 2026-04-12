@@ -1,7 +1,7 @@
 /**
- * Vienna IndexedDB Cache — Local-First Email Storage
+ * AlecRae IndexedDB Cache — Local-First Email Storage
  *
- * Makes Vienna feel instant. Emails load from local cache in <50ms
+ * Makes AlecRae feel instant. Emails load from local cache in <50ms
  * while background sync fetches updates from the server.
  *
  * Architecture:
@@ -14,7 +14,7 @@
 
 // ─── Database Schema ─────────────────────────────────────────────────────────
 
-const DB_NAME = "vienna-mail";
+const DB_NAME = "alecrae-mail";
 const DB_VERSION = 1;
 
 const STORES = {

@@ -10,8 +10,8 @@ import {
   CardContent,
   CardFooter,
   ScriptEditor,
-} from "@emailed/ui";
-import type { ScriptData, ScriptTemplate, ScriptRunEntry, TestResult } from "@emailed/ui";
+} from "@alecrae/ui";
+import type { ScriptData, ScriptTemplate, ScriptRunEntry, TestResult } from "@alecrae/ui";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

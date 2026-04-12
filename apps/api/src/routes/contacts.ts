@@ -14,7 +14,7 @@ import { z } from "zod";
 import { eq, and, or, ilike, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, contacts as contactsTable } from "@emailed/db";
+import { getDatabase, contacts as contactsTable } from "@alecrae/db";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

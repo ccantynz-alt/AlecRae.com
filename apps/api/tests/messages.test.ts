@@ -60,7 +60,7 @@ const mockDb = {
 };
 
 // Mock the database module
-vi.mock("@emailed/db", () => ({
+vi.mock("@alecrae/db", () => ({
   getDatabase: () => mockDb,
   emails: { id: "id", accountId: "account_id", status: "status" },
   deliveryResults: { id: "id", emailId: "email_id" },
@@ -85,7 +85,7 @@ vi.mock("bullmq", () => ({
 }));
 
 // Mock reputation module
-vi.mock("@emailed/reputation", () => ({
+vi.mock("@alecrae/reputation", () => ({
   getWarmupOrchestrator: () => ({
     ensureWarmupAndCheck: vi.fn().mockResolvedValue({ allowed: true }),
     recordSend: vi.fn().mockResolvedValue(undefined),
@@ -94,13 +94,13 @@ vi.mock("@emailed/reputation", () => ({
 }));
 
 // Mock MTA header validation
-vi.mock("@emailed/mta/lib", () => ({
+vi.mock("@alecrae/mta/lib", () => ({
   validateCustomHeaders: vi.fn().mockReturnValue({ ok: true, sanitized: {} }),
   HEADER_INJECTION_REJECTED: "HEADER_INJECTION_REJECTED",
 }));
 
 // Mock shared module
-vi.mock("@emailed/shared", () => ({
+vi.mock("@alecrae/shared", () => ({
   indexEmail: vi.fn().mockResolvedValue(undefined),
   searchEmails: vi.fn().mockResolvedValue({ hits: [], totalHits: 0, processingTimeMs: 0, query: "" }),
 }));

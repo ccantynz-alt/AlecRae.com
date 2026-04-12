@@ -9,7 +9,7 @@ import type {
   DeliverabilityPoint,
   EngagementPoint,
 } from "../types.js";
-import { getDatabase, emails, events } from "@emailed/db";
+import { getDatabase, emails, events } from "@alecrae/db";
 
 const analytics = new Hono();
 
