@@ -150,7 +150,7 @@ scheduleSend.delete(
       .update(emails)
       .set({
         scheduledAt: null,
-        status: "queued", // "draft" not in email_status enum; "queued" = not yet sent
+        status: "draft",
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -192,7 +192,7 @@ scheduleSend.post(
     await db
       .update(emails)
       .set({
-        status: "queued", // "draft" not in email_status enum; "queued" = not yet sent
+        status: "draft",
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));

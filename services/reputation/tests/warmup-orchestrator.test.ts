@@ -1,223 +1,236 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { WarmupOrchestrator } from '../src/warmup/orchestrator.js';
+/**
+ * Unit tests for the WarmupOrchestrator module.
+ *
+ * Tests the pure/exported helpers and schedule constants that can be
+ * exercised without a database. The DB-backed class methods
+ * (startWarmup, getDailyLimit, ensureWarmupAndCheck, etc.) are tested
+ * via integration tests that depend on a running Postgres instance.
+ */
+
+import { describe, it, expect } from 'bun:test';
+import {
+  resolveAutoStep,
+  computeNextAutoDay,
+  AUTO_WARMUP_SCHEDULE,
+  WARMUP_SCHEDULES,
+  WARMUP_LIMIT_EXCEEDED,
+} from '../src/warmup/orchestrator.js';
+import type { AutoWarmupStep, ScheduleStep } from '../src/warmup/orchestrator.js';
 
 // ---------------------------------------------------------------------------
-// Plan generation
+// AUTO_WARMUP_SCHEDULE constants
 // ---------------------------------------------------------------------------
 
-describe('WarmupOrchestrator - plan generation', () => {
-  let orchestrator: WarmupOrchestrator;
-
-  beforeEach(() => {
-    orchestrator = new WarmupOrchestrator();
+describe('AUTO_WARMUP_SCHEDULE', () => {
+  it('should have at least 5 steps', () => {
+    expect(AUTO_WARMUP_SCHEDULE.length).toBeGreaterThanOrEqual(5);
   });
 
-  it('should generate a warm-up plan for a new IP', () => {
-    const result = orchestrator.generatePlan('10.0.0.1', 'example.com', 'gmail');
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.ipAddress).toBe('10.0.0.1');
-      expect(result.value.domain).toBe('example.com');
-      expect(result.value.provider).toBe('gmail');
-      expect(result.value.status).toBe('pending');
-      expect(result.value.phases.length).toBeGreaterThan(0);
+  it('should have increasing daily limits across steps', () => {
+    for (let i = 1; i < AUTO_WARMUP_SCHEDULE.length; i++) {
+      expect(AUTO_WARMUP_SCHEDULE[i]!.dailyLimit).toBeGreaterThan(
+        AUTO_WARMUP_SCHEDULE[i - 1]!.dailyLimit,
+      );
     }
   });
 
-  it('should reject duplicate plan for same IP/domain/provider', () => {
-    orchestrator.generatePlan('10.0.0.1', 'example.com', 'gmail');
-    const result = orchestrator.generatePlan('10.0.0.1', 'example.com', 'gmail');
-    expect(result.ok).toBe(false);
+  it('should have increasing day numbers across steps', () => {
+    for (let i = 1; i < AUTO_WARMUP_SCHEDULE.length; i++) {
+      expect(AUTO_WARMUP_SCHEDULE[i]!.day).toBeGreaterThan(
+        AUTO_WARMUP_SCHEDULE[i - 1]!.day,
+      );
+    }
   });
 
-  it('should generate phases with increasing daily volumes', () => {
-    const result = orchestrator.generatePlan('10.0.0.2', 'test.com', 'gmail');
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      const volumes = result.value.phases.map((p) => p.dailyVolume);
-      for (let i = 1; i < volumes.length; i++) {
-        expect(volumes[i]).toBeGreaterThanOrEqual(volumes[i - 1]!);
+  it('should start at day 1 with a conservative limit', () => {
+    const first = AUTO_WARMUP_SCHEDULE[0]!;
+    expect(first.day).toBe(1);
+    expect(first.dailyLimit).toBeLessThanOrEqual(100);
+  });
+
+  it('should have decreasing advance bounce rate thresholds', () => {
+    for (let i = 1; i < AUTO_WARMUP_SCHEDULE.length; i++) {
+      expect(AUTO_WARMUP_SCHEDULE[i]!.advanceBounceRate).toBeLessThanOrEqual(
+        AUTO_WARMUP_SCHEDULE[i - 1]!.advanceBounceRate,
+      );
+    }
+  });
+
+  it('should end with an effectively unlimited step', () => {
+    const last = AUTO_WARMUP_SCHEDULE[AUTO_WARMUP_SCHEDULE.length - 1]!;
+    expect(last.dailyLimit).toBe(Number.MAX_SAFE_INTEGER);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveAutoStep
+// ---------------------------------------------------------------------------
+
+describe('resolveAutoStep', () => {
+  it('should return the first step for day 1', () => {
+    const step = resolveAutoStep(1);
+    expect(step.day).toBe(1);
+    expect(step.dailyLimit).toBe(50);
+  });
+
+  it('should return the correct step for an exact day boundary', () => {
+    const step = resolveAutoStep(7);
+    expect(step.day).toBe(7);
+    expect(step.dailyLimit).toBe(5_000);
+  });
+
+  it('should return the previous step for a day between boundaries', () => {
+    // Day 5 is between day 4 (1000) and day 7 (5000) — should return day 4
+    const step = resolveAutoStep(5);
+    expect(step.day).toBe(4);
+    expect(step.dailyLimit).toBe(1_000);
+  });
+
+  it('should return the last step for very high day numbers', () => {
+    const step = resolveAutoStep(999);
+    const last = AUTO_WARMUP_SCHEDULE[AUTO_WARMUP_SCHEDULE.length - 1]!;
+    expect(step.day).toBe(last.day);
+    expect(step.dailyLimit).toBe(last.dailyLimit);
+  });
+
+  it('should handle day 0 by returning the first step', () => {
+    // Edge case: day 0 — first step has day=1 which is > 0, so the initial
+    // seed (step = schedule[0]) should be returned.
+    const step = resolveAutoStep(0);
+    expect(step.day).toBe(AUTO_WARMUP_SCHEDULE[0]!.day);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeNextAutoDay
+// ---------------------------------------------------------------------------
+
+describe('computeNextAutoDay', () => {
+  it('should stay at current day when not enough wall-clock time has passed', () => {
+    const nextDay = computeNextAutoDay({
+      currentDay: 1,
+      elapsedDays: 1,
+      bounceRate24h: 0,
+    });
+    expect(nextDay).toBe(1);
+  });
+
+  it('should advance when elapsed days surpass current step and bounces are low', () => {
+    const nextDay = computeNextAutoDay({
+      currentDay: 1,
+      elapsedDays: 7,
+      bounceRate24h: 0.01,
+    });
+    expect(nextDay).toBe(7);
+  });
+
+  it('should NOT advance when bounce rate exceeds current step threshold', () => {
+    // Day 1 threshold is 0.05. Bounce rate of 0.06 should block advancement.
+    const nextDay = computeNextAutoDay({
+      currentDay: 1,
+      elapsedDays: 7,
+      bounceRate24h: 0.06,
+    });
+    expect(nextDay).toBe(1);
+  });
+
+  it('should advance to the correct intermediate step (not skip ahead)', () => {
+    // From day 1, with 3 elapsed days, should go to day 3 (not day 7)
+    const nextDay = computeNextAutoDay({
+      currentDay: 1,
+      elapsedDays: 3,
+      bounceRate24h: 0,
+    });
+    expect(nextDay).toBe(3);
+  });
+
+  it('should handle advancement from mid-schedule positions', () => {
+    // Currently at day 4, 14 days have elapsed, bounces are fine
+    const nextDay = computeNextAutoDay({
+      currentDay: 4,
+      elapsedDays: 14,
+      bounceRate24h: 0.01,
+    });
+    expect(nextDay).toBe(14);
+  });
+
+  it('should respect bounce threshold of the CURRENT step when gating', () => {
+    // Day 7 step has advanceBounceRate of 0.03
+    // Bounce rate of 0.035 should block advancement from day 7
+    const nextDay = computeNextAutoDay({
+      currentDay: 7,
+      elapsedDays: 30,
+      bounceRate24h: 0.035,
+    });
+    expect(nextDay).toBe(7);
+  });
+
+  it('should advance past day 7 when bounce rate is under 0.03', () => {
+    const nextDay = computeNextAutoDay({
+      currentDay: 7,
+      elapsedDays: 30,
+      bounceRate24h: 0.02,
+    });
+    expect(nextDay).toBe(30);
+  });
+
+  it('should stay put when already at the last step', () => {
+    const lastStep = AUTO_WARMUP_SCHEDULE[AUTO_WARMUP_SCHEDULE.length - 1]!;
+    const nextDay = computeNextAutoDay({
+      currentDay: lastStep.day,
+      elapsedDays: lastStep.day + 100,
+      bounceRate24h: 0,
+    });
+    expect(nextDay).toBe(lastStep.day);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WARMUP_SCHEDULES (named templates)
+// ---------------------------------------------------------------------------
+
+describe('WARMUP_SCHEDULES', () => {
+  it('should have three schedule templates', () => {
+    expect(Object.keys(WARMUP_SCHEDULES)).toEqual(
+      expect.arrayContaining(['conservative', 'moderate', 'aggressive']),
+    );
+  });
+
+  it('conservative should be the longest schedule', () => {
+    const conserv = WARMUP_SCHEDULES.conservative;
+    const moderate = WARMUP_SCHEDULES.moderate;
+    const aggressive = WARMUP_SCHEDULES.aggressive;
+
+    const lastDay = (s: ScheduleStep[]): number => s[s.length - 1]!.day;
+
+    expect(lastDay(conserv)).toBeGreaterThan(lastDay(moderate));
+    expect(lastDay(moderate)).toBeGreaterThan(lastDay(aggressive));
+  });
+
+  it('each schedule should have increasing daily limits', () => {
+    for (const [, schedule] of Object.entries(WARMUP_SCHEDULES)) {
+      for (let i = 1; i < schedule.length; i++) {
+        expect(schedule[i]!.dailyLimit).toBeGreaterThan(
+          schedule[i - 1]!.dailyLimit,
+        );
       }
     }
   });
 
-  it('should respect ISP-specific initial volumes', () => {
-    const gmailResult = orchestrator.generatePlan('10.0.0.3', 'a.com', 'gmail');
-    const aolResult = orchestrator.generatePlan('10.0.0.4', 'b.com', 'aol');
-    expect(gmailResult.ok && aolResult.ok).toBe(true);
-    if (gmailResult.ok && aolResult.ok) {
-      // Gmail starts at 50, AOL at 150
-      expect(gmailResult.value.phases[0]!.dailyVolume).toBeLessThan(aolResult.value.phases[0]!.dailyVolume);
-    }
+  it('aggressive should start with a higher initial volume than conservative', () => {
+    expect(WARMUP_SCHEDULES.aggressive[0]!.dailyLimit).toBeGreaterThan(
+      WARMUP_SCHEDULES.conservative[0]!.dailyLimit,
+    );
   });
 });
 
 // ---------------------------------------------------------------------------
-// Daily limit calculation
+// WARMUP_LIMIT_EXCEEDED constant
 // ---------------------------------------------------------------------------
 
-describe('WarmupOrchestrator - daily limits', () => {
-  let orchestrator: WarmupOrchestrator;
-
-  beforeEach(() => {
-    orchestrator = new WarmupOrchestrator();
-    orchestrator.generatePlan('10.0.0.10', 'test.com', 'gmail');
-    orchestrator.startPlan('10.0.0.10', 'test.com', 'gmail');
-  });
-
-  it('should return daily limit for an active plan', () => {
-    const result = orchestrator.getDailyLimit('10.0.0.10', 'test.com', 'gmail');
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBeGreaterThan(0);
-    }
-  });
-
-  it('should return 0 for a paused plan', () => {
-    orchestrator.pause('10.0.0.10', 'test.com', 'gmail');
-    const result = orchestrator.getDailyLimit('10.0.0.10', 'test.com', 'gmail');
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toBe(0);
-    }
-  });
-
-  it('should return error for non-existent schedule', () => {
-    const result = orchestrator.getDailyLimit('1.2.3.4', 'nope.com', 'gmail');
-    expect(result.ok).toBe(false);
-  });
-
-  it('should provide hourly limits respecting preferred sending hours', () => {
-    const strategy = orchestrator.getStrategy('gmail');
-    const preferredHour = strategy.preferredSendingHours[0]!;
-    const offHour = 3; // 3am is not in Gmail preferred hours
-
-    const preferredResult = orchestrator.getHourlyLimit('10.0.0.10', 'test.com', 'gmail', preferredHour);
-    const offResult = orchestrator.getHourlyLimit('10.0.0.10', 'test.com', 'gmail', offHour);
-
-    expect(preferredResult.ok && offResult.ok).toBe(true);
-    if (preferredResult.ok && offResult.ok) {
-      expect(preferredResult.value).toBeGreaterThan(offResult.value);
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// ISP-specific schedules
-// ---------------------------------------------------------------------------
-
-describe('WarmupOrchestrator - ISP strategies', () => {
-  it('should have different strategies for different ISPs', () => {
-    const orchestrator = new WarmupOrchestrator();
-    const gmail = orchestrator.getStrategy('gmail');
-    const yahoo = orchestrator.getStrategy('yahoo');
-    const microsoft = orchestrator.getStrategy('microsoft');
-
-    expect(gmail.provider).toBe('gmail');
-    expect(yahoo.provider).toBe('yahoo');
-    expect(microsoft.provider).toBe('microsoft');
-    expect(gmail.initialVolume).not.toBe(yahoo.initialVolume);
-  });
-
-  it('should allow strategy overrides via config', () => {
-    const orchestrator = new WarmupOrchestrator({
-      strategyOverrides: {
-        gmail: { initialVolume: 100, growthRate: 2.0 },
-      },
-    });
-    const gmail = orchestrator.getStrategy('gmail');
-    expect(gmail.initialVolume).toBe(100);
-    expect(gmail.growthRate).toBe(2.0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Signal adaptation
-// ---------------------------------------------------------------------------
-
-describe('WarmupOrchestrator - signal adaptation', () => {
-  let orchestrator: WarmupOrchestrator;
-
-  beforeEach(() => {
-    orchestrator = new WarmupOrchestrator();
-    orchestrator.generatePlan('10.0.0.20', 'adapt.com', 'gmail');
-    orchestrator.startPlan('10.0.0.20', 'adapt.com', 'gmail');
-  });
-
-  it('should increase multiplier on healthy delivery signals', () => {
-    const result = orchestrator.processSignal({
-      ipAddress: '10.0.0.20',
-      provider: 'gmail',
-      type: 'delivery',
-      timestamp: Date.now(),
-    } as never);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.adaptiveMultiplier).toBeGreaterThanOrEqual(1.0);
-    }
-  });
-
-  it('should reduce multiplier when bounce threshold is exceeded', () => {
-    // Send enough bounces to exceed threshold
-    for (let i = 0; i < 10; i++) {
-      orchestrator.processSignal({
-        ipAddress: '10.0.0.20',
-        provider: 'gmail',
-        type: 'bounce',
-        timestamp: Date.now(),
-      } as never);
-    }
-    const result = orchestrator.processSignal({
-      ipAddress: '10.0.0.20',
-      provider: 'gmail',
-      type: 'bounce',
-      timestamp: Date.now(),
-    } as never);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.adaptiveMultiplier).toBeLessThan(1.0);
-    }
-  });
-
-  it('should pause warm-up on block signal', () => {
-    const result = orchestrator.processSignal({
-      ipAddress: '10.0.0.20',
-      provider: 'gmail',
-      type: 'block',
-      timestamp: Date.now(),
-    } as never);
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.status).toBe('paused');
-    }
-  });
-
-  it('should support pause and resume lifecycle', () => {
-    orchestrator.pause('10.0.0.20', 'adapt.com', 'gmail');
-    const pauseLimit = orchestrator.getDailyLimit('10.0.0.20', 'adapt.com', 'gmail');
-    expect(pauseLimit.ok && pauseLimit.value === 0).toBe(true);
-
-    orchestrator.resume('10.0.0.20', 'adapt.com', 'gmail');
-    const resumeLimit = orchestrator.getDailyLimit('10.0.0.20', 'adapt.com', 'gmail');
-    expect(resumeLimit.ok).toBe(true);
-    if (resumeLimit.ok) {
-      expect(resumeLimit.value).toBeGreaterThan(0);
-    }
-  });
-
-  it('should return list of active schedules', () => {
-    const active = orchestrator.getActiveSchedules();
-    expect(active.length).toBe(1);
-    expect(active[0]!.ipAddress).toBe('10.0.0.20');
-  });
-
-  it('should generate a progress report', () => {
-    const result = orchestrator.getProgressReport('10.0.0.20', 'adapt.com', 'gmail');
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.status).toBe('active');
-      expect(result.value.healthStatus).toBe('healthy');
-      expect(result.value.totalPhases).toBeGreaterThan(0);
-    }
+describe('WARMUP_LIMIT_EXCEEDED', () => {
+  it('should be a string error code', () => {
+    expect(typeof WARMUP_LIMIT_EXCEEDED).toBe('string');
+    expect(WARMUP_LIMIT_EXCEEDED).toBe('WARMUP_LIMIT_EXCEEDED');
   });
 });

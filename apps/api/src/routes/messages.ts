@@ -28,6 +28,7 @@ import { getSendQueue } from "../lib/queue.js";
 import { checkQuota, incrementQuota } from "../lib/quota.js";
 import { indexEmail, searchEmails } from "@emailed/shared";
 import { usageEnforcement } from "../middleware/usage.js";
+import { idempotency } from "../middleware/idempotency.js";
 import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED } from "@emailed/reputation";
 import {
   validateCustomHeaders,
@@ -199,6 +200,7 @@ function buildRawMessage(
 const ListMessagesQuery = PaginationSchema.extend({
   status: z
     .enum([
+      "draft",
       "queued",
       "sending",
       "delivered",
@@ -557,7 +559,7 @@ async function handleSend(c: Context) {
 
 const messages = new Hono();
 
-const sendMiddleware = [requireScope("messages:send"), usageEnforcement, validateBody(SendMessageSchema)] as const;
+const sendMiddleware = [idempotency(), requireScope("messages:send"), usageEnforcement, validateBody(SendMessageSchema)] as const;
 
 // POST /v1/messages/send — Send an email (production pipeline)
 messages.post("/send", ...sendMiddleware, handleSend);
@@ -715,6 +717,7 @@ messages.get(
         eq(
           emails.status,
           query.status as
+            | "draft"
             | "queued"
             | "processing"
             | "sent"

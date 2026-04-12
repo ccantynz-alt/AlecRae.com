@@ -17,6 +17,7 @@ import { domains } from "./domains.js";
 // ---------------------------------------------------------------------------
 
 export const emailStatusEnum = pgEnum("email_status", [
+  "draft",
   "queued",
   "processing",
   "sent",

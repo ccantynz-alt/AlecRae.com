@@ -357,7 +357,7 @@ export class PostgresMessageStore implements MessageStore {
       fromAddress: "unknown@local",
       subject: "Appended message",
       textBody: message.rawMessage,
-      status: mailbox.toLowerCase() === "drafts" ? "queued" : "delivered", // "draft" not in enum; "queued" = not yet sent
+      status: mailbox.toLowerCase() === "drafts" ? "draft" : "delivered",
       createdAt: message.internalDate,
       updatedAt: new Date(),
       tags: [],

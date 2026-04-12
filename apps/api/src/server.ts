@@ -79,6 +79,7 @@ import { scripts } from "./routes/scripts.js";
 import { emailQuery } from "./routes/email-query.js";
 import { fbl } from "./routes/fbl.js";
 import { closeConnection } from "@emailed/db";
+import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
 import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@emailed/shared";
@@ -119,6 +120,7 @@ app.use(
       "Content-Type",
       "X-API-Key",
       "X-Request-Id",
+      "Idempotency-Key",
     ],
     exposeHeaders: [
       "X-Request-Id",
@@ -126,6 +128,7 @@ app.use(
       "X-RateLimit-Remaining",
       "X-RateLimit-Reset",
       "Retry-After",
+      "X-Idempotent-Replayed",
     ],
     maxAge: 86400,
     credentials: true,
@@ -481,6 +484,10 @@ async function shutdown(signal: string): Promise<void> {
     // Close rate-limit Redis connection
     await closeRateLimitRedis();
     console.log("[api] Rate-limit Redis closed");
+
+    // Close idempotency Redis connection
+    await closeIdempotencyRedis();
+    console.log("[api] Idempotency Redis closed");
 
     // Close the database connection pool
     await closeConnection();
