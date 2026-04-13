@@ -22,7 +22,7 @@
  * We handle backward compatibility through a conversion layer that
  * transforms HTML emails into SEDM for internal processing and rendering,
  * and converts SEDM back to HTML for outbound delivery to legacy systems.
- * But inside Emailed, everything is SEDM — giving us security, AI, and
+ * But inside AlecRae, everything is SEDM — giving us security, AI, and
  * rendering advantages no competitor can match.
  */
 

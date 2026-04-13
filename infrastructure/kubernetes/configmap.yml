@@ -1,36 +1,36 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: emailed-config
-  namespace: emailed
+  name: alecrae-config
+  namespace: alecrae
   labels:
-    app.kubernetes.io/name: emailed-config
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/name: alecrae-config
+    app.kubernetes.io/part-of: alecrae-platform
 data:
   # ─── Service URLs (internal cluster DNS) ───────────────────────────────────
-  API_INTERNAL_URL: "http://api.emailed.svc.cluster.local"
-  CLICKHOUSE_URL: "http://clickhouse.emailed.svc.cluster.local:8123"
-  MEILI_URL: "http://meilisearch.emailed.svc.cluster.local:7700"
+  API_INTERNAL_URL: "http://api.alecrae.svc.cluster.local"
+  CLICKHOUSE_URL: "http://clickhouse.alecrae.svc.cluster.local:8123"
+  MEILI_URL: "http://meilisearch.alecrae.svc.cluster.local:7700"
   S3_ENDPOINT: "https://s3.amazonaws.com"
 
   # ─── Public URLs ───────────────────────────────────────────────────────────
-  WEB_URL: "https://app.48co.ai"
-  API_URL: "https://api.48co.ai"
+  WEB_URL: "https://app.alecrae.com"
+  API_URL: "https://api.alecrae.com"
 
   # ─── S3 / Object Storage ──────────────────────────────────────────────────
-  S3_BUCKET: "emailed-attachments"
+  S3_BUCKET: "alecrae-attachments"
   S3_REGION: "us-east-1"
 
   # ─── MTA Configuration ────────────────────────────────────────────────────
-  MTA_HOSTNAME: "mail.48co.ai"
+  MTA_HOSTNAME: "mail.alecrae.com"
   DKIM_SELECTOR: "default"
 
   # ─── CORS ─────────────────────────────────────────────────────────────────
-  CORS_ORIGINS: "https://app.48co.ai,https://admin.48co.ai"
+  CORS_ORIGINS: "https://app.alecrae.com,https://admin.alecrae.com"
 
   # ─── Observability ────────────────────────────────────────────────────────
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.monitoring.svc.cluster.local:4318"
-  OTEL_SERVICE_NAME: "emailed"
+  OTEL_SERVICE_NAME: "alecrae"
   LOG_LEVEL: "info"
   LOG_FORMAT: "json"
 

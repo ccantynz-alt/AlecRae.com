@@ -23,18 +23,18 @@ import type {
   PaginationParams,
   PaginatedResponse,
 } from "../types.js";
-import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists } from "@emailed/db";
+import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
 import { checkQuota, incrementQuota } from "../lib/quota.js";
-import { indexEmail, searchEmails } from "@emailed/shared";
+import { indexEmail, searchEmails } from "@alecrae/shared";
 import { usageEnforcement } from "../middleware/usage.js";
 import { idempotency } from "../middleware/idempotency.js";
-import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED } from "@emailed/reputation";
+import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED } from "@alecrae/reputation";
 import {
   validateCustomHeaders,
   HEADER_INJECTION_REJECTED,
-} from "@emailed/mta/lib";
-import { scanAttachment, isSafe } from "@emailed/security";
+} from "@alecrae/mta/lib";
+import { scanAttachment, isSafe } from "@alecrae/security";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

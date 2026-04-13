@@ -1,5 +1,5 @@
 /**
- * Vienna Animation Library — Magic UI / Linear-grade motion presets
+ * AlecRae Animation Library — Magic UI / Linear-grade motion presets
  *
  * Pre-defined Framer Motion variants and spring physics tuned to match
  * Linear's snappy-but-organic feel. Used by list items, modals, page
@@ -7,7 +7,7 @@
  * intentional rather than incidental.
  *
  * All variants degrade gracefully to instant transitions when the user has
- * `prefers-reduced-motion` enabled (see `useViennaReducedMotion`).
+ * `prefers-reduced-motion` enabled (see `useAlecRaeReducedMotion`).
  */
 
 import type { Transition, Variants } from "motion/react";
@@ -15,7 +15,7 @@ import { useReducedMotion } from "motion/react";
 
 // ─── Spring Physics Presets ──────────────────────────────────────────────────
 
-/** Linear-style: confident bounce, fast settle. The "signature" Vienna feel. */
+/** Linear-style: confident bounce, fast settle. The "signature" AlecRae feel. */
 export const SPRING_BOUNCY: Transition = {
   type: "spring",
   stiffness: 400,
@@ -585,12 +585,12 @@ export const staggerGrid: Variants = staggerChildren(0.05, 0.03);
 // ─── Reduced Motion Support ──────────────────────────────────────────────────
 
 /**
- * Vienna's wrapper around Framer Motion's `useReducedMotion`.
+ * AlecRae's wrapper around Framer Motion's `useReducedMotion`.
  *
  * Returns `true` when the user prefers reduced motion. Components should
  * use this to swap variants for instant ones (or pass `transition={{ duration: 0 }}`).
  */
-export function useViennaReducedMotion(): boolean {
+export function useAlecRaeReducedMotion(): boolean {
   return useReducedMotion() ?? false;
 }
 

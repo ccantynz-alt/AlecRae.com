@@ -2,14 +2,14 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vienna Changelog — Releases & Updates",
-  description: "Every Vienna release. New features, fixes, and breaking changes.",
-  applicationName: "Vienna Changelog",
+  title: "AlecRae Changelog — Releases & Updates",
+  description: "Every AlecRae release. New features, fixes, and breaking changes.",
+  applicationName: "AlecRae Changelog",
   openGraph: {
-    title: "Vienna Changelog",
-    description: "Every Vienna release.",
-    url: "https://changelog.48co.ai",
-    siteName: "Vienna Changelog",
+    title: "AlecRae Changelog",
+    description: "Every AlecRae release.",
+    url: "https://changelog.alecrae.com",
+    siteName: "AlecRae Changelog",
     type: "website",
   },
 };

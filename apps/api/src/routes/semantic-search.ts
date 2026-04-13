@@ -25,14 +25,14 @@ import { z } from "zod";
 import { sql, eq, and, inArray } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, emails } from "@emailed/db";
+import { getDatabase, emails } from "@alecrae/db";
 import {
   embedText,
   embedBatch,
   embedQuery,
   EMBEDDING_DIMENSIONS,
   VOYAGE_MODEL,
-} from "@emailed/ai-engine/embeddings/voyage";
+} from "@alecrae/ai-engine/embeddings/voyage";
 import {
   IndexEmailRequestSchema,
   IndexBatchRequestSchema,
@@ -44,11 +44,11 @@ import {
   type EmbeddableEmail,
   MAX_SEARCH_RESULTS,
   DEFAULT_SEARCH_LIMIT,
-} from "@emailed/ai-engine/embeddings/types";
+} from "@alecrae/ai-engine/embeddings/types";
 import {
   indexAllUnindexed,
   getAutoIndexerStats,
-} from "@emailed/ai-engine/embeddings/auto-indexer";
+} from "@alecrae/ai-engine/embeddings/auto-indexer";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 

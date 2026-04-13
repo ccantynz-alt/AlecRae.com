@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Transcript Linker (S9)
+// @alecrae/ai-engine — Transcript Linker (S9)
 // =============================================================================
 // Detects meeting/call references inside an email thread:
 //   - Zoom / Google Meet / Teams / Webex links inline in body

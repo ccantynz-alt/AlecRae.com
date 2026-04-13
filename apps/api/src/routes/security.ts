@@ -17,15 +17,15 @@ import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
   verifySender,
   type SenderVerification,
-} from "@emailed/ai-engine/security/sender-verify";
+} from "@alecrae/ai-engine/security/sender-verify";
 import {
   analyzePhishing,
   type PhishingAnalysis,
   type PhishingInput,
   type PhishingLink,
   type PhishingAttachment,
-} from "@emailed/ai-engine/security/phishing";
-import { getDatabase, emails, attachments as attachmentsTable } from "@emailed/db";
+} from "@alecrae/ai-engine/security/phishing";
+import { getDatabase, emails, attachments as attachmentsTable } from "@alecrae/db";
 
 // ─── In-memory phishing report store (DB-backed in a future migration) ───────
 

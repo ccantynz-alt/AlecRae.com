@@ -147,7 +147,7 @@ describe("isWebhookEventType", () => {
 
 describe("constants", () => {
   it("should export the correct header names", () => {
-    expect(SIGNATURE_HEADER).toBe("x-emailed-signature");
-    expect(TIMESTAMP_HEADER).toBe("x-emailed-timestamp");
+    expect(SIGNATURE_HEADER).toBe("x-alecrae-signature");
+    expect(TIMESTAMP_HEADER).toBe("x-alecrae-timestamp");
   });
 });

@@ -1,5 +1,5 @@
 /**
- * @emailed/imap — PostgreSQL Storage Adapter
+ * @alecrae/imap — PostgreSQL Storage Adapter
  *
  * Implements the MessageStore interface from handlers/messages.ts,
  * mapping IMAP concepts (UIDs, sequence numbers, flags, mailboxes)
@@ -24,7 +24,7 @@
  */
 
 import { eq, and, desc, asc, inArray, like, gte, lte, sql, or } from "drizzle-orm";
-import { getDatabase, emails } from "@emailed/db";
+import { getDatabase, emails } from "@alecrae/db";
 import type {
   ImapMessage,
   ImapEnvelope,

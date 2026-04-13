@@ -1,9 +1,9 @@
--- Vienna (Emailed) — Neon PostgreSQL Setup
+-- AlecRae (AlecRae) — Neon PostgreSQL Setup
 -- Run this ONCE on your Neon database to create all tables.
 --
 -- Steps:
 --   1. Go to https://console.neon.tech
---   2. Create a new project (name: "vienna")
+--   2. Create a new project (name: "alecrae")
 --   3. Copy the connection string to .env.production as DATABASE_URL
 --   4. Open the SQL editor and paste this entire file
 --   5. Run it
@@ -299,4 +299,4 @@ CREATE INDEX IF NOT EXISTS templates_account_id_idx ON templates(account_id);
 
 -- ─── Done ────────────────────────────────────────────────────────────────────
 
-SELECT 'Vienna database setup complete! All tables created.' AS status;
+SELECT 'AlecRae database setup complete! All tables created.' AS status;

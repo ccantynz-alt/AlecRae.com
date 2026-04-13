@@ -1,7 +1,7 @@
 /**
- * Vienna Desktop — Electron Main Process
+ * AlecRae Desktop — Electron Main Process
  *
- * Native desktop wrapper for mail.48co.ai providing:
+ * Native desktop wrapper for mail.alecrae.com providing:
  *   - System tray + dock badge with unread count
  *   - Native notifications
  *   - Auto-updater
@@ -44,7 +44,7 @@ function resolveAppPath(...segments: string[]): string {
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 const WEB_APP_URL: string =
-  process.env["VIENNA_APP_URL"] ?? "https://mail.48co.ai";
+  process.env["ALECRAE_APP_URL"] ?? "https://mail.alecrae.com";
 const IS_DEV: boolean = process.env["NODE_ENV"] === "development";
 
 // ─── Store Types ────────────────────────────────────────────────────────────
@@ -217,8 +217,8 @@ function createMainWindow(): void {
   // Open external links in the default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (
-      url.startsWith("https://mail.48co.ai") ||
-      url.startsWith("https://48co.ai")
+      url.startsWith("https://mail.alecrae.com") ||
+      url.startsWith("https://alecrae.com")
     ) {
       return { action: "allow" as const };
     }
@@ -254,11 +254,11 @@ function createTray(): void {
   icon.setTemplateImage(true); // macOS dark mode support
 
   tray = new Tray(icon);
-  tray.setToolTip("Vienna");
+  tray.setToolTip("AlecRae");
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: "Show Vienna",
+      label: "Show AlecRae",
       click: (): void => {
         mainWindow?.show();
       },
@@ -289,7 +289,7 @@ function createTray(): void {
     },
     { type: "separator" },
     {
-      label: "Quit Vienna",
+      label: "Quit AlecRae",
       accelerator: "CmdOrCtrl+Q",
       click: (): void => {
         isQuitting = true;
@@ -309,7 +309,7 @@ function createTray(): void {
   });
 }
 
-// ─── Application Menu (Vienna branding) ─────────────────────────────────────
+// ─── Application Menu (AlecRae branding) ─────────────────────────────────────
 
 function createMenu(): void {
   const isMac = process.platform === "darwin";
@@ -317,7 +317,7 @@ function createMenu(): void {
   const macAppMenu: Electron.MenuItemConstructorOptions[] = isMac
     ? [
         {
-          label: "Vienna",
+          label: "AlecRae",
           submenu: [
             { role: "about" },
             { type: "separator" },
@@ -488,9 +488,9 @@ function createMenu(): void {
       label: "Help",
       submenu: [
         {
-          label: "Vienna Documentation",
+          label: "AlecRae Documentation",
           click: (): void => {
-            void shell.openExternal("https://docs.48co.ai");
+            void shell.openExternal("https://docs.alecrae.com");
           },
         },
         {
@@ -505,7 +505,7 @@ function createMenu(): void {
           label: "Report an Issue",
           click: (): void => {
             void shell.openExternal(
-              "https://github.com/ccantynz-alt/emailed/issues",
+              "https://github.com/ccantynz-alt/alecrae.com/issues",
             );
           },
         },
@@ -548,7 +548,7 @@ function updateUnreadBadge(count: number): void {
   }
 
   // Tray tooltip
-  tray?.setToolTip(count > 0 ? `Vienna \u2014 ${count} unread` : "Vienna");
+  tray?.setToolTip(count > 0 ? `AlecRae \u2014 ${count} unread` : "AlecRae");
 }
 
 // ─── Notifications ──────────────────────────────────────────────────────────
@@ -696,5 +696,5 @@ app.on("will-quit", () => {
   globalShortcut.unregisterAll();
 });
 
-// Handle mailto: protocol — makes Vienna the default email handler
+// Handle mailto: protocol — makes AlecRae the default email handler
 app.setAsDefaultProtocolClient("mailto");

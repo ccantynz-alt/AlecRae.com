@@ -9,15 +9,15 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: emailed
-      POSTGRES_USER: emailed
+      POSTGRES_DB: alecrae
+      POSTGRES_USER: alecrae
       POSTGRES_PASSWORD: dev_password
     ports:
       - "5432:5432"
     volumes:
       - postgres_dev:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U emailed -d emailed"]
+      test: ["CMD-SHELL", "pg_isready -U alecrae -d alecrae"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -36,8 +36,8 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:24-alpine
     environment:
-      CLICKHOUSE_DB: emailed_analytics
-      CLICKHOUSE_USER: emailed
+      CLICKHOUSE_DB: alecrae_analytics
+      CLICKHOUSE_USER: alecrae
       CLICKHOUSE_PASSWORD: dev_password
     ports:
       - "8123:8123"
@@ -56,7 +56,7 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: emailed
+      MINIO_ROOT_USER: alecrae
       MINIO_ROOT_PASSWORD: dev_password
     ports:
       - "9002:9000"

@@ -1,5 +1,5 @@
 /**
- * @emailed/imap — IMAP4rev2 Server
+ * @alecrae/imap — IMAP4rev2 Server
  *
  * Compatibility bridge that speaks IMAP (RFC 9051 / RFC 3501) to legacy
  * email clients while sharing the same underlying mailbox storage as JMAP.

@@ -8,7 +8,7 @@
  */
 
 import { Hono } from "hono";
-import { getDatabase } from "@emailed/db";
+import { getDatabase } from "@alecrae/db";
 import { sql } from "drizzle-orm";
 import Redis from "ioredis";
 import { Queue } from "bullmq";
@@ -19,7 +19,7 @@ const health = new Hono();
 
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
 const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
-const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "emailed:outbound";
+const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae:outbound";
 const startedAt = Date.now();
 
 // ─── Dependency check helpers ───────────────────────────────────────────────

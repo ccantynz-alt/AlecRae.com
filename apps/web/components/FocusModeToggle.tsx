@@ -10,7 +10,7 @@
 
 import type { JSX } from "react";
 import { motion } from "motion/react";
-import { SPRING_SNAPPY, useViennaReducedMotion } from "../lib/animations";
+import { SPRING_SNAPPY, useAlecRaeReducedMotion } from "../lib/animations";
 import { useFocusMode } from "../lib/focus-mode";
 
 export interface FocusModeToggleProps {
@@ -18,7 +18,7 @@ export interface FocusModeToggleProps {
 }
 
 export function FocusModeToggle({ className }: FocusModeToggleProps): JSX.Element {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const active = useFocusMode((s) => s.active);
   const toggle = useFocusMode((s) => s.toggleFocusMode);
   const filteredOutCount = useFocusMode((s) => s.filteredOutCount);

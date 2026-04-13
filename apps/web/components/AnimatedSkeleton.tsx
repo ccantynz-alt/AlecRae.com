@@ -12,7 +12,7 @@ import { motion } from "motion/react";
 import {
   skeletonRow,
   staggerChildren,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
 } from "../lib/animations";
 
 export type SkeletonShape = "line" | "circle" | "rect";
@@ -43,7 +43,7 @@ export function AnimatedSkeleton({
   borderRadius,
   className,
 }: AnimatedSkeletonProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const defaults = shapeDefaults[shape];
   const resolvedWidth = width ?? (shape === "circle" ? defaults.height : "100%");
   const resolvedHeight = height ?? defaults.height;

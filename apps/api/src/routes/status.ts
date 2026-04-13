@@ -1,14 +1,14 @@
 /**
  * Status / Health Route — Public Service Health Endpoint
  *
- * GET /v1/status/health — Returns health data for all Vienna services.
+ * GET /v1/status/health — Returns health data for all AlecRae services.
  *
  * This route is intentionally NOT behind auth middleware so that
  * the status page and external monitoring can probe it freely.
  */
 
 import { Hono } from "hono";
-import { getDatabase } from "@emailed/db";
+import { getDatabase } from "@alecrae/db";
 import { sql } from "drizzle-orm";
 import Redis from "ioredis";
 
@@ -208,7 +208,7 @@ function checkWebApp(): ServiceHealth {
     name: "Web App",
     status: "operational",
     latencyMs: 0,
-    description: "mail.48co.ai — Vienna inbox UI",
+    description: "mail.alecrae.com — AlecRae inbox UI",
   };
 }
 

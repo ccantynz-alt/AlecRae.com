@@ -20,7 +20,7 @@ import {
   events,
   suppressionLists,
   domains,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 // ---------------------------------------------------------------------------
 // ARF Parser

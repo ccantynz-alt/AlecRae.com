@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Box, Text } from "@emailed/ui";
+import { Box, Text } from "@alecrae/ui";
 
 interface NavItem {
   readonly label: string;

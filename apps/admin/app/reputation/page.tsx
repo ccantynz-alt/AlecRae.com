@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { Box, Text } from "@emailed/ui";
+import { Box, Text } from "@alecrae/ui";
 import { MetricCard } from "../../components/metric-card";
 import { StatusBadge } from "../../components/status-badge";
 import { DataTable } from "../../components/data-table";

@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — EmailListWithGestures
+ * AlecRae Mobile — EmailListWithGestures
  *
  * FlatList host for SwipeableEmailRow. Implements optimistic UI:
  * the row is removed instantly when an action commits, and reinserted

@@ -14,7 +14,7 @@
 
 import type { ReactElement } from "react";
 import { useState, useCallback, useEffect } from "react";
-import { Box, Text, Button, Card, CardContent } from "@emailed/ui";
+import { Box, Text, Button, Card, CardContent } from "@alecrae/ui";
 import { taskApi, type TaskProviderData } from "../lib/api";
 
 // ─── Props ──────────────────────────────────────────────────────────────────

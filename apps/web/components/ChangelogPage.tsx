@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ChangelogPage — Full changelog page for the Vienna web app.
+ * ChangelogPage — Full changelog page for the AlecRae web app.
  *
  * Fetches changelog entries from the API and renders them in a
  * timeline-style feed using the ChangelogFeed composite component.
@@ -16,7 +16,7 @@
 
 import type { ReactElement } from "react";
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Box, Text, ChangelogFeed, type ChangelogEntryData, type ChangelogCategory } from "@emailed/ui";
+import { Box, Text, ChangelogFeed, type ChangelogEntryData, type ChangelogCategory } from "@alecrae/ui";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,8 +49,8 @@ type LoadState = "idle" | "loading" | "loaded" | "error";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "https://api.48co.ai";
-const LAST_VISIT_KEY = "vienna_changelog_last_visit";
+const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "https://api.alecrae.com";
+const LAST_VISIT_KEY = "alecrae_changelog_last_visit";
 const PAGE_SIZE = 20;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -182,7 +182,7 @@ export function ChangelogPage({ className = "" }: ChangelogPageProps): ReactElem
         <Box as="header" className="mb-12">
           <Box className="flex items-center gap-3 mb-4">
             <Text variant="heading-lg" className="font-bold tracking-tight bg-gradient-to-r from-white via-blue-200 to-cyan-300 bg-clip-text text-transparent">
-              Vienna
+              AlecRae
             </Text>
             <Text variant="caption" className="text-sm uppercase tracking-wider text-blue-200/60">
               Changelog
@@ -242,7 +242,7 @@ export function ChangelogPage({ className = "" }: ChangelogPageProps): ReactElem
 
         {/* Footer */}
         <Box as="footer" className="text-center text-xs text-blue-200/40 pt-16 mt-16 border-t border-white/5">
-          2026 Vienna - changelog.48co.ai
+          2026 AlecRae - changelog.alecrae.com
         </Box>
       </Box>
     </Box>

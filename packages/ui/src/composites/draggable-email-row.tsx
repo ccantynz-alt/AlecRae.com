@@ -67,9 +67,9 @@ export interface DraggableEmailRowProps {
 // ─── Constants ─────────────────────────────────────────────────────────────
 
 const LONG_PRESS_DELAY_MS = 500;
-const DRAG_MIME = "application/x-vienna-email-id";
-const DRAG_THREAD_MIME = "application/x-vienna-thread-id";
-const DRAG_SUBJECT_MIME = "application/x-vienna-subject";
+const DRAG_MIME = "application/x-alecrae-email-id";
+const DRAG_THREAD_MIME = "application/x-alecrae-thread-id";
+const DRAG_SUBJECT_MIME = "application/x-alecrae-subject";
 
 const priorityIndicator = {
   high: "bg-status-error",

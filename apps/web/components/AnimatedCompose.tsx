@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
 import {
   composeBackdrop,
   composeEnter,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 
@@ -36,7 +36,7 @@ export function AnimatedCompose({
   onClose,
   className,
 }: AnimatedComposeProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const contentVariants = withReducedMotion(composeEnter, reduced);
   const backdropVariants = withReducedMotion(composeBackdrop, reduced);
 

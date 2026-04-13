@@ -2,30 +2,30 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vienna — Email, finally.",
+  title: "AlecRae — Email, Evolved.",
   description:
     "The fastest, smartest, most beautiful email client ever made. One subscription. All your accounts. AI in every layer.",
-  applicationName: "Vienna",
-  authors: [{ name: "Vienna" }],
+  applicationName: "AlecRae",
+  authors: [{ name: "AlecRae" }],
   keywords: [
     "email client",
     "Gmail alternative",
     "Outlook alternative",
     "AI email",
     "email app",
-    "Vienna",
+    "AlecRae",
   ],
   openGraph: {
-    title: "Vienna — Email, finally.",
+    title: "AlecRae — Email, Evolved.",
     description:
       "The fastest, smartest, most beautiful email client ever made.",
-    url: "https://48co.ai",
-    siteName: "Vienna",
+    url: "https://alecrae.com",
+    siteName: "AlecRae",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Vienna — Email, finally.",
+    title: "AlecRae — Email, Evolved.",
     description:
       "The fastest, smartest, most beautiful email client ever made.",
   },

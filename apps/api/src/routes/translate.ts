@@ -17,7 +17,7 @@ import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, emailTranslations, emails } from "@emailed/db";
+import { getDatabase, emailTranslations, emails } from "@alecrae/db";
 
 const ANTHROPIC_API_KEY = process.env["ANTHROPIC_API_KEY"] ?? process.env["CLAUDE_API_KEY"];
 

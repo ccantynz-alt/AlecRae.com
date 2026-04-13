@@ -47,7 +47,7 @@ export const changelogEntries = pgTable(
     isPublished: boolean("is_published").notNull().default(false),
 
     /** Display name of the author. */
-    authorName: text("author_name").notNull().default("Vienna Team"),
+    authorName: text("author_name").notNull().default("AlecRae Team"),
 
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

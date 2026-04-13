@@ -4,8 +4,8 @@ import { EndpointCard } from "../components/endpoint-card";
 import { Callout } from "../components/callout";
 
 export const metadata: Metadata = {
-  title: "Emails — Vienna API Docs",
-  description: "Send, list, retrieve, and search email messages through the Vienna API.",
+  title: "Emails — AlecRae API Docs",
+  description: "Send, list, retrieve, and search email messages through the AlecRae API.",
 };
 
 export default function EmailsPage(): React.JSX.Element {
@@ -48,8 +48,8 @@ export default function EmailsPage(): React.JSX.Element {
   "headers": { "X-Order-Id": "1234" },
   "tags": ["receipt", "order"]
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/messages \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/messages \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "from": "you@yourdomain.com",
@@ -59,10 +59,10 @@ export default function EmailsPage(): React.JSX.Element {
     "html": "<p>Thanks for your order.</p>",
     "tags": ["receipt"]
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/messages", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/messages", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -80,9 +80,9 @@ console.log(data.id, data.status);`}
           pythonExample={`import requests
 
 response = requests.post(
-    "https://api.48co.ai/v1/messages",
+    "https://api.alecrae.com/v1/messages",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
@@ -115,21 +115,21 @@ print(data["id"], data["status"])`}
             { name: "status", type: "string", required: false, description: "Filter by status: queued, sending, delivered, bounced, deferred, complained, failed" },
             { name: "tag", type: "string", required: false, description: "Filter by tag" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/messages?status=delivered&limit=10" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/messages?status=delivered&limit=10" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/messages?status=delivered&limit=10",
+  "https://api.alecrae.com/v1/messages?status=delivered&limit=10",
   {
     headers: {
-      "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+      "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     },
   }
 );
 
 const { data, cursor, hasMore } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/messages",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/messages",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
     params={"status": "delivered", "limit": 10},
 )
 
@@ -163,13 +163,13 @@ next_cursor = result.get("cursor")`}
           parameters={[
             { name: "id", type: "string", required: true, description: "Message ID (path parameter)" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/messages/msg_a1b2c3d4e5f6" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/messages/msg_a1b2c3d4e5f6" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/messages/msg_a1b2c3d4e5f6",
+  "https://api.alecrae.com/v1/messages/msg_a1b2c3d4e5f6",
   {
     headers: {
-      "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+      "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     },
   }
 );
@@ -177,8 +177,8 @@ next_cursor = result.get("cursor")`}
 const { data } = await response.json();
 console.log(data.status, data.deliveredAt);`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/messages/msg_a1b2c3d4e5f6",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/messages/msg_a1b2c3d4e5f6",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 message = response.json()["data"]
@@ -222,8 +222,8 @@ print(message["status"], message.get("deliveredAt"))`}
     }
   ]
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/messages/batch \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/messages/batch \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "messages": [
@@ -231,10 +231,10 @@ print(message["status"], message.get("deliveredAt"))`}
       { "from": "you@yourdomain.com", "to": ["bob@example.com"], "subject": "Hello", "text": "Hi Bob" }
     ]
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/messages/batch", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/messages/batch", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -247,9 +247,9 @@ print(message["status"], message.get("deliveredAt"))`}
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/messages/batch",
+    "https://api.alecrae.com/v1/messages/batch",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={

@@ -14,11 +14,11 @@
 import type { ReactElement } from "react";
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Box, Button, Text } from "@emailed/ui";
+import { Box, Button, Text } from "@alecrae/ui";
 import { ActionItemExtractor, type ThreadEmail } from "./ActionItemExtractor";
 import {
   SPRING_SNAPPY,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
 } from "../lib/animations";
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -49,7 +49,7 @@ export function QuickTaskButton({
   className,
 }: QuickTaskButtonProps): ReactElement {
   const [isOpen, setIsOpen] = useState(false);
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
 
   const handleClick = useCallback((): void => {
     if (mode === "button" && onOpen !== undefined) {

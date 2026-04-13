@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Smart Inbox Priority Ranker
+// @alecrae/ai-engine — Smart Inbox Priority Ranker
 // =============================================================================
 // ML-based priority scoring that ranks emails by urgency, sender importance,
 // relationship strength, and learned user behaviour. Adapts to each user's

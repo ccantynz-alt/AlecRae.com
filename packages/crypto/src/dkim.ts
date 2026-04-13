@@ -6,8 +6,8 @@
 import { generateKeyPair as nodeGenerateKeyPair } from "node:crypto";
 import { promisify } from "node:util";
 
-import { ok, err } from "@emailed/shared";
-import type { Result } from "@emailed/shared";
+import { ok, err } from "@alecrae/shared";
+import type { Result } from "@alecrae/shared";
 
 import type {
   DkimAlgorithm,

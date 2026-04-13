@@ -1,5 +1,5 @@
 /**
- * @emailed/api — Main Server Entry Point
+ * @alecrae/api — Main Server Entry Point
  *
  * Creates the Hono application, registers all routes, applies middleware,
  * starts listening, and handles graceful shutdown.
@@ -78,12 +78,12 @@ import { voiceMessageRouter } from "./routes/voice-message.js";
 import { scripts } from "./routes/scripts.js";
 import { emailQuery } from "./routes/email-query.js";
 import { fbl } from "./routes/fbl.js";
-import { closeConnection } from "@emailed/db";
+import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue, getSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
-import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@emailed/shared";
-import { startAutoIndexer, stopAutoIndexer } from "@emailed/ai-engine/embeddings/auto-indexer";
+import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@alecrae/shared";
+import { startAutoIndexer, stopAutoIndexer } from "@alecrae/ai-engine/embeddings/auto-indexer";
 import { processDLQ } from "./lib/dlq-processor.js";
 import { reconcileStorageUsage } from "./lib/storage-quota.js";
 
@@ -143,7 +143,7 @@ app.use(
 app.get("/health", (c) => {
   return c.json({
     status: "ok",
-    service: "emailed-api",
+    service: "alecrae-api",
     version: process.env["SERVICE_VERSION"] ?? "0.1.0",
     timestamp: new Date().toISOString(),
   });
@@ -152,7 +152,7 @@ app.get("/health", (c) => {
 // Deep health check with dependency verification (also no auth)
 app.route("/v1/health", health);
 
-// Public status health endpoint (no auth — consumed by status.48co.ai)
+// Public status health endpoint (no auth — consumed by status.alecrae.com)
 app.route("/v1/status", status);
 
 // Auth endpoints: strict IP rate limiting (10 req/min), no API key auth
@@ -430,13 +430,13 @@ app.onError((err, c) => {
 const port = parseInt(process.env["PORT"] ?? "3001", 10);
 
 console.log("=".repeat(60));
-console.log("  Emailed API — Starting");
+console.log("  AlecRae API — Starting");
 console.log(`  Port: ${port}`);
 console.log(`  Environment: ${process.env.NODE_ENV ?? "development"}`);
 console.log("=".repeat(60));
 
 // Initialize OpenTelemetry
-initTelemetry("emailed-api").catch((err) => {
+initTelemetry("alecrae-api").catch((err) => {
   console.warn("[api] OpenTelemetry init failed:", err);
 });
 

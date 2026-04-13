@@ -27,18 +27,18 @@ import type {
   SpatialColorScheme,
   SpatialFilterState,
   ThreadCategory,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 
 // ─── Lazy imports ───────────────────────────────────────────────────────────
 
 const LazySpatialInboxView = lazy(() =>
-  import("@emailed/ui/composites/spatial-inbox-view").then((mod) => ({
+  import("@alecrae/ui/composites/spatial-inbox-view").then((mod) => ({
     default: mod.SpatialInboxView,
   })),
 );
 
 const LazySpatialControls = lazy(() =>
-  import("@emailed/ui/composites/spatial-controls").then((mod) => ({
+  import("@alecrae/ui/composites/spatial-controls").then((mod) => ({
     default: mod.SpatialControls,
   })),
 );

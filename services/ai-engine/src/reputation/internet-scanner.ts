@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Deep Internet Scanner
+// @alecrae/ai-engine — Deep Internet Scanner
 // =============================================================================
 // Checks blocklists (Spamhaus, Barracuda, etc.), WHOIS data, domain age,
 // web presence, and social signals. Aggregates results into a risk score.
@@ -217,7 +217,7 @@ export class InternetScanner {
       // Use a WHOIS API endpoint. In production this would be an actual WHOIS
       // service or raw TCP WHOIS query. Here we use an HTTP-based lookup.
       const response = await this.withTimeout(
-        this.http.get(`https://whois.emailed.internal/api/v1/lookup?domain=${encodeURIComponent(domain)}`, {
+        this.http.get(`https://whois.alecrae.internal/api/v1/lookup?domain=${encodeURIComponent(domain)}`, {
           timeout: this.timeoutMs,
         }),
         this.timeoutMs,

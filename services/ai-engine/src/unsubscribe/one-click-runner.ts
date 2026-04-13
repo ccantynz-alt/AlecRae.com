@@ -36,7 +36,7 @@ export async function sendOneClickUnsubscribe(
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Vienna-Unsubscribe-Agent/1.0 (+https://48co.ai)",
+        "User-Agent": "AlecRae-Unsubscribe-Agent/1.0 (+https://alecrae.com)",
       },
       body: "List-Unsubscribe=One-Click",
       redirect: "follow",

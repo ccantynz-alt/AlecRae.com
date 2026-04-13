@@ -5,8 +5,8 @@ import { CodeBlock } from "../components/code-block";
 import { Callout } from "../components/callout";
 
 export const metadata: Metadata = {
-  title: "Quickstart — Vienna API Docs",
-  description: "Send your first email through the Vienna API in under five minutes.",
+  title: "Quickstart — AlecRae API Docs",
+  description: "Send your first email through the AlecRae API in under five minutes.",
 };
 
 export default function QuickstartPage(): React.JSX.Element {
@@ -14,7 +14,7 @@ export default function QuickstartPage(): React.JSX.Element {
     <div className="px-6 md:px-8 py-12 md:py-16 max-w-4xl mx-auto">
       <PageHeader
         title="Quickstart"
-        description="Send your first email through the Vienna API in under five minutes."
+        description="Send your first email through the AlecRae API in under five minutes."
       />
 
       <section className="space-y-8">
@@ -22,14 +22,14 @@ export default function QuickstartPage(): React.JSX.Element {
           <h2 className="text-2xl font-bold text-white mb-3">1. Get an API key</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
             Sign in to the{" "}
-            <a href="https://mail.48co.ai/settings/api" className="text-cyan-300 hover:text-cyan-200 underline">
-              Vienna dashboard
+            <a href="https://mail.alecrae.com/settings/api" className="text-cyan-300 hover:text-cyan-200 underline">
+              AlecRae dashboard
             </a>
             , navigate to Settings &gt; API Keys, and create a new key. Treat it like a password — anyone with the key can
             send mail on your behalf.
           </p>
           <CodeBlock
-            code={`export VIENNA_API_KEY=vn_live_xxxxxxxxxxxxxxxxxxxxxxxx`}
+            code={`export ALECRAE_API_KEY=vn_live_xxxxxxxxxxxxxxxxxxxxxxxx`}
             language="bash"
             title="Set your API key"
           />
@@ -43,11 +43,11 @@ export default function QuickstartPage(): React.JSX.Element {
           <h2 className="text-2xl font-bold text-white mb-3">2. Verify a sending domain</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
             Before you can send from <code className="text-cyan-300 font-mono text-xs">you@yourdomain.com</code>, you need to verify the domain.
-            Vienna will give you SPF, DKIM, and DMARC records to add to your DNS.
+            AlecRae will give you SPF, DKIM, and DMARC records to add to your DNS.
           </p>
           <CodeBlock
-            code={`curl https://api.48co.ai/v1/domains \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+            code={`curl https://api.alecrae.com/v1/domains \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "domain": "yourdomain.com" }'`}
             language="bash"
@@ -62,13 +62,13 @@ export default function QuickstartPage(): React.JSX.Element {
           <h2 className="text-2xl font-bold text-white mb-3">3. Send a message</h2>
 
           <CodeBlock
-            code={`curl https://api.48co.ai/v1/messages \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+            code={`curl https://api.alecrae.com/v1/messages \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "from": "you@yourdomain.com",
     "to": ["customer@example.com"],
-    "subject": "Hello from Vienna",
+    "subject": "Hello from AlecRae",
     "text": "It worked.",
     "html": "<p>It worked.</p>"
   }'`}
@@ -77,16 +77,16 @@ export default function QuickstartPage(): React.JSX.Element {
           />
 
           <CodeBlock
-            code={`const response = await fetch("https://api.48co.ai/v1/messages", {
+            code={`const response = await fetch("https://api.alecrae.com/v1/messages", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
     from: "you@yourdomain.com",
     to: ["customer@example.com"],
-    subject: "Hello from Vienna",
+    subject: "Hello from AlecRae",
     text: "It worked.",
     html: "<p>It worked.</p>",
   }),
@@ -102,15 +102,15 @@ console.log(data.id); // msg_01HX...`}
             code={`import requests
 
 response = requests.post(
-    "https://api.48co.ai/v1/messages",
+    "https://api.alecrae.com/v1/messages",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
         "from": "you@yourdomain.com",
         "to": ["customer@example.com"],
-        "subject": "Hello from Vienna",
+        "subject": "Hello from AlecRae",
         "text": "It worked.",
         "html": "<p>It worked.</p>",
     },
@@ -134,11 +134,11 @@ print(data["id"])  # msg_01HX...`}
             receive delivery, open, click, bounce, and complaint events in real time.
           </p>
           <CodeBlock
-            code={`curl https://api.48co.ai/v1/webhooks \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+            code={`curl https://api.alecrae.com/v1/webhooks \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "url": "https://yourdomain.com/hooks/vienna",
+    "url": "https://yourdomain.com/hooks/alecrae",
     "events": ["message.delivered", "message.bounced", "message.opened"]
   }'`}
             language="bash"

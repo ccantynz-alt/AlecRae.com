@@ -1,6 +1,6 @@
-# Vienna Desktop
+# AlecRae Desktop
 
-Native desktop wrapper for Vienna, providing:
+Native desktop wrapper for AlecRae, providing:
 
 - **Native notifications** with click-to-open
 - **System tray** with quick actions
@@ -15,7 +15,7 @@ Native desktop wrapper for Vienna, providing:
 
 ## Architecture
 
-The desktop app is a thin Electron wrapper around `mail.48co.ai`. All business logic lives in the web app — the desktop wrapper adds native integration only.
+The desktop app is a thin Electron wrapper around `mail.alecrae.com`. All business logic lives in the web app — the desktop wrapper adds native integration only.
 
 ```
 ┌─────────────────────────────────────────┐
@@ -29,13 +29,13 @@ The desktop app is a thin Electron wrapper around `mail.48co.ai`. All business l
                   │ IPC
 ┌─────────────────┴───────────────────────┐
 │  Preload (preload.ts)                    │
-│  - Exposes window.vienna API             │
+│  - Exposes window.alecrae API             │
 │  - contextIsolation: true                 │
 └─────────────────┬───────────────────────┘
                   │ contextBridge
 ┌─────────────────┴───────────────────────┐
-│  Renderer: https://mail.48co.ai       │
-│  - Uses window.vienna when available     │
+│  Renderer: https://mail.alecrae.com       │
+│  - Uses window.alecrae when available     │
 │  - Falls back gracefully in browser      │
 └─────────────────────────────────────────┘
 ```

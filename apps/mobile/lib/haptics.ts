@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Semantic haptic helpers
+ * AlecRae Mobile — Semantic haptic helpers
  *
  * Wraps expo-haptics with intent-revealing names so calling code reads
  * like UX design ("medium tap on threshold cross") instead of platform

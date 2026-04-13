@@ -3,8 +3,8 @@ import { PageHeader } from "../components/page-header";
 import { EndpointCard } from "../components/endpoint-card";
 
 export const metadata: Metadata = {
-  title: "Calendar — Vienna API Docs",
-  description: "Calendar events, scheduling, and availability through the Vienna API.",
+  title: "Calendar — AlecRae API Docs",
+  description: "Calendar events, scheduling, and availability through the AlecRae API.",
 };
 
 export default function CalendarPage(): React.JSX.Element {
@@ -28,22 +28,22 @@ export default function CalendarPage(): React.JSX.Element {
             { name: "calendar_id", type: "string", required: false, description: "Filter by specific calendar" },
             { name: "limit", type: "integer", required: false, description: "Max events to return (1-100, default 50)" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/calendar/events?from=2026-04-09T00:00:00Z&to=2026-04-16T00:00:00Z" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/calendar/events?from=2026-04-09T00:00:00Z&to=2026-04-16T00:00:00Z" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/calendar/events?" + new URLSearchParams({
+  "https://api.alecrae.com/v1/calendar/events?" + new URLSearchParams({
     from: "2026-04-09T00:00:00Z",
     to: "2026-04-16T00:00:00Z",
   }),
   {
-    headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+    headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
   }
 );
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/calendar/events",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/calendar/events",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
     params={
         "from": "2026-04-09T00:00:00Z",
         "to": "2026-04-16T00:00:00Z",
@@ -94,8 +94,8 @@ events = response.json()["data"]`}
   "attendees": ["alice@example.com", "bob@example.com"],
   "location": "Conference Room B"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/calendar/events \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/calendar/events \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "title": "Project review",
@@ -103,10 +103,10 @@ events = response.json()["data"]`}
     "end": "2026-04-10T15:00:00Z",
     "attendees": ["alice@example.com"]
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/calendar/events", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/calendar/events", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -119,9 +119,9 @@ events = response.json()["data"]`}
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/calendar/events",
+    "https://api.alecrae.com/v1/calendar/events",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
@@ -158,24 +158,24 @@ event = response.json()["data"]`}
             { name: "to", type: "datetime", required: true, description: "End of range (ISO 8601)" },
             { name: "duration", type: "integer", required: false, description: "Desired meeting duration in minutes (default 30)" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/calendar/availability?emails=alice@example.com,bob@example.com&from=2026-04-10T08:00:00Z&to=2026-04-10T18:00:00Z&duration=60" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/calendar/availability?emails=alice@example.com,bob@example.com&from=2026-04-10T08:00:00Z&to=2026-04-10T18:00:00Z&duration=60" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/calendar/availability?" + new URLSearchParams({
+  "https://api.alecrae.com/v1/calendar/availability?" + new URLSearchParams({
     emails: "alice@example.com,bob@example.com",
     from: "2026-04-10T08:00:00Z",
     to: "2026-04-10T18:00:00Z",
     duration: "60",
   }),
   {
-    headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+    headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
   }
 );
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/calendar/availability",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/calendar/availability",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
     params={
         "emails": "alice@example.com,bob@example.com",
         "from": "2026-04-10T08:00:00Z",

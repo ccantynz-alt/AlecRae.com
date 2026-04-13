@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
 import {
   SPRING_BOUNCY,
   SPRING_PRECISE,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
 } from "../lib/animations";
 
 export interface AnimatedSidebarNavItem {
@@ -47,7 +47,7 @@ export function AnimatedSidebar({
   onNavigate,
   className,
 }: AnimatedSidebarProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
 
   return (
     <motion.nav

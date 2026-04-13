@@ -1,5 +1,5 @@
 /**
- * Vienna Theme System — Dark Mode + Custom Themes
+ * AlecRae Theme System — Dark Mode + Custom Themes
  *
  * Features:
  *   - Light / Dark / System (auto-detect) modes

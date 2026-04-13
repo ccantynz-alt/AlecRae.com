@@ -127,7 +127,7 @@ export function formatResponse(response: SmtpResponse): string {
  */
 export const SmtpResponses = {
   greeting(hostname: string, banner?: string): SmtpResponse {
-    const msg = banner ?? `${hostname} ESMTP Emailed MTA Ready`;
+    const msg = banner ?? `${hostname} ESMTP AlecRae MTA Ready`;
     return { code: 220, message: msg, isMultiline: false };
   },
 

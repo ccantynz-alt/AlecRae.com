@@ -12,7 +12,7 @@ import {
   EmailViewer,
   type EmailListItem,
   type EmailMessage,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
 import { messagesApi, type Message, type MessageDetail } from "../../../lib/api";
 import { NewsletterSummaryPreview } from "../../../components/NewsletterSummaryPreview";
@@ -23,7 +23,7 @@ import {
   fadeInUp,
   threadExpand,
   SPRING_BOUNCY,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
 } from "../../../lib/animations";
 
 function formatTimestamp(iso: string): string {
@@ -136,7 +136,7 @@ function toEmailMessage(detail: MessageDetail): EmailMessage {
 
 export default function InboxPage(): React.ReactNode {
   const router = useRouter();
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const [emailItems, setEmailItems] = useState<EmailListItem[]>([]);
   const [selectedEmailId, setSelectedEmailId] = useState<string | undefined>();
   const [selectedEmail, setSelectedEmail] = useState<EmailMessage | null>(null);

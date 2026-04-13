@@ -26,7 +26,7 @@ export function MobileNav({ groups }: MobileNavProps): React.JSX.Element {
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-slate-950/80 backdrop-blur-md sticky top-0 z-30">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-xl font-bold bg-gradient-to-r from-white via-blue-200 to-cyan-300 bg-clip-text text-transparent">
-            Vienna
+            AlecRae
           </span>
           <span className="text-xs uppercase tracking-wider text-blue-200/40">Docs</span>
         </Link>

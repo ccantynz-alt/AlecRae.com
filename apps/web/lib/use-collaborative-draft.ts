@@ -35,7 +35,7 @@ import type {
   Collaborator,
   ConnectionStatus,
   CollaborativeEditorConfig,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -186,7 +186,7 @@ export function useCollaborativeDraft(
   const config: CollaborativeEditorConfig | null =
     draftId && sessionId && token
       ? {
-          websocketUrl: `${(endpoint ?? "wss://collab.48co.ai").replace(/\/$/, "")}/collab/${draftId}?token=${encodeURIComponent(token)}`,
+          websocketUrl: `${(endpoint ?? "wss://collab.alecrae.com").replace(/\/$/, "")}/collab/${draftId}?token=${encodeURIComponent(token)}`,
           token,
           sessionId,
           draftId,

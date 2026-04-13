@@ -15,7 +15,7 @@ import { motion } from "motion/react";
 import {
   SPRING_SNAPPY,
   listItemEnter,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 
@@ -65,7 +65,7 @@ export function FocusModeEmailCard({
   onMarkReviewed,
   index,
 }: FocusModeEmailCardProps): JSX.Element {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const itemVariants = withReducedMotion(listItemEnter, reduced);
 
   const handleClick = (): void => {

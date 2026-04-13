@@ -1,10 +1,10 @@
-import { Box, Text, Card, CardContent } from "@emailed/ui";
+import { Box, Text, Card, CardContent } from "@alecrae/ui";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Service Level Agreement - Emailed",
+  title: "Service Level Agreement - AlecRae",
   description:
-    "Emailed Service Level Agreement covering uptime commitments, service credits, and performance targets.",
+    "AlecRae Service Level Agreement covering uptime commitments, service credits, and performance targets.",
 };
 
 export default function SLAPage() {
@@ -21,8 +21,8 @@ export default function SLAPage() {
 
       <Text variant="body-md" className="text-content-secondary leading-relaxed">
         This Service Level Agreement (&quot;SLA&quot;) is a policy governing the use of
-        the Emailed platform (&quot;Service&quot;) under the terms of the Emailed Terms
-        of Service (the &quot;Terms&quot;) between Emailed, Inc. (&quot;Emailed,&quot;
+        the AlecRae platform (&quot;Service&quot;) under the terms of the AlecRae Terms
+        of Service (the &quot;Terms&quot;) between AlecRae, Inc. (&quot;AlecRae,&quot;
         &quot;we,&quot; &quot;us&quot;) and users of the Service (&quot;you,&quot;
         &quot;your&quot;). This SLA applies separately to each account using the
         Service. Unless otherwise provided herein, this SLA is subject to the Terms.
@@ -34,7 +34,7 @@ export default function SLAPage() {
           1. Service Availability Commitment
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed commits to a monthly uptime percentage of 99.99% for the core
+          AlecRae commits to a monthly uptime percentage of 99.99% for the core
           email platform, which equates to a maximum of approximately 4.38 minutes of
           unplanned downtime per month, or approximately 52.6 minutes per year. This
           commitment applies to all production services including the email sending
@@ -110,7 +110,7 @@ export default function SLAPage() {
             <Text variant="body-md" className="text-content-secondary leading-relaxed">
               <Text as="span" className="font-semibold text-content">Third-Party Failures.</Text>{" "}
               Downtime attributable to third-party services, software, or hardware
-              not under Emailed&apos;s control, including third-party DNS providers,
+              not under AlecRae&apos;s control, including third-party DNS providers,
               recipient mail servers, or ISP routing issues.
             </Text>
           </Box>
@@ -132,7 +132,7 @@ export default function SLAPage() {
           4. Service Credits
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          If Emailed fails to meet the Monthly Uptime Percentage commitment, you may
+          If AlecRae fails to meet the Monthly Uptime Percentage commitment, you may
           be eligible for Service Credits as described below. Service Credits are
           calculated as a percentage of your total monthly fees for the month in which
           the failure occurred.
@@ -194,7 +194,7 @@ export default function SLAPage() {
           5. Email Delivery Performance SLA
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          In addition to overall platform availability, Emailed commits to the
+          In addition to overall platform availability, AlecRae commits to the
           following email-specific performance targets:
         </Text>
         <Card>
@@ -256,7 +256,7 @@ export default function SLAPage() {
           6. AI Service SLA
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed&apos;s AI-powered features are subject to the following additional
+          AlecRae&apos;s AI-powered features are subject to the following additional
           performance commitments:
         </Text>
         <Card>
@@ -318,7 +318,7 @@ export default function SLAPage() {
           7. Support Response Times
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed provides tiered support response commitments based on issue severity:
+          AlecRae provides tiered support response commitments based on issue severity:
         </Text>
         <Card>
           <CardContent>
@@ -396,7 +396,7 @@ export default function SLAPage() {
           8. Monitoring and Reporting
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed provides comprehensive monitoring and transparency through the
+          AlecRae provides comprehensive monitoring and transparency through the
           following mechanisms:
         </Text>
         <Box className="space-y-3 pl-6">
@@ -404,7 +404,7 @@ export default function SLAPage() {
             <Text variant="body-md" className="text-brand-600 font-bold">a.</Text>
             <Text variant="body-md" className="text-content-secondary leading-relaxed">
               <Text as="span" className="font-semibold text-content">Real-Time Status Page.</Text>{" "}
-              A publicly accessible status page at status.emailed.dev displaying
+              A publicly accessible status page at status.alecrae.dev displaying
               current operational status of all services, updated in real time.
             </Text>
           </Box>
@@ -466,8 +466,8 @@ export default function SLAPage() {
           </Box>
         </Box>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Requests may be submitted by emailing sla@emailed.dev or through the support
-          portal. Emailed will review and respond to credit requests within 10 business
+          Requests may be submitted by emailing sla@alecrae.dev or through the support
+          portal. AlecRae will review and respond to credit requests within 10 business
           days. If we confirm the SLA failure, credits will be applied to your next
           billing cycle.
         </Text>
@@ -480,7 +480,7 @@ export default function SLAPage() {
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
           Service Credits as described in this SLA are your sole and exclusive remedy
-          for any failure by Emailed to meet the service level commitments set forth
+          for any failure by AlecRae to meet the service level commitments set forth
           herein. This SLA does not entitle you to any additional remedies, including
           but not limited to damages, refunds beyond the stated credit amounts, or
           termination rights beyond those specified in the Terms of Service. The
@@ -495,7 +495,7 @@ export default function SLAPage() {
           11. SLA Modifications
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed reserves the right to modify this SLA at any time. We will provide at
+          AlecRae reserves the right to modify this SLA at any time. We will provide at
           least 30 days&apos; notice of material changes via email and through the
           platform. Continued use of the Service following the effective date of any
           modifications constitutes your acceptance of the updated SLA. Modifications
@@ -506,7 +506,7 @@ export default function SLAPage() {
 
       <Box className="border-t border-border pt-6">
         <Text variant="body-sm" muted>
-          Questions about this SLA? Contact us at legal@emailed.dev or visit our
+          Questions about this SLA? Contact us at legal@alecrae.dev or visit our
           support portal.
         </Text>
       </Box>

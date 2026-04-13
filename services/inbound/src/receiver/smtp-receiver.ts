@@ -78,7 +78,7 @@ interface SmtpReceiverConfig {
 }
 
 const DEFAULT_CONFIG: SmtpReceiverConfig = {
-  hostname: "mx.emailed.dev",
+  hostname: "mx.alecrae.dev",
   port: 25,
   maxMessageSize: 25 * 1024 * 1024, // 25 MB
   maxRecipients: 100,
@@ -132,7 +132,7 @@ export class SmtpConnectionHandler {
     this.state = "ready";
     return {
       code: 220,
-      message: `${this.config.hostname} ESMTP Emailed Inbound - ${this.session.id}`,
+      message: `${this.config.hostname} ESMTP AlecRae Inbound - ${this.session.id}`,
     };
   }
 
@@ -496,7 +496,7 @@ export class SmtpReceiver {
     );
 
     // Send SMTP greeting
-    socket.write(`220 ${this.config.hostname} ESMTP Emailed\r\n`);
+    socket.write(`220 ${this.config.hostname} ESMTP AlecRae\r\n`);
 
     socket.setTimeout(this.config.connectionTimeout);
 

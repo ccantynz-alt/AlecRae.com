@@ -1,5 +1,5 @@
 /**
- * Vienna Local AI Router — Three-Tier Compute Model
+ * AlecRae Local AI Router — Three-Tier Compute Model
  *
  * Per CLAUDE.md architecture:
  *
@@ -29,7 +29,7 @@
  *   - Summarization:  ~50K/day at scale -> $400+/day on Haiku -> $0 on WebGPU
  *   - Translation:    ~30K/day at scale -> $200+/day on Haiku -> $0 on WebGPU
  *
- *   Estimated savings at 100K DAU: ~$35,000/month. This is why Vienna
+ *   Estimated savings at 100K DAU: ~$35,000/month. This is why AlecRae
  *   can sell at $9/mo while bundling Grammarly + Dragon + Front + more.
  *
  * Privacy bonus: tasks routed locally never leave the user's device.
@@ -291,7 +291,7 @@ export async function getLocalAIStatus(): Promise<LocalAIStatus> {
 // ─── Cloud Fallback ──────────────────────────────────────────────────────────
 
 /**
- * Cloud Claude API client. Uses Vienna's existing /api/ai/complete endpoint
+ * Cloud Claude API client. Uses AlecRae's existing /api/ai/complete endpoint
  * which proxies to Anthropic with auth + rate limits attached server-side.
  *
  * Cost note: pricing varies by model. The router does not pick the model --

@@ -21,10 +21,10 @@ const BASE_PATH = "/v1/domains";
  *
  * Usage:
  * ```ts
- * const emailed = new Emailed({ auth: { type: "apiKey", key: "em_live_..." } });
- * const domain = await emailed.domains.add({ name: "example.com" });
- * const records = await emailed.domains.getDnsRecords(domain.data.id);
- * await emailed.domains.verify(domain.data.id);
+ * const alecrae = new AlecRae({ auth: { type: "apiKey", key: "em_live_..." } });
+ * const domain = await alecrae.domains.add({ name: "example.com" });
+ * const records = await alecrae.domains.getDnsRecords(domain.data.id);
+ * await alecrae.domains.verify(domain.data.id);
  * ```
  */
 export class Domains {

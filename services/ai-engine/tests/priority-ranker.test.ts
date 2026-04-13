@@ -17,7 +17,7 @@ function makeEmail(overrides: Record<string, unknown> = {}) {
         name: 'Colleague',
       },
       to: (overrides['to'] as unknown[]) ?? [
-        { address: 'user@emailed.com', domain: 'emailed.com', name: 'User' },
+        { address: 'user@alecrae.com', domain: 'alecrae.com', name: 'User' },
       ],
       cc: overrides['cc'] ?? undefined,
       bcc: overrides['bcc'] ?? undefined,
@@ -30,7 +30,7 @@ function makeEmail(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-const USER_ID = 'user@emailed.com';
+const USER_ID = 'user@alecrae.com';
 
 // ---------------------------------------------------------------------------
 // VIP Detection

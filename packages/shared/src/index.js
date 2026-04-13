@@ -5,7 +5,7 @@ export { PLAN_LIMITS, STORAGE_LIMITS, BURST_MULTIPLIER, RATE_LIMIT_WINDOW_SECOND
 export { ok, err, map, mapErr, andThen, unwrapOr, unwrapOrElse, unwrap, collect, fromPromise, fromThrowable, } from "./utils/result.js";
 export { isValidEmail, isValidDomain, isValidHostname, emailSchema, emailAddressSchema, domainSchema, nonEmptyString, uuidSchema, tagSchema, metadataSchema, apiKeyFormatSchema, paginationSchema, } from "./utils/validation.js";
 // Errors
-export { BaseError, EmailError, EmailValidationError, EmailSendError, EmailBounceError, EmailSizeExceededError, RecipientNotFoundError, AuthError, InvalidApiKeyError, ExpiredApiKeyError, InsufficientPermissionsError, DnsError, DomainNotVerifiedError, DomainVerificationFailedError, DnsRecordNotFoundError, RateLimitError, QuotaExceededError, NotFoundError, ConflictError, DatabaseError, SmtpConnectionError, WebhookDeliveryError, InternalError, isEmailedError, ERROR_CODE_MAP, } from "./errors/index.js";
+export { BaseError, EmailError, EmailValidationError, EmailSendError, EmailBounceError, EmailSizeExceededError, RecipientNotFoundError, AuthError, InvalidApiKeyError, ExpiredApiKeyError, InsufficientPermissionsError, DnsError, DomainNotVerifiedError, DomainVerificationFailedError, DnsRecordNotFoundError, RateLimitError, QuotaExceededError, NotFoundError, ConflictError, DatabaseError, SmtpConnectionError, WebhookDeliveryError, InternalError, isAlecRaeError, ERROR_CODE_MAP, } from "./errors/index.js";
 // Search
 export { initSearchIndex, indexEmail, searchEmails, removeEmail, } from "./search/meilisearch.js";
 // Telemetry

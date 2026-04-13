@@ -6,17 +6,17 @@ import { Callout } from "../components/callout";
 import { Table } from "../components/table";
 
 export const metadata: Metadata = {
-  title: "From Apple Mail to Vienna — Vienna Docs",
+  title: "From Apple Mail to AlecRae — AlecRae Docs",
   description:
-    "Step-by-step guide to migrating from Apple Mail to Vienna using MBOX export and IMAP sync.",
+    "Step-by-step guide to migrating from Apple Mail to AlecRae using MBOX export and IMAP sync.",
 };
 
 export default function MigrateAppleMailPage(): React.JSX.Element {
   return (
     <div className="px-6 md:px-8 py-12 md:py-16 max-w-4xl mx-auto">
       <PageHeader
-        title="From Apple Mail to Vienna"
-        description="Migrate from Apple Mail to Vienna using MBOX export. All your emails, folders, and structure transfer seamlessly."
+        title="From Apple Mail to AlecRae"
+        description="Migrate from Apple Mail to AlecRae using MBOX export. All your emails, folders, and structure transfer seamlessly."
         badge="Migration Guide"
       />
 
@@ -27,7 +27,7 @@ export default function MigrateAppleMailPage(): React.JSX.Element {
           <ul className="space-y-2 text-blue-100/70">
             <li className="flex items-start gap-2">
               <span className="text-cyan-400 mt-0.5">-</span>
-              <span>A Vienna account (free tier works)</span>
+              <span>A AlecRae account (free tier works)</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-cyan-400 mt-0.5">-</span>
@@ -44,7 +44,7 @@ export default function MigrateAppleMailPage(): React.JSX.Element {
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">1. Export from Apple Mail</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
-            Apple Mail stores emails in MBOX format, which Vienna imports natively.
+            Apple Mail stores emails in MBOX format, which AlecRae imports natively.
           </p>
 
           <h3 className="text-lg font-semibold text-white mb-2">Option A: Export specific mailboxes</h3>
@@ -67,18 +67,18 @@ export default function MigrateAppleMailPage(): React.JSX.Element {
 
         {/* Step 2 */}
         <div>
-          <h2 className="text-2xl font-bold text-white mb-3">2. Import into Vienna</h2>
+          <h2 className="text-2xl font-bold text-white mb-3">2. Import into AlecRae</h2>
 
           <h3 className="text-lg font-semibold text-white mb-2">Via the web interface</h3>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
-            Open Vienna, go to <strong className="text-white">Settings &gt; Import &gt; MBOX File</strong>, and drag and
-            drop your <code className="text-cyan-300 font-mono text-xs">.mbox</code> file(s). Vienna parses and imports
+            Open AlecRae, go to <strong className="text-white">Settings &gt; Import &gt; MBOX File</strong>, and drag and
+            drop your <code className="text-cyan-300 font-mono text-xs">.mbox</code> file(s). AlecRae parses and imports
             all emails from the file.
           </p>
 
           <h3 className="text-lg font-semibold text-white mb-2">Via the API</h3>
           <CodeBlock
-            code={`POST https://api.48co.ai/v1/import/mbox
+            code={`POST https://api.alecrae.com/v1/import/mbox
 Authorization: Bearer $TOKEN
 Content-Type: multipart/form-data
 
@@ -87,12 +87,12 @@ Content-Type: multipart/form-data
             title="Import MBOX via API"
           />
           <CodeBlock
-            code={`GET https://api.48co.ai/v1/import/status/:jobId`}
+            code={`GET https://api.alecrae.com/v1/import/status/:jobId`}
             language="http"
             title="Check import status"
           />
           <Callout type="info" title="Large files">
-            Vienna handles MBOX files up to 10GB. For larger files, split them or import in batches.
+            AlecRae handles MBOX files up to 10GB. For larger files, split them or import in batches.
           </Callout>
         </div>
 
@@ -103,7 +103,7 @@ Content-Type: multipart/form-data
             If you use an iCloud email address (@icloud.com, @me.com, @mac.com), connect it via IMAP for continuous sync.
           </p>
           <CodeBlock
-            code={`POST https://api.48co.ai/v1/connect/imap
+            code={`POST https://api.alecrae.com/v1/connect/imap
 Authorization: Bearer $TOKEN
 Content-Type: application/json
 
@@ -139,7 +139,7 @@ Content-Type: application/json
             <strong className="text-white">Settings &gt; Import &gt; EML Files</strong> and select them.
           </p>
           <CodeBlock
-            code={`POST https://api.48co.ai/v1/import/eml
+            code={`POST https://api.alecrae.com/v1/import/eml
 Authorization: Bearer $TOKEN
 Content-Type: multipart/form-data
 
@@ -153,15 +153,15 @@ Content-Type: multipart/form-data
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">What transfers</h2>
           <Table
-            headers={["Apple Mail Feature", "Vienna Equivalent"]}
+            headers={["Apple Mail Feature", "AlecRae Equivalent"]}
             rows={[
               ["Mailboxes", "Tags"],
-              ["Smart Mailboxes", "Vienna AI Rules (smarter)"],
+              ["Smart Mailboxes", "AlecRae AI Rules (smarter)"],
               ["Flags", "Priority markers"],
               ["VIPs", "Smart Inbox priority contacts"],
-              ["Contacts (via iCloud)", "Vienna Contacts (via IMAP sync)"],
-              ["Rules", "Vienna AI Rules"],
-              ["Signatures", "Vienna Signatures"],
+              ["Contacts (via iCloud)", "AlecRae Contacts (via IMAP sync)"],
+              ["Rules", "AlecRae AI Rules"],
+              ["Signatures", "AlecRae Signatures"],
             ]}
           />
         </div>
@@ -180,7 +180,7 @@ Content-Type: multipart/form-data
             <li className="flex items-start gap-2">
               <span className="text-emerald-400 mt-0.5">+</span>
               <span>
-                <strong className="text-white">Cross-platform:</strong> Vienna works on Mac, Windows, Linux, iOS, Android, and web.
+                <strong className="text-white">Cross-platform:</strong> AlecRae works on Mac, Windows, Linux, iOS, Android, and web.
                 Apple Mail is Mac/iOS only.
               </span>
             </li>
@@ -201,7 +201,7 @@ Content-Type: multipart/form-data
             <li className="flex items-start gap-2">
               <span className="text-emerald-400 mt-0.5">+</span>
               <span>
-                <strong className="text-white">Modern UI:</strong> Vienna&apos;s interface is built for 2026, not 2012.
+                <strong className="text-white">Modern UI:</strong> AlecRae&apos;s interface is built for 2026, not 2012.
               </span>
             </li>
           </ul>
@@ -214,7 +214,7 @@ Content-Type: multipart/form-data
             <div>
               <h3 className="text-lg font-semibold text-white mb-1">MBOX file is very large?</h3>
               <p className="text-blue-100/70 text-sm">
-                Vienna handles files up to 10GB. For larger files, split them using a tool like{" "}
+                AlecRae handles files up to 10GB. For larger files, split them using a tool like{" "}
                 <code className="text-cyan-300 font-mono text-xs">formail</code> or import in batches.
               </p>
             </div>
@@ -228,7 +228,7 @@ Content-Type: multipart/form-data
             <div>
               <h3 className="text-lg font-semibold text-white mb-1">Attachments not importing?</h3>
               <p className="text-blue-100/70 text-sm">
-                MBOX format includes attachments inline. If an attachment exceeds 25MB, it will be stored in Vienna&apos;s
+                MBOX format includes attachments inline. If an attachment exceeds 25MB, it will be stored in AlecRae&apos;s
                 R2 object storage separately.
               </p>
             </div>
@@ -240,7 +240,7 @@ Content-Type: multipart/form-data
           <h2 className="text-2xl font-bold text-white mb-3">Next steps</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[
-              { href: "/quickstart", title: "Quickstart", desc: "Navigate Vienna efficiently" },
+              { href: "/quickstart", title: "Quickstart", desc: "Navigate AlecRae efficiently" },
               { href: "/migrate-gmail", title: "From Gmail", desc: "Also switching from Gmail?" },
               { href: "/migrate-outlook", title: "From Outlook", desc: "Migrating from Outlook?" },
               { href: "/emails", title: "Email API", desc: "Send and manage email programmatically" },

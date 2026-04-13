@@ -1,12 +1,12 @@
 /**
- * Example: Send an email using the Emailed SDK.
+ * Example: Send an email using the AlecRae SDK.
  *
  * Run:
  *   EMAILED_API_KEY=em_live_... npx tsx examples/send-email.ts
  */
-import { Emailed } from "@emailed/sdk";
+import { AlecRae } from "@alecrae/sdk";
 
-const client = new Emailed({ apiKey: process.env.EMAILED_API_KEY! });
+const client = new AlecRae({ apiKey: process.env.EMAILED_API_KEY! });
 
 async function main() {
   // --- Simple text email ---------------------------------------------------
@@ -14,8 +14,8 @@ async function main() {
   const simple = await client.messages.send({
     from: { address: "hello@example.com", name: "Your App" },
     to: [{ address: "user@example.com" }],
-    subject: "Hello from Emailed!",
-    textBody: "Welcome! This is a plain-text email sent via the Emailed SDK.",
+    subject: "Hello from AlecRae!",
+    textBody: "Welcome! This is a plain-text email sent via the AlecRae SDK.",
   });
 
   console.log("Sent plain-text email:", simple.data.id);
@@ -25,13 +25,13 @@ async function main() {
   const html = await client.messages.send({
     from: { address: "hello@example.com", name: "Your App" },
     to: [{ address: "user@example.com" }],
-    subject: "Welcome to Emailed!",
+    subject: "Welcome to AlecRae!",
     htmlBody: `
       <h1>Welcome!</h1>
-      <p>This is your first email sent through the Emailed platform.</p>
-      <p><a href="https://48co.ai/docs">Read the docs</a></p>
+      <p>This is your first email sent through the AlecRae platform.</p>
+      <p><a href="https://alecrae.com/docs">Read the docs</a></p>
     `,
-    textBody: "Welcome! This is your first email sent through the Emailed platform.",
+    textBody: "Welcome! This is your first email sent through the AlecRae platform.",
     tags: ["welcome", "onboarding"],
     metadata: { userId: "usr_123" },
   });

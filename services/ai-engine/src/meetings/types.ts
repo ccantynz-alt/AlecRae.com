@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Meeting types (S9)
+// @alecrae/ai-engine — Meeting types (S9)
 // =============================================================================
 // Shared types for the email-thread → meeting-transcript linker.
 

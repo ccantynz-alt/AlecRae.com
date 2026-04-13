@@ -7,7 +7,7 @@ import { vpc, privateSubnets, publicSubnets, eksSecurityGroup } from "./networki
 
 // ─── IAM Roles ──────────────────────────────────────────────────────────────
 
-const eksRole = new aws.iam.Role("emailed-eks-role", {
+const eksRole = new aws.iam.Role("alecrae-eks-role", {
   assumeRolePolicy: JSON.stringify({
     Version: "2012-10-17",
     Statement: [
@@ -31,7 +31,7 @@ new aws.iam.RolePolicyAttachment("eks-vpc-cni-policy", {
   policyArn: "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController",
 });
 
-const nodeRole = new aws.iam.Role("emailed-node-role", {
+const nodeRole = new aws.iam.Role("alecrae-node-role", {
   assumeRolePolicy: JSON.stringify({
     Version: "2012-10-17",
     Statement: [
@@ -61,8 +61,8 @@ nodePolicies.forEach((policyArn, index) => {
 
 // ─── EKS Cluster ────────────────────────────────────────────────────────────
 
-export const cluster = new eks.Cluster(`emailed-${environment}`, {
-  name: `emailed-${environment}`,
+export const cluster = new eks.Cluster(`alecrae-${environment}`, {
+  name: `alecrae-${environment}`,
   version: envConfig.eksVersion,
   vpcId: vpc.id,
   subnetIds: privateSubnets.map((s) => s.id),
@@ -86,16 +86,16 @@ export const cluster = new eks.Cluster(`emailed-${environment}`, {
 
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}`,
+    Name: `alecrae-${environment}`,
   },
 });
 
 // ─── Managed Node Groups ────────────────────────────────────────────────────
 
 // General workload node group
-const generalNodeGroup = new eks.ManagedNodeGroup("emailed-general", {
+const generalNodeGroup = new eks.ManagedNodeGroup("alecrae-general", {
   cluster: cluster,
-  nodeGroupName: `emailed-${environment}-general`,
+  nodeGroupName: `alecrae-${environment}-general`,
   instanceTypes: envConfig.nodeInstanceTypes,
   scalingConfig: {
     desiredSize: envConfig.nodeDesiredCount,
@@ -106,19 +106,19 @@ const generalNodeGroup = new eks.ManagedNodeGroup("emailed-general", {
   amiType: "AL2_x86_64",
   capacityType: environment === "prod" ? "ON_DEMAND" : "SPOT",
   labels: {
-    "emailed.dev/node-type": "general",
-    "emailed.dev/environment": environment,
+    "alecrae.dev/node-type": "general",
+    "alecrae.dev/environment": environment,
   },
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-general`,
+    Name: `alecrae-${environment}-general`,
   },
 });
 
 // MTA-dedicated node group (on-demand for reliability, tainted to isolate MTA pods)
-const mtaNodeGroup = new eks.ManagedNodeGroup("emailed-mta", {
+const mtaNodeGroup = new eks.ManagedNodeGroup("alecrae-mta", {
   cluster: cluster,
-  nodeGroupName: `emailed-${environment}-mta`,
+  nodeGroupName: `alecrae-${environment}-mta`,
   instanceTypes: environment === "prod" ? ["c6i.xlarge", "c6a.xlarge"] : ["t3.large"],
   scalingConfig: {
     desiredSize: environment === "prod" ? 3 : 1,
@@ -129,37 +129,37 @@ const mtaNodeGroup = new eks.ManagedNodeGroup("emailed-mta", {
   amiType: "AL2_x86_64",
   capacityType: "ON_DEMAND",
   labels: {
-    "emailed.dev/node-type": "mta",
-    "emailed.dev/environment": environment,
+    "alecrae.dev/node-type": "mta",
+    "alecrae.dev/environment": environment,
   },
   taints: [
     {
-      key: "emailed.dev/mta",
+      key: "alecrae.dev/mta",
       value: "true",
       effect: "NO_SCHEDULE",
     },
   ],
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-mta`,
+    Name: `alecrae-${environment}-mta`,
   },
 });
 
 // ─── Kubernetes Provider ────────────────────────────────────────────────────
 
-export const k8sProvider = new k8s.Provider("emailed-k8s", {
+export const k8sProvider = new k8s.Provider("alecrae-k8s", {
   kubeconfig: cluster.kubeconfigJson,
 });
 
 // ─── Namespace ──────────────────────────────────────────────────────────────
 
 const namespace = new k8s.core.v1.Namespace(
-  "emailed",
+  "alecrae",
   {
     metadata: {
-      name: "emailed",
+      name: "alecrae",
       labels: {
-        "app.kubernetes.io/part-of": "emailed-platform",
+        "app.kubernetes.io/part-of": "alecrae-platform",
         "app.kubernetes.io/managed-by": "pulumi",
       },
     },
@@ -174,14 +174,14 @@ const serviceAccounts = ["web", "api", "mta", "admin"] as const;
 
 for (const sa of serviceAccounts) {
   new k8s.core.v1.ServiceAccount(
-    `emailed-${sa}`,
+    `alecrae-${sa}`,
     {
       metadata: {
-        name: `emailed-${sa}`,
-        namespace: "emailed",
+        name: `alecrae-${sa}`,
+        namespace: "alecrae",
         labels: {
           "app.kubernetes.io/name": sa,
-          "app.kubernetes.io/part-of": "emailed-platform",
+          "app.kubernetes.io/part-of": "alecrae-platform",
         },
       },
     },
@@ -191,11 +191,11 @@ for (const sa of serviceAccounts) {
 
 // Read-only role for most services
 const readOnlyRole = new k8s.rbac.v1.Role(
-  "emailed-readonly",
+  "alecrae-readonly",
   {
     metadata: {
-      name: "emailed-readonly",
-      namespace: "emailed",
+      name: "alecrae-readonly",
+      namespace: "alecrae",
     },
     rules: [
       {
@@ -215,22 +215,22 @@ const readOnlyRole = new k8s.rbac.v1.Role(
 
 for (const sa of serviceAccounts) {
   new k8s.rbac.v1.RoleBinding(
-    `emailed-${sa}-readonly`,
+    `alecrae-${sa}-readonly`,
     {
       metadata: {
-        name: `emailed-${sa}-readonly`,
-        namespace: "emailed",
+        name: `alecrae-${sa}-readonly`,
+        namespace: "alecrae",
       },
       roleRef: {
         apiGroup: "rbac.authorization.k8s.io",
         kind: "Role",
-        name: "emailed-readonly",
+        name: "alecrae-readonly",
       },
       subjects: [
         {
           kind: "ServiceAccount",
-          name: `emailed-${sa}`,
-          namespace: "emailed",
+          name: `alecrae-${sa}`,
+          namespace: "alecrae",
         },
       ],
     },

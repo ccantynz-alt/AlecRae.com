@@ -20,8 +20,8 @@ const BASE_PATH = "/v1/events";
  *
  * Usage:
  * ```ts
- * const emailed = new Emailed({ apiKey: "em_live_..." });
- * const events = await emailed.events.list({ type: "message.delivered" });
+ * const alecrae = new AlecRae({ apiKey: "em_live_..." });
+ * const events = await alecrae.events.list({ type: "message.delivered" });
  * ```
  */
 export class Events {

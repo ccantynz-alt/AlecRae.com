@@ -7,8 +7,8 @@
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
-const SSO_TOKEN_KEY = "vienna_admin_sso_token";
-const SSO_SESSION_KEY = "vienna_admin_sso_session";
+const SSO_TOKEN_KEY = "alecrae_admin_sso_token";
+const SSO_SESSION_KEY = "alecrae_admin_sso_session";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ function storeSession(session: SsoSession): void {
   // Store full session info
   localStorage.setItem(SSO_SESSION_KEY, JSON.stringify(session));
   // Also set the standard admin key for the existing admin API client
-  localStorage.setItem("emailed_admin_key", session.token);
+  localStorage.setItem("alecrae_admin_key", session.token);
 }
 
 function getStoredSession(): SsoSession | null {
@@ -96,7 +96,7 @@ function clearSession(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(SSO_TOKEN_KEY);
   localStorage.removeItem(SSO_SESSION_KEY);
-  localStorage.removeItem("emailed_admin_key");
+  localStorage.removeItem("alecrae_admin_key");
 }
 
 // ─── API calls ──────────────────────────────────────────────────────────────

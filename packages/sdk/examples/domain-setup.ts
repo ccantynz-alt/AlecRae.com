@@ -2,7 +2,7 @@
  * Example: Register a sending domain and walk through DNS verification.
  *
  * This script demonstrates the full domain setup flow:
- * 1. Register the domain with the Emailed platform
+ * 1. Register the domain with the AlecRae platform
  * 2. Retrieve the required DNS records
  * 3. Trigger verification
  * 4. Check domain health
@@ -10,9 +10,9 @@
  * Run:
  *   EMAILED_API_KEY=em_live_... npx tsx examples/domain-setup.ts example.com
  */
-import { Emailed, ApiError } from "@emailed/sdk";
+import { AlecRae, ApiError } from "@alecrae/sdk";
 
-const client = new Emailed({ apiKey: process.env.EMAILED_API_KEY! });
+const client = new AlecRae({ apiKey: process.env.EMAILED_API_KEY! });
 
 async function main() {
   const domainName = process.argv[2];

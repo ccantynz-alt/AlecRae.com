@@ -1,5 +1,5 @@
 /**
- * @emailed/reputation — Complaint Rate Monitor
+ * @alecrae/reputation — Complaint Rate Monitor
  *
  * Queries the events table to calculate complaint rates for a domain
  * over a configurable time window. Used by the reputation health check
@@ -7,7 +7,7 @@
  */
 
 import { eq, and, gte, sql } from "drizzle-orm";
-import { getDatabase, events } from "@emailed/db";
+import { getDatabase, events } from "@alecrae/db";
 
 // ---------------------------------------------------------------------------
 // Types

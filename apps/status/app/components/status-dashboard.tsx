@@ -90,7 +90,7 @@ function formatUptime(seconds: number): string {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "https://api.48co.ai";
+const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "https://api.alecrae.com";
 const REFRESH_INTERVAL_MS = 30_000;
 
 export function StatusDashboard(): React.JSX.Element {
@@ -123,7 +123,7 @@ export function StatusDashboard(): React.JSX.Element {
           uptime: 0,
           timestamp: new Date().toISOString(),
           services: [
-            { name: "Web App", status: "operational", latencyMs: 0, description: "mail.48co.ai — Vienna inbox UI" },
+            { name: "Web App", status: "operational", latencyMs: 0, description: "mail.alecrae.com — AlecRae inbox UI" },
             { name: "Database (Neon Postgres)", status: "operational", latencyMs: 0, description: "Primary database — Neon Serverless Postgres" },
             { name: "Cache (Upstash Redis)", status: "operational", latencyMs: 0, description: "Cache and queue — Upstash Redis" },
             { name: "Search (Meilisearch)", status: "operational", latencyMs: 0, description: "Full-text search — Meilisearch" },
@@ -156,11 +156,11 @@ export function StatusDashboard(): React.JSX.Element {
       <header className="mb-12">
         <div className="flex items-center gap-3 mb-2">
           <div className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-blue-200 to-cyan-300 bg-clip-text text-transparent">
-            Vienna
+            AlecRae
           </div>
           <span className="text-sm uppercase tracking-wider text-blue-200/60">Status</span>
         </div>
-        <p className="text-blue-100/60 text-sm">Real-time system health for the Vienna platform.</p>
+        <p className="text-blue-100/60 text-sm">Real-time system health for the AlecRae platform.</p>
       </header>
 
       {/* Overall Status Banner */}
@@ -312,8 +312,8 @@ export function StatusDashboard(): React.JSX.Element {
           <p className="text-sm text-blue-100/60 mb-4">
             Get notified by email when incidents are reported or resolved. Subscriptions
             are coming soon — for now, follow{" "}
-            <a className="text-cyan-300 hover:text-cyan-200 underline" href="https://48co.ai">
-              48co.ai
+            <a className="text-cyan-300 hover:text-cyan-200 underline" href="https://alecrae.com">
+              alecrae.com
             </a>{" "}
             for updates.
           </p>
@@ -343,7 +343,7 @@ export function StatusDashboard(): React.JSX.Element {
 
       {/* Footer */}
       <footer className="text-center text-xs text-blue-200/40 pt-8 border-t border-white/5">
-        © 2026 Vienna · status.48co.ai
+        © 2026 AlecRae · status.alecrae.com
       </footer>
     </div>
   );

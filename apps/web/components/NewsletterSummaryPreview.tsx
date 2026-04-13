@@ -8,14 +8,14 @@
  * the summary lazily when the user views a newsletter email. Includes
  * a "Show full email" toggle to reveal the original content.
  *
- * Uses the Vienna design language: translucent surfaces, Tailwind,
+ * Uses the AlecRae design language: translucent surfaces, Tailwind,
  * Framer Motion spring animations, reduced-motion support.
  */
 
 import type { ReactElement } from "react";
 import { useState, useCallback } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Card, CardContent, Text, Box, Button } from "@emailed/ui";
+import { Card, CardContent, Text, Box, Button } from "@alecrae/ui";
 import {
   newsletterSummaryApi,
   type NewsletterSummaryData,
@@ -26,7 +26,7 @@ import {
   SPRING_SNAPPY,
   staggerChildren,
   listItemEnter,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 
@@ -65,7 +65,7 @@ export function NewsletterSummaryPreview({
   const [summary, setSummary] = useState<NewsletterSummaryData | null>(null);
   const [errorMsg, setErrorMsg] = useState<string>("");
   const [expanded, setExpanded] = useState(false);
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
 
   const fetchSummary = useCallback(async (): Promise<void> => {
     setState("loading");

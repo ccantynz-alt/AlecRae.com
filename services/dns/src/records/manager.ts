@@ -38,7 +38,7 @@ export class DnsRecordManager {
     const serial = this.generateSerial();
 
     const soa: SoaRecord = {
-      primaryNs: `ns1.emailed.dev`,
+      primaryNs: `ns1.alecrae.dev`,
       adminEmail: adminEmail ?? `admin.${normalized}`,
       serial,
       refresh: 3600,
@@ -61,14 +61,14 @@ export class DnsRecordManager {
       domain: normalized,
       name: "@",
       type: RecordType.NS,
-      value: "ns1.emailed.dev",
+      value: "ns1.alecrae.dev",
       ttl: 86400,
     });
     this.addRecordToZone(zone, {
       domain: normalized,
       name: "@",
       type: RecordType.NS,
-      value: "ns2.emailed.dev",
+      value: "ns2.alecrae.dev",
       ttl: 86400,
     });
 

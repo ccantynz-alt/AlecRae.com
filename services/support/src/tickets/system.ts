@@ -1,5 +1,5 @@
 /**
- * @emailed/support - Ticket System
+ * @alecrae/support - Ticket System
  *
  * Create, update, resolve, escalate tickets.
  * Track SLA compliance. Auto-categorize incoming tickets.

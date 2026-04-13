@@ -1,5 +1,5 @@
 # ─── Dockerfile.api ──────────────────────────────────────────────────────────
-# API server image for the Emailed REST/GraphQL gateway.
+# API server image for the AlecRae REST/GraphQL gateway.
 # Extends the base image pattern for the API service.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -26,11 +26,11 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build shared dependencies first, then the API
-RUN bun run --filter @emailed/shared build
-RUN bun run --filter @emailed/crypto build
-RUN bun run --filter @emailed/db build
-RUN bun run --filter @emailed/email-parser build
-RUN bun run --filter @emailed/api build
+RUN bun run --filter @alecrae/shared build
+RUN bun run --filter @alecrae/crypto build
+RUN bun run --filter @alecrae/db build
+RUN bun run --filter @alecrae/email-parser build
+RUN bun run --filter @alecrae/api build
 
 # Stage 3: Production runtime
 FROM oven/bun:1.2-alpine AS runner
@@ -41,17 +41,17 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 # Create non-root user
-RUN addgroup --system --gid 1001 emailed && \
-    adduser --system --uid 1001 --ingroup emailed api
+RUN addgroup --system --gid 1001 alecrae && \
+    adduser --system --uid 1001 --ingroup alecrae api
 
 # Copy only the built artifacts and necessary runtime files
-COPY --from=builder --chown=api:emailed /app/apps/api/dist ./apps/api/dist
-COPY --from=builder --chown=api:emailed /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder --chown=api:emailed /app/packages/crypto/dist ./packages/crypto/dist
-COPY --from=builder --chown=api:emailed /app/packages/db/dist ./packages/db/dist
-COPY --from=builder --chown=api:emailed /app/packages/email-parser/dist ./packages/email-parser/dist
-COPY --from=builder --chown=api:emailed /app/node_modules ./node_modules
-COPY --from=builder --chown=api:emailed /app/package.json ./
+COPY --from=builder --chown=api:alecrae /app/apps/api/dist ./apps/api/dist
+COPY --from=builder --chown=api:alecrae /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder --chown=api:alecrae /app/packages/crypto/dist ./packages/crypto/dist
+COPY --from=builder --chown=api:alecrae /app/packages/db/dist ./packages/db/dist
+COPY --from=builder --chown=api:alecrae /app/packages/email-parser/dist ./packages/email-parser/dist
+COPY --from=builder --chown=api:alecrae /app/node_modules ./node_modules
+COPY --from=builder --chown=api:alecrae /app/package.json ./
 
 USER api
 

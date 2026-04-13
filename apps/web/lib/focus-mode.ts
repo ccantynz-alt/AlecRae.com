@@ -1,5 +1,5 @@
 /**
- * Vienna Focus Mode — distraction-free email triage.
+ * AlecRae Focus Mode — distraction-free email triage.
  *
  * Hides everything except emails matching the user's chosen criteria
  * (important only, contacts only, no newsletters, custom AI rule).
@@ -78,7 +78,7 @@ export interface FocusModeState {
   resetProgress: () => void;
 }
 
-const STORAGE_KEY = "vienna.focusMode";
+const STORAGE_KEY = "alecrae.focusMode";
 const SUGGESTION_COOLDOWN_MS = 1000 * 60 * 60 * 4; // 4 hours
 
 interface PersistedFocusMode {

@@ -1,5 +1,5 @@
 /**
- * Vienna — Coming Soon Landing Page
+ * AlecRae — Coming Soon Landing Page
  *
  * NO email signup. NO support contact. Just a holding page with the brand.
  * Will be replaced with full marketing site once support infrastructure is ready.
@@ -19,13 +19,13 @@ export default function ComingSoonPage() {
         {/* Logo / Wordmark */}
         <div className="mb-8">
           <h1 className="text-7xl md:text-9xl font-bold tracking-tighter bg-gradient-to-r from-white via-blue-200 to-cyan-300 bg-clip-text text-transparent">
-            Vienna
+            AlecRae
           </h1>
         </div>
 
         {/* Tagline */}
         <p className="text-2xl md:text-4xl font-light text-blue-100 mb-4 tracking-tight">
-          Email, finally.
+          Email, Evolved.
         </p>
 
         {/* Coming Soon badge */}
@@ -56,7 +56,7 @@ export default function ComingSoonPage() {
 
         {/* Footer */}
         <div className="mt-24 text-sm text-blue-200/40 font-light">
-          © 2026 Vienna. The reinvention of email.
+          © 2026 AlecRae. The reinvention of email.
         </div>
       </div>
     </main>

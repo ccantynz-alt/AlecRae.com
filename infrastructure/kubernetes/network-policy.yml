@@ -4,9 +4,9 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny
-  namespace: emailed
+  namespace: alecrae
   labels:
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/part-of: alecrae-platform
 spec:
   podSelector: {}
   policyTypes:
@@ -19,9 +19,9 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-dns
-  namespace: emailed
+  namespace: alecrae
   labels:
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/part-of: alecrae-platform
 spec:
   podSelector: {}
   policyTypes:
@@ -40,10 +40,10 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: web-policy
-  namespace: emailed
+  namespace: alecrae
   labels:
     app.kubernetes.io/name: web
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/part-of: alecrae-platform
 spec:
   podSelector:
     matchLabels:
@@ -74,10 +74,10 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: api-policy
-  namespace: emailed
+  namespace: alecrae
   labels:
     app.kubernetes.io/name: api
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/part-of: alecrae-platform
 spec:
   podSelector:
     matchLabels:
@@ -153,10 +153,10 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: mta-policy
-  namespace: emailed
+  namespace: alecrae
   labels:
     app.kubernetes.io/name: mta
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/part-of: alecrae-platform
 spec:
   podSelector:
     matchLabels:
@@ -210,10 +210,10 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: postgres-policy
-  namespace: emailed
+  namespace: alecrae
   labels:
     app.kubernetes.io/name: postgres
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/part-of: alecrae-platform
 spec:
   podSelector:
     matchLabels:
@@ -238,10 +238,10 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: redis-policy
-  namespace: emailed
+  namespace: alecrae
   labels:
     app.kubernetes.io/name: redis
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/part-of: alecrae-platform
 spec:
   podSelector:
     matchLabels:

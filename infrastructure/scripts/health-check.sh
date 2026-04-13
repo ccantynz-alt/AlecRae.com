@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─── health-check.sh ─────────────────────────────────────────────────────────
-# Health check script for all Emailed platform services.
+# Health check script for all AlecRae platform services.
 # Checks both infrastructure services and application services.
 # Supports local (Docker) and Kubernetes environments.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -11,13 +11,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ─── Configuration ───────────────────────────────────────────────────────────
 
 MODE="${MODE:-local}"  # "local" for Docker, "k8s" for Kubernetes
-NAMESPACE="${NAMESPACE:-emailed}"
+NAMESPACE="${NAMESPACE:-alecrae}"
 VERBOSE="${VERBOSE:-false}"
 
 # Local service endpoints
 POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
-POSTGRES_USER="${POSTGRES_USER:-emailed}"
+POSTGRES_USER="${POSTGRES_USER:-alecrae}"
 REDIS_HOST="${REDIS_HOST:-localhost}"
 REDIS_PORT="${REDIS_PORT:-6379}"
 CLICKHOUSE_HOST="${CLICKHOUSE_HOST:-localhost}"
@@ -50,7 +50,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  -m, --mode       Check mode: local (Docker) or k8s (Kubernetes). Default: local"
-    echo "  -n, --namespace  Kubernetes namespace. Default: emailed"
+    echo "  -n, --namespace  Kubernetes namespace. Default: alecrae"
     echo "  -v, --verbose    Show detailed output"
     echo "  --help           Show this help"
     exit 0
@@ -290,7 +290,7 @@ run_k8s_checks() {
 
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}  Emailed Platform Health Check${NC}"
+echo -e "${BLUE}  AlecRae Platform Health Check${NC}"
 echo -e "${BLUE}  Mode: ${MODE} | $(date)${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
 

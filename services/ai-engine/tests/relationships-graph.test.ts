@@ -29,7 +29,7 @@ function makeEmail(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-const USER = 'user@emailed.com';
+const USER = 'user@alecrae.com';
 
 // ---------------------------------------------------------------------------
 // Contact management
@@ -58,7 +58,7 @@ describe('CommunicationGraph - contacts', () => {
 
   it('should create contacts when ingesting an outbound email', () => {
     const email = makeEmail({
-      from: { address: USER, domain: 'emailed.com', name: 'Me' },
+      from: { address: USER, domain: 'alecrae.com', name: 'Me' },
       to: [
         { address: 'bob@example.com', domain: 'example.com', name: 'Bob' },
         { address: 'carol@example.com', domain: 'example.com', name: 'Carol' },
@@ -122,7 +122,7 @@ describe('CommunicationGraph - strength scoring', () => {
     // Outbound to alice
     const outEmail = makeEmail({
       id: 'm2',
-      from: { address: USER, domain: 'emailed.com', name: 'Me' },
+      from: { address: USER, domain: 'alecrae.com', name: 'Me' },
       to: [{ address: 'alice@x.com', domain: 'x.com', name: 'Alice' }],
     });
     graph.ingestEmail(outEmail, USER, 'outbound');

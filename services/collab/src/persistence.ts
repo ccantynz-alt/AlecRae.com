@@ -16,7 +16,7 @@ import {
   collaborationSessions,
   collaborationHistory,
   type DraftSnapshot,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 export interface PersistenceOptions {
   /** Debounce window before flushing updates to Postgres (ms). */

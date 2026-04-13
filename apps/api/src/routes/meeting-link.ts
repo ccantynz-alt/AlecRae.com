@@ -15,8 +15,8 @@ import {
   validateBody,
   getValidatedBody,
 } from "../middleware/validator.js";
-import { getDatabase, emails } from "@emailed/db";
-import { detectMeetingFromThread } from "@emailed/ai-engine/meetings/transcript-linker";
+import { getDatabase, emails } from "@alecrae/db";
+import { detectMeetingFromThread } from "@alecrae/ai-engine/meetings/transcript-linker";
 import {
   fetchTranscript,
   ZoomTranscriptProvider,
@@ -24,12 +24,12 @@ import {
   createFathomProvider,
   createGranolaProvider,
   createReadAiProvider,
-} from "@emailed/ai-engine/meetings/transcript-fetcher";
+} from "@alecrae/ai-engine/meetings/transcript-fetcher";
 import type {
   MeetingReference,
   TranscriptProvider,
   LinkerEmail,
-} from "@emailed/ai-engine/meetings/types";
+} from "@alecrae/ai-engine/meetings/types";
 
 // ─── Provider connection storage (in-memory; production: encrypted DB) ───────
 
@@ -197,7 +197,7 @@ meetingLink.get(
     }
 
     const db = getDatabase();
-    // Vienna does not have a dedicated thread_id column — threading is derived
+    // AlecRae does not have a dedicated thread_id column — threading is derived
     // from messageId / inReplyTo / references. We accept any of: an email
     // primary key, a Message-ID header, or an inReplyTo value.
     const threadMessages = await db

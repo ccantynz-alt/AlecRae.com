@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Reusable gesture configuration
+ * AlecRae Mobile — Reusable gesture configuration
  *
  * Single source of truth for swipe thresholds and spring physics. Tuned
  * to feel like Things 3 / Linear: snappy, slightly overshoot, never

@@ -3,8 +3,8 @@ import { PageHeader } from "../components/page-header";
 import { EndpointCard } from "../components/endpoint-card";
 
 export const metadata: Metadata = {
-  title: "Analytics — Vienna API Docs",
-  description: "Delivery and engagement analytics, time-series metrics, and usage overview for the Vienna API.",
+  title: "Analytics — AlecRae API Docs",
+  description: "Delivery and engagement analytics, time-series metrics, and usage overview for the AlecRae API.",
 };
 
 export default function AnalyticsPage(): React.JSX.Element {
@@ -28,23 +28,23 @@ export default function AnalyticsPage(): React.JSX.Element {
             { name: "granularity", type: "string", required: false, description: "Aggregation: hour, day, week, month (default: day)" },
             { name: "tags", type: "string", required: false, description: "Comma-separated tag filter" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/analytics/delivery?from=2026-04-01T00:00:00Z&granularity=day&tags=receipt" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/analytics/delivery?from=2026-04-01T00:00:00Z&granularity=day&tags=receipt" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/analytics/delivery?" + new URLSearchParams({
+  "https://api.alecrae.com/v1/analytics/delivery?" + new URLSearchParams({
     from: "2026-04-01T00:00:00Z",
     granularity: "day",
     tags: "receipt",
   }),
   {
-    headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+    headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
   }
 );
 
 const { data, meta } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/analytics/delivery",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/analytics/delivery",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
     params={
         "from": "2026-04-01T00:00:00Z",
         "granularity": "day",
@@ -94,22 +94,22 @@ for point in result["data"]:
             { name: "granularity", type: "string", required: false, description: "Aggregation: hour, day, week, month (default: day)" },
             { name: "tags", type: "string", required: false, description: "Comma-separated tag filter" },
           ]}
-          curlExample={`curl "https://api.48co.ai/v1/analytics/engagement?from=2026-04-01T00:00:00Z&granularity=day" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
+          curlExample={`curl "https://api.alecrae.com/v1/analytics/engagement?from=2026-04-01T00:00:00Z&granularity=day" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
           jsExample={`const response = await fetch(
-  "https://api.48co.ai/v1/analytics/engagement?" + new URLSearchParams({
+  "https://api.alecrae.com/v1/analytics/engagement?" + new URLSearchParams({
     from: "2026-04-01T00:00:00Z",
     granularity: "day",
   }),
   {
-    headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+    headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
   }
 );
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/analytics/engagement",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/analytics/engagement",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
     params={"from": "2026-04-01T00:00:00Z", "granularity": "day"},
 )
 
@@ -142,16 +142,16 @@ for point in response.json()["data"]:
           path="/v1/analytics/overview"
           description="Get a high-level overview of usage for the current billing period. Includes total sends, delivery rate, engagement rate, and quota status."
           scopes={["analytics:read"]}
-          curlExample={`curl "https://api.48co.ai/v1/analytics/overview" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/analytics/overview", {
-  headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+          curlExample={`curl "https://api.alecrae.com/v1/analytics/overview" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/analytics/overview", {
+  headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
 });
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/analytics/overview",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/analytics/overview",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 overview = response.json()["data"]`}

@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Compose Screen (Modal)
+ * AlecRae Mobile — Compose Screen (Modal)
  *
  * Email compose form with:
  *   - To / CC / BCC fields
@@ -60,7 +60,7 @@ export default function ComposeScreen(): React.ReactElement {
         .map((addr) => ({ email: addr }));
 
       await messagesApi.send({
-        from: { email: user?.email ?? "me@48co.ai" },
+        from: { email: user?.email ?? "me@alecrae.com" },
         to: toAddresses,
         cc: ccAddresses.length > 0 ? ccAddresses : undefined,
         subject,

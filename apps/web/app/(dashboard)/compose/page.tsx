@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { PageLayout, ComposeEditor, type ComposeData, type AISuggestion } from "@emailed/ui";
+import { PageLayout, ComposeEditor, type ComposeData, type AISuggestion } from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
 import { messagesApi, authApi, calendarApi } from "../../../lib/api";
 import { SendTimePanel } from "../../../components/SendTimePanel";
@@ -10,7 +10,7 @@ import { AnimatedCompose } from "../../../components/AnimatedCompose";
 import {
   composeEnter,
   fadeInUp,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../../../lib/animations";
 
@@ -49,7 +49,7 @@ export default function ComposePageWrapper() {
 
 function ComposePage(): React.ReactNode {
   const searchParams = useSearchParams();
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");

@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import {
   pageCrossfade,
   pageEnter,
-  useViennaReducedMotion,
+  useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../lib/animations";
 
@@ -38,7 +38,7 @@ export function AnimatedPage({
   className,
   pageKey,
 }: AnimatedPageProps): React.ReactNode {
-  const reduced = useViennaReducedMotion();
+  const reduced = useAlecRaeReducedMotion();
   const base = mode === "crossfade" ? pageCrossfade : pageEnter;
   const variants = withReducedMotion(base, reduced);
 

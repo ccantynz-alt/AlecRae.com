@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Thread Detail Screen
+ * AlecRae Mobile — Thread Detail Screen
  *
  * Displays all messages in an email thread. Each message is rendered
  * as an expandable card showing sender, timestamp, and body content.

@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Model Manager
+// @alecrae/ai-engine — Model Manager
 // =============================================================================
 // Manages the full lifecycle of AI/ML models: registration, versioning,
 // deployment, A/B testing, rollback, and performance tracking. Routes

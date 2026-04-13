@@ -5,8 +5,8 @@ import { Table } from "../components/table";
 import { CodeBlock } from "../components/code-block";
 
 export const metadata: Metadata = {
-  title: "OpenAPI Spec — Vienna API Docs",
-  description: "Download the full OpenAPI 3.1 specification for the Vienna API.",
+  title: "OpenAPI Spec — AlecRae API Docs",
+  description: "Download the full OpenAPI 3.1 specification for the AlecRae API.",
 };
 
 export default function ApiReferencePage(): React.JSX.Element {
@@ -14,7 +14,7 @@ export default function ApiReferencePage(): React.JSX.Element {
     <div className="px-6 md:px-8 py-12 md:py-16 max-w-4xl mx-auto">
       <PageHeader
         title="OpenAPI Specification"
-        description="The full Vienna API is described as an OpenAPI 3.1 specification. Import it into Postman, Insomnia, or your favorite codegen tool."
+        description="The full AlecRae API is described as an OpenAPI 3.1 specification. Import it into Postman, Insomnia, or your favorite codegen tool."
       />
 
       <section className="space-y-8">
@@ -22,7 +22,7 @@ export default function ApiReferencePage(): React.JSX.Element {
           <h2 className="text-2xl font-bold text-white mb-3">Download</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <a
-              href="https://api.48co.ai/openapi.yaml"
+              href="https://api.alecrae.com/openapi.yaml"
               className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-4 hover:bg-white/10 transition-all group"
               target="_blank"
               rel="noopener noreferrer"
@@ -36,7 +36,7 @@ export default function ApiReferencePage(): React.JSX.Element {
               </div>
             </a>
             <a
-              href="https://api.48co.ai/openapi.json"
+              href="https://api.alecrae.com/openapi.json"
               className="flex items-center gap-3 rounded-xl bg-white/5 border border-white/10 p-4 hover:bg-white/10 transition-all group"
               target="_blank"
               rel="noopener noreferrer"
@@ -57,8 +57,8 @@ export default function ApiReferencePage(): React.JSX.Element {
           <Table
             headers={["Environment", "URL"]}
             rows={[
-              ["Production", "`https://api.48co.ai`"],
-              ["Staging", "`https://api.staging.48co.ai`"],
+              ["Production", "`https://api.alecrae.com`"],
+              ["Staging", "`https://api.staging.alecrae.com`"],
               ["Local development", "`http://localhost:3001`"],
             ]}
           />
@@ -110,15 +110,15 @@ export default function ApiReferencePage(): React.JSX.Element {
           </p>
           <CodeBlock
             code={`# TypeScript client (openapi-typescript-codegen)
-npx openapi-typescript-codegen --input https://api.48co.ai/openapi.yaml --output ./vienna-client
+npx openapi-typescript-codegen --input https://api.alecrae.com/openapi.yaml --output ./alecrae-client
 
 # Python client (openapi-python-client)
 pip install openapi-python-client
-openapi-python-client generate --url https://api.48co.ai/openapi.yaml
+openapi-python-client generate --url https://api.alecrae.com/openapi.yaml
 
 # Go client (oapi-codegen)
 go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
-oapi-codegen -package vienna https://api.48co.ai/openapi.yaml > vienna.gen.go`}
+oapi-codegen -package alecrae https://api.alecrae.com/openapi.yaml > alecrae.gen.go`}
             language="bash"
             title="Generate a typed client"
           />

@@ -17,13 +17,13 @@ import {
   accounts,
   passkeys,
   passkeyChallenges,
-} from "@emailed/db";
+} from "@alecrae/db";
 
 const passkeyRouter = new Hono();
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const RP_NAME = "Vienna";
+const RP_NAME = "AlecRae";
 const RP_ID = process.env["WEBAUTHN_RP_ID"] ?? "localhost";
 const RP_ORIGIN = process.env["WEBAUTHN_ORIGIN"] ?? "http://localhost:3000";
 const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes

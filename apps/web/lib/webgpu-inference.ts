@@ -1,5 +1,5 @@
 /**
- * Vienna WebGPU Client-Side AI Inference (Tier S1 — Industry First)
+ * AlecRae WebGPU Client-Side AI Inference (Tier S1 — Industry First)
  *
  * Runs Llama 3.1/3.2 directly in the user's browser via WebGPU.
  * No competitor has this. This is the moat.
@@ -7,12 +7,12 @@
  * Cost economics:
  *   - Claude Haiku API:  ~$0.25 / 1M input tokens, ~$1.25 / 1M output tokens
  *   - Claude Sonnet API: ~$3.00 / 1M input tokens, ~$15.00 / 1M output tokens
- *   - Vienna WebGPU:     $0.00 / token  (runs on user's GPU, our cost = 0)
+ *   - AlecRae WebGPU:     $0.00 / token  (runs on user's GPU, our cost = 0)
  *
  * At 10K daily active users × 50 AI calls/day × 200 tokens average,
- * shifting just grammar + short replies to WebGPU saves Vienna ~$2,400/month
+ * shifting just grammar + short replies to WebGPU saves AlecRae ~$2,400/month
  * on Haiku pricing, ~$28,000/month if we'd been on Sonnet. Per 10K users.
- * The savings compound with growth — this is why Vienna can sell at $9/mo.
+ * The savings compound with growth — this is why AlecRae can sell at $9/mo.
  *
  * Privacy bonus: prompts never leave the device. GDPR/HIPAA-friendly by design.
  *
@@ -169,7 +169,7 @@ interface GPUAdapterLike {
 
 // ─── IndexedDB Model Cache Metadata ─────────────────────────────────────────
 
-const CACHE_DB_NAME = "vienna-ai-models";
+const CACHE_DB_NAME = "alecrae-ai-models";
 const CACHE_DB_VERSION = 1;
 const CACHE_STORE_NAME = "model-metadata";
 

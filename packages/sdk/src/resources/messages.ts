@@ -18,8 +18,8 @@ const BASE_PATH = "/v1/messages";
  *
  * Usage:
  * ```ts
- * const emailed = new Emailed({ auth: { type: "apiKey", key: "em_live_..." } });
- * const result = await emailed.messages.send({ ... });
+ * const alecrae = new AlecRae({ auth: { type: "apiKey", key: "em_live_..." } });
+ * const result = await alecrae.messages.send({ ... });
  * ```
  */
 export class Messages {

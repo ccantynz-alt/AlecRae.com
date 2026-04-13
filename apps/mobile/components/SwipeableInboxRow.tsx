@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile -- SwipeableInboxRow
+ * AlecRae Mobile -- SwipeableInboxRow
  *
  * Enhanced swipeable inbox row that extends the base SwipeableEmailRow
  * with five-action swipe support:
@@ -18,7 +18,7 @@
  *   - Undo toast callback after destructive actions
  *   - prefers-reduced-motion: instant transitions
  *
- * Calls existing Vienna API endpoints for archive, delete, reply, snooze, flag.
+ * Calls existing AlecRae API endpoints for archive, delete, reply, snooze, flag.
  */
 
 import React, { memo, useCallback, useRef, useState } from "react";

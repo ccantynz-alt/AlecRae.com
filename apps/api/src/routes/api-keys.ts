@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, apiKeys } from "@emailed/db";
+import { getDatabase, apiKeys } from "@alecrae/db";
 
 const apiKeysRouter = new Hono();
 

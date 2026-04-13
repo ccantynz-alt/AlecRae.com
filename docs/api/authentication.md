@@ -1,6 +1,6 @@
 # Authentication
 
-The Emailed API supports two authentication methods: API keys and Bearer tokens. All authenticated requests must use HTTPS.
+The AlecRae API supports two authentication methods: API keys and Bearer tokens. All authenticated requests must use HTTPS.
 
 ## API Keys
 
@@ -47,12 +47,12 @@ X-API-Key: em_live_aBcDeFgHiJkLmNoPqRsTuVwXyZ012345
 
 ## Bearer Tokens (OAuth 2.0)
 
-For user-facing applications, the Emailed API supports OAuth 2.0 Bearer tokens obtained through the standard authorization code flow.
+For user-facing applications, the AlecRae API supports OAuth 2.0 Bearer tokens obtained through the standard authorization code flow.
 
 ### Token Exchange
 
-1. Redirect the user to `https://auth.emailed.dev/authorize` with your `client_id`, `redirect_uri`, `scope`, and `state`.
-2. After the user grants access, exchange the authorization code at `https://auth.emailed.dev/token` for an access token and refresh token.
+1. Redirect the user to `https://auth.alecrae.dev/authorize` with your `client_id`, `redirect_uri`, `scope`, and `state`.
+2. After the user grants access, exchange the authorization code at `https://auth.alecrae.dev/token` for an access token and refresh token.
 3. Include the access token in requests:
 
 ```
@@ -64,7 +64,7 @@ Authorization: Bearer eyJhbGciOi...
 Access tokens expire after 1 hour. Use the refresh token to obtain a new access token without re-prompting the user:
 
 ```http
-POST https://auth.emailed.dev/token
+POST https://auth.alecrae.dev/token
 Content-Type: application/x-www-form-urlencoded
 
 grant_type=refresh_token&refresh_token=rt_...&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET
@@ -84,21 +84,21 @@ grant_type=refresh_token&refresh_token=rt_...&client_id=YOUR_CLIENT_ID&client_se
 
 ## Webhook Signature Verification
 
-Emailed signs all webhook payloads with HMAC-SHA256 so you can verify their authenticity.
+AlecRae signs all webhook payloads with HMAC-SHA256 so you can verify their authenticity.
 
 ### Headers
 
 Each webhook delivery includes:
 
-- `X-Emailed-Signature` -- the HMAC-SHA256 hex digest
-- `X-Emailed-Timestamp` -- the ISO 8601 timestamp of the event
+- `X-AlecRae-Signature` -- the HMAC-SHA256 hex digest
+- `X-AlecRae-Timestamp` -- the ISO 8601 timestamp of the event
 
 ### Verification Steps
 
 1. Read the raw request body (do not parse JSON first).
 2. Construct the signed content: `{timestamp}.{raw_body}`.
 3. Compute `HMAC-SHA256(signed_content, webhook_secret)`.
-4. Compare the computed digest with the `X-Emailed-Signature` header using constant-time comparison.
+4. Compare the computed digest with the `X-AlecRae-Signature` header using constant-time comparison.
 5. Reject events older than 5 minutes to prevent replay attacks.
 
 ### Example (Node.js)
@@ -120,14 +120,14 @@ function verifyWebhook(body: string, signature: string, timestamp: string, secre
 
 ### SDK Helper
 
-The `@emailed/sdk` package provides a `verifyWebhook` function that handles signature verification, timestamp checking, and JSON parsing in a single call:
+The `@alecrae/sdk` package provides a `verifyWebhook` function that handles signature verification, timestamp checking, and JSON parsing in a single call:
 
 ```typescript
-import { verifyWebhook } from "@emailed/sdk/webhooks";
+import { verifyWebhook } from "@alecrae/sdk/webhooks";
 
 const event = verifyWebhook({
   payload: req.body,
-  signature: req.headers["x-emailed-signature"],
+  signature: req.headers["x-alecrae-signature"],
   secret: process.env.WEBHOOK_SECRET,
 });
 ```

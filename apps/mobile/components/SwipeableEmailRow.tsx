@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — SwipeableEmailRow
+ * AlecRae Mobile — SwipeableEmailRow
  *
  * A single inbox row with two-stage horizontal swipe gestures, powered
  * by react-native-gesture-handler (Pan) + reanimated 3 worklets so all

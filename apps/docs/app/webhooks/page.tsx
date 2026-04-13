@@ -6,8 +6,8 @@ import { CodeBlock } from "../components/code-block";
 import { Callout } from "../components/callout";
 
 export const metadata: Metadata = {
-  title: "Webhooks — Vienna API Docs",
-  description: "Webhook registration, event reference, payload signing, and retry behavior for the Vienna API.",
+  title: "Webhooks — AlecRae API Docs",
+  description: "Webhook registration, event reference, payload signing, and retry behavior for the AlecRae API.",
 };
 
 export default function WebhooksPage(): React.JSX.Element {
@@ -15,7 +15,7 @@ export default function WebhooksPage(): React.JSX.Element {
     <div className="px-6 md:px-8 py-12 md:py-16 max-w-4xl mx-auto">
       <PageHeader
         title="Webhooks"
-        description="Receive real-time notifications when events happen in Vienna. Register endpoints, verify signatures, and process events."
+        description="Receive real-time notifications when events happen in AlecRae. Register endpoints, verify signatures, and process events."
         badge="Platform"
       />
 
@@ -25,7 +25,7 @@ export default function WebhooksPage(): React.JSX.Element {
           <Table
             headers={["Event", "Description"]}
             rows={[
-              ["`message.queued`", "Vienna accepted the message for delivery"],
+              ["`message.queued`", "AlecRae accepted the message for delivery"],
               ["`message.sending`", "Message handed to the MTA"],
               ["`message.sent`", "Message sent to recipient mail server"],
               ["`message.delivered`", "Recipient mail server accepted the message"],
@@ -107,15 +107,15 @@ export default function WebhooksPage(): React.JSX.Element {
         <div>
           <h2 className="text-2xl font-bold text-white mb-4">Signature verification</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
-            Vienna signs every webhook request with HMAC-SHA256 using your webhook secret.
-            Always verify the <code className="text-cyan-300 font-mono text-xs">Vienna-Signature</code> header before trusting any payload.
+            AlecRae signs every webhook request with HMAC-SHA256 using your webhook secret.
+            Always verify the <code className="text-cyan-300 font-mono text-xs">AlecRae-Signature</code> header before trusting any payload.
           </p>
           <Table
             headers={["Header", "Description"]}
             rows={[
-              ["`Vienna-Signature`", "HMAC-SHA256 hex digest of the payload"],
-              ["`Vienna-Timestamp`", "ISO 8601 timestamp of the event"],
-              ["`Vienna-Event-Id`", "Unique event ID for deduplication"],
+              ["`AlecRae-Signature`", "HMAC-SHA256 hex digest of the payload"],
+              ["`AlecRae-Timestamp`", "ISO 8601 timestamp of the event"],
+              ["`AlecRae-Event-Id`", "Unique event ID for deduplication"],
             ]}
           />
           <CodeBlock
@@ -174,7 +174,7 @@ def verify_webhook(raw_body: str, signature: str, timestamp: str, secret: str) -
         <div>
           <h2 className="text-2xl font-bold text-white mb-4">Retry behavior</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
-            Vienna retries failed webhook deliveries with exponential backoff for up to 24 hours. Respond with
+            AlecRae retries failed webhook deliveries with exponential backoff for up to 24 hours. Respond with
             a <code className="text-cyan-300 font-mono text-xs">2xx</code> status code to acknowledge receipt.
           </p>
           <Table
@@ -193,7 +193,7 @@ def verify_webhook(raw_body: str, signature: str, timestamp: str, secret: str) -
             ]}
           />
           <Callout type="warning" title="Idempotent handlers">
-            Webhook events may be delivered more than once. Use the <code className="text-cyan-300 font-mono text-xs">Vienna-Event-Id</code> header
+            Webhook events may be delivered more than once. Use the <code className="text-cyan-300 font-mono text-xs">AlecRae-Event-Id</code> header
             to deduplicate events in your handler.
           </Callout>
         </div>
@@ -213,25 +213,25 @@ def verify_webhook(raw_body: str, signature: str, timestamp: str, secret: str) -
             { name: "active", type: "boolean", required: false, description: "Whether the webhook is active (default: true)" },
           ]}
           requestBody={`{
-  "url": "https://yourdomain.com/hooks/vienna",
+  "url": "https://yourdomain.com/hooks/alecrae",
   "events": ["message.delivered", "message.bounced", "message.opened"],
   "description": "Production delivery notifications"
 }`}
-          curlExample={`curl -X POST https://api.48co.ai/v1/webhooks \\
-  -H "Authorization: Bearer $VIENNA_API_KEY" \\
+          curlExample={`curl -X POST https://api.alecrae.com/v1/webhooks \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "url": "https://yourdomain.com/hooks/vienna",
+    "url": "https://yourdomain.com/hooks/alecrae",
     "events": ["message.delivered", "message.bounced", "message.opened"]
   }'`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/webhooks", {
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/webhooks", {
   method: "POST",
   headers: {
-    "Authorization": "Bearer " + process.env.VIENNA_API_KEY,
+    "Authorization": "Bearer " + process.env.ALECRAE_API_KEY,
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
-    url: "https://yourdomain.com/hooks/vienna",
+    url: "https://yourdomain.com/hooks/alecrae",
     events: ["message.delivered", "message.bounced", "message.opened"],
   }),
 });
@@ -240,13 +240,13 @@ const { data } = await response.json();
 console.log("Webhook ID:", data.id);
 console.log("Secret:", data.secret); // Save this — shown only once`}
           pythonExample={`response = requests.post(
-    "https://api.48co.ai/v1/webhooks",
+    "https://api.alecrae.com/v1/webhooks",
     headers={
-        "Authorization": f"Bearer {VIENNA_API_KEY}",
+        "Authorization": f"Bearer {ALECRAE_API_KEY}",
         "Content-Type": "application/json",
     },
     json={
-        "url": "https://yourdomain.com/hooks/vienna",
+        "url": "https://yourdomain.com/hooks/alecrae",
         "events": ["message.delivered", "message.bounced", "message.opened"],
     },
 )
@@ -256,7 +256,7 @@ print(f"Secret: {webhook['secret']}")  # Save this`}
           responseExample={`{
   "data": {
     "id": "wh_01HXab...",
-    "url": "https://yourdomain.com/hooks/vienna",
+    "url": "https://yourdomain.com/hooks/alecrae",
     "events": ["message.delivered", "message.bounced", "message.opened"],
     "secret": "whsec_a1B2c3D4e5F6g7H8i9J0...",
     "active": true,
@@ -271,16 +271,16 @@ print(f"Secret: {webhook['secret']}")  # Save this`}
           path="/v1/webhooks"
           description="List all webhook endpoints for your account."
           scopes={["webhooks:write"]}
-          curlExample={`curl "https://api.48co.ai/v1/webhooks" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`const response = await fetch("https://api.48co.ai/v1/webhooks", {
-  headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+          curlExample={`curl "https://api.alecrae.com/v1/webhooks" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`const response = await fetch("https://api.alecrae.com/v1/webhooks", {
+  headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
 });
 
 const { data } = await response.json();`}
           pythonExample={`response = requests.get(
-    "https://api.48co.ai/v1/webhooks",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/webhooks",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )
 
 webhooks = response.json()["data"]`}
@@ -288,7 +288,7 @@ webhooks = response.json()["data"]`}
   "data": [
     {
       "id": "wh_01HXab...",
-      "url": "https://yourdomain.com/hooks/vienna",
+      "url": "https://yourdomain.com/hooks/alecrae",
       "events": ["message.delivered", "message.bounced"],
       "active": true,
       "createdAt": "2026-04-09T12:00:00.000Z"
@@ -305,15 +305,15 @@ webhooks = response.json()["data"]`}
           parameters={[
             { name: "id", type: "string", required: true, description: "Webhook ID (path parameter)" },
           ]}
-          curlExample={`curl -X DELETE "https://api.48co.ai/v1/webhooks/wh_01HXab" \\
-  -H "Authorization: Bearer $VIENNA_API_KEY"`}
-          jsExample={`await fetch("https://api.48co.ai/v1/webhooks/wh_01HXab", {
+          curlExample={`curl -X DELETE "https://api.alecrae.com/v1/webhooks/wh_01HXab" \\
+  -H "Authorization: Bearer $ALECRAE_API_KEY"`}
+          jsExample={`await fetch("https://api.alecrae.com/v1/webhooks/wh_01HXab", {
   method: "DELETE",
-  headers: { "Authorization": "Bearer " + process.env.VIENNA_API_KEY },
+  headers: { "Authorization": "Bearer " + process.env.ALECRAE_API_KEY },
 });`}
           pythonExample={`requests.delete(
-    "https://api.48co.ai/v1/webhooks/wh_01HXab",
-    headers={"Authorization": f"Bearer {VIENNA_API_KEY}"},
+    "https://api.alecrae.com/v1/webhooks/wh_01HXab",
+    headers={"Authorization": f"Bearer {ALECRAE_API_KEY}"},
 )`}
           responseExample={`{
   "success": true,

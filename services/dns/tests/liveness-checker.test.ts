@@ -23,9 +23,9 @@ vi.mock("node:dns/promises", () => ({
   resolveTxt: mockResolveTxt,
 }));
 
-// ── Mock @emailed/db ─────────────────────────────────────────────────────
+// ── Mock @alecrae/db ─────────────────────────────────────────────────────
 
-vi.mock("@emailed/db", () => {
+vi.mock("@alecrae/db", () => {
   const updateSet = vi.fn().mockImplementation(() => ({
     where: vi.fn().mockResolvedValue(undefined),
   }));
@@ -71,7 +71,7 @@ describe("checkDomainLiveness", () => {
   it("should report healthy when all DNS records are present", async () => {
     mockResolveTxt.mockImplementation((hostname: string) => {
       if (hostname === "example.com") {
-        return Promise.resolve([["v=spf1 include:spf.emailed.dev ~all"]]);
+        return Promise.resolve([["v=spf1 include:spf.alecrae.dev ~all"]]);
       }
       if (hostname === "default._domainkey.example.com") {
         return Promise.resolve([["v=DKIM1; k=rsa; p=MIIBIjANBg..."]]);
@@ -116,7 +116,7 @@ describe("checkDomainLiveness", () => {
   it("should report stale DKIM when record is missing", async () => {
     mockResolveTxt.mockImplementation((hostname: string) => {
       if (hostname === "example.com") {
-        return Promise.resolve([["v=spf1 include:spf.emailed.dev ~all"]]);
+        return Promise.resolve([["v=spf1 include:spf.alecrae.dev ~all"]]);
       }
       if (hostname === "default._domainkey.example.com") {
         return Promise.reject(new Error("NXDOMAIN"));
@@ -139,7 +139,7 @@ describe("checkDomainLiveness", () => {
   it("should report stale DMARC when record is missing", async () => {
     mockResolveTxt.mockImplementation((hostname: string) => {
       if (hostname === "example.com") {
-        return Promise.resolve([["v=spf1 include:spf.emailed.dev ~all"]]);
+        return Promise.resolve([["v=spf1 include:spf.alecrae.dev ~all"]]);
       }
       if (hostname === "default._domainkey.example.com") {
         return Promise.resolve([["v=DKIM1; k=rsa; p=MIIBIjANBg..."]]);
@@ -173,7 +173,7 @@ describe("checkDomainLiveness", () => {
   it("should handle missing DKIM selector gracefully", async () => {
     mockResolveTxt.mockImplementation((hostname: string) => {
       if (hostname === "example.com") {
-        return Promise.resolve([["v=spf1 include:spf.emailed.dev ~all"]]);
+        return Promise.resolve([["v=spf1 include:spf.alecrae.dev ~all"]]);
       }
       if (hostname === "_dmarc.example.com") {
         return Promise.resolve([["v=DMARC1; p=quarantine; rua=mailto:dmarc@example.com"]]);
@@ -200,7 +200,7 @@ describe("checkDomainLiveness — edge cases", () => {
   it("should detect DMARC with invalid policy as stale", async () => {
     mockResolveTxt.mockImplementation((hostname: string) => {
       if (hostname === "example.com") {
-        return Promise.resolve([["v=spf1 include:spf.emailed.dev ~all"]]);
+        return Promise.resolve([["v=spf1 include:spf.alecrae.dev ~all"]]);
       }
       if (hostname === "default._domainkey.example.com") {
         return Promise.resolve([["v=DKIM1; k=rsa; p=MIIBIjANBg..."]]);

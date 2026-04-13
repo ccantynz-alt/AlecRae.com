@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Settings Screen
+ * AlecRae Mobile — Settings Screen
  *
  * User preferences and account management. Sections:
  *   - Account info
@@ -195,14 +195,14 @@ export default function SettingsScreen(): React.ReactElement {
           style={styles.signOutButton}
           onPress={handleLogout}
           accessibilityRole="button"
-          accessibilityLabel="Sign out of Vienna"
+          accessibilityLabel="Sign out of AlecRae"
         >
           <Text style={styles.signOutText}>Sign Out</Text>
         </Pressable>
       ) : null}
 
       <Text style={styles.footerText}>
-        Vienna {APP_VERSION} — The reinvention of email
+        AlecRae {APP_VERSION} — The reinvention of email
       </Text>
     </ScrollView>
   );

@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Search Screen
+ * AlecRae Mobile — Search Screen
  *
  * Full-text search across all emails. Uses the /v1/messages/search endpoint
  * with debounced input. Displays results as a list of matching threads

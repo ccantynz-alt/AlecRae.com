@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─── setup-dev.sh ────────────────────────────────────────────────────────────
-# Development environment setup for the Emailed platform.
+# Development environment setup for the AlecRae platform.
 # Installs dependencies, starts infrastructure via Docker Compose,
 # runs database migrations, and seeds initial data.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -67,11 +67,11 @@ if [[ ! -f "${PROJECT_ROOT}/.env" ]]; then
         cp "${PROJECT_ROOT}/.env.example" "${PROJECT_ROOT}/.env"
     else
         cat > "${PROJECT_ROOT}/.env" <<'ENVEOF'
-# Emailed Development Environment
+# AlecRae Development Environment
 POSTGRES_PASSWORD=dev_password
 CLICKHOUSE_PASSWORD=dev_password
 MEILI_MASTER_KEY=dev_master_key
-MINIO_ROOT_USER=emailed
+MINIO_ROOT_USER=alecrae
 MINIO_ROOT_PASSWORD=dev_password
 JWT_SECRET=dev_jwt_secret_change_in_production
 MTA_HOSTNAME=mail.localhost
@@ -107,7 +107,7 @@ log_info "Waiting for services to be healthy..."
 # Wait for PostgreSQL
 MAX_RETRIES=30
 RETRY=0
-until docker exec "$(docker ps -qf "ancestor=postgres:15-alpine" -f "ancestor=postgres:17-alpine" | head -1)" pg_isready -U emailed &>/dev/null 2>&1; do
+until docker exec "$(docker ps -qf "ancestor=postgres:15-alpine" -f "ancestor=postgres:17-alpine" | head -1)" pg_isready -U alecrae &>/dev/null 2>&1; do
     RETRY=$((RETRY + 1))
     if [[ "$RETRY" -ge "$MAX_RETRIES" ]]; then
         log_error "PostgreSQL failed to start within ${MAX_RETRIES} attempts."
@@ -137,7 +137,7 @@ log_info "Running database migrations..."
 cd "${PROJECT_ROOT}"
 
 if [[ -d "packages/db" ]]; then
-    bun run --filter @emailed/db migrate 2>/dev/null || {
+    bun run --filter @alecrae/db migrate 2>/dev/null || {
         log_warn "Migration command not found or failed. You may need to run migrations manually."
     }
 else
@@ -148,7 +148,7 @@ fi
 
 log_info "Seeding development data..."
 if [[ -d "packages/db" ]]; then
-    bun run --filter @emailed/db seed 2>/dev/null || {
+    bun run --filter @alecrae/db seed 2>/dev/null || {
         log_warn "Seed command not found or failed. You may need to seed data manually."
     }
 else
@@ -160,9 +160,9 @@ fi
 log_info "Creating MinIO buckets..."
 sleep 2
 docker exec "$(docker ps -qf "ancestor=minio/minio:latest" | head -1)" \
-    mc alias set local http://localhost:9000 emailed dev_password 2>/dev/null || true
+    mc alias set local http://localhost:9000 alecrae dev_password 2>/dev/null || true
 docker exec "$(docker ps -qf "ancestor=minio/minio:latest" | head -1)" \
-    mc mb --ignore-existing local/emailed-attachments 2>/dev/null || {
+    mc mb --ignore-existing local/alecrae-attachments 2>/dev/null || {
     log_warn "Could not create MinIO bucket. You may need to create it manually via http://localhost:9001"
 }
 log_ok "MinIO buckets configured."
@@ -171,16 +171,16 @@ log_ok "MinIO buckets configured."
 
 log_info "Building shared packages..."
 cd "${PROJECT_ROOT}"
-bun run --filter @emailed/shared build 2>/dev/null || log_warn "Could not build @emailed/shared."
-bun run --filter @emailed/db build 2>/dev/null || log_warn "Could not build @emailed/db."
-bun run --filter @emailed/ui build 2>/dev/null || log_warn "Could not build @emailed/ui."
+bun run --filter @alecrae/shared build 2>/dev/null || log_warn "Could not build @alecrae/shared."
+bun run --filter @alecrae/db build 2>/dev/null || log_warn "Could not build @alecrae/db."
+bun run --filter @alecrae/ui build 2>/dev/null || log_warn "Could not build @alecrae/ui."
 log_ok "Shared packages built."
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
 
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  Emailed development environment is ready!${NC}"
+echo -e "${GREEN}  AlecRae development environment is ready!${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
 echo ""
 echo "  Services:"

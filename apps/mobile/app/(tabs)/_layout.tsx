@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Tab Layout
+ * AlecRae Mobile — Tab Layout
  *
  * Bottom tab navigation with Inbox, Search, and Settings.
  * Compose is a modal (presented from Inbox via FAB), not a tab.

@@ -176,8 +176,8 @@ describe('DMARC Enforcer — formatAuthResults', () => {
       fromDomain: 'example.com',
     };
 
-    const header = formatAuthResults('mx.emailed.dev', evaluation);
-    expect(header).toContain('mx.emailed.dev');
+    const header = formatAuthResults('mx.alecrae.dev', evaluation);
+    expect(header).toContain('mx.alecrae.dev');
     expect(header).toContain('dmarc=pass');
     expect(header).toContain('dkim=pass');
     expect(header).toContain('spf=pass');

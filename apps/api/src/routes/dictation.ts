@@ -10,7 +10,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { processDictation, SUPPORTED_DICTATION_LANGUAGES } from "@emailed/ai-engine/dictation";
+import { processDictation, SUPPORTED_DICTATION_LANGUAGES } from "@alecrae/ai-engine/dictation";
 
 const ProcessSchema = z.object({
   transcription: z.string().min(1).max(10000),

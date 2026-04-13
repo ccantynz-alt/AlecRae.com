@@ -1,7 +1,7 @@
 /**
  * AI Inbox Agent — Type Definitions
  *
- * The Inbox Agent is Vienna's flagship overnight feature: while the user
+ * The Inbox Agent is AlecRae's flagship overnight feature: while the user
  * sleeps, the agent triages every new email, drafts replies in the user's
  * voice, identifies commitments, flags suspicious senders, and produces a
  * one-tap morning briefing.

@@ -16,8 +16,8 @@ import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
   getWarmupOrchestrator,
   type WarmupScheduleType,
-} from "@emailed/reputation";
-import { getWarmupMonitor } from "@emailed/reputation";
+} from "@alecrae/reputation";
+import { getWarmupMonitor } from "@alecrae/reputation";
 
 // ─── Schemas ───────────────────────────────────────────────────────────────
 

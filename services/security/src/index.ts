@@ -1,5 +1,5 @@
 /**
- * @emailed/security — Security Service
+ * @alecrae/security — Security Service
  *
  * Provides virus scanning for email attachments via VirusTotal API.
  */

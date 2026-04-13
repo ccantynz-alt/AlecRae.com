@@ -1,5 +1,5 @@
 /**
- * Vienna Collaboration Service
+ * AlecRae Collaboration Service
  * ────────────────────────────
  * Real-time collaborative draft editing via Yjs CRDTs.
  *
@@ -30,8 +30,8 @@ const JWT_SECRET = new TextEncoder().encode(
     process.env.JWT_SECRET ??
     "dev-collab-secret-change-me",
 );
-const JWT_ISSUER = process.env.JWT_ISSUER ?? "vienna";
-const JWT_AUDIENCE = process.env.JWT_AUDIENCE ?? "vienna-collab";
+const JWT_ISSUER = process.env.JWT_ISSUER ?? "alecrae";
+const JWT_AUDIENCE = process.env.JWT_AUDIENCE ?? "alecrae-collab";
 
 interface CollabJwtClaims extends JWTPayload {
   sub: string;

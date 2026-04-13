@@ -18,8 +18,8 @@ import {
   validateQuery,
   getValidatedQuery,
 } from "../middleware/validator.js";
-import { spellCheck, SUPPORTED_LANGUAGES } from "@emailed/ai-engine/grammar/spellcheck";
-import { getDatabase, customDictionaries } from "@emailed/db";
+import { spellCheck, SUPPORTED_LANGUAGES } from "@alecrae/ai-engine/grammar/spellcheck";
+import { getDatabase, customDictionaries } from "@alecrae/db";
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 

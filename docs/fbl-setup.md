@@ -1,6 +1,6 @@
 # ISP Feedback Loop (FBL) Registration Guide
 
-This document explains how to register for Feedback Loops with major ISPs so that emailed receives complaint notifications when recipients mark emails as spam.
+This document explains how to register for Feedback Loops with major ISPs so that alecrae receives complaint notifications when recipients mark emails as spam.
 
 ## Why FBL Matters
 
@@ -66,7 +66,7 @@ Set up `abuse@{yourdomain}` for every sending domain. This is required by RFC 21
 
 ### 2. Configure ARF parsing
 
-All incoming ARF reports to your abuse@ address should be forwarded to the emailed FBL endpoint:
+All incoming ARF reports to your abuse@ address should be forwarded to the alecrae FBL endpoint:
 
 ```
 POST /v1/fbl/report

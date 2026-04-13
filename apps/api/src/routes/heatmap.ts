@@ -12,7 +12,7 @@ import { z } from "zod";
 import { eq, and, gte, lte, sql, count } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateQuery, getValidatedQuery } from "../middleware/validator.js";
-import { getDatabase, emails, events } from "@emailed/db";
+import { getDatabase, emails, events } from "@alecrae/db";
 
 // ─── Validation Schemas ─────────────────────────────────────────────────────
 

@@ -1,5 +1,5 @@
 {
-  "name": "@emailed/dns",
+  "name": "@alecrae/dns",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,8 +15,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@emailed/shared": "workspace:*",
-    "@emailed/db": "workspace:*",
+    "@alecrae/shared": "workspace:*",
+    "@alecrae/db": "workspace:*",
     "bullmq": "^5.0.0",
     "drizzle-orm": "^0.38.0",
     "ioredis": "^5.4.0",

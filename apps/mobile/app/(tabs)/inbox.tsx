@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Inbox Screen
+ * AlecRae Mobile — Inbox Screen
  *
  * Displays the user's email inbox with swipeable rows.
  * Uses TanStack Query for server state management and the

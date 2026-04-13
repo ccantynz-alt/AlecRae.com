@@ -16,7 +16,7 @@ import { z } from "zod";
 import { SignJWT, jwtVerify, importPKCS8, importSPKI } from "jose";
 import { eq } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, users, accounts } from "@emailed/db";
+import { getDatabase, users, accounts } from "@alecrae/db";
 
 const sso = new Hono();
 
@@ -42,7 +42,7 @@ const ssoConfigs = new Map<string, SsoConfig>();
 // ─── Environment ──────────���──────────────────────────���────────────────────────
 
 function getBaseUrl(): string {
-  return process.env["API_BASE_URL"] ?? "https://api.48co.ai";
+  return process.env["API_BASE_URL"] ?? "https://api.alecrae.com";
 }
 
 function getJwtSecret(): Uint8Array {
@@ -78,7 +78,7 @@ async function createSignedToken(payload: Record<string, unknown>): Promise<stri
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuedAt()
     .setExpirationTime("7d")
-    .setIssuer("vienna-sso")
+    .setIssuer("alecrae-sso")
     .sign(secret);
 
   return jwt;
@@ -91,7 +91,7 @@ async function verifyToken(token: string): Promise<Record<string, unknown> | nul
   try {
     const secret = getJwtSecret();
     const { payload } = await jwtVerify(token, secret, {
-      issuer: "vienna-sso",
+      issuer: "alecrae-sso",
     });
     return payload as Record<string, unknown>;
   } catch {
@@ -247,9 +247,9 @@ sso.get("/metadata", (c) => {
     `      isDefault="true"/>`,
     `  </md:SPSSODescriptor>`,
     `  <md:Organization>`,
-    `    <md:OrganizationName xml:lang="en">Vienna</md:OrganizationName>`,
-    `    <md:OrganizationDisplayName xml:lang="en">Vienna Email</md:OrganizationDisplayName>`,
-    `    <md:OrganizationURL xml:lang="en">https://48co.ai</md:OrganizationURL>`,
+    `    <md:OrganizationName xml:lang="en">AlecRae</md:OrganizationName>`,
+    `    <md:OrganizationDisplayName xml:lang="en">AlecRae Email</md:OrganizationDisplayName>`,
+    `    <md:OrganizationURL xml:lang="en">https://alecrae.com</md:OrganizationURL>`,
     `  </md:Organization>`,
     `</md:EntityDescriptor>`,
   ].join("\n");
@@ -285,7 +285,7 @@ sso.post("/login", validateBody(SsoLoginSchema), async (c) => {
 
   const relayState = JSON.stringify({
     accountId: input.accountId,
-    returnUrl: input.returnUrl ?? "https://admin.48co.ai",
+    returnUrl: input.returnUrl ?? "https://admin.alecrae.com",
     requestId,
   });
 
@@ -463,7 +463,7 @@ sso.post("/acs", validateBody(SsoAcsSchema), async (c) => {
     ssoIssuer: assertion.issuer,
   });
 
-  const returnUrl = relayState?.returnUrl ?? "https://admin.48co.ai";
+  const returnUrl = relayState?.returnUrl ?? "https://admin.alecrae.com";
 
   // Return token + redirect info
   return c.json({

@@ -147,7 +147,7 @@ encryption.get(
         keyCreatedAt: keys?.createdAt ?? null,
         algorithm: "RSA-OAEP-4096 + AES-256-GCM",
         message: keys
-          ? "E2E encryption is active. Emails to other Vienna users with keys will be encrypted automatically."
+          ? "E2E encryption is active. Emails to other AlecRae users with keys will be encrypted automatically."
           : "E2E encryption is not set up. Generate keys to enable.",
       },
     });

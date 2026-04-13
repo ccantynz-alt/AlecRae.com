@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — AI Writing Assistant
+// @alecrae/ai-engine — AI Writing Assistant
 // =============================================================================
 // Drafts emails in the user's learned voice, suggests replies, adjusts tone,
 // and optimises subject lines. Uses Claude API for generation with user voice

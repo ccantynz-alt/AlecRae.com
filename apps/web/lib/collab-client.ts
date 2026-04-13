@@ -1,5 +1,5 @@
 /**
- * CollabDraft — browser client for the Vienna collaboration service.
+ * CollabDraft — browser client for the AlecRae collaboration service.
  *
  * Wraps a Y.Doc + Awareness with a managed WebSocket connection that speaks
  * the y-websocket sync/awareness protocol. Local edits are immediate
@@ -70,7 +70,7 @@ export interface RemoteCollaborator {
 }
 
 export interface CollabDraftOptions {
-  /** Override the collab WS base, e.g. wss://collab.48co.ai */
+  /** Override the collab WS base, e.g. wss://collab.alecrae.com */
   endpoint?: string | undefined;
   /** Initial reconnect delay in ms (default 500). */
   baseReconnectDelayMs?: number | undefined;
@@ -89,7 +89,7 @@ export interface CollabConnectOptions {
 
 const DEFAULT_ENDPOINT =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_COLLAB_URL) ||
-  "wss://collab.48co.ai";
+  "wss://collab.alecrae.com";
 
 export class CollabDraft {
   private readonly doc: Y.Doc;

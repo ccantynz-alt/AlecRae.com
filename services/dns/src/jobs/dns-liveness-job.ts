@@ -15,7 +15,7 @@ import { runLivenessCheck } from "../liveness-checker.js";
 
 // ─── Configuration ────────────────────────────────────────────────────────
 
-const QUEUE_NAME = "emailed:dns-liveness";
+const QUEUE_NAME = "alecrae:dns-liveness";
 const REDIS_URL =
   process.env["REDIS_URL"] ??
   process.env["UPSTASH_REDIS_URL"] ??

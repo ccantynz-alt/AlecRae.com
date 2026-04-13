@@ -1,5 +1,5 @@
 /**
- * @emailed/analytics - Event Tracking
+ * @alecrae/analytics - Event Tracking
  *
  * Handles open (pixel tracking), click (link rewriting), delivery, bounce,
  * and complaint events. High-throughput event ingestion with batching
@@ -22,7 +22,7 @@ import { ok, err } from "../types";
 
 // ─── Tracking Pixel & Link Generation ───────────────────────────────────────
 
-const TRACKING_BASE_URL = process.env.TRACKING_BASE_URL ?? "https://t.emailed.dev";
+const TRACKING_BASE_URL = process.env.TRACKING_BASE_URL ?? "https://t.alecrae.dev";
 
 /**
  * Generate a 1x1 tracking pixel URL for open tracking.

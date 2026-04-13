@@ -1,5 +1,5 @@
 # =============================================================================
-# Emailed — Code Owners
+# AlecRae — Code Owners
 # =============================================================================
 # Each line is a file pattern followed by one or more owners.
 # Order matters: later patterns take precedence over earlier ones.
@@ -7,22 +7,22 @@
 # =============================================================================
 
 # Default — core team reviews everything not covered below
-* @emailed/core
+* @alecrae/core
 
 # Email infrastructure (MTA, inbound processing, DNS, reputation)
-/services/mta/ @emailed/email-infra
-/services/inbound/ @emailed/email-infra
-/services/dns/ @emailed/email-infra
-/services/reputation/ @emailed/email-infra
+/services/mta/ @alecrae/email-infra
+/services/inbound/ @alecrae/email-infra
+/services/dns/ @alecrae/email-infra
+/services/reputation/ @alecrae/email-infra
 
 # AI / ML
-/services/ai-engine/ @emailed/ai-team
+/services/ai-engine/ @alecrae/ai-team
 
 # Frontend applications
-/apps/web/ @emailed/frontend
-/apps/admin/ @emailed/frontend
-/packages/ui/ @emailed/frontend
+/apps/web/ @alecrae/frontend
+/apps/admin/ @alecrae/frontend
+/packages/ui/ @alecrae/frontend
 
 # Infrastructure and CI/CD
-/infrastructure/ @emailed/devops
-/.github/ @emailed/devops
+/infrastructure/ @alecrae/devops
+/.github/ @alecrae/devops

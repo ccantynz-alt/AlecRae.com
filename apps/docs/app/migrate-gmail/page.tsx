@@ -6,17 +6,17 @@ import { Callout } from "../components/callout";
 import { Table } from "../components/table";
 
 export const metadata: Metadata = {
-  title: "From Gmail to Vienna in 5 Minutes — Vienna Docs",
+  title: "From Gmail to AlecRae in 5 Minutes — AlecRae Docs",
   description:
-    "Step-by-step guide to migrating from Gmail to Vienna. Import your entire mailbox, labels, contacts, and more.",
+    "Step-by-step guide to migrating from Gmail to AlecRae. Import your entire mailbox, labels, contacts, and more.",
 };
 
 export default function MigrateGmailPage(): React.JSX.Element {
   return (
     <div className="px-6 md:px-8 py-12 md:py-16 max-w-4xl mx-auto">
       <PageHeader
-        title="From Gmail to Vienna in 5 Minutes"
-        description="Switch from Gmail to Vienna without losing a single email. Vienna's migration tools import your entire mailbox — labels, contacts, and all."
+        title="From Gmail to AlecRae in 5 Minutes"
+        description="Switch from Gmail to AlecRae without losing a single email. AlecRae's migration tools import your entire mailbox — labels, contacts, and all."
         badge="Migration Guide"
       />
 
@@ -27,7 +27,7 @@ export default function MigrateGmailPage(): React.JSX.Element {
           <ul className="space-y-2 text-blue-100/70">
             <li className="flex items-start gap-2">
               <span className="text-cyan-400 mt-0.5">-</span>
-              <span>A Vienna account (free tier works)</span>
+              <span>A AlecRae account (free tier works)</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-cyan-400 mt-0.5">-</span>
@@ -44,16 +44,16 @@ export default function MigrateGmailPage(): React.JSX.Element {
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">1. Connect your Gmail account</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
-            Open Vienna at{" "}
-            <a href="https://mail.48co.ai" className="text-cyan-300 hover:text-cyan-200 underline">
-              mail.48co.ai
+            Open AlecRae at{" "}
+            <a href="https://mail.alecrae.com" className="text-cyan-300 hover:text-cyan-200 underline">
+              mail.alecrae.com
             </a>
             , go to <strong className="text-white">Settings &gt; Accounts &gt; Add Account</strong>, and select{" "}
             <strong className="text-white">Gmail / Google Workspace</strong>. Sign in with your Google account and
-            grant Vienna read access. Vienna connects via OAuth — your password is never stored.
+            grant AlecRae read access. AlecRae connects via OAuth — your password is never stored.
           </p>
           <CodeBlock
-            code={`POST https://api.48co.ai/v1/connect/gmail
+            code={`POST https://api.alecrae.com/v1/connect/gmail
 Authorization: Bearer $TOKEN
 Content-Type: application/json
 
@@ -69,7 +69,7 @@ Content-Type: application/json
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">2. Import your emails</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
-            Once connected, Vienna begins syncing automatically. For a full historical import, go to{" "}
+            Once connected, AlecRae begins syncing automatically. For a full historical import, go to{" "}
             <strong className="text-white">Settings &gt; Import &gt; Gmail</strong> and choose what to import:
           </p>
           <ul className="space-y-2 text-blue-100/70 mb-4">
@@ -93,7 +93,7 @@ Content-Type: application/json
             </li>
           </ul>
           <CodeBlock
-            code={`POST https://api.48co.ai/v1/import/gmail
+            code={`POST https://api.alecrae.com/v1/import/gmail
 Authorization: Bearer $TOKEN
 Content-Type: application/json
 
@@ -111,11 +111,11 @@ Content-Type: application/json
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">3. Check progress</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
-            Vienna imports in the background. You can keep using the app while it works. Large mailboxes
-            (50K+ emails) typically finish in 10-15 minutes. Gmail labels become Vienna tags.
+            AlecRae imports in the background. You can keep using the app while it works. Large mailboxes
+            (50K+ emails) typically finish in 10-15 minutes. Gmail labels become AlecRae tags.
           </p>
           <CodeBlock
-            code={`GET https://api.48co.ai/v1/import/status/:jobId`}
+            code={`GET https://api.alecrae.com/v1/import/status/:jobId`}
             language="http"
             title="Check import status"
           />
@@ -134,11 +134,11 @@ Content-Type: application/json
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">5. Set up forwarding (optional)</h2>
           <p className="text-blue-100/70 leading-relaxed">
-            Vienna's continuous sync keeps both inboxes in sync automatically — no forwarding needed. If you
-            prefer forwarding, go to Gmail&apos;s Settings &gt; Forwarding and add your Vienna address.
+            AlecRae's continuous sync keeps both inboxes in sync automatically — no forwarding needed. If you
+            prefer forwarding, go to Gmail&apos;s Settings &gt; Forwarding and add your AlecRae address.
           </p>
           <Callout type="tip" title="Automatic sync">
-            Vienna keeps your Gmail account synced in real time. New emails appear in Vienna within seconds.
+            AlecRae keeps your Gmail account synced in real time. New emails appear in AlecRae within seconds.
             No forwarding rules necessary.
           </Callout>
         </div>
@@ -147,14 +147,14 @@ Content-Type: application/json
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">What transfers</h2>
           <Table
-            headers={["Gmail Feature", "Vienna Equivalent"]}
+            headers={["Gmail Feature", "AlecRae Equivalent"]}
             rows={[
               ["Labels", "Tags"],
               ["Stars", "Priority markers"],
               ["Categories (Primary, Social, etc.)", "Smart Inbox categories (AI-powered)"],
-              ["Contacts", "Vienna Contacts"],
-              ["Filters", "Vienna AI Rules (smarter)"],
-              ["Drafts", "Vienna Drafts"],
+              ["Contacts", "AlecRae Contacts"],
+              ["Filters", "AlecRae AI Rules (smarter)"],
+              ["Drafts", "AlecRae Drafts"],
               ["Sent mail", "Sent folder"],
               ["Trash", "Trash (30-day retention)"],
             ]}
@@ -168,7 +168,7 @@ Content-Type: application/json
             <li className="flex items-start gap-2">
               <span className="text-emerald-400 mt-0.5">+</span>
               <span>
-                <strong className="text-white">Search:</strong> Vienna finds emails in under 50ms. Gmail search often takes 2-5 seconds.
+                <strong className="text-white">Search:</strong> AlecRae finds emails in under 50ms. Gmail search often takes 2-5 seconds.
               </span>
             </li>
             <li className="flex items-start gap-2">
@@ -180,7 +180,7 @@ Content-Type: application/json
             <li className="flex items-start gap-2">
               <span className="text-emerald-400 mt-0.5">+</span>
               <span>
-                <strong className="text-white">Privacy:</strong> Vienna never scans your emails for ads. Gmail does.
+                <strong className="text-white">Privacy:</strong> AlecRae never scans your emails for ads. Gmail does.
               </span>
             </li>
             <li className="flex items-start gap-2">
@@ -218,7 +218,7 @@ Content-Type: application/json
             <div>
               <h3 className="text-lg font-semibold text-white mb-1">OAuth error?</h3>
               <p className="text-blue-100/70 text-sm">
-                Revoke Vienna&apos;s access in{" "}
+                Revoke AlecRae&apos;s access in{" "}
                 <a
                   href="https://myaccount.google.com/permissions"
                   className="text-cyan-300 hover:text-cyan-200 underline"
@@ -238,7 +238,7 @@ Content-Type: application/json
           <h2 className="text-2xl font-bold text-white mb-3">Next steps</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[
-              { href: "/quickstart", title: "Quickstart", desc: "Navigate Vienna like a power user" },
+              { href: "/quickstart", title: "Quickstart", desc: "Navigate AlecRae like a power user" },
               { href: "/migrate-outlook", title: "From Outlook", desc: "Also switching from Outlook?" },
               { href: "/migrate-apple-mail", title: "From Apple Mail", desc: "Migrating from Apple Mail?" },
               { href: "/emails", title: "Email API", desc: "Send and manage email programmatically" },

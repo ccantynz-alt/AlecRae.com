@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Box } from "@emailed/ui";
+import { Box } from "@alecrae/ui";
 import { AdminSidebar } from "./sidebar";
 import { ssoClient } from "../lib/sso";
 
@@ -28,8 +28,8 @@ export function AuthShell({ children }: AuthShellProps): React.ReactElement {
     // Also check for legacy API key auth
     if (typeof window !== "undefined") {
       const apiKey =
-        localStorage.getItem("emailed_admin_key") ??
-        localStorage.getItem("emailed_api_key");
+        localStorage.getItem("alecrae_admin_key") ??
+        localStorage.getItem("alecrae_api_key");
       if (apiKey) {
         setAuthenticated(true);
         setChecking(false);

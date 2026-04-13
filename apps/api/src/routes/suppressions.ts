@@ -10,7 +10,7 @@ import {
 } from "../middleware/validator.js";
 import { PaginationSchema } from "../types.js";
 import type { PaginationParams } from "../types.js";
-import { getDatabase, suppressionLists, domains } from "@emailed/db";
+import { getDatabase, suppressionLists, domains } from "@alecrae/db";
 
 const suppressions = new Hono();
 

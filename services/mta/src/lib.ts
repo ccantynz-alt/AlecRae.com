@@ -1,5 +1,5 @@
 /**
- * @emailed/mta — Library surface for cross-service imports.
+ * @alecrae/mta — Library surface for cross-service imports.
  *
  * Re-exports pure helpers that other services (apps/api, etc.) can call
  * without booting the entire MTA runtime. The main `index.ts` is a

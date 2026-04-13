@@ -19,7 +19,7 @@ import {
   getValidatedBody,
   getValidatedQuery,
 } from "../middleware/validator.js";
-import { getDatabase, templates } from "@emailed/db";
+import { getDatabase, templates } from "@alecrae/db";
 import {
   renderTemplate,
   extractVariables,

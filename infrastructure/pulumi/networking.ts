@@ -4,23 +4,23 @@ import { envConfig, baseTags, environment } from "./config";
 
 // ─── VPC ────────────────────────────────────────────────────────────────────
 
-export const vpc = new aws.ec2.Vpc("emailed-vpc", {
+export const vpc = new aws.ec2.Vpc("alecrae-vpc", {
   cidrBlock: envConfig.vpcCidr,
   enableDnsHostnames: true,
   enableDnsSupport: true,
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-vpc`,
+    Name: `alecrae-${environment}-vpc`,
   },
 });
 
 // ─── Internet Gateway ───────────────────────────────────────────────────────
 
-const igw = new aws.ec2.InternetGateway("emailed-igw", {
+const igw = new aws.ec2.InternetGateway("alecrae-igw", {
   vpcId: vpc.id,
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-igw`,
+    Name: `alecrae-${environment}-igw`,
   },
 });
 
@@ -34,16 +34,16 @@ const azs = aws.getAvailabilityZones({
 
 export const publicSubnets: aws.ec2.Subnet[] = [];
 for (let i = 0; i < envConfig.azCount; i++) {
-  const subnet = new aws.ec2.Subnet(`emailed-public-${i}`, {
+  const subnet = new aws.ec2.Subnet(`alecrae-public-${i}`, {
     vpcId: vpc.id,
     cidrBlock: `${envConfig.vpcCidr.split(".")[0]}.${envConfig.vpcCidr.split(".")[1]}.${i * 16}.0/20`,
     availabilityZone: azs.then((az) => az.names[i]),
     mapPublicIpOnLaunch: true,
     tags: {
       ...baseTags,
-      Name: `emailed-${environment}-public-${i}`,
+      Name: `alecrae-${environment}-public-${i}`,
       "kubernetes.io/role/elb": "1",
-      [`kubernetes.io/cluster/emailed-${environment}`]: "shared",
+      [`kubernetes.io/cluster/alecrae-${environment}`]: "shared",
     },
   });
   publicSubnets.push(subnet);
@@ -53,15 +53,15 @@ for (let i = 0; i < envConfig.azCount; i++) {
 
 export const privateSubnets: aws.ec2.Subnet[] = [];
 for (let i = 0; i < envConfig.azCount; i++) {
-  const subnet = new aws.ec2.Subnet(`emailed-private-${i}`, {
+  const subnet = new aws.ec2.Subnet(`alecrae-private-${i}`, {
     vpcId: vpc.id,
     cidrBlock: `${envConfig.vpcCidr.split(".")[0]}.${envConfig.vpcCidr.split(".")[1]}.${128 + i * 16}.0/20`,
     availabilityZone: azs.then((az) => az.names[i]),
     tags: {
       ...baseTags,
-      Name: `emailed-${environment}-private-${i}`,
+      Name: `alecrae-${environment}-private-${i}`,
       "kubernetes.io/role/internal-elb": "1",
-      [`kubernetes.io/cluster/emailed-${environment}`]: "shared",
+      [`kubernetes.io/cluster/alecrae-${environment}`]: "shared",
     },
   });
   privateSubnets.push(subnet);
@@ -74,21 +74,21 @@ const natGateways: aws.ec2.NatGateway[] = [];
 const natCount = environment === "prod" ? envConfig.azCount : 1;
 
 for (let i = 0; i < natCount; i++) {
-  const eip = new aws.ec2.Eip(`emailed-nat-eip-${i}`, {
+  const eip = new aws.ec2.Eip(`alecrae-nat-eip-${i}`, {
     domain: "vpc",
     tags: {
       ...baseTags,
-      Name: `emailed-${environment}-nat-eip-${i}`,
+      Name: `alecrae-${environment}-nat-eip-${i}`,
     },
   });
   natEips.push(eip);
 
-  const natGw = new aws.ec2.NatGateway(`emailed-nat-${i}`, {
+  const natGw = new aws.ec2.NatGateway(`alecrae-nat-${i}`, {
     allocationId: eip.id,
     subnetId: publicSubnets[i].id,
     tags: {
       ...baseTags,
-      Name: `emailed-${environment}-nat-${i}`,
+      Name: `alecrae-${environment}-nat-${i}`,
     },
   });
   natGateways.push(natGw);
@@ -96,7 +96,7 @@ for (let i = 0; i < natCount; i++) {
 
 // ─── Route Tables ───────────────────────────────────────────────────────────
 
-const publicRouteTable = new aws.ec2.RouteTable("emailed-public-rt", {
+const publicRouteTable = new aws.ec2.RouteTable("alecrae-public-rt", {
   vpcId: vpc.id,
   routes: [
     {
@@ -106,12 +106,12 @@ const publicRouteTable = new aws.ec2.RouteTable("emailed-public-rt", {
   ],
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-public-rt`,
+    Name: `alecrae-${environment}-public-rt`,
   },
 });
 
 for (let i = 0; i < envConfig.azCount; i++) {
-  new aws.ec2.RouteTableAssociation(`emailed-public-rta-${i}`, {
+  new aws.ec2.RouteTableAssociation(`alecrae-public-rta-${i}`, {
     subnetId: publicSubnets[i].id,
     routeTableId: publicRouteTable.id,
   });
@@ -119,7 +119,7 @@ for (let i = 0; i < envConfig.azCount; i++) {
 
 for (let i = 0; i < envConfig.azCount; i++) {
   const natIndex = environment === "prod" ? i : 0;
-  const privateRt = new aws.ec2.RouteTable(`emailed-private-rt-${i}`, {
+  const privateRt = new aws.ec2.RouteTable(`alecrae-private-rt-${i}`, {
     vpcId: vpc.id,
     routes: [
       {
@@ -129,11 +129,11 @@ for (let i = 0; i < envConfig.azCount; i++) {
     ],
     tags: {
       ...baseTags,
-      Name: `emailed-${environment}-private-rt-${i}`,
+      Name: `alecrae-${environment}-private-rt-${i}`,
     },
   });
 
-  new aws.ec2.RouteTableAssociation(`emailed-private-rta-${i}`, {
+  new aws.ec2.RouteTableAssociation(`alecrae-private-rta-${i}`, {
     subnetId: privateSubnets[i].id,
     routeTableId: privateRt.id,
   });
@@ -141,7 +141,7 @@ for (let i = 0; i < envConfig.azCount; i++) {
 
 // ─── Security Groups ────────────────────────────────────────────────────────
 
-export const albSecurityGroup = new aws.ec2.SecurityGroup("emailed-alb-sg", {
+export const albSecurityGroup = new aws.ec2.SecurityGroup("alecrae-alb-sg", {
   vpcId: vpc.id,
   description: "Security group for the ALB — allows HTTP/HTTPS from internet",
   ingress: [
@@ -170,11 +170,11 @@ export const albSecurityGroup = new aws.ec2.SecurityGroup("emailed-alb-sg", {
   ],
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-alb-sg`,
+    Name: `alecrae-${environment}-alb-sg`,
   },
 });
 
-export const eksSecurityGroup = new aws.ec2.SecurityGroup("emailed-eks-sg", {
+export const eksSecurityGroup = new aws.ec2.SecurityGroup("alecrae-eks-sg", {
   vpcId: vpc.id,
   description: "Security group for EKS worker nodes",
   ingress: [
@@ -203,11 +203,11 @@ export const eksSecurityGroup = new aws.ec2.SecurityGroup("emailed-eks-sg", {
   ],
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-eks-sg`,
+    Name: `alecrae-${environment}-eks-sg`,
   },
 });
 
-export const dbSecurityGroup = new aws.ec2.SecurityGroup("emailed-db-sg", {
+export const dbSecurityGroup = new aws.ec2.SecurityGroup("alecrae-db-sg", {
   vpcId: vpc.id,
   description: "Security group for RDS — allows PostgreSQL from EKS only",
   ingress: [
@@ -222,12 +222,12 @@ export const dbSecurityGroup = new aws.ec2.SecurityGroup("emailed-db-sg", {
   egress: [],
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-db-sg`,
+    Name: `alecrae-${environment}-db-sg`,
   },
 });
 
 export const redisSecurityGroup = new aws.ec2.SecurityGroup(
-  "emailed-redis-sg",
+  "alecrae-redis-sg",
   {
     vpcId: vpc.id,
     description: "Security group for ElastiCache — allows Redis from EKS only",
@@ -243,12 +243,12 @@ export const redisSecurityGroup = new aws.ec2.SecurityGroup(
     egress: [],
     tags: {
       ...baseTags,
-      Name: `emailed-${environment}-redis-sg`,
+      Name: `alecrae-${environment}-redis-sg`,
     },
   },
 );
 
-export const mtaSecurityGroup = new aws.ec2.SecurityGroup("emailed-mta-sg", {
+export const mtaSecurityGroup = new aws.ec2.SecurityGroup("alecrae-mta-sg", {
   vpcId: vpc.id,
   description: "Security group for MTA NLB — allows SMTP from internet",
   ingress: [
@@ -284,6 +284,6 @@ export const mtaSecurityGroup = new aws.ec2.SecurityGroup("emailed-mta-sg", {
   ],
   tags: {
     ...baseTags,
-    Name: `emailed-${environment}-mta-sg`,
+    Name: `alecrae-${environment}-mta-sg`,
   },
 });

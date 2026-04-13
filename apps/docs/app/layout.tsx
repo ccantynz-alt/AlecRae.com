@@ -7,14 +7,14 @@ import { NAV_GROUPS } from "./components/nav-data";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vienna API Documentation",
-  description: "Developer documentation for the Vienna email platform API. Send, receive, and manage email programmatically.",
-  applicationName: "Vienna Docs",
+  title: "AlecRae API Documentation",
+  description: "Developer documentation for the AlecRae email platform API. Send, receive, and manage email programmatically.",
+  applicationName: "AlecRae Docs",
   openGraph: {
-    title: "Vienna API Documentation",
-    description: "Developer documentation for the Vienna email platform API.",
-    url: "https://docs.48co.ai",
-    siteName: "Vienna Docs",
+    title: "AlecRae API Documentation",
+    description: "Developer documentation for the AlecRae email platform API.",
+    url: "https://docs.alecrae.com",
+    siteName: "AlecRae Docs",
     type: "website",
   },
   robots: { index: true, follow: true },
@@ -46,7 +46,7 @@ export default function RootLayout({
             <div className="p-6 border-b border-white/10">
               <Link href="/" className="block mb-4">
                 <div className="text-2xl font-bold tracking-tight bg-gradient-to-r from-white via-blue-200 to-cyan-300 bg-clip-text text-transparent">
-                  Vienna
+                  AlecRae
                 </div>
                 <div className="text-xs uppercase tracking-wider text-blue-200/50 mt-1">API Documentation</div>
               </Link>
@@ -71,7 +71,7 @@ export default function RootLayout({
             <div className="p-4 border-t border-white/10">
               <div className="flex items-center gap-3 px-3">
                 <a
-                  href="https://api.48co.ai/openapi.yaml"
+                  href="https://api.alecrae.com/openapi.yaml"
                   className="text-xs text-blue-200/40 hover:text-cyan-300 transition-colors"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -80,7 +80,7 @@ export default function RootLayout({
                 </a>
                 <span className="text-white/10">|</span>
                 <a
-                  href="https://mail.48co.ai"
+                  href="https://mail.alecrae.com"
                   className="text-xs text-blue-200/40 hover:text-cyan-300 transition-colors"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -89,7 +89,7 @@ export default function RootLayout({
                 </a>
               </div>
               <div className="mt-3 px-3 text-xs text-blue-200/25">
-                &copy; 2026 Vienna &middot; 48co.ai
+                &copy; 2026 AlecRae &middot; alecrae.com
               </div>
             </div>
           </aside>

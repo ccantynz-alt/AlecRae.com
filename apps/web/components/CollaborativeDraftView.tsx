@@ -11,7 +11,7 @@ import {
   type CollabInvite,
   type CollabHistoryEntry,
   type Collaborator,
-} from "@emailed/ui";
+} from "@alecrae/ui";
 import {
   useCollaborativeDraft,
   type UseCollaborativeDraftOptions,

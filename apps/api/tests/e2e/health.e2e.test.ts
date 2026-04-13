@@ -25,7 +25,7 @@ describe("Health endpoints", () => {
       }>(res);
 
       expect(body.status).toBe("ok");
-      expect(body.service).toBe("emailed-api");
+      expect(body.service).toBe("alecrae-api");
       expect(body.version).toBeDefined();
       expect(body.timestamp).toBeDefined();
       // timestamp should be a valid ISO date

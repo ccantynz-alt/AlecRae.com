@@ -16,9 +16,9 @@ import {
   validateBody,
   getValidatedBody,
 } from "../middleware/validator.js";
-import { getDatabase, emails, meetingLinks } from "@emailed/db";
-import { detectMeetingFromThread } from "@emailed/ai-engine/meetings/transcript-linker";
-import type { LinkerEmail } from "@emailed/ai-engine/meetings/types";
+import { getDatabase, emails, meetingLinks } from "@alecrae/db";
+import { detectMeetingFromThread } from "@alecrae/ai-engine/meetings/transcript-linker";
+import type { LinkerEmail } from "@alecrae/ai-engine/meetings/types";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 

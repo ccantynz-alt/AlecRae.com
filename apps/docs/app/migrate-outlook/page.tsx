@@ -6,17 +6,17 @@ import { Callout } from "../components/callout";
 import { Table } from "../components/table";
 
 export const metadata: Metadata = {
-  title: "From Outlook to Vienna in 5 Minutes — Vienna Docs",
+  title: "From Outlook to AlecRae in 5 Minutes — AlecRae Docs",
   description:
-    "Step-by-step guide to migrating from Outlook (Microsoft 365, Outlook.com, Exchange) to Vienna.",
+    "Step-by-step guide to migrating from Outlook (Microsoft 365, Outlook.com, Exchange) to AlecRae.",
 };
 
 export default function MigrateOutlookPage(): React.JSX.Element {
   return (
     <div className="px-6 md:px-8 py-12 md:py-16 max-w-4xl mx-auto">
       <PageHeader
-        title="From Outlook to Vienna in 5 Minutes"
-        description="Migrate from Outlook (Microsoft 365, Outlook.com, or Exchange) to Vienna with full email history, contacts, and calendar events intact."
+        title="From Outlook to AlecRae in 5 Minutes"
+        description="Migrate from Outlook (Microsoft 365, Outlook.com, or Exchange) to AlecRae with full email history, contacts, and calendar events intact."
         badge="Migration Guide"
       />
 
@@ -27,7 +27,7 @@ export default function MigrateOutlookPage(): React.JSX.Element {
           <ul className="space-y-2 text-blue-100/70">
             <li className="flex items-start gap-2">
               <span className="text-cyan-400 mt-0.5">-</span>
-              <span>A Vienna account (free tier works)</span>
+              <span>A AlecRae account (free tier works)</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="text-cyan-400 mt-0.5">-</span>
@@ -44,16 +44,16 @@ export default function MigrateOutlookPage(): React.JSX.Element {
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">1. Connect your Outlook account</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
-            Open Vienna at{" "}
-            <a href="https://mail.48co.ai" className="text-cyan-300 hover:text-cyan-200 underline">
-              mail.48co.ai
+            Open AlecRae at{" "}
+            <a href="https://mail.alecrae.com" className="text-cyan-300 hover:text-cyan-200 underline">
+              mail.alecrae.com
             </a>
             , go to <strong className="text-white">Settings &gt; Accounts &gt; Add Account</strong>, and select{" "}
             <strong className="text-white">Outlook / Microsoft 365</strong>. Sign in with your Microsoft account and
-            authorize Vienna. Your credentials are never stored — Vienna uses the Microsoft Graph API.
+            authorize AlecRae. Your credentials are never stored — AlecRae uses the Microsoft Graph API.
           </p>
           <CodeBlock
-            code={`POST https://api.48co.ai/v1/connect/outlook
+            code={`POST https://api.alecrae.com/v1/connect/outlook
 Authorization: Bearer $TOKEN
 Content-Type: application/json
 
@@ -93,7 +93,7 @@ Content-Type: application/json
             </li>
           </ul>
           <CodeBlock
-            code={`POST https://api.48co.ai/v1/import/outlook
+            code={`POST https://api.alecrae.com/v1/import/outlook
 Authorization: Bearer $TOKEN
 Content-Type: application/json
 
@@ -111,11 +111,11 @@ Content-Type: application/json
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">3. Check progress</h2>
           <p className="text-blue-100/70 mb-4 leading-relaxed">
-            The import runs in the background — you can use Vienna immediately. Typical speed is approximately 5,000
-            emails per minute. Outlook folders become Vienna tags.
+            The import runs in the background — you can use AlecRae immediately. Typical speed is approximately 5,000
+            emails per minute. Outlook folders become AlecRae tags.
           </p>
           <CodeBlock
-            code={`GET https://api.48co.ai/v1/import/status/:jobId`}
+            code={`GET https://api.alecrae.com/v1/import/status/:jobId`}
             language="http"
             title="Check import status"
           />
@@ -125,11 +125,11 @@ Content-Type: application/json
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">4. Verify and sync</h2>
           <p className="text-blue-100/70 leading-relaxed">
-            Vienna keeps your Outlook account in continuous sync: new emails arriving in Outlook appear in Vienna
-            within seconds. Emails you send from Vienna also appear in Outlook&apos;s Sent folder.
+            AlecRae keeps your Outlook account in continuous sync: new emails arriving in Outlook appear in AlecRae
+            within seconds. Emails you send from AlecRae also appear in Outlook&apos;s Sent folder.
           </p>
           <Callout type="tip" title="Continuous sync">
-            No forwarding rules needed. Vienna handles bidirectional sync automatically.
+            No forwarding rules needed. AlecRae handles bidirectional sync automatically.
           </Callout>
         </div>
 
@@ -137,16 +137,16 @@ Content-Type: application/json
         <div>
           <h2 className="text-2xl font-bold text-white mb-3">What transfers</h2>
           <Table
-            headers={["Outlook Feature", "Vienna Equivalent"]}
+            headers={["Outlook Feature", "AlecRae Equivalent"]}
             rows={[
               ["Folders", "Tags"],
               ["Focused Inbox", "Smart Inbox (AI-powered, much better)"],
               ["Categories", "Tags with colors"],
-              ["Contacts", "Vienna Contacts"],
-              ["Rules", "Vienna AI Rules (smarter)"],
-              ["Drafts", "Vienna Drafts"],
-              ["Calendar", "Vienna Calendar integration"],
-              ["Recall (Outlook)", "Vienna Recall (actually works)"],
+              ["Contacts", "AlecRae Contacts"],
+              ["Rules", "AlecRae AI Rules (smarter)"],
+              ["Drafts", "AlecRae Drafts"],
+              ["Calendar", "AlecRae Calendar integration"],
+              ["Recall (Outlook)", "AlecRae Recall (actually works)"],
             ]}
           />
         </div>
@@ -159,7 +159,7 @@ Content-Type: application/json
               <span className="text-emerald-400 mt-0.5">+</span>
               <span>
                 <strong className="text-white">Email Recall:</strong> Outlook&apos;s recall only works within the same Exchange
-                org. Vienna&apos;s link-based recall works everywhere.
+                org. AlecRae&apos;s link-based recall works everywhere.
               </span>
             </li>
             <li className="flex items-start gap-2">
@@ -186,7 +186,7 @@ Content-Type: application/json
             <li className="flex items-start gap-2">
               <span className="text-emerald-400 mt-0.5">+</span>
               <span>
-                <strong className="text-white">No ads:</strong> Vienna never shows ads. Outlook.com free tier shows banner ads.
+                <strong className="text-white">No ads:</strong> AlecRae never shows ads. Outlook.com free tier shows banner ads.
               </span>
             </li>
           </ul>
@@ -208,7 +208,7 @@ Content-Type: application/json
                 >
                   Microsoft Account App Permissions
                 </a>
-                , revoke Vienna, and reconnect.
+                , revoke AlecRae, and reconnect.
               </p>
             </div>
             <div>
@@ -221,14 +221,14 @@ Content-Type: application/json
             <div>
               <h3 className="text-lg font-semibold text-white mb-1">Exchange on-premise?</h3>
               <p className="text-blue-100/70 text-sm">
-                Vienna supports Exchange via IMAP. Go to Settings &gt; Accounts &gt; Add Account &gt; IMAP and enter
+                AlecRae supports Exchange via IMAP. Go to Settings &gt; Accounts &gt; Add Account &gt; IMAP and enter
                 your Exchange server details.
               </p>
             </div>
             <div>
               <h3 className="text-lg font-semibold text-white mb-1">Shared mailboxes?</h3>
               <p className="text-blue-100/70 text-sm">
-                Vienna supports shared inboxes natively. Connect the shared mailbox as a separate account, then assign
+                AlecRae supports shared inboxes natively. Connect the shared mailbox as a separate account, then assign
                 team members in Settings &gt; Team.
               </p>
             </div>
@@ -240,7 +240,7 @@ Content-Type: application/json
           <h2 className="text-2xl font-bold text-white mb-3">Next steps</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {[
-              { href: "/quickstart", title: "Quickstart", desc: "Navigate Vienna like a power user" },
+              { href: "/quickstart", title: "Quickstart", desc: "Navigate AlecRae like a power user" },
               { href: "/migrate-gmail", title: "From Gmail", desc: "Also switching from Gmail?" },
               { href: "/migrate-apple-mail", title: "From Apple Mail", desc: "Migrating from Apple Mail?" },
               { href: "/emails", title: "Email API", desc: "Send and manage email programmatically" },

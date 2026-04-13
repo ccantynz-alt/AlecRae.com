@@ -1,7 +1,7 @@
 /**
  * Sentinel Pipeline — The main validation orchestrator.
  *
- * This is the entry point for ALL validation in Emailed. Every email,
+ * This is the entry point for ALL validation in AlecRae. Every email,
  * API request, webhook, and config change flows through here.
  *
  * The pipeline works in three stages:

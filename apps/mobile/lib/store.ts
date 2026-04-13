@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Global State (Zustand)
+ * AlecRae Mobile — Global State (Zustand)
  *
  * Manages auth state and user preferences. Token is persisted in
  * expo-secure-store (not AsyncStorage or localStorage) for security.

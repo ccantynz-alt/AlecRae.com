@@ -14,12 +14,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { searchEmails } from "@emailed/shared";
-import { hybridSearch, isVectorSearchAvailable } from "@emailed/ai-engine/embeddings/hybrid";
+import { searchEmails } from "@alecrae/shared";
+import { hybridSearch, isVectorSearchAvailable } from "@alecrae/ai-engine/embeddings/hybrid";
 import {
   HybridSearchRequestSchema,
   type HybridSearchRequest,
-} from "@emailed/ai-engine/embeddings/types";
+} from "@alecrae/ai-engine/embeddings/types";
 
 const ANTHROPIC_API_KEY = process.env["ANTHROPIC_API_KEY"] ?? process.env["CLAUDE_API_KEY"];
 

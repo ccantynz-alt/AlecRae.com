@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Box, Text, Button, Input, Card, CardContent } from "@emailed/ui";
+import { Box, Text, Button, Input, Card, CardContent } from "@alecrae/ui";
 import { authApi } from "../../../lib/api";
 import {
   isWebAuthnSupported,
@@ -15,7 +15,7 @@ export default function RegisterPage(): React.ReactElement {
       <Box className="w-full max-w-md">
         <Box className="text-center mb-8">
           <Text variant="heading-lg" className="text-brand-600 font-bold mb-2">
-            Vienna
+            AlecRae
           </Text>
           <Text variant="display-sm">Create your account</Text>
           <Text variant="body-md" muted className="mt-2">

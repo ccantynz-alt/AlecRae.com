@@ -403,7 +403,7 @@ export function createSampleEmailContext(
   return {
     id: "sample_email_001",
     from: { name: "Jane Smith", address: "jane@example.com" },
-    to: [{ name: "You", address: "you@48co.ai" }],
+    to: [{ name: "You", address: "you@alecrae.com" }],
     cc: [],
     subject: "Q3 Budget Review - Action Required",
     body: "Hi,\n\nPlease review the attached Q3 budget report by 2026-04-15.\n\nThe total projected spend is $142,000.\n\nBest regards,\nJane\n\nhttps://docs.example.com/q3-budget",

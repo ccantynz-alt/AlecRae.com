@@ -16,9 +16,9 @@ const BASE_PATH = "/v1/billing";
  *
  * Usage:
  * ```ts
- * const emailed = new Emailed({ apiKey: "em_live_..." });
- * const usage = await emailed.billing.getUsage();
- * const plan = await emailed.billing.getPlan();
+ * const alecrae = new AlecRae({ apiKey: "em_live_..." });
+ * const usage = await alecrae.billing.getUsage();
+ * const plan = await alecrae.billing.getPlan();
  * ```
  */
 export class Billing {

@@ -1,8 +1,8 @@
-# Defensible Innovations — Emailed Platform
+# Defensible Innovations — AlecRae Platform
 
 ## Overview
 
-This document catalogs novel technologies built into Emailed that create
+This document catalogs novel technologies built into AlecRae that create
 sustainable competitive advantages. Each innovation is designed to be
 architecturally impossible for legacy competitors to adopt without
 full system rewrites.
@@ -38,7 +38,7 @@ renders HTML. Changing that breaks compatibility with 30 years of
 email history.
 
 **Description:**
-Instead of HTML, Emailed uses a structured JSON document model for
+Instead of HTML, AlecRae uses a structured JSON document model for
 email composition and rendering. Emails are represented as typed
 blocks (paragraph, heading, image, link, list, code, table, divider)
 with semantic meaning, not visual markup.
@@ -117,7 +117,7 @@ current IP reputation state, and real-time ISP signal data.
 users "go add these 5 TXT records." We ARE the DNS.
 
 **Description:**
-When a domain is added to Emailed, the system automatically becomes
+When a domain is added to AlecRae, the system automatically becomes
 the authoritative DNS for that domain's email records. SPF, DKIM
 (with automatic key rotation), DMARC (with policy progression from
 none → quarantine → reject), BIMI, MTA-STS, and DANE/TLSA records
@@ -162,7 +162,7 @@ and compliance enforcement. Humans are supervisors, not operators.
 ## Legal Protection Strategy
 
 ### Trademarks (File Immediately)
-- "Emailed" — platform name
+- "AlecRae" — platform name
 - "Sentinel" — validation pipeline
 - "Communication Intelligence Graph" or "CIG" — relationship engine
 - Logo and brand identity

@@ -1,7 +1,7 @@
 /**
- * Vienna Mobile — API Client
+ * AlecRae Mobile — API Client
  *
- * Typed fetch wrapper that communicates with the Vienna /v1/* endpoints.
+ * Typed fetch wrapper that communicates with the AlecRae /v1/* endpoints.
  * Uses expo-secure-store for token persistence (never localStorage).
  * Falls back to the configured API_URL or localhost for development.
  */
@@ -19,7 +19,7 @@ const API_BASE: string =
   (typeof EXTRA?.["apiUrl"] === "string" ? EXTRA["apiUrl"] : undefined) ??
   "http://localhost:3001";
 
-const AUTH_TOKEN_KEY = "vienna_auth_token";
+const AUTH_TOKEN_KEY = "alecrae_auth_token";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
