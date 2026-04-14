@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!--
+    AlecRae app icon.
+    Gold envelope with a dark bronze AR monogram.
+    Dark warm-charcoal background for luxury feel.
+    Designed to read sophisticated at favicon size (32px) and hero size (512px).
+  -->
+  <defs>
+    <linearGradient id="goldBody" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#efc870"/>
+      <stop offset="55%" stop-color="#cfa630"/>
+      <stop offset="100%" stop-color="#8a7020"/>
+    </linearGradient>
+    <linearGradient id="goldFlap" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#f7e09b"/>
+      <stop offset="100%" stop-color="#caa02a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Warm charcoal background, rounded square -->
+  <rect width="512" height="512" rx="110" fill="#0b0a08"/>
+
+  <!-- Envelope body (full rectangle) -->
+  <rect x="76" y="146" width="360" height="220" rx="12" fill="url(#goldBody)"/>
+
+  <!-- Soft shadow under the flap to give depth -->
+  <path d="M76 158 L256 276 L436 158 L436 166 L256 284 L76 166 Z" fill="#000" opacity="0.18"/>
+
+  <!-- Flap triangle (lighter gold — the visible folded flap) -->
+  <path d="M76 158 L256 276 L436 158 Z" fill="url(#goldFlap)"/>
+
+  <!-- Subtle highlight along the flap crease -->
+  <path d="M76 158 L256 276 L436 158" fill="none" stroke="#fce8a0" stroke-width="1.5" opacity="0.5"/>
+
+  <!-- Outer envelope border (subtle definition) -->
+  <rect x="76" y="146" width="360" height="220" rx="12" fill="none" stroke="#6a5118" stroke-width="2" opacity="0.55"/>
+
+  <!-- AR monogram: italic serif, tight kerning, deep bronze -->
+  <text
+    x="256"
+    y="352"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="98"
+    font-weight="400"
+    font-style="italic"
+    fill="#1a1205"
+    letter-spacing="-6"
+  >AR</text>
+</svg>
