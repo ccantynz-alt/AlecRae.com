@@ -171,7 +171,7 @@ export default function LoginPage(): React.ReactElement {
           >
             <KeyIcon />
             <Text as="span" variant="body-sm" className="font-medium">
-              SSO / SAML
+              API Key
             </Text>
           </Box>
         </Box>
