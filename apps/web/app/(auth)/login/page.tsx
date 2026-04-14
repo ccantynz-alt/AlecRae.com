@@ -15,7 +15,7 @@ export default function LoginPage(): React.ReactElement {
       <Box className="w-full max-w-md">
         <Box className="text-center mb-8">
           <Text variant="heading-lg" className="text-brand-600 font-bold mb-2">
-            Vienna
+            AlecRae
           </Text>
           <Text variant="display-sm">Welcome back</Text>
           <Text variant="body-md" muted className="mt-2">
@@ -71,19 +71,12 @@ function PasskeyLogin(): React.ReactElement {
     setError(null);
 
     try {
-      // Step 1: Request a challenge from the server
       const challengeResponse = await authApi.passkeyLoginChallenge();
-
-      // Step 2: Run the WebAuthn ceremony in the browser
       const assertion = await getPasskeyAssertion(challengeResponse.publicKey);
-
-      // Step 3: Send the assertion to the server for verification
       await authApi.passkeyLoginVerify({
         challengeId: challengeResponse.challengeId,
         credential: assertion,
       });
-
-      // Step 4: Redirect to inbox on success
       window.location.href = "/inbox";
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
