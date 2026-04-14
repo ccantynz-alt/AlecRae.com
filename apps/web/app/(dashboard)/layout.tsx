@@ -3,7 +3,7 @@
 import type { JSX } from "react";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Box, Text, type SidebarSection } from "@emailed/ui";
+import { Box, Text } from "@emailed/ui";
 import { AnimatedSidebar, type AnimatedSidebarSection } from "../../components/AnimatedSidebar";
 import { AnimatedPage } from "../../components/AnimatedPage";
 import { FocusModeOverlay, type FocusModeOverlayEmail } from "../../components/FocusModeOverlay";
