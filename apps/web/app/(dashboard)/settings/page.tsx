@@ -11,8 +11,17 @@ import {
   CardHeader,
   CardFooter,
   PageLayout,
-} from "@emailed/ui";
+} from "@alecrae/ui";
+import { motion } from "motion/react";
 import { authApi, accountApi } from "../../../lib/api";
+import { PressableScale } from "../../../components/PressableScale";
+import { AnimatedPresence } from "../../../components/AnimatedPresence";
+import {
+  staggerSlow,
+  fadeInUp,
+  useAlecRaeReducedMotion,
+  withReducedMotion,
+} from "../../../lib/animations";
 
 interface UserData {
   name: string;
@@ -24,10 +33,12 @@ interface AccountData {
   emailsSentThisPeriod: number;
 }
 
-export default function SettingsPage() {
+export default function SettingsPage(): React.ReactNode {
+  const reduced = useAlecRaeReducedMotion();
   const [user, setUser] = useState<UserData | null>(null);
   const [account, setAccount] = useState<AccountData | null>(null);
   const [loading, setLoading] = useState(true);
+  const itemVariants = withReducedMotion(fadeInUp, reduced);
 
   useEffect(() => {
     Promise.all([
@@ -45,13 +56,28 @@ export default function SettingsPage() {
       title="Settings"
       description="Manage your account, preferences, and security settings."
     >
-      <Box className="max-w-3xl space-y-6">
-        <ProfileSection user={user} loading={loading} />
-        <AccountOverview account={account} loading={loading} />
-        <SecuritySection />
-        <NotificationSection />
-        <DangerZone />
-      </Box>
+      <motion.div
+        className="max-w-3xl space-y-6"
+        variants={staggerSlow}
+        initial="initial"
+        animate="animate"
+      >
+        <motion.div variants={itemVariants}>
+          <ProfileSection user={user} loading={loading} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <AccountOverview account={account} loading={loading} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <SecuritySection />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <NotificationSection />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <DangerZone />
+        </motion.div>
+      </motion.div>
     </PageLayout>
   );
 }
@@ -120,14 +146,16 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
       </CardContent>
       <CardFooter>
         <Box className="flex items-center justify-end gap-3">
-          {saved && (
+          <AnimatedPresence show={saved} presenceKey="saved-indicator">
             <Text variant="body-sm" className="text-status-success">
               Saved
             </Text>
-          )}
-          <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || loading}>
-            {saving ? "Saving..." : "Save Changes"}
-          </Button>
+          </AnimatedPresence>
+          <PressableScale as="button" tapScale={0.95}>
+            <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || loading}>
+              {saving ? "Saving..." : "Save Changes"}
+            </Button>
+          </PressableScale>
         </Box>
       </CardFooter>
     </Card>
@@ -322,14 +350,18 @@ function DangerZone() {
             </Text>
           </Box>
           <Box className="flex items-center gap-2">
-            {confirming && (
-              <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
-                Cancel
+            <AnimatedPresence show={confirming} presenceKey="cancel-delete">
+              <PressableScale as="button" tapScale={0.95}>
+                <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+                  Cancel
+                </Button>
+              </PressableScale>
+            </AnimatedPresence>
+            <PressableScale as="button" tapScale={0.95}>
+              <Button variant="destructive" size="sm" onClick={handleDelete}>
+                {confirming ? "Confirm Delete" : "Delete Account"}
               </Button>
-            )}
-            <Button variant="destructive" size="sm" onClick={handleDelete}>
-              {confirming ? "Confirm Delete" : "Delete Account"}
-            </Button>
+            </PressableScale>
           </Box>
         </Box>
       </CardContent>

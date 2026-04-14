@@ -17,6 +17,7 @@ import { domains } from "./domains.js";
 // ---------------------------------------------------------------------------
 
 export const emailStatusEnum = pgEnum("email_status", [
+  "draft",
   "queued",
   "processing",
   "sent",
@@ -31,6 +32,14 @@ export const emailStatusEnum = pgEnum("email_status", [
 export const attachmentDispositionEnum = pgEnum("attachment_disposition", [
   "attachment",
   "inline",
+]);
+
+export const virusScanStatusEnum = pgEnum("virus_scan_status", [
+  "pending",
+  "clean",
+  "infected",
+  "skipped",
+  "error",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -129,6 +138,17 @@ export const attachments = pgTable(
     disposition: attachmentDispositionEnum("disposition")
       .notNull()
       .default("attachment"),
+    /** Virus scan status from VirusTotal */
+    virusScanStatus: virusScanStatusEnum("virus_scan_status")
+      .notNull()
+      .default("pending"),
+    /** VirusTotal scan result details */
+    virusScanResult: jsonb("virus_scan_result").$type<{
+      detections: number;
+      totalEngines: number;
+      threats: string[];
+      scannedAt: string;
+    }>(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

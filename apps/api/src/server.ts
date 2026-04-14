@@ -1,5 +1,5 @@
 /**
- * @emailed/api — Main Server Entry Point
+ * @alecrae/api — Main Server Entry Point
  *
  * Creates the Hono application, registers all routes, applies middleware,
  * starts listening, and handles graceful shutdown.
@@ -36,6 +36,7 @@ import { tracking } from "./routes/tracking.js";
 import { apiKeysRouter } from "./routes/api-keys.js";
 import { account } from "./routes/account.js";
 import { auth } from "./routes/auth.js";
+import { passkeyRouter } from "./routes/passkey.js";
 import { health } from "./routes/health.js";
 import { admin } from "./routes/admin.js";
 import { billing } from "./routes/billing.js";
@@ -43,11 +44,12 @@ import { templatesRouter } from "./routes/templates.js";
 import { voice } from "./routes/voice.js";
 import { voiceClone } from "./routes/voice-clone.js";
 import { meetingLink } from "./routes/meeting-link.js";
+import { meetings } from "./routes/meetings.js";
 import { grammar } from "./routes/grammar.js";
 import { dictation } from "./routes/dictation.js";
 import { inbox } from "./routes/inbox.js";
 import { recall } from "./routes/recall.js";
-import { translate } from "./routes/translate.js";
+import { translate, emailTranslate } from "./routes/translate.js";
 import { collaborate } from "./routes/collaborate.js";
 import { connect } from "./routes/connect.js";
 import { snooze, scheduleSend } from "./routes/snooze.js";
@@ -61,15 +63,29 @@ import { aiRules } from "./routes/ai-rules.js";
 import { programs } from "./routes/programs.js";
 import { explain } from "./routes/explain.js";
 import { agent } from "./routes/agent.js";
-import { security } from "./routes/security.js";
-import { todo } from "./routes/todo.js";
-import { unsubscribe } from "./routes/unsubscribe.js";
-import { sendTime } from "./routes/send-time.js";
+import { security, emailSecurity } from "./routes/security.js";
+import { todo, emailTasks, taskRoutes } from "./routes/todo.js";
+import { unsubscribe, emailUnsubscribe } from "./routes/unsubscribe.js";
+import { sendTime, optimalSendTime, recipientPatterns } from "./routes/send-time.js";
 import { composeAssist } from "./routes/compose-assist.js";
-import { closeConnection } from "@emailed/db";
-import { closeSendQueue } from "./lib/queue.js";
+import { sso } from "./routes/sso.js";
+import { spellcheckRouter } from "./routes/spellcheck.js";
+import { status } from "./routes/status.js";
+import { gamification } from "./routes/gamification.js";
+import { changelog } from "./routes/changelog.js";
+import { heatmapAnalytics } from "./routes/heatmap.js";
+import { voiceMessageRouter } from "./routes/voice-message.js";
+import { scripts } from "./routes/scripts.js";
+import { emailQuery } from "./routes/email-query.js";
+import { fbl } from "./routes/fbl.js";
+import { closeConnection } from "@alecrae/db";
+import { closeIdempotencyRedis } from "./middleware/idempotency.js";
+import { closeSendQueue, getSendQueue } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
-import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@emailed/shared";
+import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@alecrae/shared";
+import { startAutoIndexer, stopAutoIndexer } from "@alecrae/ai-engine/embeddings/auto-indexer";
+import { processDLQ } from "./lib/dlq-processor.js";
+import { reconcileStorageUsage } from "./lib/storage-quota.js";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -106,6 +122,7 @@ app.use(
       "Content-Type",
       "X-API-Key",
       "X-Request-Id",
+      "Idempotency-Key",
     ],
     exposeHeaders: [
       "X-Request-Id",
@@ -113,6 +130,7 @@ app.use(
       "X-RateLimit-Remaining",
       "X-RateLimit-Reset",
       "Retry-After",
+      "X-Idempotent-Replayed",
     ],
     maxAge: 86400,
     credentials: true,
@@ -125,7 +143,7 @@ app.use(
 app.get("/health", (c) => {
   return c.json({
     status: "ok",
-    service: "emailed-api",
+    service: "alecrae-api",
     version: process.env["SERVICE_VERSION"] ?? "0.1.0",
     timestamp: new Date().toISOString(),
   });
@@ -134,9 +152,18 @@ app.get("/health", (c) => {
 // Deep health check with dependency verification (also no auth)
 app.route("/v1/health", health);
 
+// Public status health endpoint (no auth — consumed by status.alecrae.com)
+app.route("/v1/status", status);
+
 // Auth endpoints: strict IP rate limiting (10 req/min), no API key auth
 app.use("/v1/auth/*", authRateLimit);
 app.route("/v1/auth", auth);
+app.route("/v1/auth/passkey", passkeyRouter);
+
+// SSO endpoints: metadata and ACS are public (IdP calls them), config endpoints use their own auth
+app.use("/v1/sso/config", writeRateLimit);
+app.use("/v1/sso/*", authRateLimit);
+app.route("/v1/sso", sso);
 
 // Tracking endpoints (no auth — embedded in emails)
 app.route("/t", tracking);
@@ -180,6 +207,12 @@ app.use("/v1/voice-clone", authMiddleware, writeRateLimit);
 // Meeting Link (S9): read-level — detection + transcript fetch
 app.use("/v1/meeting-link/*", authMiddleware, readRateLimit);
 app.use("/v1/meeting-link", authMiddleware, readRateLimit);
+// Meetings (S9 full): detect, link-recording, transcribe, summary
+app.use("/v1/meetings/detect", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/thread/*", authMiddleware, readRateLimit);
+app.use("/v1/meetings/*/link-recording", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/*/transcribe", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/*/summary", authMiddleware, readRateLimit);
 // Grammar: high-frequency read (600 req/min — real-time typing)
 app.use("/v1/grammar/*", authMiddleware, readRateLimit);
 // Dictation: write-level (200 req/min)
@@ -227,6 +260,17 @@ app.use("/v1/programs/*", authMiddleware, writeRateLimit);
 app.use("/v1/rules", authMiddleware, readRateLimit);
 // Explain (newsletter summary + "why is this in my inbox?"): read-level (600 req/min)
 app.use("/v1/explain/*", authMiddleware, readRateLimit);
+// Email-level explain/summary convenience endpoints (S6+S7)
+app.use("/v1/emails/*/summary", authMiddleware, readRateLimit);
+app.use("/v1/emails/*/explain", authMiddleware, readRateLimit);
+// Per-email unsubscribe (B3): write-level (200 req/min)
+app.use("/v1/emails/*/unsubscribe", authMiddleware, writeRateLimit);
+app.use("/v1/emails/*/unsubscribe/*", authMiddleware, readRateLimit);
+// Per-email translation (B4): read-level (600 req/min)
+app.use("/v1/emails/*/translate", authMiddleware, readRateLimit);
+app.use("/v1/emails/*/translation", authMiddleware, readRateLimit);
+// Per-email security report (B5+B6): read-level (600 req/min)
+app.use("/v1/emails/*/security", authMiddleware, readRateLimit);
 // AI Inbox Agent: write-level (200 req/min) — heavy operations
 app.use("/v1/agent/*", authMiddleware, writeRateLimit);
 app.use("/v1/agent", authMiddleware, writeRateLimit);
@@ -236,11 +280,41 @@ app.use("/v1/unsubscribe/*", authMiddleware, writeRateLimit);
 app.use("/v1/unsubscribe", authMiddleware, writeRateLimit);
 // Predictive Send-Time Optimization (S10)
 app.use("/v1/send-time/*", authMiddleware, writeRateLimit);
+// Optimal Send Time (batch endpoint for multiple recipients)
+app.use("/v1/emails/optimal-send-time", authMiddleware, readRateLimit);
 // Compose-Assist / AI calendar slot suggestions (B7)
 app.use("/v1/compose-assist/*", authMiddleware, writeRateLimit);
+// Spell Check (C10): high-frequency read (600 req/min — real-time typing)
+app.use("/v1/compose/spellcheck/*", authMiddleware, readRateLimit);
+app.use("/v1/compose/spellcheck", authMiddleware, readRateLimit);
 // Native Todo App Integrations (S8): write-level (200 req/min)
 app.use("/v1/todo/*", authMiddleware, writeRateLimit);
 app.use("/v1/todo", authMiddleware, writeRateLimit);
+// Thread action-item extraction (S8): write-level (200 req/min — AI call)
+app.use("/v1/emails/*/extract-tasks", authMiddleware, writeRateLimit);
+// Task CRUD (S8): write-level for create, read-level for list
+app.use("/v1/tasks/create", authMiddleware, writeRateLimit);
+app.use("/v1/tasks/create-batch", authMiddleware, writeRateLimit);
+app.use("/v1/tasks/providers", authMiddleware, readRateLimit);
+app.use("/v1/tasks/providers/*/config", authMiddleware, writeRateLimit);
+app.use("/v1/tasks", authMiddleware, readRateLimit);
+// Gamification (A7): read-level for stats, write-level for check-zero/track
+app.use("/v1/gamification/*", authMiddleware, readRateLimit);
+app.use("/v1/gamification", authMiddleware, readRateLimit);
+// Email Query (B2): search-level (60 req/min — AI query translation)
+app.use("/v1/query/*", authMiddleware, searchRateLimit);
+app.use("/v1/query", authMiddleware, searchRateLimit);
+// Changelog (C8): public read, admin-authed write (200 req/min)
+// Note: GET endpoints are public (no auth middleware). POST/PUT/DELETE require admin scope
+// which is enforced inside the route via requireScope("admin:write").
+app.use("/v1/changelog", readRateLimit);
+app.use("/v1/changelog/*", readRateLimit);
+// Voice Messages (B8): write-level (200 req/min — audio upload + transcription)
+app.use("/v1/voice-messages/*", authMiddleware, writeRateLimit);
+app.use("/v1/voice-messages", authMiddleware, writeRateLimit);
+// Programmable Email Scripts (B1): write-level (200 req/min)
+app.use("/v1/scripts/*", authMiddleware, writeRateLimit);
+app.use("/v1/scripts", authMiddleware, writeRateLimit);
 
 // Mount route handlers
 app.route("/v1/messages", messages);
@@ -255,6 +329,7 @@ app.route("/v1/templates", templatesRouter);
 app.route("/v1/voice", voice);
 app.route("/v1/voice-clone", voiceClone);
 app.route("/v1/meeting-link", meetingLink);
+app.route("/v1/meetings", meetings);
 app.route("/v1/grammar", grammar);
 app.route("/v1/dictation", dictation);
 app.route("/v1/inbox", inbox);
@@ -273,12 +348,43 @@ app.route("/v1/encryption", encryption);
 app.route("/v1/rules", aiRules);
 app.route("/v1/programs", programs);
 app.route("/v1/explain", explain);
+// Mount explain router again at /v1 to serve /v1/emails/:id/summary and /v1/emails/:id/explain
+app.route("/v1", explain);
 app.route("/v1/agent", agent);
 app.route("/v1/security", security);
 app.route("/v1/unsubscribe", unsubscribe);
+// Per-email unsubscribe (B3): /v1/emails/:id/unsubscribe
+app.route("/v1/emails", emailUnsubscribe);
+// Per-email translation (B4): /v1/emails/:id/translate + /v1/emails/:id/translation
+app.route("/v1/emails", emailTranslate);
+// Per-email security (B5+B6): /v1/emails/:id/security
+app.route("/v1/emails", emailSecurity);
 app.route("/v1/send-time", sendTime);
+app.route("/v1/emails", optimalSendTime);
+app.route("/v1/analytics", recipientPatterns);
+// A3: Inbox Heatmap analytics (heatmap grid, hourly chart, stats dashboard)
+app.route("/v1/analytics", heatmapAnalytics);
 app.route("/v1/compose-assist", composeAssist);
+app.route("/v1/compose/spellcheck", spellcheckRouter);
 app.route("/v1/todo", todo);
+// S8: Thread → Action Items extraction + task CRUD
+app.route("/v1/emails", emailTasks);
+app.route("/v1/tasks", taskRoutes);
+app.route("/v1/gamification", gamification);
+app.route("/v1/changelog", changelog);
+// B8: Voice-to-Voice Replies (recording, transcription, inline player)
+app.route("/v1/voice-messages", voiceMessageRouter);
+// B1: Programmable Email — TypeScript snippet engine
+app.route("/v1/scripts", scripts);
+// B2: Email-as-Database — SQL over inbox query engine
+app.route("/v1/query", emailQuery);
+// FBL: ISP Feedback Loop — complaint reports (no auth — ISPs call this)
+app.use("/v1/fbl/*", webhookRateLimit);
+app.route("/v1/fbl", fbl);
+
+// Admin dashboard: requires admin API key auth (applied via authMiddleware above)
+app.use("/v1/admin/*", authMiddleware, readRateLimit);
+app.route("/v1/admin", admin);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────
 
@@ -324,13 +430,13 @@ app.onError((err, c) => {
 const port = parseInt(process.env["PORT"] ?? "3001", 10);
 
 console.log("=".repeat(60));
-console.log("  Emailed API — Starting");
+console.log("  AlecRae API — Starting");
 console.log(`  Port: ${port}`);
 console.log(`  Environment: ${process.env.NODE_ENV ?? "development"}`);
 console.log("=".repeat(60));
 
 // Initialize OpenTelemetry
-initTelemetry("emailed-api").catch((err) => {
+initTelemetry("alecrae-api").catch((err) => {
   console.warn("[api] OpenTelemetry init failed:", err);
 });
 
@@ -341,6 +447,25 @@ initSearchIndex().catch((err) => {
 
 // Start the webhook delivery worker (BullMQ consumer)
 startWebhookWorker();
+
+// Start the semantic search auto-indexer (embeds new emails in background)
+startAutoIndexer();
+
+// Register DLQ processor repeat job (every 15 minutes)
+const dlqInterval = setInterval(() => {
+  processDLQ().catch((err) => {
+    console.warn("[api] DLQ processing error:", err);
+  });
+}, 15 * 60 * 1000);
+dlqInterval.unref();
+
+// Register storage reconciliation repeat job (weekly — every 7 days)
+const storageReconcileInterval = setInterval(() => {
+  reconcileStorageUsage().catch((err) => {
+    console.warn("[api] Storage reconciliation error:", err);
+  });
+}, 7 * 24 * 60 * 60 * 1000);
+storageReconcileInterval.unref();
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 
@@ -358,6 +483,10 @@ async function shutdown(signal: string): Promise<void> {
   }, 15_000);
 
   try {
+    // Stop the semantic search auto-indexer (drains remaining queue)
+    await stopAutoIndexer();
+    console.log("[api] Auto-indexer stopped");
+
     // Close the webhook delivery worker
     await stopWebhookWorker();
     console.log("[api] Webhook worker stopped");
@@ -373,6 +502,10 @@ async function shutdown(signal: string): Promise<void> {
     // Close rate-limit Redis connection
     await closeRateLimitRedis();
     console.log("[api] Rate-limit Redis closed");
+
+    // Close idempotency Redis connection
+    await closeIdempotencyRedis();
+    console.log("[api] Idempotency Redis closed");
 
     // Close the database connection pool
     await closeConnection();

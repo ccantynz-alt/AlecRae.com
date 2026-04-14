@@ -1,10 +1,10 @@
-import { Box, Text, Card, CardContent } from "@emailed/ui";
+import { Box, Text, Card, CardContent } from "@alecrae/ui";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "DMCA / Copyright Policy - Emailed",
+  title: "DMCA / Copyright Policy - AlecRae",
   description:
-    "Emailed DMCA and Copyright Policy covering takedown procedures, counter-notifications, and designated agent information.",
+    "AlecRae DMCA and Copyright Policy covering takedown procedures, counter-notifications, and designated agent information.",
 };
 
 export default function DMCAPage() {
@@ -20,12 +20,12 @@ export default function DMCAPage() {
       </Box>
 
       <Text variant="body-md" className="text-content-secondary leading-relaxed">
-        Emailed, Inc. (&quot;Emailed,&quot; &quot;we,&quot; &quot;us,&quot;
+        AlecRae, Inc. (&quot;AlecRae,&quot; &quot;we,&quot; &quot;us,&quot;
         &quot;our&quot;) respects the intellectual property rights of others and
         expects our users to do the same. In accordance with the Digital Millennium
         Copyright Act of 1998 (&quot;DMCA&quot;), codified at 17 U.S.C. &sect; 512,
         we will respond expeditiously to claims of copyright infringement committed
-        using the Emailed platform that are reported to our designated copyright agent.
+        using the AlecRae platform that are reported to our designated copyright agent.
       </Text>
 
       {/* Section 1 */}
@@ -34,9 +34,9 @@ export default function DMCAPage() {
           1. DMCA Safe Harbor Notice
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed is a provider of email infrastructure services and acts as an
+          AlecRae is a provider of email infrastructure services and acts as an
           intermediary for the transmission and storage of electronic communications.
-          Pursuant to 17 U.S.C. &sect; 512, Emailed qualifies for safe harbor
+          Pursuant to 17 U.S.C. &sect; 512, AlecRae qualifies for safe harbor
           protection as a service provider. We do not actively monitor the content of
           emails transmitted through our platform but will act promptly upon receiving
           proper notification of alleged copyright infringement in accordance with the
@@ -50,7 +50,7 @@ export default function DMCAPage() {
           2. Designated Agent
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed&apos;s designated agent for receiving notifications of claimed
+          AlecRae&apos;s designated agent for receiving notifications of claimed
           copyright infringement is:
         </Text>
         <Card className="bg-surface-subtle">
@@ -60,13 +60,13 @@ export default function DMCAPage() {
                 DMCA Agent
               </Text>
               <Text variant="body-md" className="text-content-secondary">
-                Emailed, Inc.
+                AlecRae, Inc.
               </Text>
               <Text variant="body-md" className="text-content-secondary">
                 Attn: Copyright Agent / Legal Department
               </Text>
               <Text variant="body-md" className="text-content-secondary">
-                Email: dmca@emailed.dev
+                Email: dmca@alecrae.dev
               </Text>
               <Text variant="body-md" className="text-content-secondary">
                 Mailing Address: 548 Market Street, Suite 45000, San Francisco, CA 94104
@@ -86,7 +86,7 @@ export default function DMCAPage() {
           3. Takedown Notification Procedure
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          If you believe that content transmitted or stored through the Emailed
+          If you believe that content transmitted or stored through the AlecRae
           platform infringes your copyright, you may submit a written notification to
           our designated agent. Pursuant to 17 U.S.C. &sect; 512(c)(3), your
           notification must include the following elements:
@@ -112,14 +112,14 @@ export default function DMCAPage() {
             <Text variant="body-md" className="text-content-secondary leading-relaxed">
               Identification of the material that is claimed to be infringing or to
               be the subject of infringing activity, and information reasonably
-              sufficient to permit Emailed to locate the material (e.g., message IDs,
+              sufficient to permit AlecRae to locate the material (e.g., message IDs,
               account identifiers, timestamps, or URLs).
             </Text>
           </Box>
           <Box className="flex gap-3">
             <Text variant="body-md" className="text-brand-600 font-bold">d.</Text>
             <Text variant="body-md" className="text-content-secondary leading-relaxed">
-              Information reasonably sufficient to permit Emailed to contact the
+              Information reasonably sufficient to permit AlecRae to contact the
               complaining party, such as an address, telephone number, and email address.
             </Text>
           </Box>
@@ -142,7 +142,7 @@ export default function DMCAPage() {
           </Box>
         </Box>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Upon receipt of a valid takedown notification, Emailed will act expeditiously
+          Upon receipt of a valid takedown notification, AlecRae will act expeditiously
           to remove or disable access to the allegedly infringing material and will
           notify the affected user of the takedown.
         </Text>
@@ -188,17 +188,17 @@ export default function DMCAPage() {
               Your name, address, and telephone number, and a statement that you
               consent to the jurisdiction of the federal district court for the
               judicial district in which your address is located (or, if outside the
-              United States, any judicial district in which Emailed may be found), and
+              United States, any judicial district in which AlecRae may be found), and
               that you will accept service of process from the person who provided the
               original notification or an agent of such person.
             </Text>
           </Box>
         </Box>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Upon receipt of a valid counter-notification, Emailed will forward a copy
+          Upon receipt of a valid counter-notification, AlecRae will forward a copy
           to the original complaining party. If the original complaining party does
           not file a court action seeking to restrain the allegedly infringing activity
-          within 10 to 14 business days, Emailed will restore the removed material.
+          within 10 to 14 business days, AlecRae will restore the removed material.
         </Text>
       </Box>
 
@@ -208,17 +208,17 @@ export default function DMCAPage() {
           5. Repeat Infringer Policy
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          In accordance with the DMCA and other applicable law, Emailed has adopted a
+          In accordance with the DMCA and other applicable law, AlecRae has adopted a
           policy of terminating, in appropriate circumstances and at our sole
           discretion, the accounts of users who are deemed to be repeat infringers.
-          Emailed may also, at its sole discretion, limit access to the Service and/or
+          AlecRae may also, at its sole discretion, limit access to the Service and/or
           terminate the accounts of any users who infringe any intellectual property
           rights of others, whether or not there is any repeat infringement.
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
           An account holder will generally be considered a repeat infringer if they
           receive three or more valid DMCA takedown notifications within any 12-month
-          period. However, Emailed reserves the right to terminate accounts after fewer
+          period. However, AlecRae reserves the right to terminate accounts after fewer
           notifications where circumstances warrant.
         </Text>
       </Box>
@@ -268,7 +268,7 @@ export default function DMCAPage() {
           8. Modifications to This Policy
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed reserves the right to modify this DMCA / Copyright Policy at any
+          AlecRae reserves the right to modify this DMCA / Copyright Policy at any
           time. Changes will be posted on this page with an updated &quot;Last
           Updated&quot; date. Your continued use of the Service after any
           modifications constitutes acceptance of the revised policy.
@@ -277,8 +277,8 @@ export default function DMCAPage() {
 
       <Box className="border-t border-border pt-6">
         <Text variant="body-sm" muted>
-          To report copyright infringement, contact our DMCA agent at dmca@emailed.dev.
-          For general legal inquiries, contact legal@emailed.dev.
+          To report copyright infringement, contact our DMCA agent at dmca@alecrae.dev.
+          For general legal inquiries, contact legal@alecrae.dev.
         </Text>
       </Box>
     </Box>

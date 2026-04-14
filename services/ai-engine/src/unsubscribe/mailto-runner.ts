@@ -8,7 +8,7 @@
  *
  * Typical wiring (in apps/api):
  *
- *   import { sendUnsubscribeMailto } from "@emailed/ai-engine/unsubscribe/mailto-runner";
+ *   import { sendUnsubscribeMailto } from "@alecrae/ai-engine/unsubscribe/mailto-runner";
  *   await sendUnsubscribeMailto(mailto, async (msg) => {
  *     await getSendQueue().add("send", { from: userEmail, ...msg });
  *   });

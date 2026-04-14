@@ -1,5 +1,5 @@
 # ─── Dockerfile.base ─────────────────────────────────────────────────────────
-# Multi-stage base image for all Emailed TypeScript services.
+# Multi-stage base image for all AlecRae TypeScript services.
 # Provides Node 20 + Bun runtime, dependency installation, and build tooling.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -15,8 +15,8 @@ RUN apk add --no-cache curl bash && \
 WORKDIR /app
 
 # Create non-root user for runtime
-RUN addgroup --system --gid 1001 emailed && \
-    adduser --system --uid 1001 --ingroup emailed emailed
+RUN addgroup --system --gid 1001 alecrae && \
+    adduser --system --uid 1001 --ingroup alecrae alecrae
 
 # Stage 2: Install dependencies
 FROM base AS deps
@@ -75,7 +75,7 @@ COPY --from=builder /app/apps ./apps
 COPY --from=builder /app/package.json ./
 
 # Default to non-root user
-USER emailed
+USER alecrae
 
 # Health check placeholder (overridden by service-specific images)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \

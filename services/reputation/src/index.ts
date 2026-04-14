@@ -1,5 +1,5 @@
 /**
- * @emailed/reputation — Reputation Management Service
+ * @alecrae/reputation — Reputation Management Service
  *
  * Exports the warm-up orchestrator, monitor, and other reputation
  * management modules.
@@ -10,10 +10,14 @@ export {
   WarmupOrchestrator,
   getWarmupOrchestrator,
   WARMUP_SCHEDULES,
+  AUTO_WARMUP_SCHEDULE,
+  WARMUP_LIMIT_EXCEEDED,
   type WarmupScheduleType,
   type WarmupStatus,
   type WarmupSignals,
+  type WarmupCheckResult,
   type ScheduleStep,
+  type AutoWarmupStep,
 } from "./warmup/orchestrator.js";
 
 export {
@@ -22,6 +26,12 @@ export {
   type WarmupMetricSnapshot,
   type WarmupReport,
 } from "./warmup/monitor.js";
+
+// Feedback Loops — Complaint Rate Monitor
+export {
+  getComplaintRate,
+  type ComplaintRateResult,
+} from "./feedback-loops/complaint-rate.js";
 
 // Types
 export type {

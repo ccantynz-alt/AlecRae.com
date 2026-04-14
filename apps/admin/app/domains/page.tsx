@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback } from "react";
-import { Box, Text } from "@emailed/ui";
+import { Box, Text } from "@alecrae/ui";
 import { StatusBadge } from "../../components/status-badge";
 import { MetricCard } from "../../components/metric-card";
 import { DataTable } from "../../components/data-table";
 import { adminApi } from "../../lib/api";
 import type { AdminDomain } from "../../lib/api";
 import { useApi } from "../../lib/use-api";
+import { AuthShell } from "../../components/auth-shell";
 
 function DnsStatusIndicator({ verified }: { readonly verified: boolean }) {
   return (
@@ -101,6 +102,7 @@ export default function DomainsPage() {
   const failedCount = domainList.filter((d) => d.status === "failed").length;
 
   return (
+    <AuthShell>
     <Box className="flex flex-col gap-8">
       <Box>
         <Text variant="heading-lg" className="text-content font-bold">Domain Management</Text>
@@ -143,5 +145,6 @@ export default function DomainsPage() {
         />
       )}
     </Box>
+    </AuthShell>
   );
 }

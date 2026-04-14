@@ -1,5 +1,5 @@
 /**
- * @emailed/mta — Service Entry Point
+ * @alecrae/mta — Service Entry Point
  *
  * Starts the complete Mail Transfer Agent:
  *   1. SMTP server (for receiving inbound email)
@@ -10,17 +10,17 @@
 
 import { SmtpServer } from "./smtp/server.js";
 import { MtaWorker } from "./worker.js";
-import { getDatabase, closeConnection } from "@emailed/db";
-import { initTelemetry, shutdownTelemetry } from "@emailed/shared";
+import { getDatabase, closeConnection } from "@alecrae/db";
+import { initTelemetry, shutdownTelemetry } from "@alecrae/shared";
 import Redis from "ioredis";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 const SMTP_PORT = parseInt(process.env["SMTP_PORT"] ?? "25", 10);
 const SMTP_HOST = process.env["SMTP_HOST"] ?? "0.0.0.0";
-const SMTP_HOSTNAME = process.env["SMTP_HOSTNAME"] ?? "mail.emailed.dev";
+const SMTP_HOSTNAME = process.env["SMTP_HOSTNAME"] ?? "mail.alecrae.dev";
 const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
-const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "emailed:outbound";
+const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae:outbound";
 const WORKER_CONCURRENCY = parseInt(
   process.env["MTA_WORKER_CONCURRENCY"] ?? "10",
   10,
@@ -37,11 +37,11 @@ let isShuttingDown = false;
 
 async function start(): Promise<void> {
   console.log("=".repeat(60));
-  console.log("  Emailed MTA — Starting");
+  console.log("  AlecRae MTA — Starting");
   console.log("=".repeat(60));
 
   // ── 0. Initialize OpenTelemetry ──────────────────────────────────────
-  await initTelemetry("emailed-mta").catch((err) => {
+  await initTelemetry("alecrae-mta").catch((err) => {
     console.warn("[mta] OpenTelemetry init failed:", err);
   });
 
@@ -158,7 +158,7 @@ async function start(): Promise<void> {
   process.on("SIGINT", () => shutdown("SIGINT"));
 
   console.log("=".repeat(60));
-  console.log("  Emailed MTA — Running");
+  console.log("  AlecRae MTA — Running");
   console.log(`  SMTP:   ${smtpServer ? `${SMTP_HOST}:${SMTP_PORT}` : "disabled"}`);
   console.log(`  Queue:  ${MTA_QUEUE_NAME} (concurrency: ${WORKER_CONCURRENCY})`);
   console.log("=".repeat(60));

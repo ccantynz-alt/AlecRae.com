@@ -11,7 +11,7 @@ export default defineConfig({
         fileName: () => "main.cjs",
       },
       outDir: "dist",
-      emptyOutDir: false,
+      emptyOutDir: true,
     },
   },
   preload: {
@@ -25,8 +25,5 @@ export default defineConfig({
       outDir: "dist",
       emptyOutDir: false,
     },
-  },
-  renderer: {
-    // We don't ship our own renderer — we load mail.vieanna.com directly
   },
 });

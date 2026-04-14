@@ -7,7 +7,7 @@
 
 import Stripe from "stripe";
 import { eq, sql } from "drizzle-orm";
-import { getDatabase, accounts } from "@emailed/db";
+import { getDatabase, accounts } from "@alecrae/db";
 
 // ─── Stripe client ────────────────────────────────────────────────────────
 

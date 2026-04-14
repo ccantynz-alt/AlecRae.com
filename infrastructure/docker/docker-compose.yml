@@ -4,8 +4,8 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: emailed
-      POSTGRES_USER: emailed
+      POSTGRES_DB: alecrae
+      POSTGRES_USER: alecrae
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
@@ -13,13 +13,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U emailed -d emailed"]
+      test: ["CMD-SHELL", "pg_isready -U alecrae -d alecrae"]
       interval: 5s
       timeout: 5s
       retries: 10
       start_period: 30s
     networks:
-      - emailed-internal
+      - alecrae-internal
     deploy:
       resources:
         limits:
@@ -41,7 +41,7 @@ services:
       retries: 10
       start_period: 10s
     networks:
-      - emailed-internal
+      - alecrae-internal
     deploy:
       resources:
         limits:
@@ -52,8 +52,8 @@ services:
   clickhouse:
     image: clickhouse/clickhouse-server:24-alpine
     environment:
-      CLICKHOUSE_DB: emailed_analytics
-      CLICKHOUSE_USER: emailed
+      CLICKHOUSE_DB: alecrae_analytics
+      CLICKHOUSE_USER: alecrae
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-dev_password}
     ports:
       - "8123:8123"   # HTTP interface
@@ -68,7 +68,7 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - emailed-internal
+      - alecrae-internal
     deploy:
       resources:
         limits:
@@ -93,7 +93,7 @@ services:
       retries: 5
       start_period: 15s
     networks:
-      - emailed-internal
+      - alecrae-internal
     deploy:
       resources:
         limits:
@@ -105,7 +105,7 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-emailed}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-alecrae}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-dev_password}
     ports:
       - "9002:9000"   # S3 API
@@ -119,7 +119,7 @@ services:
       retries: 5
       start_period: 15s
     networks:
-      - emailed-internal
+      - alecrae-internal
     deploy:
       resources:
         limits:
@@ -149,8 +149,8 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - emailed-internal
-      - emailed-public
+      - alecrae-internal
+      - alecrae-public
     deploy:
       resources:
         limits:
@@ -166,17 +166,17 @@ services:
       - "3000:3000"
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://emailed:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/emailed
+      DATABASE_URL: postgres://alecrae:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/alecrae
       REDIS_URL: redis://redis:6379
       CLICKHOUSE_URL: http://clickhouse:8123
-      CLICKHOUSE_USER: emailed
+      CLICKHOUSE_USER: alecrae
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-dev_password}
       MEILI_URL: http://meilisearch:7700
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-dev_master_key}
       S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-emailed}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-alecrae}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev_password}
-      S3_BUCKET: emailed-attachments
+      S3_BUCKET: alecrae-attachments
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_change_in_production}
       CORS_ORIGINS: http://localhost:3001,http://localhost:3002
     depends_on:
@@ -195,8 +195,8 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - emailed-internal
-      - emailed-public
+      - alecrae-internal
+      - alecrae-public
     deploy:
       resources:
         limits:
@@ -227,8 +227,8 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - emailed-internal
-      - emailed-public
+      - alecrae-internal
+      - alecrae-public
     deploy:
       resources:
         limits:
@@ -246,12 +246,12 @@ services:
       - "465:465"     # Submissions (implicit TLS)
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgres://emailed:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/emailed
+      DATABASE_URL: postgres://alecrae:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/alecrae
       REDIS_URL: redis://redis:6379
       S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-emailed}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-alecrae}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-dev_password}
-      HOSTNAME: ${MTA_HOSTNAME:-mail.emailed.dev}
+      HOSTNAME: ${MTA_HOSTNAME:-mail.alecrae.dev}
       DKIM_SELECTOR: ${DKIM_SELECTOR:-default}
     depends_on:
       postgres:
@@ -265,8 +265,8 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - emailed-internal
-      - emailed-public
+      - alecrae-internal
+      - alecrae-public
     deploy:
       resources:
         limits:
@@ -277,10 +277,10 @@ services:
 # ─── Networks ────────────────────────────────────────────────────────────────
 
 networks:
-  emailed-internal:
+  alecrae-internal:
     driver: bridge
     internal: true
-  emailed-public:
+  alecrae-public:
     driver: bridge
 
 # ─── Volumes ─────────────────────────────────────────────────────────────────

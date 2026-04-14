@@ -1,8 +1,8 @@
 {
-  "name": "@emailed/ai-engine",
+  "name": "@alecrae/ai-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "Core AI/ML engine for the Emailed platform \u2014 spam detection, reputation scoring, content analysis, and intelligent email assistance",
+  "description": "Core AI/ML engine for the AlecRae platform \u2014 spam detection, reputation scoring, content analysis, and intelligent email assistance",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -52,6 +52,26 @@
       "types": "./src/embeddings/voyage.ts",
       "import": "./dist/embeddings/voyage.js"
     },
+    "./embeddings/types": {
+      "bun": "./src/embeddings/types.ts",
+      "types": "./src/embeddings/types.ts",
+      "import": "./dist/embeddings/types.js"
+    },
+    "./embeddings/local": {
+      "bun": "./src/embeddings/local.ts",
+      "types": "./src/embeddings/local.ts",
+      "import": "./dist/embeddings/local.js"
+    },
+    "./embeddings/hybrid": {
+      "bun": "./src/embeddings/hybrid.ts",
+      "types": "./src/embeddings/hybrid.ts",
+      "import": "./dist/embeddings/hybrid.js"
+    },
+    "./embeddings/auto-indexer": {
+      "bun": "./src/embeddings/auto-indexer.ts",
+      "types": "./src/embeddings/auto-indexer.ts",
+      "import": "./dist/embeddings/auto-indexer.js"
+    },
     "./inbox": {
       "bun": "./src/inbox/smart-inbox.ts",
       "types": "./src/inbox/smart-inbox.ts",
@@ -76,6 +96,11 @@
       "bun": "./src/todo/index.ts",
       "types": "./src/todo/index.ts",
       "import": "./dist/todo/index.js"
+    },
+    "./todo/thread-extractor": {
+      "bun": "./src/todo/thread-extractor.ts",
+      "types": "./src/todo/thread-extractor.ts",
+      "import": "./dist/todo/thread-extractor.js"
     },
     "./unsubscribe": {
       "bun": "./src/unsubscribe/index.ts",
@@ -102,6 +127,16 @@
       "types": "./src/voice/cloner.ts",
       "import": "./dist/voice/cloner.js"
     },
+    "./voice/voice-message": {
+      "bun": "./src/voice/voice-message.ts",
+      "types": "./src/voice/voice-message.ts",
+      "import": "./dist/voice/voice-message.js"
+    },
+    "./voice/style-cloner": {
+      "bun": "./src/voice/style-cloner.ts",
+      "types": "./src/voice/style-cloner.ts",
+      "import": "./dist/voice/style-cloner.js"
+    },
     "./meetings/transcript-linker": {
       "bun": "./src/meetings/transcript-linker.ts",
       "types": "./src/meetings/transcript-linker.ts",
@@ -126,6 +161,21 @@
       "bun": "./src/security/phishing.ts",
       "types": "./src/security/phishing.ts",
       "import": "./dist/security/phishing.js"
+    },
+    "./grammar/spellcheck": {
+      "bun": "./src/grammar/spellcheck.ts",
+      "types": "./src/grammar/spellcheck.ts",
+      "import": "./dist/grammar/spellcheck.js"
+    },
+    "./query/email-sql": {
+      "bun": "./src/query/email-sql.ts",
+      "types": "./src/query/email-sql.ts",
+      "import": "./dist/query/email-sql.js"
+    },
+    "./scripts/snippet-runner": {
+      "bun": "./src/scripts/snippet-runner.ts",
+      "types": "./src/scripts/snippet-runner.ts",
+      "import": "./dist/scripts/snippet-runner.js"
     }
   },
   "scripts": {
@@ -138,9 +188,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@emailed/shared": "workspace:*",
-    "@emailed/db": "workspace:*",
+    "@alecrae/shared": "workspace:*",
+    "@alecrae/db": "workspace:*",
     "@anthropic-ai/sdk": "^0.30.0",
+    "drizzle-orm": "^0.36.0",
     "ioredis": "^5.4.0",
     "playwright": "^1.47.0",
     "pino": "^9.0.0",

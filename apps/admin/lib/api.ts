@@ -120,7 +120,7 @@ export interface AdminUser {
 
 function getToken(): string {
   if (typeof window !== "undefined") {
-    return localStorage.getItem("emailed_admin_key") ?? localStorage.getItem("emailed_api_key") ?? "";
+    return localStorage.getItem("alecrae_admin_key") ?? localStorage.getItem("alecrae_api_key") ?? "";
   }
   return "";
 }

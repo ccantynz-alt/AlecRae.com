@@ -18,13 +18,14 @@
     "isolatedModules": true,
     "resolveJsonModule": true,
     "paths": {
-      "@emailed/shared": ["./packages/shared/src/index.ts"],
-      "@emailed/db": ["./packages/db/src/index.ts"],
-      "@emailed/ui": ["./packages/ui/src/index.ts"],
-      "@emailed/crypto": ["./packages/crypto/src/index.ts"],
-      "@emailed/sdk": ["./packages/sdk/src/index.ts"],
-      "@emailed/email-parser": ["./packages/email-parser/src/index.ts"],
-      "@emailed/dns": ["./services/dns/src/index.ts"]
+      "@alecrae/shared": ["./packages/shared/src/index.ts"],
+      "@alecrae/db": ["./packages/db/src/index.ts"],
+      "@alecrae/ui": ["./packages/ui/src/index.ts"],
+      "@alecrae/crypto": ["./packages/crypto/src/index.ts"],
+      "@alecrae/sdk": ["./packages/sdk/src/index.ts"],
+      "@alecrae/email-parser": ["./packages/email-parser/src/index.ts"],
+      "@alecrae/dns": ["./services/dns/src/index.ts"],
+      "@alecrae/security": ["./services/security/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "dist", ".next", "coverage"]

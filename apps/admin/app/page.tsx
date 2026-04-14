@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback } from "react";
-import { Box, Text } from "@emailed/ui";
+import { Box, Text } from "@alecrae/ui";
 import { MetricCard } from "../components/metric-card";
 import { StatusBadge } from "../components/status-badge";
 import { ChartContainer } from "../components/chart-container";
+import { AuthShell } from "../components/auth-shell";
 import { adminApi } from "../lib/api";
 import type { AdminStats, AdminEvent } from "../lib/api";
 import { useApi } from "../lib/use-api";
@@ -59,6 +60,7 @@ export default function DashboardPage() {
   const { data: events, loading: eventsLoading } = useApi<AdminEvent[]>(eventsFetcher);
 
   return (
+    <AuthShell>
     <Box className="flex flex-col gap-8">
       <Box>
         <Text variant="heading-lg" className="text-content font-bold">Dashboard</Text>
@@ -163,6 +165,7 @@ export default function DashboardPage() {
         <PlatformSummaryPanel stats={stats} loading={statsLoading} />
       </Box>
     </Box>
+    </AuthShell>
   );
 }
 

@@ -61,7 +61,7 @@ const DEFAULT_CONFIG: ImapServerConfig = {
   host: "0.0.0.0",
   port: 143,
   tlsPort: 993,
-  hostname: "mail.emailed.dev",
+  hostname: "mail.alecrae.dev",
   maxConnections: 1000,
   connectionTimeout: 1_800_000, // 30 minutes per RFC 9051 recommendation
   socketTimeout: 300_000, // 5 minutes idle
@@ -266,7 +266,7 @@ export class ImapServer extends EventEmitter<ImapServerEvents> {
 
     // Send IMAP greeting per RFC 9051 Section 7.1
     const greeting = formatUntagged(
-      `OK [${buildCapabilityString()}] ${this.config.hostname} Emailed IMAP Server Ready`,
+      `OK [${buildCapabilityString()}] ${this.config.hostname} AlecRae IMAP Server Ready`,
     );
     socket.write(greeting);
 
@@ -640,7 +640,7 @@ export class ImapServer extends EventEmitter<ImapServerEvents> {
     writer: (data: string) => void,
   ): void {
     session.state = "logout";
-    writer(formatUntagged("BYE Emailed IMAP server signing off"));
+    writer(formatUntagged("BYE AlecRae IMAP server signing off"));
     writer(formatTagged(command.tag, "OK", "LOGOUT completed"));
 
     const socket = this.socketMap.get(sessionId);
@@ -659,7 +659,7 @@ export class ImapServer extends EventEmitter<ImapServerEvents> {
   ): void {
     writer(
       formatUntagged(
-        'ID ("name" "Emailed" "vendor" "Emailed Platform" "support-url" "https://emailed.dev/support")',
+        'ID ("name" "AlecRae" "vendor" "AlecRae Platform" "support-url" "https://alecrae.dev/support")',
       ),
     );
     writer(formatTagged(command.tag, "OK", "ID completed"));

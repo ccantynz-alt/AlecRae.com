@@ -14,6 +14,16 @@ export {
   type HealthReport,
 } from "./auto-config";
 export {
+  runLivenessCheck,
+  checkDomainLiveness,
+  type LivenessResult,
+  type LivenessReport,
+} from "./liveness-checker";
+export {
+  registerDnsLivenessJob,
+  closeDnsLivenessQueue,
+} from "./jobs/dns-liveness-job";
+export {
   RecordType,
   RecordClass,
   ResponseCode,

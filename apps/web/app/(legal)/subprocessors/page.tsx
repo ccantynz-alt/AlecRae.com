@@ -1,10 +1,10 @@
-import { Box, Text, Card, CardContent } from "@emailed/ui";
+import { Box, Text, Card, CardContent } from "@alecrae/ui";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Subprocessors - Emailed",
+  title: "Subprocessors - AlecRae",
   description:
-    "List of Emailed subprocessors, including data processing details, locations, and change notification procedures.",
+    "List of AlecRae subprocessors, including data processing details, locations, and change notification procedures.",
 };
 
 export default function SubprocessorsPage() {
@@ -20,8 +20,8 @@ export default function SubprocessorsPage() {
       </Box>
 
       <Text variant="body-md" className="text-content-secondary leading-relaxed">
-        Emailed, Inc. (&quot;Emailed&quot;) uses certain third-party service providers
-        (&quot;Subprocessors&quot;) to assist in providing the Emailed platform. These
+        AlecRae, Inc. (&quot;AlecRae&quot;) uses certain third-party service providers
+        (&quot;Subprocessors&quot;) to assist in providing the AlecRae platform. These
         Subprocessors may process personal data on behalf of our customers in
         accordance with our{" "}
         <Text as="span" className="text-brand-600 font-medium">
@@ -38,7 +38,7 @@ export default function SubprocessorsPage() {
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
           The following Subprocessors are currently authorized to process personal
-          data on behalf of Emailed customers:
+          data on behalf of AlecRae customers:
         </Text>
 
         <Card>
@@ -180,7 +180,7 @@ export default function SubprocessorsPage() {
           2. Change Notification Process
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed is committed to transparency regarding its use of Subprocessors.
+          AlecRae is committed to transparency regarding its use of Subprocessors.
           When we engage a new Subprocessor or make material changes to an existing
           Subprocessor&apos;s scope of data processing, we will notify customers
           through the following mechanisms:
@@ -232,7 +232,7 @@ export default function SubprocessorsPage() {
               <Text as="span" className="font-semibold text-content">Objection Window.</Text>{" "}
               You must submit your objection in writing within 30 calendar days of
               receiving the change notification. Objections must be sent to
-              dpa@emailed.dev and must include a detailed explanation of the specific,
+              dpa@alecrae.dev and must include a detailed explanation of the specific,
               reasonable grounds for the objection based on data protection concerns.
             </Text>
           </Box>
@@ -240,7 +240,7 @@ export default function SubprocessorsPage() {
             <Text variant="body-md" className="text-brand-600 font-bold">b.</Text>
             <Text variant="body-md" className="text-content-secondary leading-relaxed">
               <Text as="span" className="font-semibold text-content">Resolution Process.</Text>{" "}
-              Upon receiving a valid objection, Emailed will work in good faith to
+              Upon receiving a valid objection, AlecRae will work in good faith to
               address your concerns. This may include: (i) providing additional
               information about the Subprocessor&apos;s data protection measures;
               (ii) implementing additional safeguards or restrictions on the
@@ -277,7 +277,7 @@ export default function SubprocessorsPage() {
           <Box className="flex gap-3">
             <Text variant="body-md" className="text-content-tertiary">(i)</Text>
             <Text variant="body-md" className="text-content-secondary leading-relaxed">
-              Processing personal data only on documented instructions from Emailed
+              Processing personal data only on documented instructions from AlecRae
             </Text>
           </Box>
           <Box className="flex gap-3">
@@ -296,7 +296,7 @@ export default function SubprocessorsPage() {
           <Box className="flex gap-3">
             <Text variant="body-md" className="text-content-tertiary">(iv)</Text>
             <Text variant="body-md" className="text-content-secondary leading-relaxed">
-              Assisting Emailed in responding to data subject rights requests
+              Assisting AlecRae in responding to data subject rights requests
             </Text>
           </Box>
           <Box className="flex gap-3">
@@ -329,7 +329,7 @@ export default function SubprocessorsPage() {
         </Text>
         <Text variant="body-sm" muted>
           For questions about our Subprocessors or data processing practices,
-          contact our Data Protection Officer at dpo@emailed.dev.
+          contact our Data Protection Officer at dpo@alecrae.dev.
         </Text>
       </Box>
     </Box>

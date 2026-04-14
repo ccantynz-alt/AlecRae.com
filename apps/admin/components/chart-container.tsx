@@ -1,4 +1,4 @@
-import { Box, Text } from "@emailed/ui";
+import { Box, Text } from "@alecrae/ui";
 
 interface ChartContainerProps {
   readonly title: string;

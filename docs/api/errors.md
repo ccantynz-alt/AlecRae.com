@@ -143,9 +143,9 @@ Validation errors (422) include field-level details in the `context` object:
 ## Error Handling Example
 
 ```typescript
-import { Emailed, ApiError, RateLimitError } from "@emailed/sdk";
+import { AlecRae, ApiError, RateLimitError } from "@alecrae/sdk";
 
-const client = new Emailed({ auth: { type: "apiKey", key: "em_live_..." } });
+const client = new AlecRae({ auth: { type: "apiKey", key: "em_live_..." } });
 
 try {
   const response = await client.messages.send({

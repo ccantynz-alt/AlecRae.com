@@ -5,12 +5,12 @@
  *
  * Used by feature cards, settings panels, dashboard tiles, and anywhere
  * a surface needs to feel tactile. Matches the dark gradient aesthetic of
- * the Vienna landing page (translucent surface, white border, blur).
+ * the AlecRae landing page (translucent surface, white border, blur).
  */
 
 import { motion } from "motion/react";
 import type { ReactNode } from "react";
-import { SPRING_SNAPPY, useViennaReducedMotion } from "../lib/animations";
+import { SPRING_SNAPPY, useAlecRaeReducedMotion } from "../lib/animations";
 
 export interface AnimatedCardProps {
   children: ReactNode;
@@ -30,8 +30,8 @@ export function AnimatedCard({
   disabled = false,
   role,
   ariaLabel,
-}: AnimatedCardProps): JSX.Element {
-  const reduced = useViennaReducedMotion();
+}: AnimatedCardProps): React.ReactNode {
+  const reduced = useAlecRaeReducedMotion();
   const interactive = !disabled && Boolean(onClick);
 
   const baseClass =
@@ -59,10 +59,10 @@ export function AnimatedCard({
           : undefined
       }
       initial={reduced ? false : { opacity: 0, y: 8 }}
-      animate={reduced ? undefined : { opacity: 1, y: 0 }}
+      animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
       transition={SPRING_SNAPPY}
-      whileHover={reduced || !interactive ? undefined : { y: -3, scale: 1.01 }}
-      whileTap={reduced || !interactive ? undefined : { scale: 0.98 }}
+      whileHover={reduced || !interactive ? { scale: 1 } : { y: -3, scale: 1.01 }}
+      whileTap={reduced || !interactive ? { scale: 1 } : { scale: 0.98 }}
     >
       {children}
     </motion.div>

@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Transcript Fetcher (S9)
+// @alecrae/ai-engine — Transcript Fetcher (S9)
 // =============================================================================
 // Pluggable provider abstraction for fetching call transcripts.
 // Real REST integration for Zoom (https://marketplace.zoom.us/docs/api-reference/zoom-api/).

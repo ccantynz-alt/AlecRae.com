@@ -1,5 +1,5 @@
 /**
- * @emailed/reputation — Reputation Scoring Engine
+ * @alecrae/reputation — Reputation Scoring Engine
  *
  * Calculates a multi-factor reputation score (0-100) for IP addresses
  * and domains. The score is a weighted composite of:

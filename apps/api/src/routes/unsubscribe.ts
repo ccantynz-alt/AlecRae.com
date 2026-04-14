@@ -1,17 +1,21 @@
 /**
- * AI Unsubscribe Routes
+ * AI Unsubscribe Agent Routes
  *
  * One-click, AI-driven unsubscribe. The user clicks "Unsubscribe" once and
- * Vienna's agent does the rest:
+ * AlecRae's agent does the rest:
  *
  *   POST /v1/unsubscribe/extract  — Inspect an email, list every option
  *   POST /v1/unsubscribe/execute  — Run the best option for one email
  *   POST /v1/unsubscribe/bulk     — Run unsubscribes for many emails at once
  *   GET  /v1/unsubscribe/history  — Recent unsubscribe attempts + status
+ *
+ * Per-email convenience endpoint (mounted separately on emails router):
+ *   POST /v1/emails/:id/unsubscribe — One-click unsubscribe for a specific email
  */
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { eq, desc, and } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
@@ -22,8 +26,9 @@ import {
   sendOneClickUnsubscribe,
   type UnsubscribeOption,
   type ExtractEmailInput,
-} from "@emailed/ai-engine/unsubscribe";
+} from "@alecrae/ai-engine/unsubscribe";
 import { getSendQueue } from "../lib/queue.js";
+import { getDatabase, unsubscribeHistory, emails } from "@alecrae/db";
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
@@ -58,31 +63,65 @@ const BulkSchema = z.object({
   userEmail: z.string().email().optional(),
 });
 
-// ─── History store (in-memory; production: Postgres) ───────────────────────
+const PerEmailUnsubscribeSchema = z.object({
+  /** Optional override email to fill into web forms. */
+  userEmail: z.string().email().optional(),
+  /** If specified, force a particular unsubscribe method + target. */
+  option: z
+    .object({
+      method: z.enum(["one_click_post", "http", "mailto"]),
+      target: z.string().min(1),
+    })
+    .optional(),
+});
 
-export interface UnsubscribeHistoryEntry {
-  id: string;
-  accountId: string;
-  emailId: string;
-  from: string;
-  method: "one_click_post" | "http" | "mailto" | "none";
-  target: string;
-  status: "success" | "failed" | "no_option";
-  startedAt: string;
-  finishedAt: string;
-  steps?: string[];
-  finalUrl?: string;
-  confirmationText?: string;
-  error?: string;
+// ─── ID generation ────────────────────────────────────────────────────────
+
+function generateId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return `unsub_${Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
 }
 
-const history = new Map<string, UnsubscribeHistoryEntry[]>();
+// ─── DB persistence helpers ──────────────────────────────────────────────
 
-function recordHistory(accountId: string, entry: UnsubscribeHistoryEntry): void {
-  const list = history.get(accountId) ?? [];
-  list.unshift(entry);
-  // Keep last 200 per account.
-  history.set(accountId, list.slice(0, 200));
+interface HistoryInsert {
+  accountId: string;
+  emailId: string;
+  fromAddress: string;
+  method: "one_click_post" | "http" | "mailto" | "none";
+  target: string;
+  status: "pending" | "success" | "failed" | "no_option";
+  confidence?: number | undefined;
+  source?: string | undefined;
+  steps?: string[] | undefined;
+  finalUrl?: string | undefined;
+  confirmationText?: string | undefined;
+  error?: string | undefined;
+  startedAt: Date;
+  finishedAt?: Date | undefined;
+}
+
+async function recordHistory(entry: HistoryInsert): Promise<string> {
+  const db = getDatabase();
+  const id = generateId();
+  await db.insert(unsubscribeHistory).values({
+    id,
+    accountId: entry.accountId,
+    emailId: entry.emailId,
+    fromAddress: entry.fromAddress,
+    method: entry.method,
+    target: entry.target,
+    status: entry.status,
+    confidence: entry.confidence ?? null,
+    source: entry.source ?? null,
+    steps: entry.steps ?? null,
+    finalUrl: entry.finalUrl ?? null,
+    confirmationText: entry.confirmationText ?? null,
+    error: entry.error ?? null,
+    startedAt: entry.startedAt,
+    finishedAt: entry.finishedAt ?? null,
+  });
+  return id;
 }
 
 // ─── Execution helpers ─────────────────────────────────────────────────────
@@ -92,10 +131,10 @@ async function executeOption(
   userEmail: string | undefined,
 ): Promise<{
   status: "success" | "failed";
-  error?: string;
-  finalUrl?: string;
-  steps?: string[];
-  confirmationText?: string;
+  error?: string | undefined;
+  finalUrl?: string | undefined;
+  steps?: string[] | undefined;
+  confirmationText?: string | undefined;
 }> {
   if (option.method === "one_click_post") {
     const result = await sendOneClickUnsubscribe(option.target);
@@ -128,7 +167,8 @@ async function executeOption(
   }
 
   // http — drive the browser agent.
-  const result = await runUnsubscribeFlow(option.target, { userEmail });
+  const opts = userEmail !== undefined ? { userEmail } : {};
+  const result = await runUnsubscribeFlow(option.target, opts);
   return {
     status: result.success ? "success" : "failed",
     finalUrl: result.finalUrl,
@@ -177,7 +217,7 @@ unsubscribe.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof ExecuteSchema>>(c);
     const auth = c.get("auth");
-    const startedAt = new Date().toISOString();
+    const startedAt = new Date();
 
     let chosen: UnsubscribeOption | null;
     if (input.option) {
@@ -198,41 +238,64 @@ unsubscribe.post(
     }
 
     if (!chosen) {
-      const entry: UnsubscribeHistoryEntry = {
-        id: `unsub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      const id = await recordHistory({
         accountId: auth.accountId,
         emailId: input.email.emailId,
-        from: input.email.from,
+        fromAddress: input.email.from,
         method: "none",
         target: "",
         status: "no_option",
-        startedAt,
-        finishedAt: new Date().toISOString(),
         error: "No unsubscribe option found in this email",
-      };
-      recordHistory(auth.accountId, entry);
-      return c.json({ data: entry }, 200);
+        startedAt,
+        finishedAt: new Date(),
+      });
+      return c.json({
+        data: {
+          id,
+          emailId: input.email.emailId,
+          from: input.email.from,
+          method: "none" as const,
+          status: "no_option" as const,
+          error: "No unsubscribe option found in this email",
+        },
+      }, 200);
     }
 
     const result = await executeOption(chosen, input.userEmail);
 
-    const entry: UnsubscribeHistoryEntry = {
-      id: `unsub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    const id = await recordHistory({
       accountId: auth.accountId,
       emailId: input.email.emailId,
-      from: input.email.from,
+      fromAddress: input.email.from,
       method: chosen.method,
       target: chosen.target,
       status: result.status,
+      confidence: chosen.confidence,
+      source: chosen.source,
+      steps: result.steps,
+      finalUrl: result.finalUrl,
+      confirmationText: result.confirmationText,
+      error: result.error,
       startedAt,
-      finishedAt: new Date().toISOString(),
-      ...(result.steps ? { steps: result.steps } : {}),
-      ...(result.finalUrl ? { finalUrl: result.finalUrl } : {}),
-      ...(result.confirmationText ? { confirmationText: result.confirmationText } : {}),
-      ...(result.error ? { error: result.error } : {}),
-    };
-    recordHistory(auth.accountId, entry);
-    return c.json({ data: entry });
+      finishedAt: new Date(),
+    });
+
+    return c.json({
+      data: {
+        id,
+        emailId: input.email.emailId,
+        from: input.email.from,
+        method: chosen.method,
+        target: chosen.target,
+        status: result.status,
+        confidence: chosen.confidence,
+        source: chosen.source,
+        steps: result.steps,
+        finalUrl: result.finalUrl,
+        confirmationText: result.confirmationText,
+        error: result.error,
+      },
+    });
   },
 );
 
@@ -247,42 +310,59 @@ unsubscribe.post(
 
     const results = await Promise.all(
       input.emails.map(async (email) => {
-        const startedAt = new Date().toISOString();
+        const startedAt = new Date();
         const best = await pickBestUnsubscribeOption(toExtractInput(email));
         if (!best) {
-          const entry: UnsubscribeHistoryEntry = {
-            id: `unsub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          const id = await recordHistory({
             accountId: auth.accountId,
             emailId: email.emailId,
-            from: email.from,
+            fromAddress: email.from,
             method: "none",
             target: "",
             status: "no_option",
+            error: "No unsubscribe option found",
             startedAt,
-            finishedAt: new Date().toISOString(),
+            finishedAt: new Date(),
+          });
+          return {
+            id,
+            emailId: email.emailId,
+            from: email.from,
+            method: "none" as const,
+            status: "no_option" as const,
             error: "No unsubscribe option found",
           };
-          recordHistory(auth.accountId, entry);
-          return entry;
         }
         const r = await executeOption(best, input.userEmail);
-        const entry: UnsubscribeHistoryEntry = {
-          id: `unsub_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        const id = await recordHistory({
           accountId: auth.accountId,
+          emailId: email.emailId,
+          fromAddress: email.from,
+          method: best.method,
+          target: best.target,
+          status: r.status,
+          confidence: best.confidence,
+          source: best.source,
+          steps: r.steps,
+          finalUrl: r.finalUrl,
+          confirmationText: r.confirmationText,
+          error: r.error,
+          startedAt,
+          finishedAt: new Date(),
+        });
+        return {
+          id,
           emailId: email.emailId,
           from: email.from,
           method: best.method,
           target: best.target,
           status: r.status,
-          startedAt,
-          finishedAt: new Date().toISOString(),
-          ...(r.steps ? { steps: r.steps } : {}),
-          ...(r.finalUrl ? { finalUrl: r.finalUrl } : {}),
-          ...(r.confirmationText ? { confirmationText: r.confirmationText } : {}),
-          ...(r.error ? { error: r.error } : {}),
+          confidence: best.confidence,
+          steps: r.steps,
+          finalUrl: r.finalUrl,
+          confirmationText: r.confirmationText,
+          error: r.error,
         };
-        recordHistory(auth.accountId, entry);
-        return entry;
       }),
     );
 
@@ -301,12 +381,259 @@ unsubscribe.post(
 unsubscribe.get(
   "/history",
   requireScope("inbox:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
     const limit = Math.min(Number(c.req.query("limit") ?? "50"), 200);
-    const list = (history.get(auth.accountId) ?? []).slice(0, limit);
-    return c.json({ data: list });
+    const db = getDatabase();
+
+    const rows = await db
+      .select()
+      .from(unsubscribeHistory)
+      .where(eq(unsubscribeHistory.accountId, auth.accountId))
+      .orderBy(desc(unsubscribeHistory.createdAt))
+      .limit(limit);
+
+    return c.json({ data: rows });
   },
 );
 
-export { unsubscribe };
+// ─── Per-email unsubscribe router (mounted at /v1/emails) ──────────────────
+
+const emailUnsubscribe = new Hono();
+
+/**
+ * POST /v1/emails/:id/unsubscribe
+ *
+ * One-click unsubscribe for a specific email. Looks up the email in the DB,
+ * extracts unsubscribe options from headers + body, picks the best one, and
+ * executes it automatically.
+ */
+emailUnsubscribe.post(
+  "/:id/unsubscribe",
+  requireScope("inbox:write"),
+  validateBody(PerEmailUnsubscribeSchema),
+  async (c) => {
+    const emailId = c.req.param("id");
+    const input = getValidatedBody<z.infer<typeof PerEmailUnsubscribeSchema>>(c);
+    const auth = c.get("auth");
+    const startedAt = new Date();
+
+    // Look up the email in DB.
+    const db = getDatabase();
+    const rows = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    const emailRow = rows[0];
+    if (!emailRow) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Email ${emailId} not found`,
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    // Build the extraction input from stored email data.
+    const customHeaders = (emailRow.customHeaders ?? {}) as Record<string, string>;
+    const extractInput: ExtractEmailInput = {
+      headers: customHeaders,
+      htmlBody: emailRow.htmlBody ?? "",
+      textBody: emailRow.textBody ?? "",
+    };
+
+    // Pick the best option (or use the caller-specified one).
+    let chosen: UnsubscribeOption | null;
+    if (input.option) {
+      const all = await extractUnsubscribeOptions(extractInput);
+      chosen =
+        all.find(
+          (o) => o.method === input.option!.method && o.target === input.option!.target,
+        ) ?? {
+          method: input.option.method,
+          target: input.option.target,
+          source: "list_unsubscribe_header",
+          priority: 99,
+          confidence: 0.5,
+        };
+    } else {
+      chosen = await pickBestUnsubscribeOption(extractInput);
+    }
+
+    if (!chosen) {
+      // Check if there are any body links we can try via AI extraction.
+      const allOptions = await extractUnsubscribeOptions(extractInput);
+      if (allOptions.length === 0) {
+        const id = await recordHistory({
+          accountId: auth.accountId,
+          emailId,
+          fromAddress: emailRow.fromAddress,
+          method: "none",
+          target: "",
+          status: "no_option",
+          error: "No unsubscribe option found in this email. The email may not contain List-Unsubscribe headers or unsubscribe links.",
+          startedAt,
+          finishedAt: new Date(),
+        });
+        return c.json({
+          data: {
+            id,
+            emailId,
+            from: emailRow.fromAddress,
+            method: "none" as const,
+            status: "no_option" as const,
+            error: "No unsubscribe option found in this email",
+          },
+        });
+      }
+      chosen = allOptions[0]!;
+    }
+
+    // Execute the unsubscribe.
+    const result = await executeOption(chosen, input.userEmail);
+
+    const id = await recordHistory({
+      accountId: auth.accountId,
+      emailId,
+      fromAddress: emailRow.fromAddress,
+      method: chosen.method,
+      target: chosen.target,
+      status: result.status,
+      confidence: chosen.confidence,
+      source: chosen.source,
+      steps: result.steps,
+      finalUrl: result.finalUrl,
+      confirmationText: result.confirmationText,
+      error: result.error,
+      startedAt,
+      finishedAt: new Date(),
+    });
+
+    return c.json({
+      data: {
+        id,
+        emailId,
+        from: emailRow.fromAddress,
+        subject: emailRow.subject,
+        method: chosen.method,
+        target: chosen.target,
+        status: result.status,
+        confidence: chosen.confidence,
+        source: chosen.source,
+        steps: result.steps,
+        finalUrl: result.finalUrl,
+        confirmationText: result.confirmationText,
+        error: result.error,
+      },
+    });
+  },
+);
+
+/**
+ * GET /v1/emails/:id/unsubscribe/options
+ *
+ * Inspect an email and return all available unsubscribe options without
+ * executing any of them.
+ */
+emailUnsubscribe.get(
+  "/:id/unsubscribe/options",
+  requireScope("inbox:read"),
+  async (c) => {
+    const emailId = c.req.param("id");
+    const auth = c.get("auth");
+
+    const db = getDatabase();
+    const rows = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    const emailRow = rows[0];
+    if (!emailRow) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Email ${emailId} not found`,
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    const customHeaders = (emailRow.customHeaders ?? {}) as Record<string, string>;
+    const extractInput: ExtractEmailInput = {
+      headers: customHeaders,
+      htmlBody: emailRow.htmlBody ?? "",
+      textBody: emailRow.textBody ?? "",
+    };
+
+    const options = await extractUnsubscribeOptions(extractInput);
+
+    return c.json({
+      data: {
+        emailId,
+        from: emailRow.fromAddress,
+        subject: emailRow.subject,
+        options,
+        best: options[0] ?? null,
+        hasUnsubscribe: options.length > 0,
+      },
+    });
+  },
+);
+
+/**
+ * GET /v1/emails/:id/unsubscribe/status
+ *
+ * Check the status of a previous unsubscribe attempt for this email.
+ */
+emailUnsubscribe.get(
+  "/:id/unsubscribe/status",
+  requireScope("inbox:read"),
+  async (c) => {
+    const emailId = c.req.param("id");
+    const auth = c.get("auth");
+
+    const db = getDatabase();
+    const rows = await db
+      .select()
+      .from(unsubscribeHistory)
+      .where(
+        and(
+          eq(unsubscribeHistory.emailId, emailId),
+          eq(unsubscribeHistory.accountId, auth.accountId),
+        ),
+      )
+      .orderBy(desc(unsubscribeHistory.createdAt))
+      .limit(1);
+
+    const record = rows[0];
+    if (!record) {
+      return c.json({
+        data: {
+          emailId,
+          hasAttempt: false,
+          status: null,
+        },
+      });
+    }
+
+    return c.json({
+      data: {
+        ...record,
+        hasAttempt: true,
+      },
+    });
+  },
+);
+
+export { unsubscribe, emailUnsubscribe };

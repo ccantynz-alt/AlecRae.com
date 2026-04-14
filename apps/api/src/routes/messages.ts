@@ -23,11 +23,18 @@ import type {
   PaginationParams,
   PaginatedResponse,
 } from "../types.js";
-import { getDatabase, emails, deliveryResults, domains, accounts } from "@emailed/db";
+import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
-import { indexEmail, searchEmails } from "@emailed/shared";
+import { checkQuota, incrementQuota } from "../lib/quota.js";
+import { indexEmail, searchEmails } from "@alecrae/shared";
 import { usageEnforcement } from "../middleware/usage.js";
-import { getWarmupOrchestrator } from "@emailed/reputation";
+import { idempotency } from "../middleware/idempotency.js";
+import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED } from "@alecrae/reputation";
+import {
+  validateCustomHeaders,
+  HEADER_INJECTION_REJECTED,
+} from "@alecrae/mta/lib";
+import { scanAttachment, isSafe } from "@alecrae/security";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -131,22 +138,26 @@ function buildRawMessage(
     lines.push("List-Unsubscribe-Post: List-Unsubscribe=One-Click");
   }
 
-  // Custom headers
+  // Custom headers — already validated and sanitized by
+  // validateCustomHeaders() at queue-accept time. We still skip the
+  // handful of names the platform sets itself so customer-supplied
+  // Message-ID (etc) can't collide with the header lines already
+  // emitted above; everything else is guaranteed safe by the validator.
   if (input.headers) {
+    const platformOwned = new Set([
+      "from",
+      "to",
+      "cc",
+      "bcc",
+      "subject",
+      "message-id",
+      "date",
+      "mime-version",
+      "content-type",
+      "content-transfer-encoding",
+    ]);
     for (const [key, value] of Object.entries(input.headers)) {
-      // Prevent injection of restricted headers
-      const lk = key.toLowerCase();
-      if (
-        lk === "from" ||
-        lk === "to" ||
-        lk === "cc" ||
-        lk === "bcc" ||
-        lk === "subject" ||
-        lk === "message-id" ||
-        lk === "date"
-      ) {
-        continue;
-      }
+      if (platformOwned.has(key.toLowerCase())) continue;
       lines.push(`${key}: ${value}`);
     }
   }
@@ -189,6 +200,7 @@ function buildRawMessage(
 const ListMessagesQuery = PaginationSchema.extend({
   status: z
     .enum([
+      "draft",
       "queued",
       "sending",
       "delivered",
@@ -216,7 +228,12 @@ async function handleSend(c: Context) {
 
   // ── 1. Resolve the sender domain in our database ──────────────────
   const [domainRecord] = await db
-    .select({ id: domains.id, dkimSelector: domains.dkimSelector })
+    .select({
+      id: domains.id,
+      dkimSelector: domains.dkimSelector,
+      verificationStatus: domains.verificationStatus,
+      isActive: domains.isActive,
+    })
     .from(domains)
     .where(and(eq(domains.domain, senderDomain), eq(domains.accountId, auth.accountId)))
     .limit(1);
@@ -234,18 +251,129 @@ async function handleSend(c: Context) {
     );
   }
 
-  // ── 1b. Check warm-up sending limits ──────────────────────────────
+  // ── 1.1 DNS records stale check ──────────────────────────────────
+  // If the daily liveness checker has detected missing/changed DNS
+  // records, the domain is marked as failed + inactive. Block sends
+  // with a clear error and re-verification path.
+  if (domainRecord.verificationStatus === "failed" || !domainRecord.isActive) {
+    return c.json(
+      {
+        error: "DNS_RECORDS_STALE",
+        message: `DNS records for "${senderDomain}" are stale or unverified. Sending is paused until records are corrected and re-verified via POST /v1/domains/${domainRecord.id}/verify.`,
+        domain: senderDomain,
+      },
+      422,
+    );
+  }
+
+  // ── 1a. Hard quota enforcement ────────────────────────────────────
+  // Must be checked BEFORE warmup, suppression, and enqueue so that
+  // over-quota accounts cannot consume warmup slots or queue capacity.
+  const quota = await checkQuota(auth.accountId);
+  if (!quota.allowed) {
+    return c.json(
+      {
+        error: "QUOTA_EXCEEDED",
+        message: `Monthly email limit reached (${quota.sent}/${quota.limit}). Upgrade your plan or wait until next billing cycle.`,
+        plan: quota.plan,
+        limit: quota.limit,
+        sent: quota.sent,
+        resetsAt: quota.resetsAt,
+      },
+      429,
+    );
+  }
+
+  // ── 1b. Suppression list check ────────────────────────────────────
+  // Reject sends to suppressed recipients BEFORE warmup and enqueue
+  // so a suppressed address cannot waste a warmup slot or quota count.
+  const allRecipientAddresses = [
+    ...input.to.map((r) => r.email),
+    ...(input.cc ?? []).map((r) => r.email),
+    ...(input.bcc ?? []).map((r) => r.email),
+  ];
+
+  for (const recipientEmail of allRecipientAddresses) {
+    const [suppressed] = await db
+      .select({
+        email: suppressionLists.email,
+        reason: suppressionLists.reason,
+      })
+      .from(suppressionLists)
+      .where(
+        and(
+          eq(suppressionLists.email, recipientEmail.toLowerCase()),
+          eq(suppressionLists.domainId, domainRecord.id),
+        ),
+      )
+      .limit(1);
+
+    if (suppressed) {
+      return c.json(
+        {
+          error: "RECIPIENT_SUPPRESSED",
+          reason: suppressed.reason === "bounce" ? "hard_bounce"
+            : suppressed.reason === "complaint" ? "complaint"
+            : suppressed.reason === "unsubscribe" ? "manual_unsubscribe"
+            : suppressed.reason,
+          address: suppressed.email,
+        },
+        422,
+      );
+    }
+  }
+
+  // ── 1c. Validate customer-supplied custom headers ─────────────────
+  // Reputation-protection: Bcc/CRLF injection and platform-controlled
+  // headers (DKIM-Signature, Authentication-Results, etc) must never
+  // reach the SMTP DATA stream. Hard-reject at queue-accept time so
+  // the customer gets a clear error and no bad send is enqueued.
+  const headerCheck = validateCustomHeaders(
+    (input.headers ?? null) as Record<string, unknown> | null,
+  );
+  if (!headerCheck.ok) {
+    return c.json(
+      {
+        error: {
+          type: "validation_error",
+          message: headerCheck.reason,
+          code: HEADER_INJECTION_REJECTED,
+        },
+      },
+      400,
+    );
+  }
+  const sanitizedHeaders = headerCheck.sanitized;
+
+  // ── 1d. Auto-enrol the domain in warm-up + hard-enforce day limit ─
+  // `ensureWarmupAndCheck` creates a session on-the-fly for any domain
+  // that doesn't have one, so new customers cannot bypass warm-up by
+  // "not starting one". Reputation destruction is permanent — this
+  // gate MUST hard-reject. No silent drops.
   const warmupOrchestrator = getWarmupOrchestrator();
-  const warmupCheck = await warmupOrchestrator.canSend(domainRecord.id);
+  const warmupCheck = await warmupOrchestrator.ensureWarmupAndCheck(
+    domainRecord.id,
+    auth.accountId,
+  );
 
   if (!warmupCheck.allowed) {
     return c.json(
       {
         error: {
           type: "rate_limit",
-          message: warmupCheck.reason ?? "Domain warm-up sending limit reached",
-          code: "warmup_limit_reached",
+          message:
+            warmupCheck.message ??
+            "Domain warm-up sending limit reached",
+          code: warmupCheck.code ?? WARMUP_LIMIT_EXCEEDED,
           retryAfter: warmupCheck.retryAfter?.toISOString() ?? null,
+          warmup: {
+            currentDay: warmupCheck.currentDay ?? null,
+            dailyLimit:
+              warmupCheck.dailyLimit === Number.MAX_SAFE_INTEGER
+                ? null
+                : warmupCheck.dailyLimit ?? null,
+            sentToday: warmupCheck.sentToday ?? null,
+          },
         },
       },
       429,
@@ -253,7 +381,39 @@ async function handleSend(c: Context) {
   }
 
   // ── 2. Build the raw RFC-5322 message ─────────────────────────────
-  const rawMessage = buildRawMessage(input, messageId, id);
+  // Pass sanitized headers so buildRawMessage never sees unvalidated input.
+  const rawMessage = buildRawMessage(
+    { ...input, headers: sanitizedHeaders },
+    messageId,
+    id,
+  );
+
+  // ── 2a. Virus scan attachments (before persist + enqueue) ─────────
+  if (input.attachments && input.attachments.length > 0) {
+    for (const attachment of input.attachments) {
+      try {
+        const buffer = Buffer.from(attachment.content, "base64");
+        const scanResult = await scanAttachment(buffer, attachment.filename);
+
+        if (!isSafe(scanResult)) {
+          return c.json(
+            {
+              error: "ATTACHMENT_MALWARE_DETECTED",
+              filename: attachment.filename,
+              threats: scanResult.threats,
+            },
+            422,
+          );
+        }
+      } catch (scanError) {
+        // VirusTotal unavailable — degrade gracefully, allow send
+        console.warn(
+          `[messages] Virus scan failed for "${attachment.filename}", allowing send:`,
+          scanError instanceof Error ? scanError.message : scanError,
+        );
+      }
+    }
+  }
 
   // ── 3. Collect all recipient addresses (to + cc + bcc) ────────────
   const allRecipients = [
@@ -287,7 +447,8 @@ async function handleSend(c: Context) {
     subject: input.subject,
     textBody: input.text ?? null,
     htmlBody: input.html ?? null,
-    customHeaders: input.headers ?? null,
+    customHeaders:
+      Object.keys(sanitizedHeaders).length > 0 ? sanitizedHeaders : null,
     status: "queued",
     tags: input.tags ?? [],
     scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
@@ -357,6 +518,9 @@ async function handleSend(c: Context) {
   // ── 6b. Record send against warm-up counter (fire-and-forget) ────
   warmupOrchestrator.recordSend(domainRecord.id).catch(() => {});
 
+  // ── 6c. Increment quota counter in Redis (fire-and-forget) ──────
+  incrementQuota(auth.accountId).catch(() => {});
+
   // ── 7. Index in Meilisearch (fire-and-forget) ────────────────────
   indexEmail({
     id,
@@ -395,7 +559,7 @@ async function handleSend(c: Context) {
 
 const messages = new Hono();
 
-const sendMiddleware = [requireScope("messages:send"), usageEnforcement, validateBody(SendMessageSchema)] as const;
+const sendMiddleware = [idempotency(), requireScope("messages:send"), usageEnforcement, validateBody(SendMessageSchema)] as const;
 
 // POST /v1/messages/send — Send an email (production pipeline)
 messages.post("/send", ...sendMiddleware, handleSend);
@@ -553,6 +717,7 @@ messages.get(
         eq(
           emails.status,
           query.status as
+            | "draft"
             | "queued"
             | "processing"
             | "sent"

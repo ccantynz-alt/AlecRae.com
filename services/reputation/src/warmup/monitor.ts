@@ -1,5 +1,5 @@
 /**
- * @emailed/reputation — Warm-up Health Monitor
+ * @alecrae/reputation — Warm-up Health Monitor
  *
  * Monitors warm-up health by querying the events table for bounce and
  * complaint rates, then feeds signals into the orchestrator to adjust
@@ -12,7 +12,7 @@ import {
   warmupSessions,
   events,
   domains as domainsTable,
-} from "@emailed/db";
+} from "@alecrae/db";
 import {
   getWarmupOrchestrator,
   type WarmupSignals,

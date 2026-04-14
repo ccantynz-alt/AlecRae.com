@@ -1,5 +1,5 @@
 /**
- * @emailed/analytics - TypeScript type definitions
+ * @alecrae/analytics - TypeScript type definitions
  * All types for the Analytics service.
  */
 

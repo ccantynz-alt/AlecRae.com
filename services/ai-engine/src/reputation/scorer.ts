@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Sender Reputation Scoring Engine
+// @alecrae/ai-engine — Sender Reputation Scoring Engine
 // =============================================================================
 // Computes a 0-100 reputation score from multiple weighted factors: sending
 // volume, bounce rate, complaint rate, authentication status, content quality,

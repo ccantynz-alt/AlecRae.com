@@ -1,10 +1,10 @@
-import { Box, Text, Card, CardContent } from "@emailed/ui";
+import { Box, Text, Card, CardContent } from "@alecrae/ui";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy - Emailed",
+  title: "Cookie Policy - AlecRae",
   description:
-    "Emailed Cookie Policy explaining what cookies we use, why, and how you can control them.",
+    "AlecRae Cookie Policy explaining what cookies we use, why, and how you can control them.",
 };
 
 export default function CookiesPage() {
@@ -20,9 +20,9 @@ export default function CookiesPage() {
       </Box>
 
       <Text variant="body-md" className="text-content-secondary leading-relaxed">
-        This Cookie Policy explains how Emailed, Inc. (&quot;Emailed,&quot;
+        This Cookie Policy explains how AlecRae, Inc. (&quot;AlecRae,&quot;
         &quot;we,&quot; &quot;us,&quot; &quot;our&quot;) uses cookies and similar
-        tracking technologies when you visit or use our platform at emailed.dev (the
+        tracking technologies when you visit or use our platform at alecrae.dev (the
         &quot;Service&quot;). This policy should be read alongside our{" "}
         <Text as="span" className="text-brand-600 font-medium">
           Privacy Policy
@@ -145,7 +145,7 @@ export default function CookiesPage() {
                 {/* Strictly Necessary */}
                 <Box className="grid grid-cols-4 py-3 border-b border-border/50">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_session
+                    __alecrae_session
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     Session management and user authentication state
@@ -159,7 +159,7 @@ export default function CookiesPage() {
                 </Box>
                 <Box className="grid grid-cols-4 py-3 border-b border-border/50">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_auth
+                    __alecrae_auth
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     Authentication token for secure login persistence
@@ -173,7 +173,7 @@ export default function CookiesPage() {
                 </Box>
                 <Box className="grid grid-cols-4 py-3 border-b border-border/50">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_csrf
+                    __alecrae_csrf
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     Cross-site request forgery protection token
@@ -187,7 +187,7 @@ export default function CookiesPage() {
                 </Box>
                 <Box className="grid grid-cols-4 py-3 border-b border-border/50">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_device
+                    __alecrae_device
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     Device fingerprint for security and fraud detection
@@ -203,7 +203,7 @@ export default function CookiesPage() {
                 {/* Functional */}
                 <Box className="grid grid-cols-4 py-3 border-b border-border/50">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_theme
+                    __alecrae_theme
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     User theme preference (light/dark/system)
@@ -217,7 +217,7 @@ export default function CookiesPage() {
                 </Box>
                 <Box className="grid grid-cols-4 py-3 border-b border-border/50">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_locale
+                    __alecrae_locale
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     Language and regional format preferences
@@ -231,7 +231,7 @@ export default function CookiesPage() {
                 </Box>
                 <Box className="grid grid-cols-4 py-3 border-b border-border/50">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_layout
+                    __alecrae_layout
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     Inbox layout and sidebar collapse state
@@ -247,7 +247,7 @@ export default function CookiesPage() {
                 {/* Analytics */}
                 <Box className="grid grid-cols-4 py-3 border-b border-border/50">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_analytics
+                    __alecrae_analytics
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     Anonymous usage analytics identifier
@@ -261,7 +261,7 @@ export default function CookiesPage() {
                 </Box>
                 <Box className="grid grid-cols-4 py-3 border-b border-border/50">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_ab
+                    __alecrae_ab
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     A/B testing group assignment
@@ -277,7 +277,7 @@ export default function CookiesPage() {
                 {/* Performance */}
                 <Box className="grid grid-cols-4 py-3">
                   <Text variant="body-sm" className="text-content-secondary font-mono">
-                    __emailed_perf
+                    __alecrae_perf
                   </Text>
                   <Text variant="body-sm" className="text-content-secondary">
                     Performance monitoring and page load timing
@@ -380,7 +380,7 @@ export default function CookiesPage() {
               <Text as="span" className="font-semibold text-content">Platform Settings.</Text>{" "}
               Logged-in users can manage functional and analytics cookie preferences
               from the Privacy section of their Account Settings page within the
-              Emailed dashboard.
+              AlecRae dashboard.
             </Text>
           </Box>
           <Box className="flex gap-3">
@@ -401,10 +401,10 @@ export default function CookiesPage() {
           6. Cookie Consent Mechanism
         </Text>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Emailed uses a cookie consent management platform that records your consent
+          AlecRae uses a cookie consent management platform that records your consent
           preferences. When you first visit the Service, you are presented with a
           clear choice to accept or decline non-essential cookies. Your consent
-          preference is stored in a first-party cookie (__emailed_consent) and is
+          preference is stored in a first-party cookie (__alecrae_consent) and is
           respected across all pages and subsequent visits. Strictly Necessary cookies
           do not require consent as they are essential for the Service to function.
         </Text>
@@ -472,7 +472,7 @@ export default function CookiesPage() {
 
       <Box className="border-t border-border pt-6">
         <Text variant="body-sm" muted>
-          Questions about our use of cookies? Contact us at privacy@emailed.dev.
+          Questions about our use of cookies? Contact us at privacy@alecrae.dev.
         </Text>
       </Box>
     </Box>

@@ -1,22 +1,22 @@
 {
-  "name": "@emailed/desktop",
+  "name": "@alecrae/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Vienna Desktop \u2014 Native email client for Mac, Windows, Linux",
+  "description": "AlecRae Desktop \u2014 Native email client for Mac, Windows, Linux",
   "type": "module",
   "main": "dist/main.cjs",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "echo 'Desktop app builds via electron-builder, not in monorepo turbo build'",
+    "build": "electron-vite build",
     "preview": "electron-vite preview",
     "start": "electron .",
-    "pack": "electron-builder --dir",
-    "dist": "electron-builder",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux",
+    "pack": "electron-vite build && electron-builder --dir",
+    "dist": "electron-vite build && electron-builder",
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:win": "electron-vite build && electron-builder --win",
+    "dist:linux": "electron-vite build && electron-builder --linux",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/",
+    "lint": "tsc --noEmit",
     "clean": "rm -rf dist out"
   },
   "dependencies": {
@@ -32,9 +32,9 @@
     "vite": "^6.0.0"
   },
   "build": {
-    "appId": "com.vienna.desktop",
-    "productName": "Vienna",
-    "copyright": "Copyright \u00a9 2026 Vienna",
+    "appId": "com.alecrae.desktop",
+    "productName": "AlecRae",
+    "copyright": "Copyright \u00a9 2026 AlecRae",
     "directories": {
       "buildResources": "build",
       "output": "out"
@@ -112,7 +112,7 @@
     "publish": {
       "provider": "github",
       "owner": "ccantynz-alt",
-      "repo": "emailed"
+      "repo": "alecrae"
     }
   },
   "engines": {

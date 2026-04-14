@@ -1,5 +1,5 @@
 /**
- * @emailed/support - Automated Diagnostics Runner
+ * @alecrae/support - Automated Diagnostics Runner
  *
  * When a user reports an issue, automatically runs:
  * DNS checks, deliverability tests, authentication verification,
@@ -754,7 +754,7 @@ function generateRecommendations(checks: DiagnosticCheck[]): string[] {
         const issues = (check.details.issues as string[]) ?? [];
         if (issues.some((i) => i.toLowerCase().includes("spf"))) {
           recommendations.push(
-            "Add or fix your SPF record. Include 'include:spf.emailed.dev' in your SPF TXT record.",
+            "Add or fix your SPF record. Include 'include:spf.alecrae.dev' in your SPF TXT record.",
           );
         }
         if (issues.some((i) => i.toLowerCase().includes("dkim"))) {

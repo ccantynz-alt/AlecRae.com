@@ -10,7 +10,7 @@ POST /v1/webhooks
 
 ```json
 {
-  "url": "https://yourdomain.com/hooks/vienna",
+  "url": "https://yourdomain.com/hooks/alecrae",
   "events": ["message.delivered", "message.bounced", "message.opened"],
   "secret": "whsec_..."
 }
@@ -20,7 +20,7 @@ POST /v1/webhooks
 
 | Event | When |
 |---|---|
-| `message.queued` | Vienna accepted the message |
+| `message.queued` | AlecRae accepted the message |
 | `message.sending` | Handed to the MTA |
 | `message.delivered` | Recipient mail server accepted it |
 | `message.bounced` | Permanent failure |
@@ -48,7 +48,7 @@ Every payload has the same envelope:
 
 ## Signing
 
-Vienna signs every request with HMAC-SHA256 using your webhook secret. Verify the `Vienna-Signature` header before trusting any payload.
+AlecRae signs every request with HMAC-SHA256 using your webhook secret. Verify the `AlecRae-Signature` header before trusting any payload.
 
 ```ts
 import { createHmac, timingSafeEqual } from "node:crypto";
@@ -61,4 +61,4 @@ function verify(rawBody: string, signature: string, secret: string): boolean {
 
 ## Retries
 
-Vienna retries failed deliveries with exponential backoff for up to 24 hours. Respond with a 2xx status to acknowledge.
+AlecRae retries failed deliveries with exponential backoff for up to 24 hours. Respond with a 2xx status to acknowledge.

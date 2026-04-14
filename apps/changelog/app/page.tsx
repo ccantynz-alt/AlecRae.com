@@ -2,7 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ChangelogList, type Release, type ReleaseType } from "./changelog-list";
 
-const VALID_TYPES: ReadonlySet<ReleaseType> = new Set(["feature", "fix", "breaking"]);
+const VALID_TYPES: ReadonlySet<ReleaseType> = new Set([
+  "feature",
+  "improvement",
+  "fix",
+  "security",
+  "breaking",
+]);
 
 interface FrontMatter {
   readonly version: string;
@@ -78,7 +84,7 @@ export default async function ChangelogPage(): Promise<React.JSX.Element> {
         <header className="mb-12">
           <div className="flex items-center gap-3 mb-4">
             <div className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white via-blue-200 to-cyan-300 bg-clip-text text-transparent">
-              Vienna
+              AlecRae
             </div>
             <span className="text-sm uppercase tracking-wider text-blue-200/60">Changelog</span>
           </div>
@@ -86,14 +92,14 @@ export default async function ChangelogPage(): Promise<React.JSX.Element> {
             Every release.
           </h1>
           <p className="text-blue-100/60 max-w-2xl">
-            New features, fixes, and breaking changes — every time we ship.
+            New features, improvements, fixes, and breaking changes — every time we ship.
           </p>
         </header>
 
         <ChangelogList releases={releases} />
 
         <footer className="text-center text-xs text-blue-200/40 pt-16 mt-16 border-t border-white/5">
-          © 2026 Vienna · changelog.vieanna.com
+          2026 AlecRae - changelog.alecrae.com
         </footer>
       </div>
     </main>

@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide covers deploying Emailed to production using Docker and Kubernetes.
+This guide covers deploying AlecRae to production using Docker and Kubernetes.
 
 ## Build Docker Images
 
@@ -8,15 +8,15 @@ Each service has its own Dockerfile. Build all images from the repository root:
 
 ```bash
 # Build all service images
-docker build -f infrastructure/docker/Dockerfile.web -t emailed/web:latest .
-docker build -f infrastructure/docker/Dockerfile.api -t emailed/api:latest .
-docker build -f infrastructure/docker/Dockerfile.mta -t emailed/mta:latest .
-docker build -f infrastructure/docker/Dockerfile.inbound -t emailed/inbound:latest .
-docker build -f infrastructure/docker/Dockerfile.ai-engine -t emailed/ai-engine:latest .
-docker build -f infrastructure/docker/Dockerfile.dns -t emailed/dns:latest .
-docker build -f infrastructure/docker/Dockerfile.jmap -t emailed/jmap:latest .
-docker build -f infrastructure/docker/Dockerfile.reputation -t emailed/reputation:latest .
-docker build -f infrastructure/docker/Dockerfile.sentinel -t emailed/sentinel:latest .
+docker build -f infrastructure/docker/Dockerfile.web -t alecrae/web:latest .
+docker build -f infrastructure/docker/Dockerfile.api -t alecrae/api:latest .
+docker build -f infrastructure/docker/Dockerfile.mta -t alecrae/mta:latest .
+docker build -f infrastructure/docker/Dockerfile.inbound -t alecrae/inbound:latest .
+docker build -f infrastructure/docker/Dockerfile.ai-engine -t alecrae/ai-engine:latest .
+docker build -f infrastructure/docker/Dockerfile.dns -t alecrae/dns:latest .
+docker build -f infrastructure/docker/Dockerfile.jmap -t alecrae/jmap:latest .
+docker build -f infrastructure/docker/Dockerfile.reputation -t alecrae/reputation:latest .
+docker build -f infrastructure/docker/Dockerfile.sentinel -t alecrae/sentinel:latest .
 
 # Or build all at once with the helper script
 ./infrastructure/scripts/build-all.sh
@@ -28,11 +28,11 @@ Tag and push images to your container registry:
 
 ```bash
 # Example using a private registry
-REGISTRY=registry.example.com/emailed
+REGISTRY=registry.example.com/alecrae
 TAG=$(git rev-parse --short HEAD)
 
 for SERVICE in web api mta inbound ai-engine dns jmap reputation sentinel; do
-  docker tag emailed/$SERVICE:latest $REGISTRY/$SERVICE:$TAG
+  docker tag alecrae/$SERVICE:latest $REGISTRY/$SERVICE:$TAG
   docker push $REGISTRY/$SERVICE:$TAG
 done
 ```
@@ -50,13 +50,13 @@ done
 
 ```bash
 # Create the namespace
-kubectl create namespace emailed
+kubectl create namespace alecrae
 
 # Apply secrets (see Environment Variables section)
-kubectl apply -f infrastructure/kubernetes/secrets.yaml -n emailed
+kubectl apply -f infrastructure/kubernetes/secrets.yaml -n alecrae
 
 # Apply all manifests
-kubectl apply -f infrastructure/kubernetes/ -n emailed
+kubectl apply -f infrastructure/kubernetes/ -n alecrae
 ```
 
 ### Deploy with Pulumi
@@ -105,19 +105,19 @@ Run migrations as a Kubernetes Job before deploying new application pods:
 
 ```bash
 # Run migrations via a Job
-kubectl apply -f infrastructure/kubernetes/migration-job.yaml -n emailed
+kubectl apply -f infrastructure/kubernetes/migration-job.yaml -n alecrae
 
 # Watch the job status
-kubectl wait --for=condition=complete job/db-migrate -n emailed --timeout=120s
+kubectl wait --for=condition=complete job/db-migrate -n alecrae --timeout=120s
 
 # Check migration logs
-kubectl logs job/db-migrate -n emailed
+kubectl logs job/db-migrate -n alecrae
 ```
 
 Alternatively, run migrations directly:
 
 ```bash
-DATABASE_URL=postgresql://user:pass@host:5432/emailed bun run db:migrate
+DATABASE_URL=postgresql://user:pass@host:5432/alecrae bun run db:migrate
 ```
 
 Always back up the database before running migrations in production:
@@ -155,11 +155,11 @@ readinessProbe:
 
 ### Monitoring
 
-Emailed uses OpenTelemetry for observability. Configure the collector endpoint:
+AlecRae uses OpenTelemetry for observability. Configure the collector endpoint:
 
 ```env
 OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
-OTEL_SERVICE_NAME=emailed-api
+OTEL_SERVICE_NAME=alecrae-api
 ```
 
 Grafana dashboards are provided in `infrastructure/kubernetes/monitoring/`:
@@ -188,13 +188,13 @@ Roll back to the previous deployment:
 
 ```bash
 # Rollback a specific deployment
-kubectl rollout undo deployment/emailed-api -n emailed
+kubectl rollout undo deployment/alecrae-api -n alecrae
 
 # Rollback to a specific revision
-kubectl rollout undo deployment/emailed-api -n emailed --to-revision=3
+kubectl rollout undo deployment/alecrae-api -n alecrae --to-revision=3
 
 # Check rollout status
-kubectl rollout status deployment/emailed-api -n emailed
+kubectl rollout status deployment/alecrae-api -n alecrae
 ```
 
 ### Database Rollback
@@ -219,7 +219,7 @@ pulumi up --target-version <version-number>
 
 ### Automated Certificates with cert-manager
 
-Emailed uses cert-manager for automatic TLS certificate provisioning via Let's Encrypt:
+AlecRae uses cert-manager for automatic TLS certificate provisioning via Let's Encrypt:
 
 ```bash
 # Install cert-manager
@@ -239,7 +239,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: ops@emailed.dev
+    email: ops@alecrae.dev
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:
@@ -254,10 +254,10 @@ The MTA service requires a TLS certificate for STARTTLS and implicit TLS on port
 
 ```bash
 # Generate or provide the SMTP TLS certificate
-kubectl create secret tls emailed-smtp-tls \
+kubectl create secret tls alecrae-smtp-tls \
   --cert=path/to/smtp.crt \
   --key=path/to/smtp.key \
-  -n emailed
+  -n alecrae
 ```
 
 ### Certificate Rotation
@@ -267,7 +267,7 @@ Certificates managed by cert-manager are automatically rotated before expiry. Fo
 1. Update the Kubernetes secret with the new certificate.
 2. Restart the affected pods:
    ```bash
-   kubectl rollout restart deployment/emailed-mta -n emailed
+   kubectl rollout restart deployment/alecrae-mta -n alecrae
    ```
 
 ## Production Checklist

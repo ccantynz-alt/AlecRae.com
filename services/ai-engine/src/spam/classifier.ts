@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Multi-Layer Spam Classifier
+// @alecrae/ai-engine — Multi-Layer Spam Classifier
 // =============================================================================
 // Combines Bayesian scoring, content heuristics, header analysis, and Claude AI
 // for ambiguous cases. Each layer contributes a weighted score; the final

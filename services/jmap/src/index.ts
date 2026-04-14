@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { eq, and, desc, ilike, gte } from "drizzle-orm";
-import { initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@emailed/shared";
+import { initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@alecrae/shared";
 import { JmapHandler } from "./server/handler.js";
 import { MailboxOperations } from "./mailbox/operations.js";
 import { ThreadingEngine } from "./thread/engine.js";
 import { PushNotificationService } from "./push/notifications.js";
-import { getDatabase, emails, users } from "@emailed/db";
+import { getDatabase, emails, users } from "@alecrae/db";
 import type {
   JmapRequest,
   JmapId,
@@ -516,7 +516,7 @@ app.get("/jmap/eventsource", async (c) => {
 app.get("/health", (c) => {
   return c.json({
     status: "ok",
-    service: "emailed-jmap",
+    service: "alecrae-jmap",
     version: "0.1.0",
     stats: {
       push: pushService.getStats(),
@@ -547,10 +547,10 @@ app.onError((err, c) => {
 
 const port = parseInt(process.env.PORT ?? "3001", 10);
 
-console.log(`Emailed JMAP server starting on port ${port}`);
+console.log(`AlecRae JMAP server starting on port ${port}`);
 
 // Initialize OpenTelemetry
-initTelemetry("emailed-jmap").catch((err) => {
+initTelemetry("alecrae-jmap").catch((err) => {
   console.warn("[jmap] OpenTelemetry init failed:", err);
 });
 

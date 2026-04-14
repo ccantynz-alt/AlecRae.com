@@ -18,8 +18,8 @@ const BASE_PATH = "/v1/webhooks";
  *
  * Usage:
  * ```ts
- * const emailed = new Emailed({ apiKey: "em_live_..." });
- * const hook = await emailed.webhooks.create({
+ * const alecrae = new AlecRae({ apiKey: "em_live_..." });
+ * const hook = await alecrae.webhooks.create({
  *   url: "https://example.com/webhooks",
  *   events: ["message.delivered", "message.bounced"],
  * });

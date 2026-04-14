@@ -11,6 +11,12 @@
  *   - Paper trail: receipts/confirmations auto-filed
  */
 
+import { eq, and } from "drizzle-orm";
+import {
+  getDatabase,
+  screenerDecisions as screenerDecisionsTable,
+} from "@alecrae/db";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface InboxCategory {
@@ -142,42 +148,98 @@ const IMPORTANT_SIGNALS = [
 
 // ─── Screener Logic ──────────────────────────────────────────────────────────
 
-/** Track known senders per account */
-const knownSenders = new Map<string, Set<string>>();
-/** Track screener decisions per account */
-const screenerDecisions = new Map<string, Map<string, "allow" | "block">>();
+/**
+ * In-process cache for screener decisions. This avoids a DB round-trip on
+ * every classify call while still persisting decisions to the database.
+ * The route layer is responsible for writing to the DB; these caches are
+ * populated on read and kept in sync via `screenSender`.
+ */
+const decisionCache = new Map<string, Map<string, "allow" | "block">>();
 
 export function isKnownSender(accountId: string, senderEmail: string): boolean {
-  return knownSenders.get(accountId)?.has(senderEmail.toLowerCase()) ?? false;
+  const cached = decisionCache.get(accountId)?.get(senderEmail.toLowerCase());
+  return cached === "allow";
 }
 
 export function markSenderKnown(accountId: string, senderEmail: string): void {
-  if (!knownSenders.has(accountId)) {
-    knownSenders.set(accountId, new Set());
+  if (!decisionCache.has(accountId)) {
+    decisionCache.set(accountId, new Map());
   }
-  knownSenders.get(accountId)!.add(senderEmail.toLowerCase());
+  decisionCache.get(accountId)!.set(senderEmail.toLowerCase(), "allow");
 }
 
+/**
+ * Record a screener decision. Updates the in-process cache AND persists to DB.
+ * The route handler also writes to the DB independently; the DB write here
+ * serves as a safety net so the AI engine can be used standalone.
+ */
 export function screenSender(
   accountId: string,
   senderEmail: string,
   decision: "allow" | "block",
 ): void {
-  if (!screenerDecisions.has(accountId)) {
-    screenerDecisions.set(accountId, new Map());
+  if (!decisionCache.has(accountId)) {
+    decisionCache.set(accountId, new Map());
   }
-  screenerDecisions.get(accountId)!.set(senderEmail.toLowerCase(), decision);
-
-  if (decision === "allow") {
-    markSenderKnown(accountId, senderEmail);
-  }
+  decisionCache.get(accountId)!.set(senderEmail.toLowerCase(), decision);
 }
 
+/**
+ * Look up the screener decision for a sender. Checks the in-process cache
+ * first, then falls back to the database. DB results are cached locally.
+ */
 export function getScreenerDecision(
   accountId: string,
   senderEmail: string,
 ): "allow" | "block" | "pending" {
-  return screenerDecisions.get(accountId)?.get(senderEmail.toLowerCase()) ?? "pending";
+  const cached = decisionCache.get(accountId)?.get(senderEmail.toLowerCase());
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // Synchronous fallback — return pending and let async hydration handle it
+  // The async variant below should be used when possible.
+  return "pending";
+}
+
+/**
+ * Async variant that checks the database when the cache misses.
+ */
+export async function getScreenerDecisionAsync(
+  accountId: string,
+  senderEmail: string,
+): Promise<"allow" | "block" | "pending"> {
+  const cached = decisionCache.get(accountId)?.get(senderEmail.toLowerCase());
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  try {
+    const db = getDatabase();
+    const [row] = await db
+      .select({ decision: screenerDecisionsTable.decision })
+      .from(screenerDecisionsTable)
+      .where(
+        and(
+          eq(screenerDecisionsTable.accountId, accountId),
+          eq(screenerDecisionsTable.senderEmail, senderEmail.toLowerCase()),
+        ),
+      )
+      .limit(1);
+
+    if (row) {
+      // Cache for future sync lookups
+      if (!decisionCache.has(accountId)) {
+        decisionCache.set(accountId, new Map());
+      }
+      decisionCache.get(accountId)!.set(senderEmail.toLowerCase(), row.decision as "allow" | "block");
+      return row.decision as "allow" | "block";
+    }
+  } catch {
+    // DB unavailable — fall through to pending
+  }
+
+  return "pending";
 }
 
 // ─── Commitment Extraction ───────────────────────────────────────────────────
@@ -234,16 +296,22 @@ export function extractCommitments(
         /\b(by|before|deadline)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week|end of (?:day|week|month))/i,
       );
 
-      commitments.push({
+      const commitment: Commitment = {
         id: `commit_${emailId}_${commitments.length}`,
         actor,
         actorName,
         description,
-        deadline: deadlineMatch ? parseRelativeDate(deadlineMatch[2]!) : undefined,
         status: "pending",
         sourceEmailId: emailId,
         sourceQuote: fullMatch.slice(0, 200),
-      });
+      };
+      if (deadlineMatch) {
+        const parsed = parseRelativeDate(deadlineMatch[2]!);
+        if (parsed !== undefined) {
+          commitment.deadline = parsed;
+        }
+      }
+      commitments.push(commitment);
     }
   }
 

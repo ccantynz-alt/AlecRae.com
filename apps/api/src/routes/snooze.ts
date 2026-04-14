@@ -15,7 +15,7 @@ import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, emails } from "@emailed/db";
+import { getDatabase, emails } from "@alecrae/db";
 
 // ─── Undo Send Config ────────────────────────────────────────────────────────
 // Emails are held for this many seconds before actual delivery.
@@ -63,7 +63,7 @@ snooze.post(
     await db
       .update(emails)
       .set({
-        metadata: { snoozedUntil: until.toISOString() } as any,
+        metadata: { snoozedUntil: until.toISOString() },
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -90,7 +90,7 @@ snooze.delete(
     await db
       .update(emails)
       .set({
-        metadata: {} as any,
+        metadata: {} as Record<string, string>,
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -150,7 +150,7 @@ scheduleSend.delete(
       .update(emails)
       .set({
         scheduledAt: null,
-        status: "draft" as any,
+        status: "draft",
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -170,7 +170,7 @@ scheduleSend.post(
     const undoable = undoableEmails.get(emailId);
     if (!undoable) {
       return c.json(
-        { error: { message: "Email cannot be undone. The undo window has expired or email was not sent through Vienna.", code: "undo_expired" } },
+        { error: { message: "Email cannot be undone. The undo window has expired or email was not sent through AlecRae.", code: "undo_expired" } },
         410,
       );
     }
@@ -192,7 +192,7 @@ scheduleSend.post(
     await db
       .update(emails)
       .set({
-        status: "draft" as any,
+        status: "draft",
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));

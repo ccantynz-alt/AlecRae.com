@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Real-Time Threat Intelligence Scanner
+// @alecrae/ai-engine — Real-Time Threat Intelligence Scanner
 // =============================================================================
 // Scans emails for threat indicators: malicious URLs, dangerous attachments,
 // known malware signatures, and emerging attack patterns. Integrates with

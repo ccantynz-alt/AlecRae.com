@@ -13,28 +13,17 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, emails } from "@emailed/db";
+import { getDatabase, emails, recallRecords } from "@alecrae/db";
 import * as crypto from "node:crypto";
 
-// ─── In-memory recall state (production: DB table) ──────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-interface RecallRecord {
-  emailId: string;
-  accountId: string;
-  token: string;
-  revoked: boolean;
-  revokedAt?: Date;
-  selfDestructAt?: Date;
-  viewCount: number;
-  lastViewedAt?: Date;
-  createdAt: Date;
+function generateId(): string {
+  return crypto.randomUUID().replace(/-/g, "");
 }
-
-const recallStore = new Map<string, RecallRecord>(); // token -> record
-const emailToToken = new Map<string, string>(); // emailId -> token
 
 function generateSecureToken(): string {
   return crypto.randomBytes(32).toString("base64url");
@@ -81,35 +70,42 @@ recall.post(
     }
 
     // Check if already enabled
-    const existingToken = emailToToken.get(input.emailId);
-    if (existingToken) {
-      const record = recallStore.get(existingToken)!;
+    const [existing] = await db
+      .select()
+      .from(recallRecords)
+      .where(eq(recallRecords.emailId, input.emailId))
+      .limit(1);
+
+    if (existing) {
+      const baseUrl = process.env["API_URL"] ?? "https://api.alecrae.com";
       return c.json({
         data: {
           emailId: input.emailId,
-          token: existingToken,
-          viewUrl: `${process.env["API_URL"] ?? "https://api.vieanna.com"}/v1/recall/view/${existingToken}`,
-          status: record.revoked ? "revoked" : "active",
-          viewCount: record.viewCount,
+          token: existing.token,
+          viewUrl: `${baseUrl}/v1/recall/view/${existing.token}`,
+          status: existing.revoked ? "revoked" : "active",
+          viewCount: existing.viewCount,
         },
       });
     }
 
-    // Generate secure token
+    // Generate secure token and persist
     const token = generateSecureToken();
-    const record: RecallRecord = {
-      emailId: input.emailId,
-      accountId: auth.accountId,
-      token,
-      revoked: false,
-      viewCount: 0,
-      createdAt: new Date(),
-    };
+    const id = generateId();
 
-    recallStore.set(token, record);
-    emailToToken.set(input.emailId, token);
+    const [record] = await db
+      .insert(recallRecords)
+      .values({
+        id,
+        emailId: input.emailId,
+        accountId: auth.accountId,
+        token,
+        revoked: false,
+        viewCount: 0,
+      })
+      .returning();
 
-    const baseUrl = process.env["API_URL"] ?? "https://api.vieanna.com";
+    const baseUrl = process.env["API_URL"] ?? "https://api.alecrae.com";
 
     return c.json({
       data: {
@@ -130,16 +126,21 @@ recall.post(
   async (c) => {
     const emailId = c.req.param("id");
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const token = emailToToken.get(emailId);
-    if (!token) {
+    const [record] = await db
+      .select()
+      .from(recallRecords)
+      .where(eq(recallRecords.emailId, emailId))
+      .limit(1);
+
+    if (!record) {
       return c.json(
         { error: { type: "not_found", message: "No recall record found for this email", code: "recall_not_found" } },
         404,
       );
     }
 
-    const record = recallStore.get(token)!;
     if (record.accountId !== auth.accountId) {
       return c.json(
         { error: { type: "forbidden", message: "Not authorized", code: "forbidden" } },
@@ -147,14 +148,17 @@ recall.post(
       );
     }
 
-    record.revoked = true;
-    record.revokedAt = new Date();
+    const now = new Date();
+    await db
+      .update(recallRecords)
+      .set({ revoked: true, revokedAt: now })
+      .where(eq(recallRecords.id, record.id));
 
     return c.json({
       data: {
         emailId,
         status: "revoked",
-        revokedAt: record.revokedAt.toISOString(),
+        revokedAt: now.toISOString(),
         message: "Email access has been revoked. Recipients can no longer view this email.",
         totalViews: record.viewCount,
       },
@@ -166,19 +170,24 @@ recall.post(
 recall.get(
   "/status/:id",
   requireScope("recall:read"),
-  (c) => {
+  async (c) => {
     const emailId = c.req.param("id");
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const token = emailToToken.get(emailId);
-    if (!token) {
+    const [record] = await db
+      .select()
+      .from(recallRecords)
+      .where(eq(recallRecords.emailId, emailId))
+      .limit(1);
+
+    if (!record) {
       return c.json(
         { error: { type: "not_found", message: "No recall record", code: "recall_not_found" } },
         404,
       );
     }
 
-    const record = recallStore.get(token)!;
     if (record.accountId !== auth.accountId) {
       return c.json(
         { error: { type: "forbidden", message: "Not authorized", code: "forbidden" } },
@@ -186,10 +195,12 @@ recall.get(
       );
     }
 
+    const isExpired = record.selfDestructAt !== null && record.selfDestructAt <= new Date();
+
     return c.json({
       data: {
         emailId,
-        status: record.revoked ? "revoked" : record.selfDestructAt && record.selfDestructAt <= new Date() ? "expired" : "active",
+        status: record.revoked ? "revoked" : isExpired ? "expired" : "active",
         viewCount: record.viewCount,
         lastViewedAt: record.lastViewedAt?.toISOString() ?? null,
         revokedAt: record.revokedAt?.toISOString() ?? null,
@@ -205,8 +216,14 @@ recall.get(
   "/view/:token",
   async (c) => {
     const token = c.req.param("token");
+    const db = getDatabase();
 
-    const record = recallStore.get(token);
+    const [record] = await db
+      .select()
+      .from(recallRecords)
+      .where(eq(recallRecords.token, token))
+      .limit(1);
+
     if (!record) {
       return c.html("<html><body><h1>Email not found</h1><p>This email does not exist or the link is invalid.</p></body></html>", 404);
     }
@@ -220,7 +237,6 @@ recall.get(
     }
 
     // Fetch the email content
-    const db = getDatabase();
     const [email] = await db
       .select({
         fromAddress: emails.fromAddress,
@@ -238,9 +254,14 @@ recall.get(
       return c.html("<html><body><h1>Email not found</h1></body></html>", 404);
     }
 
-    // Update view stats
-    record.viewCount++;
-    record.lastViewedAt = new Date();
+    // Update view stats atomically
+    await db
+      .update(recallRecords)
+      .set({
+        viewCount: sql`${recallRecords.viewCount} + 1`,
+        lastViewedAt: new Date(),
+      })
+      .where(eq(recallRecords.id, record.id));
 
     // Render email
     const fromDisplay = email.fromName ? `${email.fromName} &lt;${email.fromAddress}&gt;` : email.fromAddress;
@@ -270,7 +291,7 @@ recall.get(
   </div>
   <div class="body">${body}</div>
   <div class="footer">
-    Sent via Vienna &middot; This email may be recalled by the sender at any time.
+    Sent via AlecRae &middot; This email may be recalled by the sender at any time.
   </div>
 </body>
 </html>`);
@@ -285,25 +306,43 @@ recall.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof SelfDestructSchema>>(c);
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    let token = emailToToken.get(input.emailId);
+    // Check if recall already enabled for this email
+    const existingRows = await db
+      .select()
+      .from(recallRecords)
+      .where(eq(recallRecords.emailId, input.emailId))
+      .limit(1);
+
+    let record = existingRows[0];
 
     // Auto-enable recall if not already enabled
-    if (!token) {
-      token = generateSecureToken();
-      const record: RecallRecord = {
-        emailId: input.emailId,
-        accountId: auth.accountId,
-        token,
-        revoked: false,
-        viewCount: 0,
-        createdAt: new Date(),
-      };
-      recallStore.set(token, record);
-      emailToToken.set(input.emailId, token);
+    if (!record) {
+      const token = generateSecureToken();
+      const id = generateId();
+
+      const insertedRows = await db
+        .insert(recallRecords)
+        .values({
+          id,
+          emailId: input.emailId,
+          accountId: auth.accountId,
+          token,
+          revoked: false,
+          viewCount: 0,
+        })
+        .returning();
+
+      record = insertedRows[0];
+      if (!record) {
+        return c.json(
+          { error: { type: "server_error", message: "Failed to create recall record", code: "create_failed" } },
+          500,
+        );
+      }
     }
 
-    const record = recallStore.get(token)!;
     if (record.accountId !== auth.accountId) {
       return c.json(
         { error: { type: "forbidden", message: "Not authorized", code: "forbidden" } },
@@ -311,12 +350,17 @@ recall.post(
       );
     }
 
-    record.selfDestructAt = new Date(Date.now() + input.minutes * 60 * 1000);
+    const selfDestructAt = new Date(Date.now() + input.minutes * 60 * 1000);
+
+    await db
+      .update(recallRecords)
+      .set({ selfDestructAt })
+      .where(eq(recallRecords.id, record.id));
 
     return c.json({
       data: {
         emailId: input.emailId,
-        selfDestructAt: record.selfDestructAt.toISOString(),
+        selfDestructAt: selfDestructAt.toISOString(),
         minutesRemaining: input.minutes,
         message: `Email will self-destruct in ${input.minutes} minutes`,
       },

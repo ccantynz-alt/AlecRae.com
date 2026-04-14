@@ -1,5 +1,5 @@
 /**
- * Vienna Mobile — Reusable gesture configuration
+ * AlecRae Mobile — Reusable gesture configuration
  *
  * Single source of truth for swipe thresholds and spring physics. Tuned
  * to feel like Things 3 / Linear: snappy, slightly overshoot, never
@@ -28,10 +28,12 @@ export const ACTION_COLORS = {
   read: "#3b82f6", // blue
   snooze: "#f59e0b", // orange
   delete: "#ef4444", // red
+  reply: "#3b82f6", // blue
+  flag: "#eab308", // yellow
   none: "#1e293b", // slate-800 (matches dark theme base)
 } as const;
 
-export type ActionKind = "archive" | "read" | "snooze" | "delete";
+export type ActionKind = "archive" | "read" | "snooze" | "delete" | "reply" | "flag";
 
 /** Standard "snap" spring — used when releasing back to rest position. */
 export const SPRING_SNAP: WithSpringConfig = {

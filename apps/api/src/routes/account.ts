@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
-import { getDatabase, accounts } from "@emailed/db";
+import { getDatabase, accounts } from "@alecrae/db";
 
 const account = new Hono();
 

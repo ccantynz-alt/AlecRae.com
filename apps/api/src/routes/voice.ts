@@ -15,17 +15,17 @@ import {
   validateBody,
   getValidatedBody,
 } from "../middleware/validator.js";
-import { getDatabase, emails } from "@emailed/db";
+import { getDatabase, emails } from "@alecrae/db";
 
 // ─── Lazy import the AI compose module ───────────────────────────────────────
 // The ai-engine is a separate service; we import its core classes directly.
 
-let assistantModule: typeof import("@emailed/ai-engine/compose") | null = null;
+let assistantModule: typeof import("@alecrae/ai-engine/compose") | null = null;
 
 async function getComposeModule() {
   if (!assistantModule) {
     try {
-      assistantModule = await import("@emailed/ai-engine/compose") as any;
+      assistantModule = await import("@alecrae/ai-engine/compose") as typeof import("@alecrae/ai-engine/compose");
     } catch {
       // Fallback: inline minimal implementation
       return null;

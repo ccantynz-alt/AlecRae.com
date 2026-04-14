@@ -1,5 +1,5 @@
 /**
- * Typed error hierarchy for the Emailed platform.
+ * Typed error hierarchy for the AlecRae platform.
  *
  * All errors extend BaseError which provides a machine-readable `code`,
  * an HTTP-friendly `statusCode`, and optional structured context.
@@ -149,7 +149,7 @@ export class InternalError extends BaseError {
 // Type guard
 // ---------------------------------------------------------------------------
 /** Check if an unknown value is a platform error. */
-export function isEmailedError(value) {
+export function isAlecRaeError(value) {
     return value instanceof BaseError;
 }
 /** Map of error codes to error classes for deserialization. */

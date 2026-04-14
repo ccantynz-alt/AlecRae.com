@@ -11,35 +11,12 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { eq, and, or, ilike, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
+import { getDatabase, contacts as contactsTable } from "@alecrae/db";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface Contact {
-  id: string;
-  accountId: string;
-  email: string;
-  name: string | null;
-  avatarUrl: string | null;
-  company: string | null;
-  tags: string[];
-  notes: string;
-  /** Auto-calculated from email history */
-  stats: {
-    totalEmails: number;
-    lastContactedAt: string | null;
-    firstContactedAt: string | null;
-    avgResponseTimeHours: number | null;
-    sentCount: number;
-    receivedCount: number;
-  };
-  createdAt: string;
-  updatedAt: string;
-}
-
-// In-memory store (production: DB table populated from email sync)
-const contactStore = new Map<string, Contact[]>();
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "");
@@ -73,16 +50,27 @@ const contacts = new Hono();
 contacts.get(
   "/",
   requireScope("contacts:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
     const limit = parseInt(c.req.query("limit") ?? "50", 10);
     const offset = parseInt(c.req.query("offset") ?? "0", 10);
-    const all = contactStore.get(auth.accountId) ?? [];
-    const page = all.slice(offset, offset + limit);
+    const db = getDatabase();
+
+    const rows = await db
+      .select()
+      .from(contactsTable)
+      .where(eq(contactsTable.accountId, auth.accountId))
+      .limit(limit)
+      .offset(offset);
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(contactsTable)
+      .where(eq(contactsTable.accountId, auth.accountId));
 
     return c.json({
-      data: page,
-      total: all.length,
+      data: rows,
+      total: countResult?.count ?? 0,
       limit,
       offset,
     });
@@ -93,24 +81,32 @@ contacts.get(
 contacts.get(
   "/search",
   requireScope("contacts:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const q = (c.req.query("q") ?? "").toLowerCase();
+    const q = (c.req.query("q") ?? "").trim();
     const limit = parseInt(c.req.query("limit") ?? "10", 10);
 
     if (!q) {
       return c.json({ data: [] });
     }
 
-    const all = contactStore.get(auth.accountId) ?? [];
-    const matches = all
-      .filter(
-        (contact) =>
-          contact.email.toLowerCase().includes(q) ||
-          (contact.name?.toLowerCase().includes(q) ?? false) ||
-          (contact.company?.toLowerCase().includes(q) ?? false),
+    const db = getDatabase();
+    const pattern = `%${q}%`;
+
+    const matches = await db
+      .select()
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.accountId, auth.accountId),
+          or(
+            ilike(contactsTable.email, pattern),
+            ilike(contactsTable.name, pattern),
+            ilike(contactsTable.company, pattern),
+          ),
+        ),
       )
-      .slice(0, limit);
+      .limit(limit);
 
     return c.json({ data: matches });
   },
@@ -120,30 +116,53 @@ contacts.get(
 contacts.get(
   "/suggestions",
   requireScope("contacts:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const q = (c.req.query("q") ?? "").toLowerCase();
+    const q = (c.req.query("q") ?? "").trim();
     const limit = parseInt(c.req.query("limit") ?? "5", 10);
 
-    const all = contactStore.get(auth.accountId) ?? [];
+    const db = getDatabase();
 
-    // Rank by interaction frequency + recency
-    const scored = all
-      .filter(
-        (contact) =>
-          contact.email.toLowerCase().includes(q) ||
-          (contact.name?.toLowerCase().includes(q) ?? false),
-      )
-      .map((contact) => ({
-        ...contact,
-        score:
-          contact.stats.totalEmails * 2 +
-          (contact.stats.lastContactedAt
-            ? Math.max(0, 30 - Math.floor((Date.now() - new Date(contact.stats.lastContactedAt).getTime()) / (24 * 60 * 60 * 1000)))
-            : 0),
-      }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    // If no query, return most frequently contacted
+    const baseCondition = eq(contactsTable.accountId, auth.accountId);
+    const searchCondition = q
+      ? and(
+          baseCondition,
+          or(
+            ilike(contactsTable.email, `%${q}%`),
+            ilike(contactsTable.name, `%${q}%`),
+          ),
+        )
+      : baseCondition;
+
+    const rows = await db
+      .select()
+      .from(contactsTable)
+      .where(searchCondition)
+      .limit(limit);
+
+    // Score by interaction frequency + recency
+    const scored = rows
+      .map((contact) => {
+        const stats = contact.stats as {
+          totalEmails: number;
+          lastContactedAt: string | null;
+        };
+        const score =
+          stats.totalEmails * 2 +
+          (stats.lastContactedAt
+            ? Math.max(
+                0,
+                30 -
+                  Math.floor(
+                    (Date.now() - new Date(stats.lastContactedAt).getTime()) /
+                      (24 * 60 * 60 * 1000),
+                  ),
+              )
+            : 0);
+        return { ...contact, score };
+      })
+      .sort((a, b) => b.score - a.score);
 
     return c.json({
       data: scored.map((s) => ({
@@ -160,11 +179,21 @@ contacts.get(
 contacts.get(
   "/:id",
   requireScope("contacts:read"),
-  (c) => {
+  async (c) => {
     const id = c.req.param("id");
     const auth = c.get("auth");
-    const all = contactStore.get(auth.accountId) ?? [];
-    const contact = all.find((ct) => ct.id === id);
+    const db = getDatabase();
+
+    const [contact] = await db
+      .select()
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, id),
+          eq(contactsTable.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
 
     if (!contact) {
       return c.json({ error: { message: "Contact not found", code: "contact_not_found" } }, 404);
@@ -184,24 +213,43 @@ contacts.patch(
   "/:id",
   requireScope("contacts:write"),
   validateBody(UpdateContactSchema),
-  (c) => {
+  async (c) => {
     const id = c.req.param("id");
     const input = getValidatedBody<z.infer<typeof UpdateContactSchema>>(c);
     const auth = c.get("auth");
-    const all = contactStore.get(auth.accountId) ?? [];
-    const contact = all.find((ct) => ct.id === id);
+    const db = getDatabase();
 
-    if (!contact) {
+    // Verify ownership
+    const [existing] = await db
+      .select({ id: contactsTable.id })
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, id),
+          eq(contactsTable.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
+
+    if (!existing) {
       return c.json({ error: { message: "Contact not found", code: "contact_not_found" } }, 404);
     }
 
-    if (input.name !== undefined) contact.name = input.name;
-    if (input.company !== undefined) contact.company = input.company;
-    if (input.tags !== undefined) contact.tags = input.tags;
-    if (input.notes !== undefined) contact.notes = input.notes;
-    contact.updatedAt = new Date().toISOString();
+    const updateFields: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+    if (input.name !== undefined) updateFields["name"] = input.name;
+    if (input.company !== undefined) updateFields["company"] = input.company;
+    if (input.tags !== undefined) updateFields["tags"] = input.tags;
+    if (input.notes !== undefined) updateFields["notes"] = input.notes;
 
-    return c.json({ data: contact });
+    const [updated] = await db
+      .update(contactsTable)
+      .set(updateFields)
+      .where(eq(contactsTable.id, id))
+      .returning();
+
+    return c.json({ data: updated });
   },
 );
 
@@ -210,25 +258,47 @@ contacts.post(
   "/merge",
   requireScope("contacts:write"),
   validateBody(MergeSchema),
-  (c) => {
+  async (c) => {
     const input = getValidatedBody<z.infer<typeof MergeSchema>>(c);
     const auth = c.get("auth");
-    const all = contactStore.get(auth.accountId) ?? [];
-    const primary = all.find((ct) => ct.id === input.primaryId);
+    const db = getDatabase();
+
+    // Verify primary contact exists and belongs to this account
+    const [primary] = await db
+      .select()
+      .from(contactsTable)
+      .where(
+        and(
+          eq(contactsTable.id, input.primaryId),
+          eq(contactsTable.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
 
     if (!primary) {
       return c.json({ error: { message: "Primary contact not found" } }, 404);
     }
 
-    // Merge stats and remove duplicates
-    const merged = all.filter((ct) => !input.mergeIds.includes(ct.id));
-    contactStore.set(auth.accountId, merged);
+    // Delete the merged contacts (they belong to the same account)
+    let deletedCount = 0;
+    for (const mergeId of input.mergeIds) {
+      const result = await db
+        .delete(contactsTable)
+        .where(
+          and(
+            eq(contactsTable.id, mergeId),
+            eq(contactsTable.accountId, auth.accountId),
+          ),
+        )
+        .returning({ id: contactsTable.id });
+      deletedCount += result.length;
+    }
 
     return c.json({
       data: {
         primaryId: input.primaryId,
-        mergedCount: input.mergeIds.length,
-        message: `Merged ${input.mergeIds.length} contacts into ${primary.email}`,
+        mergedCount: deletedCount,
+        message: `Merged ${deletedCount} contacts into ${primary.email}`,
       },
     });
   },

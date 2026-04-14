@@ -27,7 +27,7 @@ import { TlsManager } from "../tls/manager.js";
 const DEFAULT_CONFIG: SmtpServerConfig = {
   host: "0.0.0.0",
   port: 25,
-  hostname: "mail.emailed.dev",
+  hostname: "mail.alecrae.dev",
   maxMessageSize: 25 * 1024 * 1024, // 25 MB
   maxRecipients: 100,
   maxConnections: 500,

@@ -1,7 +1,7 @@
 /**
  * Sentinel — AI-Powered Zero-Latency Validation Pipeline
  *
- * The immune system of Emailed. Every email, API request, and
+ * The immune system of AlecRae. Every email, API request, and
  * system action flows through Sentinel for validation.
  *
  * Key innovation: Instead of running all security checks sequentially

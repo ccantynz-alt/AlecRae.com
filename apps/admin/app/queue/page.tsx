@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback } from "react";
-import { Box, Text } from "@emailed/ui";
+import { Box, Text } from "@alecrae/ui";
 import { MetricCard } from "../../components/metric-card";
 import { StatusBadge } from "../../components/status-badge";
 import { DataTable } from "../../components/data-table";
 import { adminApi } from "../../lib/api";
 import type { AdminStats, AdminMessage } from "../../lib/api";
 import { useApi } from "../../lib/use-api";
+import { AuthShell } from "../../components/auth-shell";
 
 function formatNumber(n: number): string {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
@@ -115,6 +116,7 @@ export default function QueuePage() {
   const deferredMessages = messageList.filter((m) => m.status === "deferred");
 
   return (
+    <AuthShell>
     <Box className="flex flex-col gap-8">
       <Box>
         <Text variant="heading-lg" className="text-content font-bold">Email Queue</Text>
@@ -239,5 +241,6 @@ export default function QueuePage() {
         )}
       </Box>
     </Box>
+    </AuthShell>
   );
 }

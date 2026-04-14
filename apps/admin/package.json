@@ -1,5 +1,5 @@
 {
-  "name": "@emailed/admin",
+  "name": "@alecrae/admin",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,8 +13,8 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
-    "@emailed/ui": "workspace:*",
-    "@emailed/shared": "workspace:*",
+    "@alecrae/ui": "workspace:*",
+    "@alecrae/shared": "workspace:*",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

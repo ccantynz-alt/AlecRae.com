@@ -1,20 +1,31 @@
 /**
- * CollabDraft — browser client for the Vienna collaboration service.
+ * CollabDraft — browser client for the AlecRae collaboration service.
  *
  * Wraps a Y.Doc + Awareness with a managed WebSocket connection that speaks
  * the y-websocket sync/awareness protocol. Local edits are immediate
  * (local-first); the network sync happens in the background.
  *
+ * S2: CRDT Real-Time Collaborative Drafting
+ *
  * Usage:
  *
  *   const collab = new CollabDraft();
- *   await collab.connect(draftId, jwt);
+ *   await collab.connect(draftId, jwt, {
+ *     sessionId: "abc123",
+ *     user: { name: "Craig", color: "#ff7a59", avatarUrl: "..." },
+ *   });
  *   const ydoc = collab.getDoc();
  *   const yText = ydoc.getText("body");
  *   yText.insert(0, "Hello team");
  *
+ *   // Awareness: live cursors + presence
  *   collab.getAwareness().setLocalStateField("user", {
  *     name: "Craig", color: "#ff7a59"
+ *   });
+ *
+ *   // Listen for collaborator changes
+ *   collab.onCollaboratorsChange((collaborators) => {
+ *     console.log("Collaborators:", collaborators);
  *   });
  *
  *   collab.disconnect();
@@ -41,20 +52,44 @@ export type CollabStatus =
   | "reconnecting"
   | "disconnected";
 
+/** User info for awareness state. */
+export interface CollabUser {
+  name: string;
+  color: string;
+  avatarUrl?: string | undefined;
+}
+
+/** Remote collaborator derived from awareness state. */
+export interface RemoteCollaborator {
+  clientId: number;
+  userId: string;
+  name: string;
+  color: string;
+  avatarUrl?: string | undefined;
+  cursor?: { anchor: number; head: number } | null | undefined;
+}
+
 export interface CollabDraftOptions {
-  /** Override the collab WS base, e.g. wss://collab.vieanna.com */
-  endpoint?: string;
+  /** Override the collab WS base, e.g. wss://collab.alecrae.com */
+  endpoint?: string | undefined;
   /** Initial reconnect delay in ms (default 500). */
-  baseReconnectDelayMs?: number;
+  baseReconnectDelayMs?: number | undefined;
   /** Max reconnect delay in ms (default 30s). */
-  maxReconnectDelayMs?: number;
+  maxReconnectDelayMs?: number | undefined;
   /** Listener for status changes (UI badges, etc). */
-  onStatus?: (status: CollabStatus) => void;
+  onStatus?: ((status: CollabStatus) => void) | undefined;
+}
+
+export interface CollabConnectOptions {
+  /** Session ID for tracking. */
+  sessionId?: string | undefined;
+  /** Current user info for awareness. */
+  user?: CollabUser | undefined;
 }
 
 const DEFAULT_ENDPOINT =
   (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_COLLAB_URL) ||
-  "wss://collab.vieanna.com";
+  "wss://collab.alecrae.com";
 
 export class CollabDraft {
   private readonly doc: Y.Doc;
@@ -63,14 +98,18 @@ export class CollabDraft {
   private status: CollabStatus = "idle";
   private draftId: string | null = null;
   private token: string | null = null;
+  private sessionId: string | null = null;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionallyClosed = false;
+  private collaboratorListeners: Array<
+    (collaborators: RemoteCollaborator[]) => void
+  > = [];
 
   private readonly endpoint: string;
   private readonly baseDelay: number;
   private readonly maxDelay: number;
-  private readonly onStatus?: (status: CollabStatus) => void;
+  private readonly onStatus: ((status: CollabStatus) => void) | undefined;
 
   constructor(opts: CollabDraftOptions = {}) {
     this.doc = new Y.Doc();
@@ -90,7 +129,11 @@ export class CollabDraft {
     this.awareness.on(
       "update",
       (
-        { added, updated, removed }: {
+        {
+          added,
+          updated,
+          removed,
+        }: {
           added: number[];
           updated: number[];
           removed: number[];
@@ -101,6 +144,14 @@ export class CollabDraft {
         const changed = added.concat(updated, removed);
         if (changed.length === 0) return;
         this.sendAwarenessUpdate(changed);
+      },
+    );
+
+    // Notify collaborator listeners when awareness changes.
+    this.awareness.on(
+      "change",
+      () => {
+        this.notifyCollaboratorListeners();
       },
     );
   }
@@ -119,10 +170,84 @@ export class CollabDraft {
     return this.status;
   }
 
-  async connect(draftId: string, token: string): Promise<void> {
+  getDraftId(): string | null {
+    return this.draftId;
+  }
+
+  getSessionId(): string | null {
+    return this.sessionId;
+  }
+
+  /** Get the Yjs Text type for the email body. */
+  getBodyText(): Y.Text {
+    return this.doc.getText("body");
+  }
+
+  /** Get the Yjs Text type for the email subject. */
+  getSubjectText(): Y.Text {
+    return this.doc.getText("subject");
+  }
+
+  /** Get the Yjs Map for draft metadata (to, cc, bcc, from). */
+  getMetadata(): Y.Map<string> {
+    return this.doc.getMap("metadata");
+  }
+
+  /** Get all remote collaborators from the awareness state. */
+  getRemoteCollaborators(): RemoteCollaborator[] {
+    const states = this.awareness.getStates();
+    const collaborators: RemoteCollaborator[] = [];
+
+    states.forEach((state: Record<string, unknown>, clientId: number) => {
+      // Skip our own client.
+      if (clientId === this.doc.clientID) return;
+
+      const user = state.user as
+        | {
+            userId?: string;
+            name?: string;
+            color?: string;
+            avatarUrl?: string;
+          }
+        | undefined;
+      if (!user) return;
+
+      const cursorRaw = state.cursor as
+        | { anchor: number; head: number }
+        | null
+        | undefined;
+
+      collaborators.push({
+        clientId,
+        userId: user.userId ?? `client-${clientId}`,
+        name: user.name ?? "Anonymous",
+        color: user.color ?? "#3b82f6",
+        avatarUrl: user.avatarUrl ?? undefined,
+        cursor: cursorRaw ?? null,
+      });
+    });
+
+    return collaborators;
+  }
+
+  async connect(
+    draftId: string,
+    token: string,
+    options: CollabConnectOptions = {},
+  ): Promise<void> {
     this.draftId = draftId;
     this.token = token;
+    this.sessionId = options.sessionId ?? null;
     this.intentionallyClosed = false;
+
+    // Set local awareness state with user info.
+    if (options.user) {
+      this.awareness.setLocalStateField("user", {
+        ...options.user,
+        userId: `user-${this.doc.clientID}`,
+      });
+    }
+
     this.openSocket();
   }
 
@@ -151,11 +276,35 @@ export class CollabDraft {
 
   destroy(): void {
     this.disconnect();
+    this.collaboratorListeners = [];
     this.awareness.destroy();
     this.doc.destroy();
   }
 
+  /** Register a listener for collaborator changes. Returns an unsubscribe fn. */
+  onCollaboratorsChange(
+    listener: (collaborators: RemoteCollaborator[]) => void,
+  ): () => void {
+    this.collaboratorListeners.push(listener);
+    return () => {
+      this.collaboratorListeners = this.collaboratorListeners.filter(
+        (l) => l !== listener,
+      );
+    };
+  }
+
   // ─── Internals ─────────────────────────────────────────────────────────────
+
+  private notifyCollaboratorListeners(): void {
+    const collaborators = this.getRemoteCollaborators();
+    for (const listener of this.collaboratorListeners) {
+      try {
+        listener(collaborators);
+      } catch {
+        // Don't let listener errors break the loop.
+      }
+    }
+  }
 
   private setStatus(next: CollabStatus): void {
     if (this.status === next) return;
@@ -165,7 +314,9 @@ export class CollabDraft {
 
   private openSocket(): void {
     if (!this.draftId || !this.token) return;
-    this.setStatus(this.reconnectAttempts > 0 ? "reconnecting" : "connecting");
+    this.setStatus(
+      this.reconnectAttempts > 0 ? "reconnecting" : "connecting",
+    );
 
     const url = `${this.endpoint.replace(/\/$/, "")}/collab/${encodeURIComponent(
       this.draftId,
@@ -232,8 +383,16 @@ export class CollabDraft {
       case MESSAGE_SYNC: {
         const encoder = encoding.createEncoder();
         encoding.writeVarUint(encoder, MESSAGE_SYNC);
-        syncProtocol.readSyncMessage(encoder, decoder, this.doc, "remote");
-        if (encoding.length(encoder) > 1 && this.ws?.readyState === WebSocket.OPEN) {
+        syncProtocol.readSyncMessage(
+          decoder,
+          encoder,
+          this.doc,
+          "remote",
+        );
+        if (
+          encoding.length(encoder) > 1 &&
+          this.ws?.readyState === WebSocket.OPEN
+        ) {
           this.ws.send(encoding.toUint8Array(encoder));
         }
         break;

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@emailed/ui"],
+  transpilePackages: ["@alecrae/ui"],
   reactStrictMode: true,
   experimental: {
     typedRoutes: true,

@@ -1,5 +1,5 @@
 /**
- * @emailed/mta - TypeScript type definitions
+ * @alecrae/mta - TypeScript type definitions
  * All types for the Mail Transfer Agent service.
  */
 

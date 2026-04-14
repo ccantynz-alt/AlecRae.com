@@ -1,5 +1,5 @@
 {
-  "name": "emailed",
+  "name": "alecrae",
   "version": "0.1.0",
   "private": true,
   "description": "AI-Native Email Infrastructure Platform",
@@ -23,7 +23,8 @@
     "db:studio": "bun run --cwd packages/db db:studio"
   },
   "dependencies": {
-    "meilisearch": "^0.44.0"
+    "meilisearch": "^0.44.0",
+    "next": "^15.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

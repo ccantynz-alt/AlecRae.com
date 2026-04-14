@@ -1,47 +1,98 @@
 /**
- * Vienna Desktop — Electron Main Process
+ * AlecRae Desktop — Electron Main Process
  *
- * Native desktop wrapper for mail.vieanna.com providing:
+ * Native desktop wrapper for mail.alecrae.com providing:
  *   - System tray + dock badge with unread count
  *   - Native notifications
  *   - Auto-updater
  *   - Keyboard shortcut registration (global)
  *   - Window state persistence
- *   - Multi-window support (per account)
  *   - Deep-link handling (mailto:)
  *   - Secure session storage
  */
 
-import { app, BrowserWindow, Tray, Menu, nativeImage, shell, ipcMain, Notification, globalShortcut } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Tray,
+  Menu,
+  nativeImage,
+  shell,
+  ipcMain,
+  Notification,
+  globalShortcut,
+  screen,
+} from "electron";
 import { autoUpdater } from "electron-updater";
 import Store from "electron-store";
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+
+// ─── Path Resolution ────────────────────────────────────────────────────────
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// ─── Configuration ───────────────────────────────────────────────────────────
+/** Resolve a path relative to the app root (works in both dev and packaged) */
+function resolveAppPath(...segments: string[]): string {
+  const base = app.isPackaged
+    ? path.dirname(app.getPath("exe"))
+    : path.join(__dirname, "..");
+  return path.join(base, ...segments);
+}
 
-const WEB_APP_URL = process.env.VIENNA_APP_URL ?? "https://mail.vieanna.com";
-const IS_DEV = process.env.NODE_ENV === "development";
+// ─── Configuration ──────────────────────────────────────────────────────────
 
-// Persisted settings across launches
-const store = new Store<{
-  windowBounds: { x: number; y: number; width: number; height: number };
+const WEB_APP_URL: string =
+  process.env["ALECRAE_APP_URL"] ?? "https://mail.alecrae.com";
+const IS_DEV: boolean = process.env["NODE_ENV"] === "development";
+
+// ─── Store Types ────────────────────────────────────────────────────────────
+
+interface WindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface StoreSchema {
+  windowBounds: WindowBounds;
   isMaximized: boolean;
   minimizeToTray: boolean;
   launchOnStartup: boolean;
   unreadCount: number;
-  lastAccount?: string;
-}>({
+  lastAccount: string | undefined;
+}
+
+type StoreKey = keyof StoreSchema;
+
+const VALID_STORE_KEYS: ReadonlySet<string> = new Set<StoreKey>([
+  "windowBounds",
+  "isMaximized",
+  "minimizeToTray",
+  "launchOnStartup",
+  "unreadCount",
+  "lastAccount",
+]);
+
+function isValidStoreKey(key: string): key is StoreKey {
+  return VALID_STORE_KEYS.has(key);
+}
+
+// Persisted settings across launches
+const store = new Store<StoreSchema>({
   defaults: {
     windowBounds: { x: 100, y: 100, width: 1400, height: 900 },
     isMaximized: false,
     minimizeToTray: true,
     launchOnStartup: false,
     unreadCount: 0,
+    lastAccount: undefined,
   },
 });
+
+// ─── State ──────────────────────────────────────────────────────────────────
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -49,14 +100,17 @@ let isQuitting = false;
 
 // ─── Single Instance Lock ───────────────────────────────────────────────────
 
-const gotLock = app.requestSingleInstanceLock();
+const gotLock: boolean = app.requestSingleInstanceLock();
+
 if (!gotLock) {
   app.quit();
 } else {
   app.on("second-instance", (_event, commandLine) => {
     // If user tries to open a second instance, focus the existing window
     if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
       mainWindow.show();
       mainWindow.focus();
     }
@@ -69,10 +123,43 @@ if (!gotLock) {
   });
 }
 
-// ─── Main Window ─────────────────────────────────────────────────────────────
+// ─── Window Bounds Validation ───────────────────────────────────────────────
+
+/** Ensure saved window bounds are within a visible display area */
+function getValidatedBounds(): WindowBounds {
+  const saved = store.get("windowBounds");
+  const displays = screen.getAllDisplays();
+
+  // Check if any part of the saved position is visible on any display
+  const isVisible = displays.some((display) => {
+    const { x, y, width, height } = display.workArea;
+    return (
+      saved.x < x + width &&
+      saved.x + saved.width > x &&
+      saved.y < y + height &&
+      saved.y + saved.height > y
+    );
+  });
+
+  if (isVisible) {
+    return saved;
+  }
+
+  // Fall back to primary display center
+  const primary = screen.getPrimaryDisplay();
+  const { width, height } = primary.workArea;
+  return {
+    x: Math.round((width - 1400) / 2),
+    y: Math.round((height - 900) / 2),
+    width: 1400,
+    height: 900,
+  };
+}
+
+// ─── Main Window ────────────────────────────────────────────────────────────
 
 function createMainWindow(): void {
-  const bounds = store.get("windowBounds");
+  const bounds = getValidatedBounds();
 
   mainWindow = new BrowserWindow({
     ...bounds,
@@ -81,7 +168,7 @@ function createMainWindow(): void {
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 20, y: 20 },
     backgroundColor: "#0f172a", // Slate 950
-    show: false, // Show after 'ready-to-show' to avoid flash
+    show: false, // Show after "ready-to-show" to avoid white flash
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -97,18 +184,23 @@ function createMainWindow(): void {
     mainWindow.maximize();
   }
 
-  // Load the web app
-  mainWindow.loadURL(WEB_APP_URL);
+  // Load the web app (remote URL in prod, can be localhost in dev)
+  void mainWindow.loadURL(WEB_APP_URL);
 
+  // Show window when content is ready (prevents white flash)
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
   });
 
-  // Persist window bounds
+  // Persist window bounds on resize/move
   mainWindow.on("resize", saveWindowBounds);
   mainWindow.on("move", saveWindowBounds);
-  mainWindow.on("maximize", () => store.set("isMaximized", true));
-  mainWindow.on("unmaximize", () => store.set("isMaximized", false));
+  mainWindow.on("maximize", () => {
+    store.set("isMaximized", true);
+  });
+  mainWindow.on("unmaximize", () => {
+    store.set("isMaximized", false);
+  });
 
   // Minimize to tray instead of quitting on close (configurable)
   mainWindow.on("close", (event) => {
@@ -124,12 +216,20 @@ function createMainWindow(): void {
 
   // Open external links in the default browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("https://mail.vieanna.com") || url.startsWith("https://vieanna.com")) {
-      return { action: "allow" };
+    if (
+      url.startsWith("https://mail.alecrae.com") ||
+      url.startsWith("https://alecrae.com")
+    ) {
+      return { action: "allow" as const };
     }
-    shell.openExternal(url);
-    return { action: "deny" };
+    void shell.openExternal(url);
+    return { action: "deny" as const };
   });
+
+  // Dev tools in development only
+  if (IS_DEV) {
+    mainWindow.webContents.openDevTools({ mode: "detach" });
+  }
 }
 
 function saveWindowBounds(): void {
@@ -138,45 +238,60 @@ function saveWindowBounds(): void {
   store.set("windowBounds", bounds);
 }
 
-// ─── System Tray ─────────────────────────────────────────────────────────────
+// ─── System Tray ────────────────────────────────────────────────────────────
 
 function createTray(): void {
-  const iconPath = path.join(__dirname, "../build/tray-icon.png");
-  const icon = nativeImage.createFromPath(iconPath).resize({ width: 22, height: 22 });
+  const iconPath = resolveAppPath("build", "tray-icon.png");
+
+  // Gracefully handle missing tray icon (skip tray if icon not found)
+  if (!fs.existsSync(iconPath)) {
+    return;
+  }
+
+  const icon = nativeImage
+    .createFromPath(iconPath)
+    .resize({ width: 22, height: 22 });
   icon.setTemplateImage(true); // macOS dark mode support
 
   tray = new Tray(icon);
-  tray.setToolTip("Vienna");
+  tray.setToolTip("AlecRae");
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: "Show Vienna", click: () => mainWindow?.show() },
+    {
+      label: "Show AlecRae",
+      click: (): void => {
+        mainWindow?.show();
+      },
+    },
     { type: "separator" },
     {
       label: "Compose New Email",
       accelerator: "CmdOrCtrl+N",
-      click: () => {
+      click: (): void => {
         mainWindow?.show();
         mainWindow?.webContents.send("compose-new");
       },
     },
     {
       label: "Check Mail",
-      click: () => mainWindow?.webContents.send("sync-now"),
+      click: (): void => {
+        mainWindow?.webContents.send("sync-now");
+      },
     },
     { type: "separator" },
     {
       label: "Preferences...",
       accelerator: "CmdOrCtrl+,",
-      click: () => {
+      click: (): void => {
         mainWindow?.show();
         mainWindow?.webContents.send("open-preferences");
       },
     },
     { type: "separator" },
     {
-      label: "Quit Vienna",
+      label: "Quit AlecRae",
       accelerator: "CmdOrCtrl+Q",
-      click: () => {
+      click: (): void => {
         isQuitting = true;
         app.quit();
       },
@@ -194,54 +309,64 @@ function createTray(): void {
   });
 }
 
-// ─── Application Menu ────────────────────────────────────────────────────────
+// ─── Application Menu (AlecRae branding) ─────────────────────────────────────
 
 function createMenu(): void {
   const isMac = process.platform === "darwin";
 
-  const template: Electron.MenuItemConstructorOptions[] = [
-    ...(isMac
-      ? [
-          {
-            label: "Vienna",
-            submenu: [
-              { role: "about" as const },
-              { type: "separator" as const },
-              {
-                label: "Preferences...",
-                accelerator: "Cmd+,",
-                click: () => mainWindow?.webContents.send("open-preferences"),
+  const macAppMenu: Electron.MenuItemConstructorOptions[] = isMac
+    ? [
+        {
+          label: "AlecRae",
+          submenu: [
+            { role: "about" },
+            { type: "separator" },
+            {
+              label: "Preferences...",
+              accelerator: "Cmd+,",
+              click: (): void => {
+                mainWindow?.webContents.send("open-preferences");
               },
-              { type: "separator" as const },
-              { role: "services" as const },
-              { type: "separator" as const },
-              { role: "hide" as const },
-              { role: "hideOthers" as const },
-              { role: "unhide" as const },
-              { type: "separator" as const },
-              { role: "quit" as const },
-            ],
-          },
-        ]
-      : []),
+            },
+            { type: "separator" },
+            { role: "services" },
+            { type: "separator" },
+            { role: "hide" },
+            { role: "hideOthers" },
+            { role: "unhide" },
+            { type: "separator" },
+            { role: "quit" },
+          ],
+        },
+      ]
+    : [];
+
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...macAppMenu,
     {
       label: "File",
       submenu: [
         {
           label: "New Email",
           accelerator: "CmdOrCtrl+N",
-          click: () => mainWindow?.webContents.send("compose-new"),
+          click: (): void => {
+            mainWindow?.webContents.send("compose-new");
+          },
         },
         {
           label: "New Window",
           accelerator: "CmdOrCtrl+Shift+N",
-          click: () => createMainWindow(),
+          click: (): void => {
+            createMainWindow();
+          },
         },
         { type: "separator" },
         {
           label: "Check Mail",
           accelerator: "CmdOrCtrl+Shift+M",
-          click: () => mainWindow?.webContents.send("sync-now"),
+          click: (): void => {
+            mainWindow?.webContents.send("sync-now");
+          },
         },
         { type: "separator" },
         isMac ? { role: "close" } : { role: "quit" },
@@ -261,12 +386,16 @@ function createMenu(): void {
         {
           label: "Find in Mailbox",
           accelerator: "CmdOrCtrl+F",
-          click: () => mainWindow?.webContents.send("focus-search"),
+          click: (): void => {
+            mainWindow?.webContents.send("focus-search");
+          },
         },
         {
           label: "Command Palette",
           accelerator: "CmdOrCtrl+K",
-          click: () => mainWindow?.webContents.send("open-command-palette"),
+          click: (): void => {
+            mainWindow?.webContents.send("open-command-palette");
+          },
         },
       ],
     },
@@ -275,7 +404,7 @@ function createMenu(): void {
       submenu: [
         { role: "reload" },
         { role: "forceReload" },
-        { role: "toggleDevTools" },
+        ...(IS_DEV ? [{ role: "toggleDevTools" as const }] : []),
         { type: "separator" },
         { role: "resetZoom" },
         { role: "zoomIn" },
@@ -286,7 +415,57 @@ function createMenu(): void {
         {
           label: "Toggle Dark Mode",
           accelerator: "CmdOrCtrl+Shift+D",
-          click: () => mainWindow?.webContents.send("toggle-dark-mode"),
+          click: (): void => {
+            mainWindow?.webContents.send("toggle-dark-mode");
+          },
+        },
+      ],
+    },
+    {
+      label: "Go",
+      submenu: [
+        {
+          label: "Inbox",
+          accelerator: "CmdOrCtrl+1",
+          click: (): void => {
+            mainWindow?.webContents.send("navigate", "inbox");
+          },
+        },
+        {
+          label: "Sent",
+          accelerator: "CmdOrCtrl+2",
+          click: (): void => {
+            mainWindow?.webContents.send("navigate", "sent");
+          },
+        },
+        {
+          label: "Drafts",
+          accelerator: "CmdOrCtrl+3",
+          click: (): void => {
+            mainWindow?.webContents.send("navigate", "drafts");
+          },
+        },
+        {
+          label: "Archive",
+          accelerator: "CmdOrCtrl+4",
+          click: (): void => {
+            mainWindow?.webContents.send("navigate", "archive");
+          },
+        },
+        { type: "separator" },
+        {
+          label: "Calendar",
+          accelerator: "CmdOrCtrl+5",
+          click: (): void => {
+            mainWindow?.webContents.send("navigate", "calendar");
+          },
+        },
+        {
+          label: "Contacts",
+          accelerator: "CmdOrCtrl+6",
+          click: (): void => {
+            mainWindow?.webContents.send("navigate", "contacts");
+          },
         },
       ],
     },
@@ -296,7 +475,12 @@ function createMenu(): void {
         { role: "minimize" },
         { role: "zoom" },
         ...(isMac
-          ? [{ type: "separator" as const }, { role: "front" as const }, { type: "separator" as const }, { role: "window" as const }]
+          ? [
+              { type: "separator" as const },
+              { role: "front" as const },
+              { type: "separator" as const },
+              { role: "window" as const },
+            ]
           : [{ role: "close" as const }]),
       ],
     },
@@ -304,22 +488,32 @@ function createMenu(): void {
       label: "Help",
       submenu: [
         {
-          label: "Vienna Documentation",
-          click: () => shell.openExternal("https://docs.vieanna.com"),
+          label: "AlecRae Documentation",
+          click: (): void => {
+            void shell.openExternal("https://docs.alecrae.com");
+          },
         },
         {
           label: "Keyboard Shortcuts",
-          accelerator: "CmdOrCtrl+?",
-          click: () => mainWindow?.webContents.send("show-shortcuts"),
+          accelerator: "CmdOrCtrl+/",
+          click: (): void => {
+            mainWindow?.webContents.send("show-shortcuts");
+          },
         },
         { type: "separator" },
         {
           label: "Report an Issue",
-          click: () => shell.openExternal("https://github.com/ccantynz-alt/emailed/issues"),
+          click: (): void => {
+            void shell.openExternal(
+              "https://github.com/ccantynz-alt/alecrae.com/issues",
+            );
+          },
         },
         {
           label: "Check for Updates",
-          click: () => autoUpdater.checkForUpdatesAndNotify(),
+          click: (): void => {
+            void autoUpdater.checkForUpdatesAndNotify();
+          },
         },
       ],
     },
@@ -328,7 +522,7 @@ function createMenu(): void {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// ─── Unread Badge (dock + tray) ──────────────────────────────────────────────
+// ─── Unread Badge (dock + tray) ─────────────────────────────────────────────
 
 function updateUnreadBadge(count: number): void {
   store.set("unreadCount", count);
@@ -341,22 +535,29 @@ function updateUnreadBadge(count: number): void {
   // Windows taskbar overlay
   if (process.platform === "win32" && mainWindow) {
     if (count > 0) {
-      mainWindow.setOverlayIcon(
-        nativeImage.createFromPath(path.join(__dirname, "../build/overlay-unread.png")),
-        `${count} unread`,
-      );
+      const overlayPath = resolveAppPath("build", "overlay-unread.png");
+      if (fs.existsSync(overlayPath)) {
+        mainWindow.setOverlayIcon(
+          nativeImage.createFromPath(overlayPath),
+          `${count} unread`,
+        );
+      }
     } else {
       mainWindow.setOverlayIcon(null, "");
     }
   }
 
   // Tray tooltip
-  tray?.setToolTip(count > 0 ? `Vienna — ${count} unread` : "Vienna");
+  tray?.setToolTip(count > 0 ? `AlecRae \u2014 ${count} unread` : "AlecRae");
 }
 
-// ─── Notifications ───────────────────────────────────────────────────────────
+// ─── Notifications ──────────────────────────────────────────────────────────
 
-function showNotification(title: string, body: string, emailId?: string): void {
+function showNotification(
+  title: string,
+  body: string,
+  emailId?: string,
+): void {
   if (!Notification.isSupported()) return;
 
   const notification = new Notification({
@@ -383,19 +584,57 @@ ipcMain.on("update-badge", (_event, count: number) => {
   updateUnreadBadge(count);
 });
 
-ipcMain.on("show-notification", (_event, { title, body, emailId }: { title: string; body: string; emailId?: string }) => {
-  showNotification(title, body, emailId);
-});
+ipcMain.on(
+  "show-notification",
+  (
+    _event,
+    payload: { title: string; body: string; emailId?: string },
+  ) => {
+    showNotification(payload.title, payload.body, payload.emailId);
+  },
+);
 
 ipcMain.on("set-preference", (_event, key: string, value: unknown) => {
-  store.set(key as any, value);
+  if (isValidStoreKey(key)) {
+    // Use type-safe setter via individual key checks
+    switch (key) {
+      case "windowBounds":
+        store.set("windowBounds", value as WindowBounds);
+        break;
+      case "isMaximized":
+        store.set("isMaximized", value as boolean);
+        break;
+      case "minimizeToTray":
+        store.set("minimizeToTray", value as boolean);
+        break;
+      case "launchOnStartup":
+        store.set("launchOnStartup", value as boolean);
+        break;
+      case "unreadCount":
+        store.set("unreadCount", value as number);
+        break;
+      case "lastAccount":
+        store.set("lastAccount", value as string | undefined);
+        break;
+    }
+  }
 });
 
-ipcMain.handle("get-preference", (_event, key: string) => {
-  return store.get(key as any);
+ipcMain.handle("get-preference", (_event, key: string): unknown => {
+  if (isValidStoreKey(key)) {
+    return store.get(key);
+  }
+  return undefined;
 });
 
-ipcMain.handle("get-platform", () => {
+interface PlatformInfo {
+  platform: NodeJS.Platform;
+  arch: string;
+  version: string;
+  isPackaged: boolean;
+}
+
+ipcMain.handle("get-platform", (): PlatformInfo => {
   return {
     platform: process.platform,
     arch: process.arch,
@@ -404,7 +643,7 @@ ipcMain.handle("get-platform", () => {
   };
 });
 
-// ─── Auto Updater ────────────────────────────────────────────────────────────
+// ─── Auto Updater ───────────────────────────────────────────────────────────
 
 autoUpdater.on("update-available", () => {
   mainWindow?.webContents.send("update-available");
@@ -414,24 +653,25 @@ autoUpdater.on("update-downloaded", () => {
   mainWindow?.webContents.send("update-downloaded");
 });
 
-// ─── App Lifecycle ───────────────────────────────────────────────────────────
+// ─── App Lifecycle ──────────────────────────────────────────────────────────
 
-app.whenReady().then(() => {
+void app.whenReady().then(() => {
   createMainWindow();
   createTray();
   createMenu();
 
-  // Register global shortcut for quick compose
-  globalShortcut.register("CommandOrControl+Shift+M", () => {
+  // Register global shortcut for quick compose (show app + open compose)
+  globalShortcut.register("CommandOrControl+Shift+E", () => {
     mainWindow?.show();
     mainWindow?.webContents.send("compose-new");
   });
 
-  // Check for updates in production
+  // Check for updates in production (non-blocking)
   if (!IS_DEV) {
-    autoUpdater.checkForUpdatesAndNotify();
+    void autoUpdater.checkForUpdatesAndNotify();
   }
 
+  // macOS: re-create window when dock icon clicked and no windows open
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
@@ -442,6 +682,7 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
+  // On macOS, keep running in the menu bar until explicit quit
   if (process.platform !== "darwin") {
     app.quit();
   }
@@ -455,5 +696,5 @@ app.on("will-quit", () => {
   globalShortcut.unregisterAll();
 });
 
-// Handle mailto: protocol
+// Handle mailto: protocol — makes AlecRae the default email handler
 app.setAsDefaultProtocolClient("mailto");

@@ -15,7 +15,7 @@ import { Queue } from "bullmq";
 
 // ─── Configuration (must match MTA worker defaults) ────────────────────────
 
-const QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "emailed:outbound";
+const QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae:outbound";
 const REDIS_URL =
   process.env["REDIS_URL"] ??
   process.env["UPSTASH_REDIS_URL"] ??

@@ -1,5 +1,5 @@
 /**
- * @emailed/reputation — ISP Feedback Loop Processor
+ * @alecrae/reputation — ISP Feedback Loop Processor
  *
  * Processes ARF (Abuse Reporting Format, RFC 5965) complaint messages
  * received from ISP feedback loops. When a recipient marks an email as

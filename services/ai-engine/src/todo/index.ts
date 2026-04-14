@@ -34,6 +34,13 @@ export {
   NotionProvider,
   MicrosoftTodoProvider,
 };
+export {
+  extractThreadActionItems,
+  type ThreadEmail,
+  type ThreadForExtraction,
+  type ExtractedTask,
+  type ThreadExtractionResult,
+} from "./thread-extractor.js";
 
 // ─── Connected accounts store ─────────────────────────────────────────────
 

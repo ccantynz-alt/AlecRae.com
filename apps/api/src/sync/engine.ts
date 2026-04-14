@@ -1,7 +1,7 @@
 /**
  * Email Sync Engine — Unified IMAP, Gmail API, Outlook Graph API
  *
- * The core of Vienna. Connects to any email provider and syncs messages
+ * The core of AlecRae. Connects to any email provider and syncs messages
  * into our local database. Supports:
  *   - Generic IMAP (any provider)
  *   - Gmail API (OAuth2, faster than IMAP, labels support)
@@ -15,7 +15,7 @@
  *   5. Background worker keeps accounts in sync
  */
 
-import { getDatabase } from "@emailed/db";
+import { getDatabase } from "@alecrae/db";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -142,7 +142,7 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
 const GOOGLE_CLIENT_ID = process.env["GOOGLE_CLIENT_ID"] ?? "";
 const GOOGLE_CLIENT_SECRET = process.env["GOOGLE_CLIENT_SECRET"] ?? "";
-const GOOGLE_REDIRECT_URI = process.env["GOOGLE_REDIRECT_URI"] ?? "https://api.vieanna.com/v1/auth/callback/google";
+const GOOGLE_REDIRECT_URI = process.env["GOOGLE_REDIRECT_URI"] ?? "https://api.alecrae.com/v1/auth/callback/google";
 
 export function getGoogleAuthUrl(state: string): string {
   const params = new URLSearchParams({
@@ -438,7 +438,7 @@ const MS_GRAPH_API = "https://graph.microsoft.com/v1.0";
 
 const MS_CLIENT_ID = process.env["MICROSOFT_CLIENT_ID"] ?? "";
 const MS_CLIENT_SECRET = process.env["MICROSOFT_CLIENT_SECRET"] ?? "";
-const MS_REDIRECT_URI = process.env["MICROSOFT_REDIRECT_URI"] ?? "https://api.vieanna.com/v1/auth/callback/microsoft";
+const MS_REDIRECT_URI = process.env["MICROSOFT_REDIRECT_URI"] ?? "https://api.alecrae.com/v1/auth/callback/microsoft";
 
 export function getMicrosoftAuthUrl(state: string): string {
   const params = new URLSearchParams({

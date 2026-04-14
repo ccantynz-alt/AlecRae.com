@@ -1,16 +1,23 @@
 /**
  * Translation Route — Bidirectional Real-Time Email Translation
  *
- * POST /v1/translate              — Translate text between languages
- * POST /v1/translate/email        — Translate a full email (subject + body)
- * POST /v1/translate/detect       — Detect language of text
- * GET  /v1/translate/languages    — List supported languages
+ * Existing endpoints:
+ *   POST /v1/translate              — Translate text between languages
+ *   POST /v1/translate/email        — Translate a full email (subject + body)
+ *   POST /v1/translate/detect       — Detect language of text
+ *   GET  /v1/translate/languages    — List supported languages
+ *
+ * Per-email convenience endpoint (mounted separately on emails router):
+ *   POST /v1/emails/:id/translate   — Auto-translate an email with badge metadata
+ *   GET  /v1/emails/:id/translation — Retrieve cached translation for an email
  */
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { eq, and } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
+import { getDatabase, emailTranslations, emails } from "@alecrae/db";
 
 const ANTHROPIC_API_KEY = process.env["ANTHROPIC_API_KEY"] ?? process.env["CLAUDE_API_KEY"];
 
@@ -126,6 +133,60 @@ Rules:
   return { translated, detectedLanguage };
 }
 
+/**
+ * Detect the language of a text snippet using Claude.
+ * Returns a language code string.
+ */
+async function detectLanguage(text: string): Promise<{ code: string; name: string }> {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error("Language detection requires ANTHROPIC_API_KEY");
+  }
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 20,
+      system: `Detect the language of the following text. Reply with ONLY the ISO 639-1 two-letter language code (e.g., "en", "es", "fr", "de", "ja", "zh", "ko", "ar", "ru"). Nothing else.`,
+      messages: [{ role: "user", content: text.slice(0, 2000) }],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Language detection API error ${response.status}: ${errText}`);
+  }
+
+  const data = (await response.json()) as {
+    content: Array<{ type: string; text?: string }>;
+  };
+
+  const code = data.content
+    .filter((b) => b.type === "text")
+    .map((b) => b.text ?? "")
+    .join("")
+    .trim()
+    .toLowerCase()
+    .slice(0, 5);
+
+  return {
+    code,
+    name: languageName(code),
+  };
+}
+
+// ─── ID generation ─────────────────────────────────────────────────────────
+
+function generateId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  return `trl_${Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+}
+
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
 const TranslateSchema = z.object({
@@ -143,6 +204,12 @@ const TranslateEmailSchema = z.object({
 
 const DetectSchema = z.object({
   text: z.string().min(1).max(5000),
+});
+
+const PerEmailTranslateSchema = z.object({
+  targetLanguage: z.string().min(2).max(5),
+  /** If true, force re-translation even if a cached version exists. */
+  force: z.boolean().default(false),
 });
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
@@ -214,13 +281,12 @@ translate.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof DetectSchema>>(c);
 
-    // Quick local detection for common languages
-    const result = await translateWithClaude(input.text, "en", undefined, "general");
+    const detected = await detectLanguage(input.text);
 
     return c.json({
       data: {
-        detectedLanguage: result.detectedLanguage,
-        languageName: languageName(result.detectedLanguage),
+        detectedLanguage: detected.code,
+        languageName: detected.name,
       },
     });
   },
@@ -235,4 +301,249 @@ translate.get(
   },
 );
 
-export { translate };
+// ─── Per-email translation router (mounted at /v1/emails) ──────────────────
+
+const emailTranslate = new Hono();
+
+/**
+ * POST /v1/emails/:id/translate
+ *
+ * Auto-detect the language of an email, translate to the user's target
+ * language, cache the result, and return it with badge metadata.
+ */
+emailTranslate.post(
+  "/:id/translate",
+  requireScope("translate:read"),
+  validateBody(PerEmailTranslateSchema),
+  async (c) => {
+    const emailId = c.req.param("id");
+    const input = getValidatedBody<z.infer<typeof PerEmailTranslateSchema>>(c);
+    const auth = c.get("auth");
+
+    const db = getDatabase();
+
+    // Check for cached translation if not forcing re-translate.
+    if (!input.force) {
+      const cached = await db
+        .select()
+        .from(emailTranslations)
+        .where(
+          and(
+            eq(emailTranslations.emailId, emailId),
+            eq(emailTranslations.targetLanguage, input.targetLanguage),
+          ),
+        )
+        .limit(1);
+
+      const existing = cached[0];
+      if (existing) {
+        return c.json({
+          data: {
+            id: existing.id,
+            emailId,
+            sourceLanguage: existing.sourceLanguage,
+            sourceLanguageName: existing.sourceLanguageName,
+            targetLanguage: existing.targetLanguage,
+            targetLanguageName: existing.targetLanguageName,
+            original: existing.originalContent,
+            translated: existing.translatedContent,
+            autoTranslated: existing.autoTranslated,
+            badge: {
+              visible: existing.sourceLanguage !== input.targetLanguage,
+              label: `Translated from ${existing.sourceLanguageName}`,
+              sourceLanguage: existing.sourceLanguage,
+              sourceLanguageName: existing.sourceLanguageName,
+            },
+            cached: true,
+          },
+        });
+      }
+    }
+
+    // Load the email from DB.
+    const emailRows = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    const emailRow = emailRows[0];
+    if (!emailRow) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Email ${emailId} not found`,
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    const originalSubject = emailRow.subject;
+    const originalBody = emailRow.textBody ?? emailRow.htmlBody ?? "";
+
+    // Detect the source language and translate in parallel.
+    const bodySnippet = originalBody.slice(0, 2000);
+    const combinedText = `${originalSubject}\n\n${bodySnippet}`;
+
+    const detected = await detectLanguage(combinedText);
+    const sourceCode = detected.code;
+    const sourceName = detected.name;
+
+    // If the email is already in the target language, no translation needed.
+    if (sourceCode === input.targetLanguage) {
+      return c.json({
+        data: {
+          emailId,
+          sourceLanguage: sourceCode,
+          sourceLanguageName: sourceName,
+          targetLanguage: input.targetLanguage,
+          targetLanguageName: languageName(input.targetLanguage),
+          original: {
+            subject: originalSubject,
+            body: originalBody,
+          },
+          translated: {
+            subject: originalSubject,
+            body: originalBody,
+          },
+          autoTranslated: false,
+          badge: {
+            visible: false,
+            label: null,
+            sourceLanguage: sourceCode,
+            sourceLanguageName: sourceName,
+          },
+          cached: false,
+        },
+      });
+    }
+
+    // Translate subject and body in parallel.
+    const [subjectResult, bodyResult] = await Promise.all([
+      translateWithClaude(originalSubject, input.targetLanguage, sourceCode, "email_subject"),
+      translateWithClaude(originalBody, input.targetLanguage, sourceCode, "email_body"),
+    ]);
+
+    const translationId = generateId();
+    const targetName = languageName(input.targetLanguage);
+
+    // Persist to DB.
+    await db.insert(emailTranslations).values({
+      id: translationId,
+      accountId: auth.accountId,
+      emailId,
+      sourceLanguage: sourceCode,
+      sourceLanguageName: sourceName,
+      targetLanguage: input.targetLanguage,
+      targetLanguageName: targetName,
+      originalContent: {
+        subject: originalSubject,
+        body: originalBody,
+      },
+      translatedContent: {
+        subject: subjectResult.translated,
+        body: bodyResult.translated,
+      },
+      autoTranslated: true,
+    });
+
+    return c.json({
+      data: {
+        id: translationId,
+        emailId,
+        sourceLanguage: sourceCode,
+        sourceLanguageName: sourceName,
+        targetLanguage: input.targetLanguage,
+        targetLanguageName: targetName,
+        original: {
+          subject: originalSubject,
+          body: originalBody,
+        },
+        translated: {
+          subject: subjectResult.translated,
+          body: bodyResult.translated,
+        },
+        autoTranslated: true,
+        badge: {
+          visible: true,
+          label: `Translated from ${sourceName}`,
+          sourceLanguage: sourceCode,
+          sourceLanguageName: sourceName,
+        },
+        cached: false,
+      },
+    });
+  },
+);
+
+/**
+ * GET /v1/emails/:id/translation
+ *
+ * Retrieve an existing cached translation for an email. Returns the
+ * translation record including badge metadata and original content for
+ * the "toggle to original" feature.
+ */
+emailTranslate.get(
+  "/:id/translation",
+  requireScope("translate:read"),
+  async (c) => {
+    const emailId = c.req.param("id");
+    const auth = c.get("auth");
+    const targetLanguage = c.req.query("targetLanguage") ?? "en";
+
+    const db = getDatabase();
+    const rows = await db
+      .select()
+      .from(emailTranslations)
+      .where(
+        and(
+          eq(emailTranslations.emailId, emailId),
+          eq(emailTranslations.accountId, auth.accountId),
+          eq(emailTranslations.targetLanguage, targetLanguage),
+        ),
+      )
+      .limit(1);
+
+    const record = rows[0];
+    if (!record) {
+      return c.json({
+        data: {
+          emailId,
+          hasTranslation: false,
+          badge: {
+            visible: false,
+            label: null,
+            sourceLanguage: null,
+            sourceLanguageName: null,
+          },
+        },
+      });
+    }
+
+    return c.json({
+      data: {
+        emailId,
+        hasTranslation: true,
+        id: record.id,
+        sourceLanguage: record.sourceLanguage,
+        sourceLanguageName: record.sourceLanguageName,
+        targetLanguage: record.targetLanguage,
+        targetLanguageName: record.targetLanguageName,
+        original: record.originalContent,
+        translated: record.translatedContent,
+        autoTranslated: record.autoTranslated,
+        badge: {
+          visible: record.sourceLanguage !== record.targetLanguage,
+          label: `Translated from ${record.sourceLanguageName}`,
+          sourceLanguage: record.sourceLanguage,
+          sourceLanguageName: record.sourceLanguageName,
+        },
+      },
+    });
+  },
+);
+
+export { translate, emailTranslate };

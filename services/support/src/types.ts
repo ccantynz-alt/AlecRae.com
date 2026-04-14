@@ -1,5 +1,5 @@
 /**
- * @emailed/support - TypeScript type definitions
+ * @alecrae/support - TypeScript type definitions
  * All types for the AI Support service.
  */
 

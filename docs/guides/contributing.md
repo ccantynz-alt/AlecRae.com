@@ -1,6 +1,6 @@
-# Contributing to Emailed
+# Contributing to AlecRae
 
-Thank you for your interest in contributing to Emailed. This guide covers the development workflow, code standards, and review process.
+Thank you for your interest in contributing to AlecRae. This guide covers the development workflow, code standards, and review process.
 
 ## Development Workflow
 
@@ -8,9 +8,9 @@ Thank you for your interest in contributing to Emailed. This guide covers the de
 
 ```bash
 # Fork the repository on GitHub, then clone your fork
-git clone git@github.com:your-username/emailed.git
-cd emailed
-git remote add upstream git@github.com:your-org/emailed.git
+git clone git@github.com:your-username/alecrae.git
+cd alecrae
+git remote add upstream git@github.com:your-org/alecrae.git
 ```
 
 ### 2. Create a Branch
@@ -115,7 +115,7 @@ These checks run automatically via pre-commit hooks. Do not skip them.
 
 ### Frontend
 
-- No raw HTML elements. Everything must use the component library from `@emailed/ui`.
+- No raw HTML elements. Everything must use the component library from `@alecrae/ui`.
 - Server Components by default; Client Components only when necessary.
 - All components must be accessible (ARIA attributes, keyboard navigation).
 - No inline styles. Use Tailwind CSS classes or CSS modules.
@@ -140,7 +140,7 @@ bun run test
 bun run test:coverage
 
 # Run tests for a specific package
-bun run test --filter=@emailed/mta
+bun run test --filter=@alecrae/mta
 ```
 
 ### What to Test

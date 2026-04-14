@@ -17,8 +17,29 @@ import type {
 import { ok, err } from "../types.js";
 
 const SPF_VERSION_TAG = "v=spf1";
-const MAX_DNS_LOOKUPS = 10; // RFC 7208 Section 4.6.4
+const MAX_DNS_LOOKUPS = 10; // RFC 7208 Section 4.6.4 — void-lookup limit
 const MAX_VOID_LOOKUPS = 2; // RFC 7208 Section 4.6.4
+const MAX_RECURSION_DEPTH = 10; // safety net against pathological nesting
+
+/**
+ * Injectable DNS resolver — lets tests short-circuit real DNS calls without
+ * any new third-party dependency. Production code uses `node:dns/promises`.
+ */
+export interface SpfDnsResolver {
+  resolveTxt: (domain: string) => Promise<string[][]>;
+  resolve4?: (domain: string) => Promise<string[]>;
+  resolve6?: (domain: string) => Promise<string[]>;
+  resolveMx?: (domain: string) => Promise<Array<{ exchange: string; priority: number }>>;
+  reverse?: (ip: string) => Promise<string[]>;
+}
+
+const DEFAULT_RESOLVER: SpfDnsResolver = {
+  resolveTxt: (d) => dns.resolveTxt(d),
+  resolve4: (d) => dns.resolve4(d),
+  resolve6: (d) => dns.resolve6(d),
+  resolveMx: (d) => dns.resolveMx(d),
+  reverse: (ip) => dns.reverse(ip),
+};
 
 interface SpfContext {
   senderIp: string;
@@ -26,6 +47,25 @@ interface SpfContext {
   ehloIdentity: string;
   dnsLookupCount: number;
   voidLookupCount: number;
+  resolver: SpfDnsResolver;
+  /**
+   * Set of domains currently being evaluated on the recursion stack.
+   * Used to short-circuit circular include: / redirect= chains to permerror
+   * per RFC 7208 §4.6.4 and §10.1 (processing limits).
+   */
+  visited: Set<string>;
+  depth: number;
+}
+
+/**
+ * Sentinel error thrown inside the SPF evaluator to escape a deep recursion
+ * with a permanent error state. Caller maps to `permerror`.
+ */
+class SpfPermError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SpfPermError";
+  }
 }
 
 /**
@@ -35,6 +75,7 @@ export async function checkSpf(
   senderIp: string,
   senderDomain: string,
   ehloIdentity: string = senderDomain,
+  resolver: SpfDnsResolver = DEFAULT_RESOLVER,
 ): Promise<SpfCheckResult> {
   const ctx: SpfContext = {
     senderIp,
@@ -42,11 +83,30 @@ export async function checkSpf(
     ehloIdentity,
     dnsLookupCount: 0,
     voidLookupCount: 0,
+    resolver,
+    visited: new Set<string>(),
+    depth: 0,
   };
 
   try {
     return await evaluateSpf(ctx, senderDomain);
   } catch (error) {
+    // Permanent errors escape to here via SpfPermError so that deep
+    // recursion can short-circuit without cascading try/catch noise.
+    if (error instanceof SpfPermError) {
+      return {
+        result: "permerror",
+        domain: senderDomain,
+        explanation: error.message,
+      };
+    }
+    // Any other exception is logged and treated as "fail" gracefully so
+    // the inbound pipeline never crashes on a DNS hiccup. Callers see
+    // "fail" — which is conservative and reputation-safe.
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[spf] evaluation failed for ${senderDomain}: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return {
       result: "temperror",
       domain: senderDomain,
@@ -85,85 +145,132 @@ export function parseSpfRecord(txt: string): Result<SpfRecord> {
 }
 
 async function evaluateSpf(ctx: SpfContext, domain: string): Promise<SpfCheckResult> {
-  // Fetch SPF record for the domain
-  const record = await fetchSpfRecord(ctx, domain);
-  if (!record) {
-    return { result: "none", domain };
+  const normalized = domain.toLowerCase();
+
+  // Circular include/redirect detection — RFC 7208 §10.1. If we're already
+  // in the middle of evaluating this domain up the call stack, the chain is
+  // circular and must short-circuit to permerror.
+  if (ctx.visited.has(normalized)) {
+    throw new SpfPermError(`Circular SPF reference detected: ${domain}`);
   }
 
-  const parsed = parseSpfRecord(record);
-  if (!parsed.ok) {
-    return {
-      result: "permerror",
-      domain,
-      explanation: parsed.error.message,
-    };
+  if (ctx.depth >= MAX_RECURSION_DEPTH) {
+    throw new SpfPermError(`SPF recursion depth exceeded (${MAX_RECURSION_DEPTH})`);
   }
 
-  // Evaluate each mechanism in order
-  for (const mechanism of parsed.value.mechanisms) {
-    // Handle redirect modifier
-    if (mechanism.type === "redirect") {
-      if (ctx.dnsLookupCount >= MAX_DNS_LOOKUPS) {
-        return { result: "permerror", domain, explanation: "Too many DNS lookups" };
-      }
-      return evaluateSpf(ctx, mechanism.value);
+  ctx.visited.add(normalized);
+  ctx.depth += 1;
+
+  try {
+    // Fetch SPF record for the domain
+    const record = await fetchSpfRecord(ctx, domain);
+    if (!record) {
+      return { result: "none", domain };
     }
 
-    // Handle exp modifier (explanation — skip, just informational)
-    if (mechanism.type === "exp") {
-      continue;
-    }
-
-    const matches = await matchesMechanism(ctx, mechanism, domain);
-    if (matches) {
+    const parsed = parseSpfRecord(record);
+    if (!parsed.ok) {
       return {
-        result: qualifierToResult(mechanism.qualifier),
+        result: "permerror",
         domain,
-        mechanismMatched: formatMechanism(mechanism),
+        explanation: parsed.error.message,
       };
     }
-  }
 
-  // No mechanism matched — default result is "neutral" (RFC 7208 Section 4.7)
-  return { result: "neutral", domain };
+    // Evaluate each mechanism in order
+    for (const mechanism of parsed.value.mechanisms) {
+      // Handle redirect modifier (RFC 7208 §6.1) — counts as a DNS lookup.
+      // `redirect=` only applies if NO other mechanism matched, which is
+      // true here because we reached the end of the loop without matching.
+      // However, per RFC, redirect= is consumed at the end, so we defer it.
+      if (mechanism.type === "redirect") {
+        continue;
+      }
+
+      // Handle exp modifier (explanation — skip, just informational)
+      if (mechanism.type === "exp") {
+        continue;
+      }
+
+      const matches = await matchesMechanism(ctx, mechanism, domain);
+      if (matches) {
+        return {
+          result: qualifierToResult(mechanism.qualifier),
+          domain,
+          mechanismMatched: formatMechanism(mechanism),
+        };
+      }
+    }
+
+    // No mechanism matched. Apply redirect= if present (RFC 7208 §6.1).
+    const redirect = parsed.value.mechanisms.find((m) => m.type === "redirect");
+    if (redirect) {
+      ctx.dnsLookupCount += 1;
+      if (ctx.dnsLookupCount > MAX_DNS_LOOKUPS) {
+        throw new SpfPermError(
+          `Too many DNS lookups — exceeded limit of ${MAX_DNS_LOOKUPS} at redirect=${redirect.value}`,
+        );
+      }
+      // redirect replaces the current domain context entirely
+      return evaluateSpf(ctx, redirect.value);
+    }
+
+    // Default result is "neutral" (RFC 7208 §4.7)
+    return { result: "neutral", domain };
+  } finally {
+    // Pop off the visited set so siblings (not ancestors) can reference
+    // the same domain legitimately. Only ancestors form a cycle.
+    ctx.visited.delete(normalized);
+    ctx.depth -= 1;
+  }
 }
 
 async function fetchSpfRecord(ctx: SpfContext, domain: string): Promise<string | null> {
-  ctx.dnsLookupCount++;
+  ctx.dnsLookupCount += 1;
   if (ctx.dnsLookupCount > MAX_DNS_LOOKUPS) {
-    throw new Error("Too many DNS lookups — SPF evaluation limit exceeded");
+    throw new SpfPermError(
+      `Too many DNS lookups — exceeded limit of ${MAX_DNS_LOOKUPS} fetching ${domain}`,
+    );
   }
 
   try {
-    const txtRecords = await dns.resolveTxt(domain);
+    const txtRecords = await ctx.resolver.resolveTxt(domain);
     const spfRecords = txtRecords
       .map((parts) => parts.join(""))
       .filter((txt) => txt.toLowerCase().startsWith(SPF_VERSION_TAG));
 
     if (spfRecords.length === 0) {
+      // Void lookup: DNS responded but no SPF record found.
+      ctx.voidLookupCount += 1;
+      if (ctx.voidLookupCount > MAX_VOID_LOOKUPS) {
+        throw new SpfPermError(
+          `Too many void DNS lookups (${ctx.voidLookupCount}) — RFC 7208 §4.6.4`,
+        );
+      }
       return null;
     }
 
     if (spfRecords.length > 1) {
-      // RFC 7208 Section 4.5 — multiple SPF records = permerror
-      throw new Error(`Multiple SPF records found for ${domain}`);
+      // RFC 7208 §4.5 — multiple SPF records = permerror
+      throw new SpfPermError(`Multiple SPF records found for ${domain}`);
     }
 
     return spfRecords[0]!;
   } catch (error) {
-    if (error instanceof Error && error.message.includes("Multiple SPF")) {
-      throw error;
-    }
-    // DNS errors
+    if (error instanceof SpfPermError) throw error;
+
+    // DNS errors: ENOTFOUND / ENODATA are void lookups.
     const dnsErr = error as NodeJS.ErrnoException;
     if (dnsErr.code === "ENOTFOUND" || dnsErr.code === "ENODATA") {
-      ctx.voidLookupCount++;
+      ctx.voidLookupCount += 1;
       if (ctx.voidLookupCount > MAX_VOID_LOOKUPS) {
-        throw new Error("Too many void DNS lookups");
+        throw new SpfPermError(
+          `Too many void DNS lookups (${ctx.voidLookupCount}) — RFC 7208 §4.6.4`,
+        );
       }
       return null;
     }
+    // Transient DNS error — bubble up to produce temperror.
     throw error;
   }
 }
@@ -190,21 +297,56 @@ async function matchesMechanism(
       return matchMxMechanism(ctx, mechanism.value || currentDomain);
 
     case "include": {
-      ctx.dnsLookupCount++;
+      // RFC 7208 §5.2 — include: counts as one DNS lookup, then recursively
+      // evaluates the target domain's SPF record with the same sender IP.
+      // Result translation table (RFC 7208 §5.2):
+      //   pass            → match (caller applies qualifier)
+      //   fail/softfail/neutral → no match (continue to next mechanism)
+      //   temperror       → temperror (propagate)
+      //   permerror/none  → permerror (propagate — "no record" on an include
+      //                     chain is a hard configuration error, not a miss)
+      if (!mechanism.value) {
+        throw new SpfPermError("include: mechanism requires a domain");
+      }
+      ctx.dnsLookupCount += 1;
       if (ctx.dnsLookupCount > MAX_DNS_LOOKUPS) {
-        throw new Error("Too many DNS lookups");
+        throw new SpfPermError(
+          `Too many DNS lookups — exceeded limit of ${MAX_DNS_LOOKUPS} at include:${mechanism.value}`,
+        );
       }
       const includeResult = await evaluateSpf(ctx, mechanism.value);
-      return includeResult.result === "pass";
+      switch (includeResult.result) {
+        case "pass":
+          return true;
+        case "fail":
+        case "softfail":
+        case "neutral":
+          return false;
+        case "temperror":
+          // Bubble up by throwing a non-perm error — the outer handler
+          // converts unknown errors into temperror.
+          throw new Error(
+            `include:${mechanism.value} returned temperror: ${includeResult.explanation ?? ""}`,
+          );
+        case "none":
+        case "permerror":
+          throw new SpfPermError(
+            `include:${mechanism.value} returned ${includeResult.result}: ${includeResult.explanation ?? "no valid SPF record"}`,
+          );
+      }
+      return false;
     }
 
     case "exists": {
-      ctx.dnsLookupCount++;
+      ctx.dnsLookupCount += 1;
       if (ctx.dnsLookupCount > MAX_DNS_LOOKUPS) {
-        throw new Error("Too many DNS lookups");
+        throw new SpfPermError(
+          `Too many DNS lookups — exceeded limit of ${MAX_DNS_LOOKUPS} at exists:${mechanism.value}`,
+        );
       }
       try {
-        const addresses = await dns.resolve4(mechanism.value);
+        const resolve4 = ctx.resolver.resolve4 ?? dns.resolve4;
+        const addresses = await resolve4(mechanism.value);
         return addresses.length > 0;
       } catch {
         return false;
@@ -302,21 +444,26 @@ function ipv6ToBytes(ip: string): number[] | null {
 }
 
 async function matchAMechanism(ctx: SpfContext, domain: string): Promise<boolean> {
-  ctx.dnsLookupCount++;
+  ctx.dnsLookupCount += 1;
   if (ctx.dnsLookupCount > MAX_DNS_LOOKUPS) {
-    throw new Error("Too many DNS lookups");
+    throw new SpfPermError(
+      `Too many DNS lookups — exceeded limit of ${MAX_DNS_LOOKUPS} at a:${domain}`,
+    );
   }
+
+  const resolve4 = ctx.resolver.resolve4 ?? dns.resolve4;
+  const resolve6 = ctx.resolver.resolve6 ?? dns.resolve6;
 
   // Parse optional CIDR from domain
   const { hostname, cidr4, cidr6 } = parseDomainCidr(domain);
 
   try {
     if (net.isIPv4(ctx.senderIp)) {
-      const addresses = await dns.resolve4(hostname);
+      const addresses = await resolve4(hostname);
       return addresses.some((addr) => ipv4InSubnet(ctx.senderIp, addr, cidr4));
     }
     if (net.isIPv6(ctx.senderIp)) {
-      const addresses = await dns.resolve6(hostname);
+      const addresses = await resolve6(hostname);
       return addresses.some((addr) => ipv6InSubnet(ctx.senderIp, addr, cidr6));
     }
   } catch {
@@ -326,30 +473,38 @@ async function matchAMechanism(ctx: SpfContext, domain: string): Promise<boolean
 }
 
 async function matchMxMechanism(ctx: SpfContext, domain: string): Promise<boolean> {
-  ctx.dnsLookupCount++;
+  ctx.dnsLookupCount += 1;
   if (ctx.dnsLookupCount > MAX_DNS_LOOKUPS) {
-    throw new Error("Too many DNS lookups");
+    throw new SpfPermError(
+      `Too many DNS lookups — exceeded limit of ${MAX_DNS_LOOKUPS} at mx:${domain}`,
+    );
   }
+
+  const resolve4 = ctx.resolver.resolve4 ?? dns.resolve4;
+  const resolve6 = ctx.resolver.resolve6 ?? dns.resolve6;
+  const resolveMx = ctx.resolver.resolveMx ?? dns.resolveMx;
 
   const { hostname, cidr4, cidr6 } = parseDomainCidr(domain);
 
   try {
-    const mxRecords = await dns.resolveMx(hostname);
+    const mxRecords = await resolveMx(hostname);
 
     for (const mx of mxRecords) {
-      ctx.dnsLookupCount++;
+      ctx.dnsLookupCount += 1;
       if (ctx.dnsLookupCount > MAX_DNS_LOOKUPS) {
-        throw new Error("Too many DNS lookups");
+        throw new SpfPermError(
+          `Too many DNS lookups — exceeded limit of ${MAX_DNS_LOOKUPS} at mx lookup ${mx.exchange}`,
+        );
       }
 
       try {
         if (net.isIPv4(ctx.senderIp)) {
-          const addresses = await dns.resolve4(mx.exchange);
+          const addresses = await resolve4(mx.exchange);
           if (addresses.some((addr) => ipv4InSubnet(ctx.senderIp, addr, cidr4))) {
             return true;
           }
         } else if (net.isIPv6(ctx.senderIp)) {
-          const addresses = await dns.resolve6(mx.exchange);
+          const addresses = await resolve6(mx.exchange);
           if (addresses.some((addr) => ipv6InSubnet(ctx.senderIp, addr, cidr6))) {
             return true;
           }
@@ -367,13 +522,19 @@ async function matchMxMechanism(ctx: SpfContext, domain: string): Promise<boolea
 }
 
 async function matchPtrMechanism(ctx: SpfContext, domain: string): Promise<boolean> {
-  ctx.dnsLookupCount++;
+  ctx.dnsLookupCount += 1;
   if (ctx.dnsLookupCount > MAX_DNS_LOOKUPS) {
-    throw new Error("Too many DNS lookups");
+    throw new SpfPermError(
+      `Too many DNS lookups — exceeded limit of ${MAX_DNS_LOOKUPS} at ptr`,
+    );
   }
 
+  const reverse = ctx.resolver.reverse ?? dns.reverse;
+  const resolve4 = ctx.resolver.resolve4 ?? dns.resolve4;
+  const resolve6 = ctx.resolver.resolve6 ?? dns.resolve6;
+
   try {
-    const hostnames = await dns.reverse(ctx.senderIp);
+    const hostnames = await reverse(ctx.senderIp);
     const targetDomain = domain.toLowerCase();
 
     for (const hostname of hostnames) {
@@ -381,15 +542,17 @@ async function matchPtrMechanism(ctx: SpfContext, domain: string): Promise<boole
       // Must match the domain exactly or be a subdomain
       if (normalized === targetDomain || normalized.endsWith(`.${targetDomain}`)) {
         // Validate the reverse — the hostname must resolve back to the sender IP
-        ctx.dnsLookupCount++;
+        ctx.dnsLookupCount += 1;
         if (ctx.dnsLookupCount > MAX_DNS_LOOKUPS) {
-          throw new Error("Too many DNS lookups");
+          throw new SpfPermError(
+            `Too many DNS lookups — exceeded limit of ${MAX_DNS_LOOKUPS} at ptr reverse`,
+          );
         }
 
         try {
           const addresses = net.isIPv4(ctx.senderIp)
-            ? await dns.resolve4(hostname)
-            : await dns.resolve6(hostname);
+            ? await resolve4(hostname)
+            : await resolve6(hostname);
 
           if (addresses.includes(ctx.senderIp)) {
             return true;

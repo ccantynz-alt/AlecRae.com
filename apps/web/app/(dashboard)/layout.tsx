@@ -1,11 +1,17 @@
 "use client";
 
+import type { JSX } from "react";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Box, Text, Sidebar, type SidebarSection } from "@emailed/ui";
+import { Box, Text, type SidebarSection } from "@alecrae/ui";
+import { AnimatedSidebar, type AnimatedSidebarSection } from "../../components/AnimatedSidebar";
+import { AnimatedPage } from "../../components/AnimatedPage";
+import { FocusModeOverlay, type FocusModeOverlayEmail } from "../../components/FocusModeOverlay";
+import { FocusModeToggle } from "../../components/FocusModeToggle";
+import { useFocusMode } from "../../lib/focus-mode";
 import { authApi } from "../../lib/api";
 
-const navigationSections: SidebarSection[] = [
+const navigationSections: AnimatedSidebarSection[] = [
   {
     items: [
       { id: "inbox", label: "Inbox", href: "/inbox" },
@@ -31,10 +37,30 @@ export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
-}) {
+}): JSX.Element {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState<UserInfo>({ name: "User", email: "" });
+  const hydrate = useFocusMode((s) => s.hydrate);
+  const toggleFocusMode = useFocusMode((s) => s.toggleFocusMode);
+
+  // Hydrate focus mode state from IndexedDB on mount
+  useEffect(() => {
+    void hydrate();
+  }, [hydrate]);
+
+  // Register Cmd+Shift+F keyboard shortcut for focus mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        void toggleFocusMode();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleFocusMode]);
 
   useEffect(() => {
     authApi
@@ -47,7 +73,7 @@ export default function DashboardLayout({
       });
   }, []);
 
-  const sectionsWithActive: SidebarSection[] = navigationSections.map((section) => ({
+  const sectionsWithActive: AnimatedSidebarSection[] = navigationSections.map((section) => ({
     ...section,
     items: section.items.map((item) => ({
       ...item,
@@ -65,7 +91,7 @@ export default function DashboardLayout({
   const brand = (
     <Box className="flex items-center justify-between">
       <Text variant="heading-md" className="text-brand-600 font-bold">
-        Vienna
+        AlecRae
       </Text>
       <Box
         as="button"
@@ -80,7 +106,7 @@ export default function DashboardLayout({
     </Box>
   );
 
-  const handleLogout = () => {
+  const handleLogout = (): void => {
     authApi.logout();
     window.location.href = "/login";
   };
@@ -118,17 +144,31 @@ export default function DashboardLayout({
     </Box>
   );
 
+  // Placeholder email list for focus mode overlay.
+  // In production this comes from the inbox store / IndexedDB cache.
+  // The overlay filters them by the active focus criteria.
+  const focusModeEmails: FocusModeOverlayEmail[] = [];
+
   return (
     <Box className="flex h-full">
-      <Sidebar
+      <AnimatedSidebar
         brand={brand}
         sections={sectionsWithActive}
         footer={footer}
         collapsed={collapsed}
       />
       <Box as="main" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {children}
+        {/* Toolbar bar with focus mode toggle */}
+        <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">
+          <FocusModeToggle />
+        </Box>
+        <AnimatedPage pageKey={pathname ?? "dashboard"} mode="slide" className="flex flex-col flex-1 min-h-0">
+          {children}
+        </AnimatedPage>
       </Box>
+
+      {/* Focus Mode Overlay — covers entire screen when active */}
+      <FocusModeOverlay emails={focusModeEmails} />
     </Box>
   );
 }

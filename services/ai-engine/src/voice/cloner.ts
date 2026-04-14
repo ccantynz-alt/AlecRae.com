@@ -1,5 +1,5 @@
 // =============================================================================
-// @emailed/ai-engine — Voice Cloner (S4)
+// @alecrae/ai-engine — Voice Cloner (S4)
 // =============================================================================
 // Goes BEYOND the basic UserVoiceProfile in compose/assistant.ts. Captures
 // signature phrases, idioms, structural rhythm, vocabulary fingerprints,

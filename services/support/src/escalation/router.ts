@@ -1,5 +1,5 @@
 /**
- * @emailed/support - Smart Escalation Router
+ * @alecrae/support - Smart Escalation Router
  *
  * Determines when AI can't resolve an issue and routes to
  * appropriate human team. Includes confidence scoring on AI responses.

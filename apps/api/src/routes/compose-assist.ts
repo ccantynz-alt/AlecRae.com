@@ -10,11 +10,11 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { detectMeetingIntent } from "@emailed/ai-engine/calendar/slot-detector";
+import { detectMeetingIntent } from "@alecrae/ai-engine/calendar/slot-detector";
 import {
   suggestSlotsForCompose,
   type SlotSuggestion,
-} from "@emailed/ai-engine/calendar/slot-suggester";
+} from "@alecrae/ai-engine/calendar/slot-suggester";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 

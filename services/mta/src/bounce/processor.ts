@@ -1,5 +1,5 @@
 /**
- * @emailed/mta — Bounce Processor
+ * @alecrae/mta — Bounce Processor
  *
  * Handles DSN (Delivery Status Notification, RFC 3464) parsing, bounce
  * classification, suppression list management, and retry scheduling.

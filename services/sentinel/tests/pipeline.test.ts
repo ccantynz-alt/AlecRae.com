@@ -28,7 +28,7 @@ function makeItem(overrides?: Partial<ValidationItem> & { payload?: Record<strin
         'date': 'Thu, 01 Jan 2026 00:00:00 +0000',
         'dkim-signature': 'v=1; a=rsa-sha256; d=example.com',
         'received-spf': 'pass',
-        'authentication-results': 'mx.emailed.dev; dkim=pass; dmarc=pass',
+        'authentication-results': 'mx.alecrae.dev; dkim=pass; dmarc=pass',
       },
       senderReputation: 95,
       ipReputation: 90,

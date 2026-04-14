@@ -1,11 +1,11 @@
 /**
- * @emailed/shared — OpenTelemetry Hono Middleware
+ * @alecrae/shared — OpenTelemetry Hono Middleware
  *
  * Automatically traces every HTTP request and records standard API metrics.
  * Adds `X-Trace-Id` to response headers for distributed tracing correlation.
  *
  * Usage:
- *   import { telemetryMiddleware } from "@emailed/shared/telemetry/middleware";
+ *   import { telemetryMiddleware } from "@alecrae/shared/telemetry/middleware";
  *   app.use("*", telemetryMiddleware());
  */
 import { getTracer, recordApiRequest, SpanStatusCode, SpanKind } from "./index.js";

@@ -21,13 +21,13 @@ import {
   getDatabase,
   domains as domainsTable,
   dnsRecords as dnsRecordsTable,
-} from "@emailed/db";
+} from "@alecrae/db";
 import {
   generateDomainConfig,
   verifyDomainConfig,
   checkDomainHealth,
   rotateDkimKey,
-} from "@emailed/dns";
+} from "@alecrae/dns";
 import { warmup } from "./warmup.js";
 
 // ─── Route handler ──────────────────────────────────────────────────────────

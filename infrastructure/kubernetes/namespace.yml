@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: emailed
+  name: alecrae
   labels:
-    app.kubernetes.io/name: emailed
-    app.kubernetes.io/part-of: emailed-platform
+    app.kubernetes.io/name: alecrae
+    app.kubernetes.io/part-of: alecrae-platform
     app.kubernetes.io/managed-by: kubectl
   annotations:
-    description: "Emailed AI-native email infrastructure platform"
+    description: "AlecRae AI-native email infrastructure platform"

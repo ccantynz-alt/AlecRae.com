@@ -1,6 +1,6 @@
 # Rate Limits
 
-The Emailed API enforces rate limits to ensure fair usage and platform stability. Limits are applied per API key or OAuth token.
+The AlecRae API enforces rate limits to ensure fair usage and platform stability. Limits are applied per API key or OAuth token.
 
 ## Limits by Plan
 
@@ -72,12 +72,12 @@ When rate limited, follow this strategy:
 
 ### SDK Automatic Retries
 
-The `@emailed/sdk` client handles rate limiting automatically:
+The `@alecrae/sdk` client handles rate limiting automatically:
 
 ```typescript
-import { Emailed } from "@emailed/sdk";
+import { AlecRae } from "@alecrae/sdk";
 
-const client = new Emailed({
+const client = new AlecRae({
   auth: { type: "apiKey", key: "em_live_..." },
   maxRetries: 3, // Default: 3 retries with exponential backoff
 });

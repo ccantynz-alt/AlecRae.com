@@ -1,10 +1,10 @@
-import { checkSpf } from "@emailed/mta/src/spf/validator.js";
-import { evaluateDmarc, determineAction } from "@emailed/mta/src/dmarc/enforcer.js";
+import { checkSpf } from "@alecrae/mta/src/spf/validator.js";
+import { evaluateDmarc, determineAction } from "@alecrae/mta/src/dmarc/enforcer.js";
 import { verifyDkim } from "./dkim-verifier.js";
 import type { DkimVerifyResult } from "./dkim-verifier.js";
 import type { ParsedEmail, AuthenticationResult, FilterVerdict, SmtpEnvelope } from "../types.js";
-import { classifyEmail, isAIAvailable } from "@emailed/ai-engine/classifier";
-import type { EmailClassificationInput } from "@emailed/ai-engine/classifier";
+import { classifyEmail, isAIAvailable } from "@alecrae/ai-engine/classifier";
+import type { EmailClassificationInput } from "@alecrae/ai-engine/classifier";
 
 // --- Filter Stage Interface ---
 

@@ -13,7 +13,7 @@ function makeEmail(overrides: Record<string, unknown> = {}) {
     headers: {
       subject: (overrides['subject'] as string) ?? 'Hello',
       from: { address: 'sender@example.com', domain: 'example.com', name: 'Sender' },
-      to: [{ address: 'user@emailed.com', domain: 'emailed.com', name: 'User' }],
+      to: [{ address: 'user@alecrae.com', domain: 'alecrae.com', name: 'User' }],
       cc: [],
       replyTo: overrides['replyTo'] as { address: string; domain: string } | undefined,
       receivedChain: (overrides['receivedChain'] as unknown[]) ?? [

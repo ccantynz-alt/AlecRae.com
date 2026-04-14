@@ -209,7 +209,7 @@ importRouter.post(
     for (const file of files) {
       if (file instanceof File && file.name.endsWith(".eml")) {
         try {
-          // In production: parse EML with @emailed/email-parser and store
+          // In production: parse EML with @alecrae/email-parser and store
           job.progress.processed++;
         } catch {
           job.progress.failed++;
@@ -319,7 +319,7 @@ async function startMboxImport(job: ImportJob, content: string): Promise<void> {
 
   for (const _msg of messages) {
     try {
-      // In production: parse each message with @emailed/email-parser
+      // In production: parse each message with @alecrae/email-parser
       // and store in DB + index for search
       job.progress.processed++;
     } catch {

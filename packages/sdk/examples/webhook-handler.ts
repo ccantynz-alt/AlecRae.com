@@ -1,5 +1,5 @@
 /**
- * Example: Receive and verify Emailed webhooks using Hono.
+ * Example: Receive and verify AlecRae webhooks using Hono.
  *
  * This handler verifies the HMAC-SHA256 signature on every inbound
  * webhook event before processing it, preventing replay and tampering
@@ -19,14 +19,14 @@ import {
   WebhookVerificationError,
   SIGNATURE_HEADER,
   isWebhookEventType,
-} from "@emailed/sdk";
-import type { WebhookEvent } from "@emailed/sdk";
+} from "@alecrae/sdk";
+import type { WebhookEvent } from "@alecrae/sdk";
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET!;
 
 const app = new Hono();
 
-app.post("/webhooks/emailed", async (c) => {
+app.post("/webhooks/alecrae", async (c) => {
   const rawBody = await c.req.text();
   const signature = c.req.header(SIGNATURE_HEADER);
 

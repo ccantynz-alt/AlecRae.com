@@ -7,6 +7,9 @@ import * as domainsSchema from "../schema/domains.js";
 import * as eventsSchema from "../schema/events.js";
 import * as apiKeysSchema from "../schema/api-keys.js";
 import * as suppressionsSchema from "../schema/suppressions.js";
+import * as contactsSchema from "../schema/contacts.js";
+import * as recallSchema from "../schema/recall.js";
+import * as screenerSchema from "../schema/screener.js";
 
 const schema = {
   ...usersSchema,
@@ -15,6 +18,9 @@ const schema = {
   ...eventsSchema,
   ...apiKeysSchema,
   ...suppressionsSchema,
+  ...contactsSchema,
+  ...recallSchema,
+  ...screenerSchema,
 };
 
 export type DatabaseSchema = typeof schema;

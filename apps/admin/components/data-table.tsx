@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { Box, Text, Button } from "@emailed/ui";
+import { Box, Text, Button } from "@alecrae/ui";
 
 type SortDirection = "asc" | "desc";
 

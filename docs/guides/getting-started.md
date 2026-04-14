@@ -1,6 +1,6 @@
-# Getting Started with Emailed
+# Getting Started with AlecRae
 
-This guide walks you through setting up your local development environment for the Emailed platform.
+This guide walks you through setting up your local development environment for the AlecRae platform.
 
 ## Prerequisites
 
@@ -16,8 +16,8 @@ Before you begin, make sure you have the following installed:
 
 ```bash
 # Clone the repository
-git clone git@github.com:your-org/emailed.git
-cd emailed
+git clone git@github.com:your-org/alecrae.git
+cd alecrae
 
 # Install all dependencies (monorepo workspaces)
 bun install
@@ -35,7 +35,7 @@ Edit `.env` and set the following values at minimum:
 
 ```env
 # Database
-DATABASE_URL=postgresql://emailed:emailed@localhost:5432/emailed
+DATABASE_URL=postgresql://alecrae:alecrae@localhost:5432/alecrae
 
 # Redis
 REDIS_URL=redis://localhost:6379
@@ -85,9 +85,9 @@ This starts:
 To start a specific service only:
 
 ```bash
-bun run dev --filter=@emailed/web
-bun run dev --filter=@emailed/api
-bun run dev --filter=@emailed/mta
+bun run dev --filter=@alecrae/web
+bun run dev --filter=@alecrae/api
+bun run dev --filter=@alecrae/mta
 ```
 
 ## Run Tests
@@ -97,7 +97,7 @@ bun run dev --filter=@emailed/mta
 bun run test
 
 # Run tests for a specific package
-bun run test --filter=@emailed/mta
+bun run test --filter=@alecrae/mta
 
 # Run tests in watch mode
 bun run test:watch
@@ -109,7 +109,7 @@ bun run test:coverage
 ## Project Structure Overview
 
 ```
-emailed/
+alecrae/
 ├── apps/
 │   ├── web/          # Next.js 15 web application
 │   ├── api/          # REST/GraphQL API gateway
@@ -146,7 +146,7 @@ emailed/
    ```bash
    mkdir -p services/my-service/src
    ```
-2. Add a `package.json` with the workspace name `@emailed/my-service`.
+2. Add a `package.json` with the workspace name `@alecrae/my-service`.
 3. Add TypeScript config extending `../../tsconfig.base.json`.
 4. Register the service in `turbo.json` if it has custom build/dev tasks.
 5. Run `bun install` to link the workspace.

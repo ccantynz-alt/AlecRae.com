@@ -5,6 +5,7 @@
  * POST /v1/calendar/parse-invite    — Parse meeting invite from email
  * POST /v1/calendar/availability    — Get availability for scheduling
  * POST /v1/calendar/schedule-link   — Generate scheduling link
+ * POST /v1/calendar/suggest-slots   — AI-powered slot suggestions for compose (B7)
  * GET  /v1/calendar/providers       — List connected calendar providers
  * POST /v1/calendar/connect         — Connect a calendar (Google/Outlook)
  */
@@ -13,6 +14,11 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
+import { detectMeetingIntent } from "@alecrae/ai-engine/calendar/slot-detector";
+import {
+  suggestSlotsForCompose,
+  type SlotSuggestion,
+} from "@alecrae/ai-engine/calendar/slot-suggester";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +68,16 @@ const ScheduleLinkSchema = z.object({
   }),
   location: z.string().optional(),
   description: z.string().optional(),
+});
+
+const SuggestSlotsFromTextSchema = z.object({
+  text: z.string().min(1).max(20_000),
+  timezone: z.string().default("UTC"),
+  workingHoursStart: z.number().int().min(0).max(23).default(9),
+  workingHoursEnd: z.number().int().min(0).max(23).default(17),
+  durationMinutes: z.number().int().min(15).max(480).optional(),
+  recipientEmail: z.string().email().optional(),
+  daysAhead: z.number().int().min(1).max(30).default(7),
 });
 
 // ─── In-memory store ─────────────────────────────────────────────────────────
@@ -214,7 +230,7 @@ calendar.post(
     const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     schedulingLinks.set(token, { config: input, accountId: auth.accountId, token });
 
-    const baseUrl = process.env["WEB_URL"] ?? "https://mail.vieanna.com";
+    const baseUrl = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
 
     return c.json({
       data: {
@@ -222,6 +238,120 @@ calendar.post(
         title: input.title,
         duration: input.durationMinutes,
         expiresAt: input.dateRange.to,
+      },
+    });
+  },
+);
+
+// POST /v1/calendar/suggest-slots — AI-powered slot suggestions from compose text (B7)
+calendar.post(
+  "/suggest-slots",
+  requireScope("calendar:read"),
+  validateBody(SuggestSlotsFromTextSchema),
+  async (c) => {
+    const input = getValidatedBody<z.infer<typeof SuggestSlotsFromTextSchema>>(c);
+    const auth = c.get("auth");
+
+    // Step 1: Detect meeting intent from the compose text
+    const intent = await detectMeetingIntent(input.text);
+
+    if (!intent.hasIntent) {
+      return c.json({
+        data: {
+          detected: false,
+          intent,
+          slots: [],
+          formattedText: null,
+        },
+      });
+    }
+
+    // Step 2: Determine meeting duration — from input, AI hint, or default 30
+    const duration = input.durationMinutes ?? intent.durationHint ?? 30;
+
+    // Step 3: Get sender's availability (free slots from their calendar)
+    const now = new Date();
+    const dateFrom = new Date(now.getTime() + 24 * 60 * 60 * 1000); // tomorrow
+    const dateTo = new Date(now.getTime() + input.daysAhead * 24 * 60 * 60 * 1000);
+
+    const events = eventStore.get(auth.accountId) ?? [];
+    const busySlots = events
+      .filter((e) => e.startTime >= dateFrom.toISOString() && e.endTime <= dateTo.toISOString())
+      .map((e) => ({ start: new Date(e.startTime).getTime(), end: new Date(e.endTime).getTime() }));
+
+    // Build availability windows from working hours, excluding busy slots
+    const availabilityWindows: Array<{ start: Date; end: Date }> = [];
+    const durationMs = duration * 60 * 1000;
+
+    for (let day = new Date(dateFrom); day <= dateTo; day.setDate(day.getDate() + 1)) {
+      if (day.getDay() === 0 || day.getDay() === 6) continue; // Skip weekends
+
+      const dayStart = new Date(day);
+      dayStart.setHours(input.workingHoursStart, 0, 0, 0);
+      const dayEnd = new Date(day);
+      dayEnd.setHours(input.workingHoursEnd, 0, 0, 0);
+
+      // Collect free intervals in this working day
+      let cursor = dayStart.getTime();
+      const dayBusy = busySlots
+        .filter((b) => b.start < dayEnd.getTime() && b.end > dayStart.getTime())
+        .sort((a, b) => a.start - b.start);
+
+      for (const busy of dayBusy) {
+        if (cursor < busy.start && busy.start - cursor >= durationMs) {
+          availabilityWindows.push({
+            start: new Date(cursor),
+            end: new Date(busy.start),
+          });
+        }
+        cursor = Math.max(cursor, busy.end);
+      }
+
+      // Remaining time after last busy block
+      if (cursor < dayEnd.getTime() && dayEnd.getTime() - cursor >= durationMs) {
+        availabilityWindows.push({
+          start: new Date(cursor),
+          end: dayEnd,
+        });
+      }
+    }
+
+    // Step 4: Run the AI slot suggester
+    const slots = await suggestSlotsForCompose({
+      senderAvailability: availabilityWindows,
+      recipientEmail: input.recipientEmail ?? "unknown@example.com",
+      durationMinutes: duration,
+      dateRange: { from: dateFrom, to: dateTo },
+      preferredTimes: {
+        hourStart: input.workingHoursStart,
+        hourEnd: input.workingHoursEnd,
+      },
+      timezone: input.timezone,
+    });
+
+    // Step 5: Format as insertable text
+    const introLine = "Here are a few times that work on my end:";
+    const slotLines = slots.map(
+      (s: SlotSuggestion) => `- ${s.formattedRange} (${s.durationMinutes} min)`,
+    );
+    const formattedText = [introLine, "", ...slotLines].join("\n");
+
+    return c.json({
+      data: {
+        detected: true,
+        intent: {
+          hasIntent: intent.hasIntent,
+          type: intent.type ?? null,
+          confidence: intent.confidence,
+          durationHint: intent.durationHint ?? null,
+          locationHint: intent.locationHint ?? null,
+          extractedTimes: intent.extractedTimes.map((t) => ({
+            raw: t.raw,
+            parsed: t.parsed?.toISOString() ?? null,
+          })),
+        },
+        slots,
+        formattedText,
       },
     });
   },

@@ -1,22 +1,35 @@
 /**
  * Predictive Send-Time Optimization Route (S10)
  *
- * POST /v1/send-time/predict        — Get recommended send times for a recipient
- * POST /v1/send-time/analyze        — Get full pattern analysis for a recipient
- * POST /v1/send-time/auto-schedule  — Schedule an existing email at the predicted optimal time
+ * POST /v1/send-time/predict            — Get recommended send times for a recipient
+ * POST /v1/send-time/analyze            — Get full pattern analysis for a recipient
+ * POST /v1/send-time/auto-schedule      — Schedule an existing email at the predicted optimal time
+ * POST /v1/emails/optimal-send-time     — Batch: get optimal send time for multiple recipients
+ * GET  /v1/analytics/recipient-patterns  — Get engagement patterns for a recipient
+ * POST /v1/send-time/record-engagement  — Record an engagement event (open/click/reply)
  */
 
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
-import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, emails } from "@emailed/db";
+import { validateBody, validateQuery, getValidatedBody, getValidatedQuery } from "../middleware/validator.js";
+import {
+  getDatabase,
+  emails,
+  recipientEngagement,
+  engagementEvents,
+} from "@alecrae/db";
 import {
   analyzeRecipientPatterns,
   predictBestSendTime,
+  engagementRowToPattern,
+  computeUpdatedAggregates,
   type HistoricalEmail,
-} from "@emailed/ai-engine/send-time";
+  type EngagementRow,
+  type RecipientPattern,
+  type SendTimeRecommendation,
+} from "@alecrae/ai-engine/send-time";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -42,7 +55,36 @@ const AutoScheduleSchema = z.object({
   windowDays: z.number().int().min(1).max(30).optional(),
 });
 
+const OptimalSendTimeSchema = z.object({
+  recipients: z
+    .array(z.string().email())
+    .min(1)
+    .max(50),
+  senderTimezone: z.string().default("UTC"),
+  urgency: z.enum(["low", "normal", "high"]).default("normal"),
+  windowDays: z.number().int().min(1).max(30).optional(),
+});
+
+const RecipientPatternsQuerySchema = z.object({
+  recipientEmail: z.string().email(),
+});
+
+const RecordEngagementSchema = z.object({
+  recipientEmail: z.string().email(),
+  emailId: z.string(),
+  eventType: z.enum(["open", "click", "reply"]),
+  sentAt: z.string().datetime(),
+  engagedAt: z.string().datetime(),
+});
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function generateId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 interface EmailRow {
   createdAt: Date;
@@ -70,6 +112,51 @@ function rowsToHistorical(
   return out;
 }
 
+/**
+ * Fetch the engagement row for a recipient within an account.
+ * Returns null if not found.
+ */
+async function getEngagementRow(
+  accountId: string,
+  email: string,
+): Promise<EngagementRow | null> {
+  const db = getDatabase();
+  const rows = await db
+    .select({
+      totalSent: recipientEngagement.totalSent,
+      totalOpened: recipientEngagement.totalOpened,
+      totalClicked: recipientEngagement.totalClicked,
+      totalReplied: recipientEngagement.totalReplied,
+      openRate: recipientEngagement.openRate,
+      clickRate: recipientEngagement.clickRate,
+      replyRate: recipientEngagement.replyRate,
+      openHourDistribution: recipientEngagement.openHourDistribution,
+      openDayDistribution: recipientEngagement.openDayDistribution,
+      clickHourDistribution: recipientEngagement.clickHourDistribution,
+      clickDayDistribution: recipientEngagement.clickDayDistribution,
+      avgOpenDelayHours: recipientEngagement.avgOpenDelayHours,
+      avgClickDelayHours: recipientEngagement.avgClickDelayHours,
+      avgReplyDelayHours: recipientEngagement.avgReplyDelayHours,
+      peakOpenHour: recipientEngagement.peakOpenHour,
+      peakOpenDay: recipientEngagement.peakOpenDay,
+      peakClickHour: recipientEngagement.peakClickHour,
+      peakClickDay: recipientEngagement.peakClickDay,
+      inferredTimezone: recipientEngagement.inferredTimezone,
+    })
+    .from(recipientEngagement)
+    .where(
+      and(
+        eq(recipientEngagement.accountId, accountId),
+        eq(recipientEngagement.recipientEmail, email.toLowerCase()),
+      ),
+    )
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return null;
+  return row;
+}
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 const sendTime = new Hono();
@@ -81,7 +168,16 @@ sendTime.post(
   validateBody(PredictSchema),
   async (c) => {
     const input = getValidatedBody<z.infer<typeof PredictSchema>>(c);
-    const recommendation = await predictBestSendTime(input);
+    const auth = c.get("auth");
+
+    // Try to fetch engagement data from DB
+    const engagement = await getEngagementRow(auth.accountId, input.recipientEmail);
+
+    const recommendation: SendTimeRecommendation = await predictBestSendTime({
+      ...input,
+      engagement,
+    });
+
     return c.json({ data: recommendation });
   },
 );
@@ -96,6 +192,22 @@ sendTime.post(
     const auth = c.get("auth");
     const db = getDatabase();
 
+    // First check DB engagement data
+    const engagement = await getEngagementRow(auth.accountId, input.recipientEmail);
+
+    if (engagement && engagement.totalOpened > 0) {
+      const pattern: RecipientPattern = engagementRowToPattern(engagement);
+      return c.json({
+        data: {
+          recipientEmail: input.recipientEmail,
+          sampleSize: engagement.totalSent,
+          source: "aggregated" as const,
+          pattern,
+        },
+      });
+    }
+
+    // Fallback: scan raw email data
     const rows = await db
       .select({
         createdAt: emails.createdAt,
@@ -108,12 +220,16 @@ sendTime.post(
       .limit(500);
 
     const historical = rowsToHistorical(rows, input.recipientEmail);
-    const pattern = await analyzeRecipientPatterns(input.recipientEmail, historical);
+    const pattern: RecipientPattern = await analyzeRecipientPatterns(
+      input.recipientEmail,
+      historical,
+    );
 
     return c.json({
       data: {
         recipientEmail: input.recipientEmail,
         sampleSize: historical.length,
+        source: "raw_scan" as const,
         pattern,
       },
     });
@@ -130,7 +246,13 @@ sendTime.post(
     const auth = c.get("auth");
     const db = getDatabase();
 
-    const recommendation = await predictBestSendTime(input);
+    const engagement = await getEngagementRow(auth.accountId, input.recipientEmail);
+
+    const recommendation: SendTimeRecommendation = await predictBestSendTime({
+      ...input,
+      engagement,
+    });
+
     const top = recommendation.recommendedTimes[0];
     if (!top) {
       return c.json(
@@ -188,10 +310,230 @@ sendTime.post(
         scheduledAt: sendAt.toISOString(),
         confidence: top.confidence,
         reasoning: top.reasoning,
+        dataSource: recommendation.dataSource,
         alternatives: recommendation.recommendedTimes.slice(1),
       },
     });
   },
 );
 
-export { sendTime };
+// POST /v1/send-time/record-engagement — Record engagement event + update aggregates
+sendTime.post(
+  "/record-engagement",
+  requireScope("messages:send"),
+  validateBody(RecordEngagementSchema),
+  async (c) => {
+    const input = getValidatedBody<z.infer<typeof RecordEngagementSchema>>(c);
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const sentDate = new Date(input.sentAt);
+    const engagedDate = new Date(input.engagedAt);
+    const delaySeconds = Math.max(
+      0,
+      Math.floor((engagedDate.getTime() - sentDate.getTime()) / 1000),
+    );
+    const delayHours = delaySeconds / 3600;
+    const engagedHour = engagedDate.getUTCHours();
+    const engagedDayOfWeek = engagedDate.getUTCDay();
+    const normalizedEmail = input.recipientEmail.toLowerCase().trim();
+
+    // 1. Insert the raw engagement event
+    const eventId = generateId();
+    await db.insert(engagementEvents).values({
+      id: eventId,
+      accountId: auth.accountId,
+      recipientEmail: normalizedEmail,
+      emailId: input.emailId,
+      eventType: input.eventType,
+      sentAt: sentDate,
+      engagedAt: engagedDate,
+      delaySeconds,
+      engagedHour,
+      engagedDayOfWeek,
+    });
+
+    // 2. Upsert + update the aggregate row
+    const existing = await getEngagementRow(auth.accountId, normalizedEmail);
+
+    if (!existing) {
+      // Create a new engagement row
+      const hourDist: Record<string, number> = {};
+      const dayDist: Record<string, number> = {};
+      hourDist[String(engagedHour)] = 1;
+      dayDist[String(engagedDayOfWeek)] = 1;
+
+      const isOpen = input.eventType === "open";
+      const isClick = input.eventType === "click";
+      const isReply = input.eventType === "reply";
+
+      await db.insert(recipientEngagement).values({
+        id: generateId(),
+        accountId: auth.accountId,
+        recipientEmail: normalizedEmail,
+        totalSent: 1,
+        totalOpened: isOpen ? 1 : 0,
+        totalClicked: isClick ? 1 : 0,
+        totalReplied: isReply ? 1 : 0,
+        openRate: isOpen ? 1 : 0,
+        clickRate: isClick ? 1 : 0,
+        replyRate: isReply ? 1 : 0,
+        openHourDistribution: isOpen ? hourDist : {},
+        openDayDistribution: isOpen ? dayDist : {},
+        clickHourDistribution: isClick ? hourDist : {},
+        clickDayDistribution: isClick ? dayDist : {},
+        avgOpenDelayHours: isOpen ? delayHours : null,
+        avgClickDelayHours: isClick ? delayHours : null,
+        avgReplyDelayHours: isReply ? delayHours : null,
+        peakOpenHour: isOpen ? engagedHour : null,
+        peakOpenDay: isOpen ? engagedDayOfWeek : null,
+        peakClickHour: isClick ? engagedHour : null,
+        peakClickDay: isClick ? engagedDayOfWeek : null,
+        firstInteractionAt: engagedDate,
+        lastInteractionAt: engagedDate,
+      });
+    } else {
+      // Update existing aggregates
+      const updates = computeUpdatedAggregates(
+        existing,
+        input.eventType,
+        engagedDate,
+        delayHours,
+      );
+
+      await db
+        .update(recipientEngagement)
+        .set({
+          ...updates,
+          lastInteractionAt: engagedDate,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(recipientEngagement.accountId, auth.accountId),
+            eq(recipientEngagement.recipientEmail, normalizedEmail),
+          ),
+        );
+    }
+
+    return c.json({
+      data: {
+        eventId,
+        recipientEmail: normalizedEmail,
+        eventType: input.eventType,
+        delaySeconds,
+        recorded: true,
+      },
+    });
+  },
+);
+
+// ─── Optimal Send Time (batch) ──────────────────────────────────────────────
+
+const optimalSendTime = new Hono();
+
+// POST /v1/emails/optimal-send-time
+optimalSendTime.post(
+  "/optimal-send-time",
+  requireScope("messages:read"),
+  validateBody(OptimalSendTimeSchema),
+  async (c) => {
+    const input = getValidatedBody<z.infer<typeof OptimalSendTimeSchema>>(c);
+    const auth = c.get("auth");
+
+    const results: Array<{
+      recipientEmail: string;
+      recommendation: SendTimeRecommendation;
+    }> = [];
+
+    for (const recipient of input.recipients) {
+      const engagement = await getEngagementRow(auth.accountId, recipient);
+      const recommendation: SendTimeRecommendation = await predictBestSendTime({
+        recipientEmail: recipient,
+        senderTimezone: input.senderTimezone,
+        urgency: input.urgency,
+        windowDays: input.windowDays,
+        engagement,
+      });
+
+      results.push({
+        recipientEmail: recipient,
+        recommendation,
+      });
+    }
+
+    // Compute a consensus time: the most common top recommendation
+    const timeCounts = new Map<string, number>();
+    for (const r of results) {
+      const topTime = r.recommendation.recommendedTimes[0]?.datetime;
+      if (topTime) {
+        timeCounts.set(topTime, (timeCounts.get(topTime) ?? 0) + 1);
+      }
+    }
+    const sortedTimes = [...timeCounts.entries()].sort((a, b) => b[1] - a[1]);
+    const consensusTime = sortedTimes[0]?.[0] ?? null;
+
+    return c.json({
+      data: {
+        recipients: results,
+        consensusOptimalTime: consensusTime,
+        recipientCount: input.recipients.length,
+      },
+    });
+  },
+);
+
+// ─── Recipient Patterns (analytics) ─────────────────────────────────────────
+
+const recipientPatterns = new Hono();
+
+// GET /v1/analytics/recipient-patterns?recipientEmail=...
+recipientPatterns.get(
+  "/recipient-patterns",
+  requireScope("analytics:read"),
+  validateQuery(RecipientPatternsQuerySchema),
+  async (c) => {
+    const query = getValidatedQuery<z.infer<typeof RecipientPatternsQuerySchema>>(c);
+    const auth = c.get("auth");
+
+    const engagement = await getEngagementRow(auth.accountId, query.recipientEmail);
+
+    if (!engagement) {
+      return c.json({
+        data: {
+          recipientEmail: query.recipientEmail,
+          hasData: false,
+          pattern: null,
+          engagement: null,
+        },
+      });
+    }
+
+    const pattern: RecipientPattern = engagementRowToPattern(engagement);
+
+    return c.json({
+      data: {
+        recipientEmail: query.recipientEmail,
+        hasData: true,
+        pattern,
+        engagement: {
+          totalSent: engagement.totalSent,
+          totalOpened: engagement.totalOpened,
+          totalClicked: engagement.totalClicked,
+          totalReplied: engagement.totalReplied,
+          openRate: engagement.openRate,
+          clickRate: engagement.clickRate,
+          replyRate: engagement.replyRate,
+          avgOpenDelayHours: engagement.avgOpenDelayHours,
+          avgClickDelayHours: engagement.avgClickDelayHours,
+          avgReplyDelayHours: engagement.avgReplyDelayHours,
+          peakOpenHour: engagement.peakOpenHour,
+          peakOpenDay: engagement.peakOpenDay,
+          inferredTimezone: engagement.inferredTimezone,
+        },
+      },
+    });
+  },
+);
+
+export { sendTime, optimalSendTime, recipientPatterns };

@@ -1,5 +1,5 @@
 /**
- * @emailed/reputation — Blocklist Monitor
+ * @alecrae/reputation — Blocklist Monitor
  *
  * Continuously monitors IP addresses and domains against major DNS-based
  * blocklists (DNSBLs). When a listing is detected, the monitor:
