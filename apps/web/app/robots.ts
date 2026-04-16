@@ -6,7 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/inbox", "/compose", "/settings", "/analytics", "/domains", "/login", "/register", "/api/"],
+        disallow: ["/inbox", "/compose", "/settings", "/analytics", "/domains", "/login", "/register", "/api/", "/admin"],
       },
     ],
     sitemap: "https://alecrae.com/sitemap.xml",

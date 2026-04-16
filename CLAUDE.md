@@ -553,6 +553,7 @@ After writing the code:
 | 12 | Full rebrand from Vienna/48co/@emailed to AlecRae/alecrae.com/@alecrae | HIGH | 2026-04-12 | DONE 2026-04-12 — all files updated |
 | 13 | No error boundaries in web app (error.tsx / not-found.tsx) | MEDIUM | 2026-04-12 | FIXED 2026-04-12 — root + dashboard error boundaries + 404 page |
 | 14 | No sitemap.xml or robots.txt for SEO | LOW | 2026-04-12 | FIXED 2026-04-12 — Next.js route-based sitemap.ts + robots.ts |
+| 15 | Craig couldn't actually see an admin page on iPad — admin sub-app not deployed | HIGH | 2026-04-16 | FIXED 2026-04-16 — added /admin preview route to apps/web (KPIs, recent activity, launch gates, section nav). Brand-correct (ivory + Italianno wordmark), robots-disallowed, builds clean (23/23 static pages). Standalone admin.alecrae.com still ships from apps/admin once DNS cuts over. |
 
 ---
 
@@ -650,9 +651,9 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Date last updated:** 2026-04-12
+**Date last updated:** 2026-04-16
 **Current phase:** Phase 1 — Ready for Beta Launch
-**Current focus:** Rebrand complete (Vienna/48co → AlecRae/alecrae.com). Production deployment awaiting Craig's infra setup.
+**Current focus:** Admin preview (`/admin` on web app) added so Craig can SEE the admin surface from his iPad ahead of admin.alecrae.com cutover. Production deployment still awaiting Craig's infra setup.
 **Build completion:** TIER 1-4 ALL DONE (36/36) + 7 bonus + 31 advanced features (S10/10 + A7/7 + B8/8 + C6/10)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
