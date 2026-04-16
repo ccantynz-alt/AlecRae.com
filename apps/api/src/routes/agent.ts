@@ -279,7 +279,7 @@ function getAgent(): InboxAgent {
     });
 
   // Draft queueing is intentionally omitted from the agent factory. Drafts in
-  // Vienna ALWAYS require explicit user approval (DraftedReply.requiresApproval
+  // AlecRae ALWAYS requires explicit user approval (DraftedReply.requiresApproval
   // is hard-coded to true), so the queueDraft hook would only fire for drafts
   // the user has *not* yet approved. The real send path lives in the
   // /drafts/:id/approve and /runs/:id/approve routes below, which call

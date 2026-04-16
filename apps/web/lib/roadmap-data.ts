@@ -108,15 +108,15 @@ const TIER_B_ITEMS: RoadmapItem[] = [
 ];
 
 const TIER_C_ITEMS: RoadmapItem[] = [
-  { id: "C1-status", title: "Status page", description: "Public uptime and incident history at status.48co.ai.", status: "shipped", tier: "C", shippedAt: "2026-04" },
+  { id: "C1-status", title: "Status page", description: "Public uptime and incident history at status.alecrae.com.", status: "shipped", tier: "C", shippedAt: "2026-04" },
   { id: "C2-api-docs", title: "Public API docs", description: "22-page developer documentation with endpoint reference and code examples.", status: "shipped", tier: "C", shippedAt: "2026-04" },
   { id: "C3-saml", title: "Admin console SSO (SAML)", description: "SAML 2.0 SP for enterprise auth providers.", status: "shipped", tier: "C", shippedAt: "2026-04" },
   { id: "C4-soc2", title: "SOC 2 Type I → Type II", description: "Third-party audit certifying our security controls. Required for enterprise.", status: "planned", tier: "C" },
   { id: "C5-dpa", title: "GDPR DPA template", description: "Signed Data Processing Agreement workflow for enterprise customers.", status: "planned", tier: "C" },
   { id: "C6-bounty", title: "Bug bounty program", description: "Responsible disclosure via security.txt and /security. HackerOne program to follow.", status: "in_progress", tier: "C" },
   { id: "C7-roadmap", title: "Public roadmap", description: "This page. Live view of what&apos;s shipped, in progress, and planned.", status: "shipped", tier: "C", shippedAt: "2026-04" },
-  { id: "C8-changelog", title: "Changelog page", description: "Public changelog at changelog.48co.ai with release notes and breaking changes.", status: "shipped", tier: "C", shippedAt: "2026-04" },
-  { id: "C9-migration-guides", title: "Migration guides", description: "Step-by-step guides: &quot;From Gmail to 48co.ai in 5 minutes.&quot;", status: "shipped", tier: "C", shippedAt: "2026-04" },
+  { id: "C8-changelog", title: "Changelog page", description: "Public changelog at changelog.alecrae.com with release notes and breaking changes.", status: "shipped", tier: "C", shippedAt: "2026-04" },
+  { id: "C9-migration-guides", title: "Migration guides", description: "Step-by-step guides: &quot;From Gmail to AlecRae in 5 minutes.&quot;", status: "shipped", tier: "C", shippedAt: "2026-04" },
   { id: "C10-spellcheck", title: "Multi-language spell check", description: "Native browser spell-check integration with user-editable custom dictionary.", status: "shipped", tier: "C", shippedAt: "2026-04" },
 ];
 
