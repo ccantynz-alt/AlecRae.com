@@ -28,9 +28,6 @@ import type {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** ARF MIME content type */
-const ARF_CONTENT_TYPE = 'multipart/report; report-type=feedback-report';
-
 /** Maximum complaint rate before triggering automatic suspension review */
 const CRITICAL_COMPLAINT_RATE = 0.005; // 0.5%
 
@@ -110,22 +107,22 @@ export class FeedbackLoopProcessor {
   private readonly config: Required<FeedbackLoopProcessorConfig>;
 
   /** All processed complaints, keyed by complaint ID */
-  private readonly complaints: Map<string, ArfComplaint> = new Map();
+  private readonly complaints = new Map<string, ArfComplaint>();
 
   /** Suppression list: email -> SuppressionEntry */
-  private readonly suppressions: Map<string, SuppressionEntry> = new Map();
+  private readonly suppressions = new Map<string, SuppressionEntry>();
 
   /** FBL subscriptions keyed by subscription ID */
-  private readonly subscriptions: Map<string, FblSubscription> = new Map();
+  private readonly subscriptions = new Map<string, FblSubscription>();
 
   /** Complaint counts per domain (for rate calculation) */
-  private readonly domainComplaintCounts: Map<string, number> = new Map();
+  private readonly domainComplaintCounts = new Map<string, number>();
 
   /** Complaint counts per IP (for rate calculation) */
-  private readonly ipComplaintCounts: Map<string, number> = new Map();
+  private readonly ipComplaintCounts = new Map<string, number>();
 
   /** Sent counts per domain (set externally for rate calculation) */
-  private readonly domainSentCounts: Map<string, number> = new Map();
+  private readonly domainSentCounts = new Map<string, number>();
 
   /** Pending notifications for consumers to drain */
   private readonly pendingNotifications: ComplaintNotification[] = [];
@@ -227,11 +224,11 @@ export class FeedbackLoopProcessor {
         originalMailFrom,
         originalRcptTo,
         reportedDomain,
-        reportedUri: reportedUri ?? undefined,
+        ...(reportedUri !== undefined ? { reportedUri } : {}),
         arrivalDate,
         sourceIp,
-        authenticationResults: authResults ?? undefined,
-        reportingMta: reportingMta ?? undefined,
+        ...(authResults !== undefined ? { authenticationResults: authResults } : {}),
+        ...(reportingMta !== undefined ? { reportingMta } : {}),
         originalHeaders,
         rawMessage,
         processedAt: new Date(),
@@ -368,7 +365,7 @@ export class FeedbackLoopProcessor {
       source,
       domain,
       createdAt: new Date(),
-      expiresAt,
+      ...(expiresAt !== undefined ? { expiresAt } : {}),
     };
 
     this.suppressions.set(email.toLowerCase(), entry);

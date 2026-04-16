@@ -155,9 +155,10 @@ suppressions.get(
 
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const lastItem = page[page.length - 1];
     const nextCursor =
-      hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+      hasMore && lastItem
+        ? lastItem.createdAt.toISOString()
         : null;
 
     const domainMap = new Map(accountDomains.map((d) => [d.id, d.domain]));

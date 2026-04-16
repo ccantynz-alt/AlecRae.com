@@ -335,12 +335,6 @@ import type {
   recipientEngagement,
   engagementEvents,
 } from "./schema/recipient-engagement.js";
-import type {
-  collaborationSessions,
-  collaborationInvites,
-  collaborationParticipants,
-  collaborationHistory,
-} from "./schema/collaboration.js";
 import type { tasks, taskProviderConfigs } from "./schema/tasks.js";
 import type {
   agentRuns,

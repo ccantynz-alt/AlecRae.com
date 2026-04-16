@@ -28,8 +28,8 @@ function base64UrlToArrayBuffer(base64url: string): ArrayBuffer {
 function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!);
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
   }
   return btoa(binary)
     .replace(/\+/g, "-")
@@ -166,11 +166,14 @@ export async function getPasskeyAssertion(
   };
 
   if (options.allowCredentials && options.allowCredentials.length > 0) {
-    publicKeyOptions.allowCredentials = options.allowCredentials.map((cred) => ({
-      type: cred.type,
-      id: base64UrlToArrayBuffer(cred.id),
-      transports: cred.transports as AuthenticatorTransport[] | undefined,
-    }));
+    publicKeyOptions.allowCredentials = options.allowCredentials.map((cred) => {
+      const transports = cred.transports as AuthenticatorTransport[] | undefined;
+      return {
+        type: cred.type,
+        id: base64UrlToArrayBuffer(cred.id),
+        ...(transports !== undefined ? { transports } : {}),
+      };
+    });
   }
 
   const credential = (await navigator.credentials.get({

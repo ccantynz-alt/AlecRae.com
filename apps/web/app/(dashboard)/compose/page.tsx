@@ -66,7 +66,7 @@ function ComposePage(): React.ReactNode {
   useEffect(() => {
     authApi.me().then((res) => {
       setUserEmail(res.data.email);
-    }).catch(() => {});
+    }).catch(() => { /* not authenticated */ });
   }, []);
 
   const initialSubject = mode === "forward"
@@ -106,7 +106,7 @@ function ComposePage(): React.ReactNode {
     async (text: string, recipientEmail: string) => {
       const res = await calendarApi.suggestSlots({
         text,
-        recipientEmail: recipientEmail || undefined,
+        ...(recipientEmail ? { recipientEmail } : {}),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       return res.data;
@@ -233,7 +233,7 @@ function ComposePage(): React.ReactNode {
               setStatus(null);
               window.history.back();
             }}
-            onApplySuggestion={() => {}}
+            onApplySuggestion={() => { /* no-op */ }}
             onRequestCalendarSlots={handleRequestCalendarSlots}
             className="flex-1"
           />

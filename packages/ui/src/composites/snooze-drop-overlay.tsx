@@ -19,7 +19,6 @@ import {
   useEffect,
   useRef,
   type DragEvent,
-  type KeyboardEvent,
 } from "react";
 import { Box } from "../primitives/box";
 import { Text } from "../primitives/text";

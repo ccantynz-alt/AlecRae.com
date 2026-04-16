@@ -10,6 +10,7 @@ import { getDatabase, emails, users } from "@alecrae/db";
 import type {
   JmapRequest,
   JmapId,
+  JmapFilter,
   GetArgs,
   ChangesArgs,
   SetArgs,
@@ -30,9 +31,9 @@ async function authenticateRequest(authHeader: string | undefined): Promise<Auth
   const token = authHeader.slice(7);
   try {
     const parts = token.split(".");
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3 || parts[1] === undefined) return null;
 
-    const payload = JSON.parse(atob(parts[1]!));
+    const payload = JSON.parse(atob(parts[1]));
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
 
     const accountId = payload.sub as string;
@@ -69,30 +70,36 @@ const pushService = new PushNotificationService();
 // --- Register JMAP Methods ---
 
 handler.registerMethod("Mailbox/get", async (args, ctx) => {
+  const properties = args.properties as string[] | undefined;
   const getArgs: GetArgs = {
     accountId: (args.accountId as JmapId) ?? ctx.accountId,
     ids: (args.ids as JmapId[] | null) ?? null,
-    properties: args.properties as string[] | undefined,
+    ...(properties !== undefined ? { properties } : {}),
   };
   return await mailboxOps.get(getArgs) as unknown as Record<string, unknown>;
 });
 
 handler.registerMethod("Mailbox/changes", async (args, ctx) => {
+  const maxChanges = args.maxChanges as number | undefined;
   const changesArgs: ChangesArgs = {
     accountId: (args.accountId as JmapId) ?? ctx.accountId,
     sinceState: args.sinceState as string,
-    maxChanges: args.maxChanges as number | undefined,
+    ...(maxChanges !== undefined ? { maxChanges } : {}),
   };
   return await mailboxOps.getChanges(changesArgs) as unknown as Record<string, unknown>;
 });
 
 handler.registerMethod("Mailbox/set", async (args, ctx) => {
+  const ifInState = args.ifInState as string | undefined;
+  const create = args.create as Record<JmapId, Partial<Mailbox>> | undefined;
+  const update = args.update as Record<JmapId, Partial<Mailbox>> | undefined;
+  const destroy = args.destroy as JmapId[] | undefined;
   const setArgs: SetArgs<Mailbox> = {
     accountId: (args.accountId as JmapId) ?? ctx.accountId,
-    ifInState: args.ifInState as string | undefined,
-    create: args.create as Record<JmapId, Partial<Mailbox>> | undefined,
-    update: args.update as Record<JmapId, Partial<Mailbox>> | undefined,
-    destroy: args.destroy as JmapId[] | undefined,
+    ...(ifInState !== undefined ? { ifInState } : {}),
+    ...(create !== undefined ? { create } : {}),
+    ...(update !== undefined ? { update } : {}),
+    ...(destroy !== undefined ? { destroy } : {}),
   };
   const result = await mailboxOps.set(setArgs);
 
@@ -103,13 +110,18 @@ handler.registerMethod("Mailbox/set", async (args, ctx) => {
 });
 
 handler.registerMethod("Mailbox/query", async (args, ctx) => {
+  const filter = args.filter as JmapFilter | undefined;
+  const sort = args.sort as { property: string; isAscending?: boolean }[] | undefined;
+  const position = args.position as number | undefined;
+  const limit = args.limit as number | undefined;
+  const calculateTotal = args.calculateTotal as boolean | undefined;
   const queryArgs: QueryArgs = {
     accountId: (args.accountId as JmapId) ?? ctx.accountId,
-    filter: args.filter as Record<string, unknown> | undefined,
-    sort: args.sort as Array<{ property: string; isAscending?: boolean }> | undefined,
-    position: args.position as number | undefined,
-    limit: args.limit as number | undefined,
-    calculateTotal: args.calculateTotal as boolean | undefined,
+    ...(filter !== undefined ? { filter } : {}),
+    ...(sort !== undefined ? { sort } : {}),
+    ...(position !== undefined ? { position } : {}),
+    ...(limit !== undefined ? { limit } : {}),
+    ...(calculateTotal !== undefined ? { calculateTotal } : {}),
   };
   return await mailboxOps.query(queryArgs) as unknown as Record<string, unknown>;
 });
@@ -149,10 +161,10 @@ handler.registerMethod("Email/get", async (args, ctx) => {
       threadId: row.id,
       mailboxIds: { inbox: true },
       from: [{ name: row.fromName ?? row.fromAddress, email: row.fromAddress }],
-      to: (row.toAddresses as Array<{ address: string; name?: string }>)?.map(
+      to: (row.toAddresses as { address: string; name?: string }[])?.map(
         (a) => ({ name: a.name ?? a.address, email: a.address }),
       ) ?? [],
-      cc: (row.ccAddresses as Array<{ address: string; name?: string }>)?.map(
+      cc: (row.ccAddresses as { address: string; name?: string }[])?.map(
         (a) => ({ name: a.name ?? a.address, email: a.address }),
       ) ?? null,
       subject: row.subject,
@@ -477,7 +489,7 @@ app.get("/jmap/eventsource", async (c) => {
   const clientId = `sse_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
   const client = pushService.registerEventSource(clientId, accountId, {
-    types: types?.length ? types : undefined,
+    ...(types && types.length > 0 ? { types } : {}),
     closeAfter: closeAfter ?? "no",
     pingInterval: ping > 0 ? ping : 30,
   });
@@ -556,9 +568,9 @@ initTelemetry("alecrae-jmap").catch((err) => {
 
 // Graceful shutdown
 async function shutdown(signal: string): Promise<void> {
-  console.log(`[jmap] Received ${signal} — shutting down...`);
-  await shutdownTelemetry().catch(() => {});
-  console.log("[jmap] Shutdown complete");
+  console.warn(`[jmap] Received ${signal} — shutting down...`);
+  await shutdownTelemetry().catch(() => { /* no-op */ });
+  console.warn("[jmap] Shutdown complete");
   process.exit(0);
 }
 

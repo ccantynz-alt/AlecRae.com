@@ -37,7 +37,7 @@ import type {
   FlagOperation,
   UidMapping,
   AppendData,
-} from "./handlers/messages.js";
+} from "./store-types.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,41 +51,6 @@ function parseAddress(email: string, name?: string | null): ImapAddress {
   };
 }
 
-function folderFromStatus(status: string): string {
-  switch (status) {
-    case "delivered":
-    case "processing":
-    case "queued":
-    case "deferred":
-      return "inbox";
-    case "sent":
-      return "sent";
-    case "bounced":
-    case "failed":
-      return "trash";
-    case "dropped":
-      return "junk";
-    default:
-      return "inbox";
-  }
-}
-
-function statusesForFolder(folder: string): string[] {
-  switch (folder.toLowerCase()) {
-    case "inbox":
-      return ["delivered", "processing", "queued", "deferred"];
-    case "sent":
-      return ["sent", "delivered"]; // sent emails
-    case "trash":
-      return ["bounced", "failed"];
-    case "junk":
-      return ["dropped"];
-    case "drafts":
-      return ["draft"];
-    default:
-      return ["delivered"];
-  }
-}
 
 // ─── In-memory flag storage (pending DB migration) ───────────────────────────
 
@@ -189,7 +154,7 @@ function rowToImapMessage(
 
 function buildRawHeaders(
   row: { fromAddress: string; fromName: string | null; subject: string; messageId: string | null; createdAt: Date },
-  envelope: ImapEnvelope,
+  _envelope: ImapEnvelope,
 ): string {
   const lines: string[] = [];
   const from = row.fromName ? `${row.fromName} <${row.fromAddress}>` : row.fromAddress;
@@ -214,7 +179,7 @@ export class PostgresMessageStore implements MessageStore {
     const allRows = await this.getMailboxRows(mailbox, userId);
     return allRows
       .filter((_, idx) => uids.includes(idx + 1))
-      .map((row, idx) => {
+      .map((row) => {
         const actualIdx = allRows.indexOf(row);
         return rowToImapMessage(row, actualIdx + 1, actualIdx + 1);
       });
@@ -228,7 +193,10 @@ export class PostgresMessageStore implements MessageStore {
     const allRows = await this.getMailboxRows(mailbox, userId);
     return seqNums
       .filter((n) => n >= 1 && n <= allRows.length)
-      .map((n) => rowToImapMessage(allRows[n - 1]!, n, n));
+      .flatMap((n) => {
+        const row = allRows[n - 1];
+        return row ? [rowToImapMessage(row, n, n)] : [];
+      });
   }
 
   async getMessageCount(mailbox: string, userId: string): Promise<number> {
@@ -245,7 +213,8 @@ export class PostgresMessageStore implements MessageStore {
     const results: number[] = [];
 
     for (let i = 0; i < allRows.length; i++) {
-      const row = allRows[i]!;
+      const row = allRows[i];
+      if (!row) continue;
       const uid = i + 1;
       if (this.matchesCriteria(row, uid, criteria)) {
         results.push(uid);
@@ -267,7 +236,8 @@ export class PostgresMessageStore implements MessageStore {
 
     for (const uid of uids) {
       if (uid < 1 || uid > allRows.length) continue;
-      const row = allRows[uid - 1]!;
+      const row = allRows[uid - 1];
+      if (!row) continue;
 
       switch (operation) {
         case "set":
@@ -322,7 +292,8 @@ export class PostgresMessageStore implements MessageStore {
 
     for (let i = 0; i < allRows.length; i++) {
       const uid = i + 1;
-      const row = allRows[i]!;
+      const row = allRows[i];
+      if (!row) continue;
       const flags = getFlags(row.id);
 
       if (flags.includes("\\Deleted")) {
@@ -351,9 +322,29 @@ export class PostgresMessageStore implements MessageStore {
     const db = getDatabase();
     const id = crypto.randomUUID().replace(/-/g, "");
 
+    // Every email row must reference a verified domain; IMAP APPEND has no
+    // concept of a domain, so we use the account's first domain as the owner
+    // for the appended message. If the account has no domains yet, APPEND
+    // fails loudly rather than silently corrupting state.
+    const [firstDomain] = await db
+      .select({ id: domains.id })
+      .from(domains)
+      .where(eq(domains.accountId, userId))
+      .limit(1);
+
+    if (!firstDomain) {
+      throw new Error(
+        "IMAP APPEND failed: account has no domains — add a domain before appending messages",
+      );
+    }
+
+    const messageId = `<${id}@${firstDomain.id}.imap.local>`;
+
     await db.insert(emails).values({
       id,
       accountId: userId,
+      domainId: firstDomain.id,
+      messageId,
       fromAddress: "unknown@local",
       subject: "Appended message",
       textBody: message.rawMessage,
@@ -375,9 +366,8 @@ export class PostgresMessageStore implements MessageStore {
 
   // ─── Private helpers ─────────────────────────────────────────────────────
 
-  private async getMailboxRows(mailbox: string, userId: string) {
+  private async getMailboxRows(_mailbox: string, userId: string) {
     const db = getDatabase();
-    const statuses = statusesForFolder(mailbox);
 
     // For "sent" mailbox, we look at emails sent BY this user
     // For "inbox", we look at emails received (inbound)

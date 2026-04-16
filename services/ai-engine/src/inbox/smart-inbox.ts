@@ -105,6 +105,12 @@ export const DEFAULT_CATEGORIES: InboxCategory[] = [
   { id: "other", name: "Other", icon: "📧", source: "system", priority: 99 },
 ];
 
+const OTHER_CATEGORY: InboxCategory = { id: "other", name: "Other", icon: "📧", source: "system", priority: 99 };
+
+function getCategory(id: string): InboxCategory {
+  return DEFAULT_CATEGORIES.find((c) => c.id === id) ?? OTHER_CATEGORY;
+}
+
 // ─── Classification Signals ──────────────────────────────────────────────────
 
 const NEWSLETTER_SIGNALS = [
@@ -165,7 +171,8 @@ export function markSenderKnown(accountId: string, senderEmail: string): void {
   if (!decisionCache.has(accountId)) {
     decisionCache.set(accountId, new Map());
   }
-  decisionCache.get(accountId)!.set(senderEmail.toLowerCase(), "allow");
+  const map = decisionCache.get(accountId);
+  if (map) map.set(senderEmail.toLowerCase(), "allow");
 }
 
 /**
@@ -181,7 +188,8 @@ export function screenSender(
   if (!decisionCache.has(accountId)) {
     decisionCache.set(accountId, new Map());
   }
-  decisionCache.get(accountId)!.set(senderEmail.toLowerCase(), decision);
+  const map = decisionCache.get(accountId);
+  if (map) map.set(senderEmail.toLowerCase(), decision);
 }
 
 /**
@@ -232,7 +240,8 @@ export async function getScreenerDecisionAsync(
       if (!decisionCache.has(accountId)) {
         decisionCache.set(accountId, new Map());
       }
-      decisionCache.get(accountId)!.set(senderEmail.toLowerCase(), row.decision as "allow" | "block");
+      const map = decisionCache.get(accountId);
+      if (map) map.set(senderEmail.toLowerCase(), row.decision as "allow" | "block");
       return row.decision as "allow" | "block";
     }
   } catch {
@@ -254,7 +263,7 @@ const COMMITMENT_PATTERNS = [
   // "We need to..." / "Let's..."
   /\b(we need to|let'?s|we should)\s+(.{10,60}?)(?:\.|$)/gi,
   // "by [date]" / "before [date]" / "deadline"
-  /\b(by|before|deadline[:\s]+)\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week|end of (?:day|week|month)|[\d\/\-]+)/gi,
+  /\b(by|before|deadline[:\s]+)\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week|end of (?:day|week|month)|[\d/-]+)/gi,
 ];
 
 export function extractCommitments(
@@ -305,8 +314,8 @@ export function extractCommitments(
         sourceEmailId: emailId,
         sourceQuote: fullMatch.slice(0, 200),
       };
-      if (deadlineMatch) {
-        const parsed = parseRelativeDate(deadlineMatch[2]!);
+      if (deadlineMatch && deadlineMatch[2]) {
+        const parsed = parseRelativeDate(deadlineMatch[2]);
         if (parsed !== undefined) {
           commitment.deadline = parsed;
         }
@@ -355,14 +364,14 @@ function parseRelativeDate(relative: string): Date | undefined {
 // ─── Follow-Up Detection ─────────────────────────────────────────────────────
 
 export function detectFollowUpNeeded(
-  sentEmails: Array<{
+  sentEmails: {
     id: string;
     toAddress: string;
     subject: string;
     sentAt: Date;
     hasReply: boolean;
-  }>,
-  thresholdDays: number = 3,
+  }[],
+  thresholdDays = 3,
 ): FollowUpNudge[] {
   const nudges: FollowUpNudge[] = [];
   const now = new Date();
@@ -404,7 +413,7 @@ export function classifyEmail(
   subject: string,
   body: string,
   headers?: Record<string, string>,
-  isSentByUser: boolean = false,
+  isSentByUser = false,
 ): EmailClassification {
   const text = `${subject} ${body}`.toLowerCase();
   const headerText = headers ? Object.values(headers).join(" ").toLowerCase() : "";
@@ -437,23 +446,23 @@ export function classifyEmail(
   let reasoning: string;
 
   if (isNewsletter) {
-    category = DEFAULT_CATEGORIES.find((c) => c.id === "newsletters")!;
+    category = getCategory("newsletters");
     confidence = 0.9;
     reasoning = "Contains newsletter/unsubscribe signals";
   } else if (isTransactional) {
-    category = DEFAULT_CATEGORIES.find((c) => c.id === "receipts")!;
+    category = getCategory("receipts");
     confidence = 0.85;
     reasoning = "Contains transactional/receipt signals";
   } else if (isImportant) {
-    category = DEFAULT_CATEGORIES.find((c) => c.id === "important")!;
+    category = getCategory("important");
     confidence = 0.8;
     reasoning = "Contains urgency/importance signals";
   } else if (commitments.length > 0) {
-    category = DEFAULT_CATEGORIES.find((c) => c.id === "important")!;
+    category = getCategory("important");
     confidence = 0.75;
     reasoning = `Contains ${commitments.length} action item(s)`;
   } else {
-    category = DEFAULT_CATEGORIES.find((c) => c.id === "other")!;
+    category = getCategory("other");
     confidence = 0.5;
     reasoning = "No strong category signals detected";
   }

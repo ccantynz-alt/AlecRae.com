@@ -14,7 +14,6 @@ import type {
   CreateTicketInput,
   UpdateTicketInput,
   SlaInfo,
-  SlaPolicy,
   Result,
 } from "../types";
 import { ok, err, SLA_POLICIES } from "../types";
@@ -123,8 +122,10 @@ export function autoCategorize(
 
   // Confidence is based on the gap between best and second-best
   const sortedScores = Array.from(scores.values()).sort((a, b) => b - a);
-  const gap = sortedScores.length > 1
-    ? (sortedScores[0]! - sortedScores[1]!) / sortedScores[0]!
+  const first = sortedScores[0] ?? 0;
+  const second = sortedScores[1] ?? 0;
+  const gap = sortedScores.length > 1 && first > 0
+    ? (first - second) / first
     : 1.0;
 
   const confidence = Math.min(1.0, bestScore * 0.5 + gap * 0.5);
@@ -303,7 +304,7 @@ export class TicketSystem {
   async updateTicket(
     ticketId: string,
     updates: UpdateTicketInput,
-    updatedBy: string = "system",
+    updatedBy = "system",
   ): Promise<Result<Ticket>> {
     try {
       const ticket = await this.store.get(ticketId);
@@ -426,7 +427,7 @@ export class TicketSystem {
   async resolveTicket(
     ticketId: string,
     resolution: string,
-    resolvedBy: string = "ai-agent",
+    resolvedBy = "ai-agent",
   ): Promise<Result<Ticket>> {
     const noteResult = await this.addNote(ticketId, resolvedBy, `Resolution: ${resolution}`, {
       internal: false,
@@ -582,7 +583,7 @@ export class TicketSystem {
 // ─── In-Memory Ticket Store ─────────────────────────────────────────────────
 
 export class InMemoryTicketStore implements TicketStore {
-  private tickets: Map<string, Ticket> = new Map();
+  private tickets = new Map<string, Ticket>();
 
   async get(id: string): Promise<Ticket | undefined> {
     const ticket = this.tickets.get(id);
@@ -622,12 +623,14 @@ export class InMemoryTicketStore implements TicketStore {
       results = results.filter((t) => t.assignedTo === filter.assignedTo);
     }
 
-    if (filter.createdAfter) {
-      results = results.filter((t) => t.createdAt >= filter.createdAfter!);
+    const createdAfter = filter.createdAfter;
+    if (createdAfter) {
+      results = results.filter((t) => t.createdAt >= createdAfter);
     }
 
-    if (filter.createdBefore) {
-      results = results.filter((t) => t.createdAt < filter.createdBefore!);
+    const createdBefore = filter.createdBefore;
+    if (createdBefore) {
+      results = results.filter((t) => t.createdAt < createdBefore);
     }
 
     // Sort by priority (critical first), then by creation time

@@ -44,12 +44,10 @@ export default function DashboardLayout({
   const hydrate = useFocusMode((s) => s.hydrate);
   const toggleFocusMode = useFocusMode((s) => s.toggleFocusMode);
 
-  // Hydrate focus mode state from IndexedDB on mount
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
-  // Register Cmd+Shift+F keyboard shortcut for focus mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
@@ -144,9 +142,6 @@ export default function DashboardLayout({
     </Box>
   );
 
-  // Placeholder email list for focus mode overlay.
-  // In production this comes from the inbox store / IndexedDB cache.
-  // The overlay filters them by the active focus criteria.
   const focusModeEmails: FocusModeOverlayEmail[] = [];
 
   return (
@@ -158,7 +153,6 @@ export default function DashboardLayout({
         collapsed={collapsed}
       />
       <Box as="main" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Toolbar bar with focus mode toggle */}
         <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">
           <FocusModeToggle />
         </Box>
@@ -166,8 +160,6 @@ export default function DashboardLayout({
           {children}
         </AnimatedPage>
       </Box>
-
-      {/* Focus Mode Overlay — covers entire screen when active */}
       <FocusModeOverlay emails={focusModeEmails} />
     </Box>
   );

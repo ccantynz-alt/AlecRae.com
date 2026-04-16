@@ -13,7 +13,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { SignJWT, jwtVerify, importPKCS8, importSPKI } from "jose";
+import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { getDatabase, users, accounts } from "@alecrae/db";

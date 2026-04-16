@@ -10,7 +10,6 @@
  *   - RFC 5321  SMTP reply codes
  */
 
-import { randomUUID } from "node:crypto";
 import {
   type BounceInfo,
   type BounceCategory,
@@ -96,7 +95,7 @@ export function parseDsn(raw: string): Result<DsnMessage> {
     const statusBlockMatch = raw.match(
       /content-type:\s*message\/delivery-status[\s\S]*?\n\n([\s\S]*?)(?:\n--|\n\nContent-Type:|\n\n$)/i,
     );
-    const statusBlock = statusBlockMatch ? statusBlockMatch[1] : raw;
+    const statusBlock = statusBlockMatch ? statusBlockMatch[1] ?? raw : raw;
 
     // Split into groups: per-message fields come first, then one group
     // per recipient, separated by blank lines.
@@ -111,7 +110,10 @@ export function parseDsn(raw: string): Result<DsnMessage> {
       // Per-message fields have Reporting-MTA but no Final-Recipient.
       if (fields["reporting-mta"] && !fields["final-recipient"]) {
         message.reportingMta = stripType(fields["reporting-mta"]);
-        message.arrivalDate = fields["arrival-date"];
+        const arrivalDate = fields["arrival-date"];
+        if (arrivalDate !== undefined) {
+          message.arrivalDate = arrivalDate;
+        }
         continue;
       }
 
@@ -120,18 +122,23 @@ export function parseDsn(raw: string): Result<DsnMessage> {
         continue; // skip groups we cannot interpret
       }
 
+      const originalRecipient = fields["original-recipient"];
+      const remoteMta = fields["remote-mta"];
+      const diagnosticCode = fields["diagnostic-code"];
+      const lastAttemptDate = fields["last-attempt-date"];
+
       const recipient: DsnFields = {
         finalRecipient: stripType(finalRecipient),
         action: (fields["action"] ?? "").toLowerCase(),
         status: fields["status"] ?? "",
-        originalRecipient: fields["original-recipient"]
-          ? stripType(fields["original-recipient"])
-          : undefined,
-        remoteMta: fields["remote-mta"]
-          ? stripType(fields["remote-mta"])
-          : undefined,
-        diagnosticCode: fields["diagnostic-code"],
-        lastAttemptDate: fields["last-attempt-date"],
+        ...(originalRecipient !== undefined
+          ? { originalRecipient: stripType(originalRecipient) }
+          : {}),
+        ...(remoteMta !== undefined
+          ? { remoteMta: stripType(remoteMta) }
+          : {}),
+        ...(diagnosticCode !== undefined ? { diagnosticCode } : {}),
+        ...(lastAttemptDate !== undefined ? { lastAttemptDate } : {}),
       };
 
       message.recipients.push(recipient);
@@ -167,10 +174,11 @@ export function parseBounceMessage(raw: string): Result<BounceInfo[]> {
   for (const rcpt of dsn.recipients) {
     const statusCode = smtpCodeFromStatus(rcpt.status);
     const classified = classifyBounce(statusCode, rcpt.diagnosticCode ?? "");
+    const remoteMta = rcpt.remoteMta ?? dsn.reportingMta;
     infos.push({
       ...classified,
       recipient: rcpt.finalRecipient,
-      remoteMta: rcpt.remoteMta ?? dsn.reportingMta,
+      ...(remoteMta !== undefined ? { remoteMta } : {}),
       timestamp: new Date(),
     });
   }
@@ -195,6 +203,22 @@ export function classifyBounce(
   const enhancedCode = enhancedMatch ? enhancedMatch[1] : undefined;
   const enhancedClass = enhancedCode ? enhancedCode.charAt(0) : undefined;
 
+  // exactOptionalPropertyTypes forbids passing `enhancedCode: undefined`
+  // when the field is declared as `enhancedCode?: string`. This helper
+  // builds the result object while conditionally including the field.
+  const build = (
+    category: BounceCategory,
+    type: BounceType,
+    retryable: boolean,
+  ): Pick<BounceInfo, "category" | "type" | "statusCode" | "enhancedCode" | "diagnosticCode" | "retryable"> => ({
+    category,
+    type,
+    statusCode,
+    ...(enhancedCode !== undefined ? { enhancedCode } : {}),
+    diagnosticCode: diagnosticText,
+    retryable,
+  });
+
   // ── Hard bounces (5xx, permanent) ────────────────────────────────────
   if (statusCode >= 550 || enhancedClass === "5") {
     // Invalid / non-existent recipient
@@ -202,7 +226,7 @@ export function classifyBounce(
       matches(diag, ["user unknown", "no such user", "does not exist", "mailbox not found", "invalid recipient", "recipient rejected"]) ||
       enhancedCode === "5.1.1"
     ) {
-      return { category: "hard", type: "invalid-recipient", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: false };
+      return build("hard", "invalid-recipient", false);
     }
 
     // Domain not found
@@ -210,7 +234,7 @@ export function classifyBounce(
       matches(diag, ["domain not found", "no such domain", "host not found", "name not resolved"]) ||
       enhancedCode === "5.1.2"
     ) {
-      return { category: "hard", type: "domain-not-found", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: false };
+      return build("hard", "domain-not-found", false);
     }
 
     // Spam / policy block
@@ -218,12 +242,12 @@ export function classifyBounce(
       matches(diag, ["spam", "blocked", "blacklist", "blocklist", "dnsbl", "rbl", "rejected for policy", "abuse"]) ||
       enhancedCode === "5.7.1"
     ) {
-      return { category: "block", type: "spam-block", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: false };
+      return build("block", "spam-block", false);
     }
 
     // Content rejected
     if (matches(diag, ["content rejected", "message rejected", "virus", "malware"])) {
-      return { category: "block", type: "content-rejected", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: false };
+      return build("block", "content-rejected", false);
     }
 
     // Auth failure
@@ -231,7 +255,7 @@ export function classifyBounce(
       matches(diag, ["dkim", "spf", "dmarc", "authentication failed"]) ||
       enhancedCode === "5.7.0"
     ) {
-      return { category: "block", type: "auth-failure", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: false };
+      return build("block", "auth-failure", false);
     }
 
     // Message too large
@@ -239,16 +263,16 @@ export function classifyBounce(
       matches(diag, ["too large", "size limit", "exceeds maximum"]) ||
       enhancedCode === "5.3.4"
     ) {
-      return { category: "hard", type: "message-too-large", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: false };
+      return build("hard", "message-too-large", false);
     }
 
     // Policy violation (catch-all for remaining 5xx)
     if (enhancedCode?.startsWith("5.7")) {
-      return { category: "block", type: "policy-violation", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: false };
+      return build("block", "policy-violation", false);
     }
 
     // Generic permanent failure
-    return { category: "hard", type: "unknown", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: false };
+    return build("hard", "unknown", false);
   }
 
   // ── Soft / transient bounces (4xx, temporary) ────────────────────────
@@ -258,7 +282,7 @@ export function classifyBounce(
       matches(diag, ["mailbox full", "over quota", "quota exceeded", "insufficient storage"]) ||
       enhancedCode === "4.2.2"
     ) {
-      return { category: "soft", type: "mailbox-full", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: true };
+      return build("soft", "mailbox-full", true);
     }
 
     // Rate limiting / throttling
@@ -266,30 +290,30 @@ export function classifyBounce(
       matches(diag, ["rate limit", "too many connections", "throttl", "try again later"]) ||
       enhancedCode === "4.7.1"
     ) {
-      return { category: "transient", type: "rate-limited", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: true };
+      return build("transient", "rate-limited", true);
     }
 
     // Connection refused
     if (matches(diag, ["connection refused", "connect failed"])) {
-      return { category: "transient", type: "connection-refused", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: true };
+      return build("transient", "connection-refused", true);
     }
 
     // Timeout
     if (matches(diag, ["timeout", "timed out"])) {
-      return { category: "transient", type: "timeout", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: true };
+      return build("transient", "timeout", true);
     }
 
     // Network error
     if (matches(diag, ["network error", "connection reset", "broken pipe"])) {
-      return { category: "transient", type: "network-error", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: true };
+      return build("transient", "network-error", true);
     }
 
     // Generic temporary failure
-    return { category: "soft", type: "unknown", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: true };
+    return build("soft", "unknown", true);
   }
 
   // ── Undetermined ─────────────────────────────────────────────────────
-  return { category: "undetermined", type: "unknown", statusCode, enhancedCode, diagnosticCode: diagnosticText, retryable: true };
+  return build("undetermined", "unknown", true);
 }
 
 /**
@@ -380,13 +404,13 @@ export class BounceProcessor {
   processIncoming(
     rawBounce: string,
     currentAttemptsByRecipient?: Map<string, number>,
-  ): Result<Array<{ recipient: string; bounceInfo: BounceInfo; action: BounceAction }>> {
+  ): Result<{ recipient: string; bounceInfo: BounceInfo; action: BounceAction }[]> {
     const parsed = parseBounceMessage(rawBounce);
     if (!parsed.ok) {
       return parsed;
     }
 
-    const results: Array<{ recipient: string; bounceInfo: BounceInfo; action: BounceAction }> = [];
+    const results: { recipient: string; bounceInfo: BounceInfo; action: BounceAction }[] = [];
 
     for (const info of parsed.value) {
       const attempt = currentAttemptsByRecipient?.get(info.recipient) ?? 0;
@@ -518,7 +542,7 @@ function matches(text: string, keywords: string[]): boolean {
 function parseBounceHeuristic(raw: string): Result<BounceInfo[]> {
   // Try to find an SMTP status code
   const codeMatch = raw.match(/\b([245]\d{2})\b/);
-  const statusCode = codeMatch ? parseInt(codeMatch[1], 10) : 0;
+  const statusCode = codeMatch?.[1] ? parseInt(codeMatch[1], 10) : 0;
 
   // Try to find an email address
   const emailMatch = raw.match(/[\w.+-]+@[\w.-]+\.\w{2,}/);

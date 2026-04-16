@@ -11,7 +11,7 @@
  * management, reduced-motion support.
  */
 
-import {
+import React, {
   forwardRef,
   useState,
   useEffect,
@@ -118,7 +118,7 @@ function ConfidenceBar({
 }: {
   confidence: number;
   level: ConfidenceLevel;
-}): JSX.Element {
+}): React.ReactElement {
   const widthPercent = Math.round(confidence * 100);
   const barColor =
     level === "high"
@@ -155,7 +155,7 @@ function ConfidenceBar({
 
 function TimeSlotCard({
   slot,
-  index,
+  index: _index,
   isTop,
   onSelect,
 }: {
@@ -163,7 +163,7 @@ function TimeSlotCard({
   index: number;
   isTop: boolean;
   onSelect: (slot: SendTimeSlot) => void;
-}): JSX.Element {
+}): React.ReactElement {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLButtonElement>): void => {
       if (e.key === "Enter" || e.key === " ") {

@@ -34,6 +34,7 @@ async function getComposeModule() {
   return assistantModule;
 }
 
+
 // ─── In-memory voice profile cache (production: use DB or Redis) ─────────────
 
 const voiceProfiles = new Map<string, unknown>();
@@ -70,7 +71,7 @@ async function generateWithClaude(
   }
 
   const data = (await response.json()) as {
-    content: Array<{ type: string; text?: string }>;
+    content: { type: string; text?: string }[];
   };
 
   return data.content

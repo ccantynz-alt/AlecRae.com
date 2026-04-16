@@ -28,7 +28,6 @@ import { useCallback, useRef, useState, type KeyboardEvent, type MouseEvent, typ
 import { motion, AnimatePresence } from "motion/react";
 import {
   SPRING_SNAPPY,
-  SPRING_BOUNCY,
   SPRING_MICRO,
   useAlecRaeReducedMotion,
   selectTransition,

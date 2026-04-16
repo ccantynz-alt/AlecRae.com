@@ -39,8 +39,17 @@ export { SnoozeDropOverlay, type SnoozeDropOverlayProps } from "./composites/sno
 // depend on @react-three/fiber + three which break React 19 SSR/SSG.
 // Import directly from "@alecrae/ui/src/composites/spatial-inbox-view" and
 // "@alecrae/ui/src/composites/spatial-controls" where needed (with dynamic import).
-export type { SpatialInboxViewProps, SpatialThread, SpatialAxis, SpatialColorScheme, SpatialFilterState, ThreadCategory } from "./composites/spatial-inbox-view";
-export type { SpatialControlsProps } from "./composites/spatial-controls";
+// Types live in spatial-types.ts so they can be re-exported without pulling
+// the R3F-dependent components into the typecheck program.
+export type {
+  SpatialInboxViewProps,
+  SpatialControlsProps,
+  SpatialThread,
+  SpatialAxis,
+  SpatialColorScheme,
+  SpatialFilterState,
+  ThreadCategory,
+} from "./composites/spatial-types";
 export { InboxHeatmap, type InboxHeatmapProps, type HeatmapDayData, type HeatmapMode } from "./composites/inbox-heatmap";
 export { HourlyActivityChart, type HourlyActivityChartProps, type HourlyBucket } from "./composites/hourly-activity-chart";
 export { EmailStatsDashboard, type EmailStatsDashboardProps, type EmailStatsMetrics, type EmailStatsCompare, type StatsPeriod } from "./composites/email-stats-dashboard";

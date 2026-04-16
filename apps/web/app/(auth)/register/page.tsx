@@ -93,23 +93,16 @@ function PasskeyRegistration(): React.ReactElement {
     setError(null);
 
     try {
-      // Step 1: Request a registration challenge from the server
       const challengeResponse = await authApi.passkeyRegisterChallenge({
         email: email.trim(),
         name: name.trim(),
       });
-
-      // Step 2: Run the WebAuthn creation ceremony in the browser
       const credential = await createPasskeyCredential(challengeResponse.publicKey);
-
-      // Step 3: Send the attestation to the server for verification
       await authApi.passkeyRegisterVerify({
         challengeId: challengeResponse.challengeId,
         credential,
         _registration: challengeResponse._registration,
       });
-
-      // Step 4: Redirect to inbox on success
       window.location.href = "/inbox";
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {

@@ -307,7 +307,6 @@ heatmapAnalytics.get(
 
     if (dayTotals.size === 0) {
       quietestDay = null;
-      quietestCount = 0;
     }
 
     // Average response time: compute from delivery_results if available,

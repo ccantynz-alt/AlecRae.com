@@ -6,9 +6,7 @@ import {
   Text,
   Button,
   Card,
-  CardHeader,
   CardContent,
-  CardFooter,
   ScriptEditor,
 } from "@alecrae/ui";
 import type { ScriptData, ScriptTemplate, ScriptRunEntry, TestResult } from "@alecrae/ui";
@@ -304,7 +302,7 @@ export default function EmailScriptManager(): React.ReactElement {
         {/* Header */}
         <Box className="flex items-center justify-between">
           <Box className="flex flex-col">
-            <Text variant="heading">Programmable Email</Text>
+            <Text variant="heading-md">Programmable Email</Text>
             <Text variant="body-sm" muted>
               TypeScript snippets that automate your email workflow
             </Text>
@@ -457,19 +455,21 @@ export default function EmailScriptManager(): React.ReactElement {
       )}
 
       <ScriptEditor
-        initialData={
-          selectedScript
-            ? {
+        {...(selectedScript
+          ? {
+              initialData: {
                 id: selectedScript.id,
                 name: selectedScript.name,
-                description: selectedScript.description ?? undefined,
+                ...(selectedScript.description !== null && selectedScript.description !== undefined
+                  ? { description: selectedScript.description }
+                  : {}),
                 code: selectedScript.code,
                 trigger: selectedScript.trigger,
                 schedule: selectedScript.schedule,
                 isActive: selectedScript.isActive,
-              }
-            : undefined
-        }
+              },
+            }
+          : {})}
         templates={templates}
         runs={runs}
         saving={saving}
@@ -477,7 +477,7 @@ export default function EmailScriptManager(): React.ReactElement {
         testResult={testResult}
         onSave={(data) => void handleSave(data)}
         onTest={(data) => void handleTest(data)}
-        onToggle={(active) => {
+        onToggle={(_active) => {
           if (selectedScript) {
             void handleToggle(selectedScript.id);
           }

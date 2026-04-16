@@ -41,7 +41,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "build": "tsc; exit 0",
+    "build": "tsc",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",

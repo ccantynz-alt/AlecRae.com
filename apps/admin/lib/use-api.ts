@@ -21,7 +21,6 @@ export function useApi<T>(fetcher: () => Promise<T>, deps: unknown[] = []): UseA
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const mountedRef = useRef(true);
-  const depsRef = useRef(deps);
 
   const execute = useCallback(() => {
     setLoading(true);
@@ -47,8 +46,8 @@ export function useApi<T>(fetcher: () => Promise<T>, deps: unknown[] = []): UseA
     return () => {
       mountedRef.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps]);
+
+  }, [execute, ...deps]);
 
   return { data, error, loading, refetch: execute };
 }

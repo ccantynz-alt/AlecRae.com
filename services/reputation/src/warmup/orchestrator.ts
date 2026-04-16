@@ -301,7 +301,7 @@ export class WarmupOrchestrator {
     const schedule = [...WARMUP_SCHEDULES[scheduleType]];
     const id = crypto.randomUUID().replace(/-/g, "");
     const now = new Date();
-    const todayStr = now.toISOString().split("T")[0]!;
+    const todayStr = now.toISOString().split("T")[0] ?? now.toISOString().slice(0, 10);
 
     await db.insert(warmupSessions).values({
       id,
@@ -369,7 +369,6 @@ export class WarmupOrchestrator {
       return {
         allowed: false,
         reason: "Warm-up is paused due to delivery issues",
-        retryAfter: undefined,
       };
     }
 
@@ -753,7 +752,10 @@ export class WarmupOrchestrator {
       .where(eq(warmupSessions.id, id))
       .limit(1);
 
-    return session!;
+    if (!session) {
+      throw new Error(`Warmup session not found: ${id}`);
+    }
+    return session;
   }
 
   /**
@@ -876,7 +878,8 @@ export class WarmupOrchestrator {
   private async maybeResetDailyCounter(
     session: WarmupSession,
   ): Promise<void> {
-    const todayStr = new Date().toISOString().split("T")[0]!;
+    const nowIso = new Date().toISOString();
+    const todayStr = nowIso.split("T")[0] ?? nowIso.slice(0, 10);
     if (session.sentTodayDate === todayStr) return;
 
     const db = getDatabase();
@@ -951,8 +954,9 @@ export class WarmupOrchestrator {
     if (schedule.length < 2) return schedule;
 
     // Add interpolated steps between the last two steps
-    const last = schedule[schedule.length - 1]!;
-    const secondLast = schedule[schedule.length - 2]!;
+    const last = schedule[schedule.length - 1];
+    const secondLast = schedule[schedule.length - 2];
+    if (!last || !secondLast) return schedule;
 
     const newSteps = [...schedule];
     // Shift the last step out by extraDays
@@ -986,9 +990,12 @@ export class WarmupOrchestrator {
     const result = [...schedule];
     // Shift all steps from index 1 onward earlier by removeDays
     for (let i = 1; i < result.length; i++) {
+      const current = result[i];
+      const previous = result[i - 1];
+      if (!current || !previous) continue;
       result[i] = {
-        ...result[i]!,
-        day: Math.max(result[i]!.day - removeDays, result[i - 1]!.day + 1),
+        ...current,
+        day: Math.max(current.day - removeDays, previous.day + 1),
       };
     }
 

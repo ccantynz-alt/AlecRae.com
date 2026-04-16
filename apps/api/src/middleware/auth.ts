@@ -301,6 +301,7 @@ export function requireScope(...requiredScopes: string[]) {
     }
 
     await next();
+    return;
   });
 }
 
@@ -325,7 +326,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     );
   }
 
-  let authContext: AuthContext | null = null;
+  let authContext: AuthContext | null;
 
   if (credential.type === "api_key") {
     // Try database lookup first, fall back to dev mode
@@ -363,4 +364,5 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
   c.set("auth", authContext);
   await next();
+  return;
 });

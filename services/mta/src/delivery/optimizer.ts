@@ -18,7 +18,6 @@ import {
   type ConnectionPool,
   type RetryStrategy,
   type ThrottleState,
-  type SmtpClientConfig,
   type Result,
   ok,
   err,
@@ -317,7 +316,7 @@ export class DeliveryOptimizer {
     }
 
     // RFC 7505: null MX record means domain does not accept mail.
-    if (mxRecords.length === 1 && mxRecords[0]!.exchange === ".") {
+    if (mxRecords.length === 1 && mxRecords[0]?.exchange === ".") {
       return err(new Error(`Domain ${domain} has a null MX record (RFC 7505) — does not accept mail`));
     }
 
@@ -331,7 +330,11 @@ export class DeliveryOptimizer {
     const sorted = [...valid].sort((a, b) => a.priority - b.priority);
 
     // Group by priority
-    const bestPriority = sorted[0]!.priority;
+    const first = sorted[0];
+    if (!first) {
+      return err(new Error(`No valid MX records for ${domain}`));
+    }
+    const bestPriority = first.priority;
     const candidates = sorted.filter((r) => r.priority === bestPriority);
 
     // Prefer hosts with an existing warm connection in the pool
@@ -343,12 +346,14 @@ export class DeliveryOptimizer {
     if (warm.length > 0) {
       // Pick a random warm host (load balance)
       const idx = randomInt(warm.length);
-      return ok(warm[idx]!);
+      const chosen = warm[idx];
+      if (chosen) return ok(chosen);
     }
 
     // Random selection among equal-priority candidates
     const idx = randomInt(candidates.length);
-    return ok(candidates[idx]!);
+    const chosen = candidates[idx] ?? first;
+    return ok(chosen);
   }
 
   /**

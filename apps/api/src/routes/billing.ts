@@ -10,6 +10,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import type Stripe from "stripe";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -206,7 +207,7 @@ billing.post("/webhook", async (c) => {
     );
   }
 
-  let event: import("stripe").default.Event;
+  let event: Stripe.Event;
 
   try {
     const rawBody = await c.req.text();

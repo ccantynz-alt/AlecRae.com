@@ -71,19 +71,12 @@ function PasskeyLogin(): React.ReactElement {
     setError(null);
 
     try {
-      // Step 1: Request a challenge from the server
       const challengeResponse = await authApi.passkeyLoginChallenge();
-
-      // Step 2: Run the WebAuthn ceremony in the browser
       const assertion = await getPasskeyAssertion(challengeResponse.publicKey);
-
-      // Step 3: Send the assertion to the server for verification
       await authApi.passkeyLoginVerify({
         challengeId: challengeResponse.challengeId,
         credential: assertion,
       });
-
-      // Step 4: Redirect to inbox on success
       window.location.href = "/inbox";
     } catch (err) {
       if (err instanceof DOMException && err.name === "NotAllowedError") {
