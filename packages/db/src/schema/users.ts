@@ -66,6 +66,15 @@ export const accounts = pgTable(
     storageUsedBytes: bigint("storage_used_bytes", { mode: "number" }).notNull().default(0),
     stripeCustomerId: text("stripe_customer_id"),
     stripeSubscriptionId: text("stripe_subscription_id"),
+    /**
+     * Dunning state derived from Stripe webhooks.
+     *   `active`              — payments up to date (default)
+     *   `past_due`            — invoice.payment_failed fired; grace period
+     *   `downgraded_unpaid`   — dunning worker downgraded to free after 7d
+     */
+    billingStatus: text("billing_status").notNull().default("active"),
+    /** Stamped when billingStatus flips to past_due. NULL otherwise. */
+    pastDueSince: timestamp("past_due_since", { withTimezone: true }),
     status: accountStatusEnum("status").notNull().default("active"),
     scheduledDeletionAt: timestamp("scheduled_deletion_at", {
       withTimezone: true,

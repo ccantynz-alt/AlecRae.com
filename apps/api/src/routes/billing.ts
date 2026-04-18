@@ -22,6 +22,9 @@ import {
   getUsage,
   constructWebhookEvent,
   handleWebhookEvent,
+  markEventProcessed,
+  recordEventReceived,
+  wasEventProcessed,
   PLANS,
   isPlanId,
 } from "../lib/billing.js";
@@ -228,6 +231,41 @@ billing.post("/webhook", async (c) => {
     );
   }
 
+  // ─── Idempotency guard ───────────────────────────────────────────────
+  //
+  // Stripe redelivers the same event.id on transient failures, scheduled
+  // retries after 5xx, and when our response is slow. Without this guard,
+  // `invoice.payment_failed` could flip an account to past_due twice and
+  // re-stamp pastDueSince, resetting the 7-day grace clock on every
+  // retry. We check-then-insert under the event id's unique PK; if we've
+  // already stamped processedAt the handler is skipped with 200 OK.
+  try {
+    const existing = await wasEventProcessed(event.id);
+    if (existing?.processedAt) {
+      console.log(
+        `[billing/webhook] Duplicate ${event.type} (${event.id}) — already processed`,
+      );
+      return c.json({ ok: true, duplicate: true });
+    }
+    if (!existing) {
+      await recordEventReceived(event.id, event.type);
+    }
+  } catch (err) {
+    // If the idempotency table is unavailable we'd rather fail loud than
+    // silently risk double-processing. Return 500 so Stripe retries.
+    console.error("[billing/webhook] Idempotency check failed:", err);
+    return c.json(
+      {
+        error: {
+          type: "server_error",
+          message: "Failed to record webhook event",
+          code: "webhook_idempotency_failed",
+        },
+      },
+      500,
+    );
+  }
+
   try {
     const result = await handleWebhookEvent(event);
 
@@ -240,6 +278,10 @@ billing.post("/webhook", async (c) => {
         `[billing/webhook] Ignored unhandled event type: ${event.type}`,
       );
     }
+
+    // Only stamp processedAt on success. If the handler threw above,
+    // processedAt stays NULL so the next Stripe retry is allowed to run.
+    await markEventProcessed(event.id);
 
     return c.json({ received: true });
   } catch (err) {

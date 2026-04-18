@@ -301,6 +301,9 @@ export {
   refreshTokensRelations,
 } from "./schema/refresh-tokens.js";
 
+// Schema - Stripe Events (webhook idempotency guard)
+export { stripeEvents } from "./schema/billing.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -355,6 +358,7 @@ import type {
   voiceTrainingSamples,
 } from "./schema/voice-clone.js";
 import type { refreshTokens } from "./schema/refresh-tokens.js";
+import type { stripeEvents } from "./schema/billing.js";
 
 // Select types (what you get back from queries)
 export type Account = InferSelectModel<typeof accounts>;
@@ -451,3 +455,5 @@ export type ScriptRun = InferSelectModel<typeof scriptRuns>;
 export type NewScriptRun = InferInsertModel<typeof scriptRuns>;
 export type RefreshToken = InferSelectModel<typeof refreshTokens>;
 export type NewRefreshToken = InferInsertModel<typeof refreshTokens>;
+export type StripeEvent = InferSelectModel<typeof stripeEvents>;
+export type NewStripeEvent = InferInsertModel<typeof stripeEvents>;
