@@ -200,7 +200,7 @@ export interface EngagementPoint {
 }
 
 // --- API Key / Auth ---
-export type PlanTier = "free" | "starter" | "pro" | "enterprise";
+export type PlanTier = "free" | "personal" | "pro" | "team" | "enterprise";
 
 export interface ApiKeyRecord {
   id: string;
@@ -226,7 +226,8 @@ export interface ApiError {
 
 export const RATE_LIMITS: Record<PlanTier, { requestsPerSecond: number; burstSize: number }> = {
   free: { requestsPerSecond: 2, burstSize: 5 },
-  starter: { requestsPerSecond: 10, burstSize: 30 },
+  personal: { requestsPerSecond: 10, burstSize: 30 },
   pro: { requestsPerSecond: 50, burstSize: 150 },
+  team: { requestsPerSecond: 100, burstSize: 300 },
   enterprise: { requestsPerSecond: 200, burstSize: 500 },
 };

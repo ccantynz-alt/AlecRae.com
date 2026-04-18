@@ -32,7 +32,7 @@ function getStripe(): Stripe {
 
 // ─── Plan definitions ─────────────────────────────────────────────────────
 
-export type PlanId = "free" | "starter" | "professional" | "enterprise";
+export type PlanId = "free" | "personal" | "pro" | "team" | "enterprise";
 
 export interface PlanDefinition {
   priceId: string | null;
@@ -43,18 +43,23 @@ export interface PlanDefinition {
 
 export const PLANS: Record<PlanId, PlanDefinition> = {
   free: { priceId: null, emailsPerMonth: 1_000, domains: 1, webhooks: 2 },
-  starter: {
-    priceId: process.env["STRIPE_PRICE_STARTER"] ?? "price_starter",
+  personal: {
+    priceId: process.env["STRIPE_PRICE_PERSONAL"] ?? "price_personal",
     emailsPerMonth: 10_000,
     domains: 5,
     webhooks: 10,
   },
-  professional: {
-    priceId:
-      process.env["STRIPE_PRICE_PROFESSIONAL"] ?? "price_professional",
+  pro: {
+    priceId: process.env["STRIPE_PRICE_PRO"] ?? "price_pro",
     emailsPerMonth: 100_000,
     domains: 25,
     webhooks: 50,
+  },
+  team: {
+    priceId: process.env["STRIPE_PRICE_TEAM"] ?? "price_team",
+    emailsPerMonth: 250_000,
+    domains: 50,
+    webhooks: 100,
   },
   enterprise: {
     priceId: process.env["STRIPE_PRICE_ENTERPRISE"] ?? "price_enterprise",

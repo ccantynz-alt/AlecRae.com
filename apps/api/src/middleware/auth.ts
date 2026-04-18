@@ -23,6 +23,8 @@ export interface AuthContext {
   keyId: string;
   tier: PlanTier;
   scopes: string[];
+  /** Whether the authed account has ops/admin privileges on /v1/admin/*. */
+  isAdmin: boolean;
 }
 
 declare module "hono" {
@@ -83,15 +85,19 @@ function normaliseTier(dbTier: string | null | undefined): PlanTier {
   switch (dbTier) {
     case "free":
       return "free";
+    // Legacy enum values kept for read-compat with pre-rebrand rows.
     case "starter":
-      return "starter";
+    case "personal":
+      return "personal";
     case "professional":
     case "pro":
       return "pro";
+    case "team":
+      return "team";
     case "enterprise":
       return "enterprise";
     default:
-      return "starter";
+      return "personal";
   }
 }
 
@@ -142,20 +148,22 @@ async function resolveApiKeyFromDb(
         )
       : [];
 
-    // Look up account to get the real plan tier
-    let tier: PlanTier = "starter";
+    // Look up account to get the real plan tier + admin flag
+    let tier: PlanTier = "personal";
+    let isAdmin = false;
     try {
       const [account] = await db
-        .select({ planTier: accounts.planTier })
+        .select({ planTier: accounts.planTier, isAdmin: accounts.isAdmin })
         .from(accounts)
         .where(eq(accounts.id, record.accountId))
         .limit(1);
       if (account) {
         tier = normaliseTier(account.planTier);
+        isAdmin = account.isAdmin === true;
       }
     } catch {
       // Fall back to a safe default if the account lookup fails
-      tier = normaliseTier(record.environment === "test" ? "starter" : "pro");
+      tier = normaliseTier(record.environment === "test" ? "personal" : "pro");
     }
 
     return {
@@ -163,6 +171,7 @@ async function resolveApiKeyFromDb(
       keyId: record.id,
       tier,
       scopes,
+      isAdmin,
     };
   } catch (error) {
     console.error("[auth] Database lookup failed:", error);
@@ -189,6 +198,7 @@ async function resolveApiKeyDev(rawKey: string): Promise<AuthContext | null> {
         "webhooks:manage",
         "analytics:read",
       ],
+      isAdmin: false,
     };
   }
 
@@ -210,6 +220,7 @@ async function validateBearerToken(
       keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
       tier: normaliseTier(payload.tier as string),
       scopes: (payload.scope as string)?.split(" ") ?? [],
+      isAdmin: payload["isAdmin"] === true,
     };
   } catch {
     // Fallback: try raw decode for legacy tokens (unsigned / HS256 dev tokens)
@@ -228,6 +239,7 @@ async function validateBearerToken(
         keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
         tier: normaliseTier(payload.tier as string),
         scopes: (payload.scope as string)?.split(" ") ?? [],
+        isAdmin: payload.isAdmin === true,
       };
     } catch {
       return null;
@@ -268,6 +280,21 @@ function extractCredential(
 
 // ─── Scope enforcement middleware ───────────────────────────────────────────
 
+/**
+ * Gate that only admin accounts may pass. Must run AFTER `authMiddleware`
+ * so that `c.get("auth")` is populated. Enforces the isAdmin flag that is
+ * loaded from the accounts table for API keys, or from the JWT payload for
+ * bearer tokens.
+ */
+export const requireAdmin = createMiddleware(async (c, next) => {
+  const auth = c.get("auth");
+  if (!auth || auth.isAdmin !== true) {
+    return c.json({ error: "admin_required" }, 403);
+  }
+  await next();
+  return;
+});
+
 export function requireScope(...requiredScopes: string[]) {
   return createMiddleware(async (c, next) => {
     const auth = c.get("auth");
@@ -307,9 +334,29 @@ export function requireScope(...requiredScopes: string[]) {
 
 // ─── Main auth middleware ───────────────────────────────────────────────────
 
+// Hard-fail at module load in production when DATABASE_URL is missing.
+// The dev fallback (resolveApiKeyDev) would happily accept any well-formed
+// key without a DB lookup — shipping that behaviour to production is an
+// authentication bypass, so refuse to start instead.
+if (
+  process.env["NODE_ENV"] === "production" &&
+  !process.env["DATABASE_URL"]
+) {
+  throw new Error("FATAL: DATABASE_URL required in production");
+}
+
 const useDatabase = !!process.env["DATABASE_URL"];
 
 export const authMiddleware = createMiddleware(async (c, next) => {
+  // Defence-in-depth: even if this module was loaded before env was set
+  // (tests, boot races), never accept unauthenticated requests in prod.
+  if (
+    process.env["NODE_ENV"] === "production" &&
+    !process.env["DATABASE_URL"]
+  ) {
+    throw new Error("FATAL: DATABASE_URL required in production");
+  }
+
   const credential = extractCredential(c);
 
   if (!credential) {

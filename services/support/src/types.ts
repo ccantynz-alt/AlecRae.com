@@ -102,7 +102,7 @@ export interface DeliveryStatsSummary {
 
 export interface AccountSettings {
   accountId: string;
-  plan: "free" | "starter" | "professional" | "enterprise";
+  plan: "free" | "personal" | "pro" | "team" | "enterprise";
   domains: string[];
   sendingLimits: {
     perHour: number;

@@ -104,12 +104,16 @@ vi.mock("drizzle-orm", () => ({
 
 describe("POST /v1/fbl/report", () => {
   let app: Hono;
+  const FBL_SECRET = "test-fbl-secret";
 
   beforeEach(async () => {
     vi.clearAllMocks();
     queryCallIndex = 0;
     queryResults = [];
     mockDb = createMockDb();
+
+    // Endpoint now requires a shared-secret header; provision it for tests.
+    process.env["FBL_REPORT_SECRET"] = FBL_SECRET;
 
     const { fbl } = await import("../src/routes/fbl.js");
     app = new Hono();
@@ -132,7 +136,7 @@ describe("POST /v1/fbl/report", () => {
 
     const res = await app.request("/v1/fbl/report", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-FBL-Secret": FBL_SECRET },
       body: JSON.stringify({
         originalMailFrom: "sender@example.com",
         originalRcptTo: "recipient@gmail.com",
@@ -152,7 +156,7 @@ describe("POST /v1/fbl/report", () => {
   it("should return 400 for an invalid/empty report", async () => {
     const res = await app.request("/v1/fbl/report", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-FBL-Secret": FBL_SECRET },
       body: JSON.stringify({ invalid: true }),
     });
 
@@ -168,7 +172,7 @@ describe("POST /v1/fbl/report", () => {
 
     const res = await app.request("/v1/fbl/report", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-FBL-Secret": FBL_SECRET },
       body: JSON.stringify({
         originalMailFrom: "sender@unknown-domain.com",
         originalRcptTo: "recipient@gmail.com",
@@ -202,7 +206,7 @@ describe("POST /v1/fbl/report", () => {
 
     const res = await app.request("/v1/fbl/report", {
       method: "POST",
-      headers: { "Content-Type": "text/plain" },
+      headers: { "Content-Type": "text/plain", "X-FBL-Secret": FBL_SECRET },
       body: arfBody,
     });
 
@@ -222,7 +226,7 @@ describe("POST /v1/fbl/report", () => {
 
     const res = await app.request("/v1/fbl/report", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-FBL-Secret": FBL_SECRET },
       body: JSON.stringify({
         originalMailFrom: "sender@example.com",
         originalRcptTo: "unhappy@gmail.com",

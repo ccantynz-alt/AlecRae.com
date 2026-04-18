@@ -69,11 +69,16 @@
 | `STRIPE_SECRET_KEY` | Server-side Stripe calls | dashboard.stripe.com → Developers → API keys | `sk_live_...` | api |
 | `STRIPE_WEBHOOK_SECRET` | Verify webhook signatures | dashboard.stripe.com → Developers → Webhooks → signing secret | `whsec_...` | api |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe.js client-side | dashboard.stripe.com → Developers → API keys | `pk_live_...` | web |
+| `STRIPE_PRICE_PERSONAL` | Stripe Price ID for the Personal plan | dashboard.stripe.com → Products | `price_...` | api |
+| `STRIPE_PRICE_PRO` | Stripe Price ID for the Pro plan | dashboard.stripe.com → Products | `price_...` | api |
+| `STRIPE_PRICE_TEAM` | Stripe Price ID for the Team plan | dashboard.stripe.com → Products | `price_...` | api |
+| `STRIPE_PRICE_ENTERPRISE` | Stripe Price ID for the Enterprise plan | dashboard.stripe.com → Products | `price_...` | api |
 
 ## OAuth Providers
 
 | Var | Purpose | Where to get | Example | Services |
 |---|---|---|---|---|
+| `OAUTH_STATE_SECRET` | HMAC-SHA256 secret for signing the OAuth `state` param (account-takeover mitigation) | `openssl rand -base64 48` | `<48-byte-base64>` | api |
 | `GOOGLE_CLIENT_ID` | Gmail OAuth + SSO | console.cloud.google.com → Credentials | `...apps.googleusercontent.com` | api |
 | `GOOGLE_CLIENT_SECRET` | Gmail OAuth secret | Same | `GOCSPX-...` | api |
 | `MICROSOFT_CLIENT_ID` | Outlook/Graph OAuth | portal.azure.com → App registrations | UUID | api |
@@ -99,6 +104,7 @@
 | `POSTMASTER_EMAIL` | RFC 5321 required postmaster contact | Literal | `postmaster@alecrae.com` | mta |
 | `ABUSE_EMAIL` | Abuse contact (RFC 2142) | Literal | `abuse@alecrae.com` | mta |
 | `DMARC_EMAIL` | DMARC aggregate report receiver | Literal | `dmarc@alecrae.com` | mta |
+| `FBL_REPORT_SECRET` | Shared secret for `X-FBL-Secret` header on `POST /v1/fbl/report`. If unset the endpoint returns 503 and refuses reports. | `openssl rand -base64 32` | `<32-byte-base64>` | api |
 
 ## Storage — Cloudflare R2
 

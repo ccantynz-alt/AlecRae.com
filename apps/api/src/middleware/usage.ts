@@ -35,8 +35,9 @@ export const usageEnforcement = createMiddleware(async (c, next) => {
       const currentPlan = usage.planTier as PlanId;
       const planOrder: PlanId[] = [
         "free",
-        "starter",
-        "professional",
+        "personal",
+        "pro",
+        "team",
         "enterprise",
       ];
       const currentIndex = planOrder.indexOf(currentPlan);

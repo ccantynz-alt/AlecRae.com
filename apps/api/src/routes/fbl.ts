@@ -209,6 +209,19 @@ const fbl = new Hono();
  *   - JSON body with fields: originalMailFrom, originalRcptTo, feedbackType, sourceIp
  */
 fbl.post("/report", async (c) => {
+  // Shared-secret auth — ISPs post FBL reports from known IPs with the
+  // X-FBL-Secret header we provision out of band. Unauthenticated acceptance
+  // would let anyone poison the suppression list for any sender.
+  const expectedSecret = process.env["FBL_REPORT_SECRET"];
+  if (!expectedSecret) {
+    return c.json({ error: "fbl_report_disabled" }, 503);
+  }
+
+  const providedSecret = c.req.header("x-fbl-secret");
+  if (!providedSecret || providedSecret !== expectedSecret) {
+    return c.json({ error: "unauthorized" }, 401);
+  }
+
   const contentType = c.req.header("content-type") ?? "";
   let report: ParsedArfReport | null = null;
 

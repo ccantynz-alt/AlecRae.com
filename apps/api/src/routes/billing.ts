@@ -32,7 +32,7 @@ const billing = new Hono();
 // ─── Schemas ──────────────────────────────────────────────────────────────
 
 const CheckoutSchema = z.object({
-  planId: z.enum(["starter", "professional", "enterprise"]),
+  planId: z.enum(["personal", "pro", "team", "enterprise"]),
   successUrl: z.string().url(),
   cancelUrl: z.string().url(),
 });

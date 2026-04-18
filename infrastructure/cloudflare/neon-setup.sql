@@ -13,8 +13,10 @@
 
 -- ─── Enums ───────────────────────────────────────────────────────────────────
 
+-- Plan tier enum. `starter` and `professional` are legacy values kept for
+-- backwards-compat with pre-2026-04-18 rows. New writes use personal/pro/team.
 DO $$ BEGIN
-  CREATE TYPE plan_tier AS ENUM ('free', 'starter', 'professional', 'enterprise');
+  CREATE TYPE plan_tier AS ENUM ('free', 'starter', 'professional', 'personal', 'pro', 'team', 'enterprise');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

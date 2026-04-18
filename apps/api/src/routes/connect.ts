@@ -13,6 +13,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
@@ -29,6 +30,81 @@ const accountStore = new Map<string, EmailAccount[]>();
 
 function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "");
+}
+
+// ─── OAuth state signing (HMAC-SHA256) ────────────────────────────────────────
+//
+// The OAuth `state` parameter carries the initiating user's accountId across
+// the Google/Microsoft redirect. Without a signature the callback has no way
+// to prove the state wasn't forged by an attacker — a crafted URL could bind
+// the attacker's tokens to the victim's accountId (account takeover).
+//
+// We therefore sign the base64url(JSON) payload with HMAC-SHA256 using
+// OAUTH_STATE_SECRET and verify it in the callback before trusting `userId`.
+
+function getOauthStateSecret(): string {
+  const secret = process.env["OAUTH_STATE_SECRET"];
+  if (!secret) {
+    // Fail loudly instead of silently using a dev default — an unsigned
+    // state in production is an account-takeover vector.
+    throw new Error("OAUTH_STATE_SECRET is not set");
+  }
+  return secret;
+}
+
+function toBase64Url(input: Buffer): string {
+  return input.toString("base64url");
+}
+
+function signOauthState(payload: Record<string, unknown>): string {
+  const payloadB64 = toBase64Url(Buffer.from(JSON.stringify(payload)));
+  const sig = createHmac("sha256", getOauthStateSecret())
+    .update(payloadB64)
+    .digest();
+  return `${payloadB64}.${toBase64Url(sig)}`;
+}
+
+interface VerifiedState {
+  userId: string;
+  provider?: string;
+  ts?: number;
+}
+
+function verifyOauthState(signed: string): VerifiedState | null {
+  const dot = signed.indexOf(".");
+  if (dot <= 0 || dot === signed.length - 1) return null;
+  const payloadB64 = signed.slice(0, dot);
+  const sigB64 = signed.slice(dot + 1);
+
+  const expectedSig = createHmac("sha256", getOauthStateSecret())
+    .update(payloadB64)
+    .digest();
+  let providedSig: Buffer;
+  try {
+    providedSig = Buffer.from(sigB64, "base64url");
+  } catch {
+    return null;
+  }
+  if (providedSig.length !== expectedSig.length) return null;
+  if (!timingSafeEqual(providedSig, expectedSig)) return null;
+
+  try {
+    const json = Buffer.from(payloadB64, "base64url").toString("utf8");
+    const parsed = JSON.parse(json) as {
+      userId?: unknown;
+      provider?: unknown;
+      ts?: unknown;
+    };
+    if (typeof parsed.userId !== "string" || parsed.userId.length === 0) {
+      return null;
+    }
+    const result: VerifiedState = { userId: parsed.userId };
+    if (typeof parsed.provider === "string") result.provider = parsed.provider;
+    if (typeof parsed.ts === "number") result.ts = parsed.ts;
+    return result;
+  } catch {
+    return null;
+  }
 }
 
 const ImapConnectSchema = z.object({
@@ -54,11 +130,11 @@ connect.get(
   requireScope("accounts:write"),
   (c) => {
     const auth = c.get("auth");
-    const state = Buffer.from(JSON.stringify({
+    const state = signOauthState({
       userId: auth.accountId,
       provider: "gmail",
       ts: Date.now(),
-    })).toString("base64url");
+    });
 
     return c.redirect(getGoogleAuthUrl(state));
   },
@@ -70,11 +146,11 @@ connect.get(
   requireScope("accounts:write"),
   (c) => {
     const auth = c.get("auth");
-    const state = Buffer.from(JSON.stringify({
+    const state = signOauthState({
       userId: auth.accountId,
       provider: "outlook",
       ts: Date.now(),
-    })).toString("base64url");
+    });
 
     return c.redirect(getMicrosoftAuthUrl(state));
   },
@@ -91,8 +167,12 @@ connect.get(
       return c.json({ error: { message: "Missing code or state" } }, 400);
     }
 
+    const state = verifyOauthState(stateParam);
+    if (!state) {
+      return c.json({ error: { message: "invalid oauth state" } }, 400);
+    }
+
     try {
-      const state = JSON.parse(Buffer.from(stateParam, "base64url").toString()) as { userId: string };
       const tokens = await exchangeGoogleCode(code);
 
       const account: EmailAccount = {
@@ -137,8 +217,12 @@ connect.get(
       return c.json({ error: { message: "Missing code or state" } }, 400);
     }
 
+    const state = verifyOauthState(stateParam);
+    if (!state) {
+      return c.json({ error: { message: "invalid oauth state" } }, 400);
+    }
+
     try {
-      const state = JSON.parse(Buffer.from(stateParam, "base64url").toString()) as { userId: string };
       const tokens = await exchangeMicrosoftCode(code);
 
       const account: EmailAccount = {

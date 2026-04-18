@@ -56,7 +56,7 @@ async function main() {
     .values({
       id: accountId,
       name: "Test Organization",
-      planTier: "professional",
+      planTier: "pro",
       billingEmail: "billing@test.alecrae.dev",
     })
     .onConflictDoNothing();

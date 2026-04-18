@@ -16,7 +16,7 @@ import { logger } from "hono/logger";
 import { timing } from "hono/timing";
 import { secureHeaders } from "hono/secure-headers";
 
-import { authMiddleware } from "./middleware/auth.js";
+import { authMiddleware, requireAdmin } from "./middleware/auth.js";
 import {
   globalIpRateLimit,
   authRateLimit,
@@ -382,8 +382,8 @@ app.route("/v1/query", emailQuery);
 app.use("/v1/fbl/*", webhookRateLimit);
 app.route("/v1/fbl", fbl);
 
-// Admin dashboard: requires admin API key auth (applied via authMiddleware above)
-app.use("/v1/admin/*", authMiddleware, readRateLimit);
+// Admin dashboard: requires admin API key auth + isAdmin flag on the account.
+app.use("/v1/admin/*", authMiddleware, requireAdmin, readRateLimit);
 app.route("/v1/admin", admin);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────

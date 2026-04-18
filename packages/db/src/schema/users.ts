@@ -16,10 +16,17 @@ import { relations } from "drizzle-orm";
 // Enums
 // ---------------------------------------------------------------------------
 
+// Note: `starter` and `professional` are legacy values kept in the Postgres
+// enum for backwards compatibility with rows created before the 2026-04-18
+// rebrand. New writes should use `personal`, `pro`, `team`, or `enterprise`.
+// A future migration will rename existing rows and drop the legacy values.
 export const planTierEnum = pgEnum("plan_tier", [
   "free",
   "starter",
   "professional",
+  "personal",
+  "pro",
+  "team",
   "enterprise",
 ]);
 
@@ -46,6 +53,8 @@ export const accounts = pgTable(
     id: text("id").primaryKey(), // CUID or ULID
     name: text("name").notNull(),
     planTier: planTierEnum("plan_tier").notNull().default("free"),
+    /** Grants access to /v1/admin/* endpoints. Set manually for ops users. */
+    isAdmin: boolean("is_admin").notNull().default(false),
     emailsSentThisPeriod: integer("emails_sent_this_period")
       .notNull()
       .default(0),

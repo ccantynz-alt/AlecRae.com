@@ -1,5 +1,5 @@
 /** Plan tiers available on the platform. */
-export type PlanTier = "free" | "starter" | "professional" | "enterprise";
+export type PlanTier = "free" | "personal" | "pro" | "team" | "enterprise";
 /** Subscription plan with limits and features. */
 export interface Plan {
     readonly tier: PlanTier;

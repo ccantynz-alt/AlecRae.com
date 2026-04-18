@@ -235,7 +235,7 @@ export async function rotateRefreshToken(oldRefreshToken: string): Promise<Token
   }
 
   // Look up account tier
-  let tier = "starter";
+  let tier = "personal";
   try {
     const [account] = await db
       .select({ planTier: accounts.planTier })

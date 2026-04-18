@@ -21,9 +21,9 @@ export const PLAN_LIMITS: Readonly<Record<PlanTier, Plan>> = {
     dedicatedIp: false,
     prioritySupport: false,
   },
-  starter: {
-    tier: "starter",
-    name: "Starter",
+  personal: {
+    tier: "personal",
+    name: "Personal",
     monthlyEmailLimit: 50_000,
     rateLimit: 10,
     maxAttachmentSize: 10 * MB,
@@ -35,9 +35,9 @@ export const PLAN_LIMITS: Readonly<Record<PlanTier, Plan>> = {
     dedicatedIp: false,
     prioritySupport: false,
   },
-  professional: {
-    tier: "professional",
-    name: "Professional",
+  pro: {
+    tier: "pro",
+    name: "Pro",
     monthlyEmailLimit: 500_000,
     rateLimit: 50,
     maxAttachmentSize: 25 * MB,
@@ -46,6 +46,20 @@ export const PLAN_LIMITS: Readonly<Record<PlanTier, Plan>> = {
     maxApiKeys: 25,
     maxWebhooks: 20,
     retentionDays: 30,
+    dedicatedIp: true,
+    prioritySupport: true,
+  },
+  team: {
+    tier: "team",
+    name: "Team",
+    monthlyEmailLimit: 1_000_000,
+    rateLimit: 100,
+    maxAttachmentSize: 50 * MB,
+    maxEmailSize: 75 * MB,
+    maxDomains: 50,
+    maxApiKeys: 50,
+    maxWebhooks: 30,
+    retentionDays: 60,
     dedicatedIp: true,
     prioritySupport: true,
   },
@@ -68,8 +82,9 @@ export const PLAN_LIMITS: Readonly<Record<PlanTier, Plan>> = {
 /** Storage limits per plan tier in bytes. */
 export const STORAGE_LIMITS: Readonly<Record<PlanTier, number>> = {
   free: 1 * GB,
-  starter: 10 * GB,
-  professional: 100 * GB,
+  personal: 10 * GB,
+  pro: 100 * GB,
+  team: 500 * GB,
   enterprise: 1024 * GB, // 1 TB
 } as const;
 
