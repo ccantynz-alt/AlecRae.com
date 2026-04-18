@@ -10,6 +10,7 @@
 
 import { SmtpServer } from "./smtp/server.js";
 import { MtaWorker } from "./worker.js";
+import { createHealthServer, dbCheck, redisCheck } from "./health.js";
 import { getDatabase, closeConnection } from "@alecrae/db";
 import { initTelemetry, shutdownTelemetry } from "@alecrae/shared";
 import Redis from "ioredis";
@@ -25,12 +26,15 @@ const WORKER_CONCURRENCY = parseInt(
   process.env["MTA_WORKER_CONCURRENCY"] ?? "10",
   10,
 );
+const HEALTH_PORT = parseInt(process.env["HEALTH_PORT"] ?? "8080", 10);
+const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
 
 // ─── Service state ──────────────────────────────────────────────────────────
 
 let smtpServer: SmtpServer | null = null;
 let mtaWorker: MtaWorker | null = null;
 let redis: Redis | null = null;
+let healthServer: { start: () => Promise<void>; stop: () => Promise<void> } | null = null;
 let isShuttingDown = false;
 
 // ─── Startup ────────────────────────────────────────────────────────────────
@@ -154,7 +158,21 @@ async function start(): Promise<void> {
 
   await mtaWorker.start();
 
-  // ── 5. Register shutdown handlers ───────────────────────────────────
+  // ── 5. Start health server (Fly.io http_checks target) ─────────────
+  console.log(`[mta] Starting health server on port ${HEALTH_PORT}...`);
+  const redisClient = redis;
+  healthServer = createHealthServer({
+    port: HEALTH_PORT,
+    version: SERVICE_VERSION,
+    checks: [
+      dbCheck(() => getDatabase()),
+      ...(redisClient ? [redisCheck(redisClient)] : []),
+    ],
+  });
+  await healthServer.start();
+  console.log(`[mta] Health server listening on :${HEALTH_PORT} (/healthz, /readyz)`);
+
+  // ── 6. Register shutdown handlers ───────────────────────────────────
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
@@ -162,6 +180,7 @@ async function start(): Promise<void> {
   console.log("  AlecRae MTA — Running");
   console.log(`  SMTP:   ${smtpServer ? `${SMTP_HOST}:${SMTP_PORT}` : "disabled"}`);
   console.log(`  Queue:  ${MTA_QUEUE_NAME} (concurrency: ${WORKER_CONCURRENCY})`);
+  console.log(`  Health: :${HEALTH_PORT} (/healthz, /readyz)`);
   console.log("=".repeat(60));
 }
 
@@ -179,7 +198,16 @@ async function shutdown(signal: string): Promise<void> {
   }, 30_000);
 
   try {
-    // Stop accepting new work first
+    // Stop the health server first — signals the load balancer to stop
+    // routing traffic to this instance before we tear down dependencies.
+    if (healthServer) {
+      console.log("[mta] Stopping health server...");
+      await healthServer.stop();
+      healthServer = null;
+      console.log("[mta] Health server stopped");
+    }
+
+    // Stop accepting new work next
     if (mtaWorker) {
       console.log("[mta] Stopping queue worker...");
       await mtaWorker.stop();

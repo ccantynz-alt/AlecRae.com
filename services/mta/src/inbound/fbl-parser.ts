@@ -121,29 +121,31 @@ export function parseArfReport(rawMessage: string | Buffer): ParseResult {
       ? extractRawHeadersBlock(originalPart.body)
       : undefined;
 
+    const userAgent = fields.get("user-agent");
+    const reportingMtaRaw = fields.get("reporting-mta");
+    const sourceIp = fields.get("source-ip");
+    const originalMailFromRaw = fields.get("original-mail-from");
+    const originalRcptToRaw = fields.get("original-rcpt-to");
+    const reportedDomain = fields.get("reported-domain");
+    const authResults = fields.get("authentication-results");
+
     const report: ArfReport = {
       feedbackType,
       arrivalDate,
-      ...(fields.get("user-agent") ? { userAgent: fields.get("user-agent") } : {}),
-      ...(fields.get("reporting-mta")
-        ? { reportingMta: stripMtaType(fields.get("reporting-mta") ?? "") }
+      ...(userAgent ? { userAgent } : {}),
+      ...(reportingMtaRaw ? { reportingMta: stripMtaType(reportingMtaRaw) } : {}),
+      ...(sourceIp ? { sourceIp } : {}),
+      ...(originalMailFromRaw
+        ? { originalMailFrom: stripAngleBrackets(originalMailFromRaw) }
         : {}),
-      ...(fields.get("source-ip") ? { sourceIp: fields.get("source-ip") } : {}),
-      ...(fields.get("original-mail-from")
-        ? { originalMailFrom: stripAngleBrackets(fields.get("original-mail-from") ?? "") }
-        : {}),
-      ...(fields.get("original-rcpt-to")
-        ? { originalRcptTo: stripAngleBrackets(fields.get("original-rcpt-to") ?? "") }
+      ...(originalRcptToRaw
+        ? { originalRcptTo: stripAngleBrackets(originalRcptToRaw) }
         : {}),
       ...(originalMessageId ? { originalMessageId: stripAngleBrackets(originalMessageId) } : {}),
       ...(originalSubject ? { originalSubject } : {}),
-      ...(fields.get("reported-domain")
-        ? { reportedDomain: fields.get("reported-domain") }
-        : {}),
+      ...(reportedDomain ? { reportedDomain } : {}),
       ...(incidents !== undefined ? { incidents } : {}),
-      ...(fields.get("authentication-results")
-        ? { authResults: fields.get("authentication-results") }
-        : {}),
+      ...(authResults ? { authResults } : {}),
       ...(rawHeaders ? { rawHeaders } : {}),
     };
 
