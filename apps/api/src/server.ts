@@ -99,6 +99,15 @@ import { chatRouter } from "./routes/chat.js";
 import { linkPreviewRouter } from "./routes/link-previews.js";
 import { integrationsRouter } from "./routes/integrations.js";
 import { schedulingAnalyticsRouter } from "./routes/scheduling-analytics.js";
+import { onboardingRouter } from "./routes/onboarding.js";
+import { videoMeetingsRouter } from "./routes/video-meetings.js";
+import { aiWritingRouter } from "./routes/ai-writing.js";
+import { notificationsRouter, focusRouter } from "./routes/notification-intelligence.js";
+import { hygieneRouter } from "./routes/email-hygiene.js";
+import { aiIntelligenceRouter } from "./routes/ai-intelligence.js";
+import { contactsExtendedRouter } from "./routes/contacts-extended.js";
+import { documentsRouter } from "./routes/documents.js";
+import { calendarEventsRouter } from "./routes/calendar-events.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue, getSendQueue } from "./lib/queue.js";
@@ -284,6 +293,13 @@ app.use("/v1/semantic/*", authMiddleware, searchRateLimit);
 // Contacts: read-level (600 req/min)
 app.use("/v1/contacts/*", authMiddleware, readRateLimit);
 app.use("/v1/contacts", authMiddleware, readRateLimit);
+// Contacts Extended (CRM-lite): read + write level
+app.use("/v1/contacts-extended/interactions/*", authMiddleware, readRateLimit);
+app.use("/v1/contacts-extended/interactions", authMiddleware, writeRateLimit);
+app.use("/v1/contacts-extended/reminders/*/complete", authMiddleware, writeRateLimit);
+app.use("/v1/contacts-extended/reminders/*", authMiddleware, writeRateLimit);
+app.use("/v1/contacts-extended/reminders", authMiddleware, writeRateLimit);
+app.use("/v1/contacts-extended/insights/*", authMiddleware, readRateLimit);
 // Calendar: read-level (600 req/min)
 app.use("/v1/calendar/*", authMiddleware, readRateLimit);
 // Encryption: write-level (200 req/min)
@@ -395,6 +411,61 @@ app.use("/v1/integrations", authMiddleware, writeRateLimit);
 // Scheduling Analytics: read-level for analytics queries
 app.use("/v1/analytics/scheduling/*", authMiddleware, readRateLimit);
 app.use("/v1/analytics/scheduling", authMiddleware, readRateLimit);
+// Onboarding: write-level (200 req/min) — guided setup wizard
+app.use("/v1/onboarding/*", authMiddleware, writeRateLimit);
+app.use("/v1/onboarding", authMiddleware, writeRateLimit);
+// Video Meetings (AlecRae Meet): write-level for room CRUD + schedule, read-level for listing
+app.use("/v1/meetings/rooms/*/recordings", authMiddleware, readRateLimit);
+app.use("/v1/meetings/rooms/*/schedule", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/rooms/*", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/rooms", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/recordings/*/summarize", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/recordings/*", authMiddleware, readRateLimit);
+app.use("/v1/meetings/instant", authMiddleware, writeRateLimit);
+// AI Writing Intelligence: write-level for compose/rewrite/expand, read-level for stats/profiles
+app.use("/v1/ai/write/profiles/*", authMiddleware, writeRateLimit);
+app.use("/v1/ai/write/profiles", authMiddleware, readRateLimit);
+app.use("/v1/ai/write/stats", authMiddleware, readRateLimit);
+app.use("/v1/ai/write/*", authMiddleware, writeRateLimit);
+app.use("/v1/ai/write", authMiddleware, writeRateLimit);
+// Notification Intelligence: write-level for rule CRUD + evaluate, read-level for batches/digest
+app.use("/v1/notifications/rules/*", authMiddleware, writeRateLimit);
+app.use("/v1/notifications/rules", authMiddleware, writeRateLimit);
+app.use("/v1/notifications/evaluate", authMiddleware, writeRateLimit);
+app.use("/v1/notifications/batches/*/deliver", authMiddleware, writeRateLimit);
+app.use("/v1/notifications/batches/*", authMiddleware, readRateLimit);
+app.use("/v1/notifications/batches", authMiddleware, readRateLimit);
+app.use("/v1/notifications/digest", authMiddleware, readRateLimit);
+// Focus Sessions: write-level for start/end, read-level for current/deferred
+app.use("/v1/focus/start", authMiddleware, writeRateLimit);
+app.use("/v1/focus/end", authMiddleware, writeRateLimit);
+app.use("/v1/focus/current", authMiddleware, readRateLimit);
+app.use("/v1/focus/deferred", authMiddleware, readRateLimit);
+// Email Hygiene: write-level for goals/cleanup/audit, read-level for analytics
+app.use("/v1/hygiene/subscriptions/audit", authMiddleware, readRateLimit);
+app.use("/v1/hygiene/subscriptions/*/wanted", authMiddleware, writeRateLimit);
+app.use("/v1/hygiene/subscriptions/*", authMiddleware, readRateLimit);
+app.use("/v1/hygiene/subscriptions", authMiddleware, readRateLimit);
+app.use("/v1/hygiene/inbox-cleanup", authMiddleware, writeRateLimit);
+app.use("/v1/hygiene/goals", authMiddleware, writeRateLimit);
+app.use("/v1/hygiene/*", authMiddleware, readRateLimit);
+// Documents (AlecRae Docs): write-level for CRUD, read-level for listing
+app.use("/v1/documents/folders/*", authMiddleware, writeRateLimit);
+app.use("/v1/documents/folders", authMiddleware, writeRateLimit);
+app.use("/v1/documents/*/ai-assist", authMiddleware, writeRateLimit);
+app.use("/v1/documents/*/export", authMiddleware, writeRateLimit);
+app.use("/v1/documents/*/restore/*", authMiddleware, writeRateLimit);
+app.use("/v1/documents/*/versions", authMiddleware, readRateLimit);
+app.use("/v1/documents/*", authMiddleware, writeRateLimit);
+app.use("/v1/documents", authMiddleware, writeRateLimit);
+// Calendar Events: write-level for CRUD + scheduling, read-level for queries
+app.use("/v1/calendar-events/find-time", authMiddleware, writeRateLimit);
+app.use("/v1/calendar-events/schedule-from-text", authMiddleware, writeRateLimit);
+app.use("/v1/calendar-events/today", authMiddleware, readRateLimit);
+app.use("/v1/calendar-events/availability", authMiddleware, writeRateLimit);
+app.use("/v1/calendar-events/*/prep", authMiddleware, readRateLimit);
+app.use("/v1/calendar-events/*", authMiddleware, writeRateLimit);
+app.use("/v1/calendar-events", authMiddleware, writeRateLimit);
 // Mount route handlers
 app.route("/v1/messages", messages);
 app.route("/v1/domains", domains);
@@ -423,6 +494,8 @@ app.route("/v1/import", importRouter);
 app.route("/v1/search", aiSearch);
 app.route("/v1/semantic", semanticSearch);
 app.route("/v1/contacts", contacts);
+// Contacts Extended (CRM-lite) — interactions, reminders, AI insights
+app.route("/v1/contacts-extended", contactsExtendedRouter);
 app.route("/v1/calendar", calendar);
 app.route("/v1/encryption", encryption);
 app.route("/v1/rules", aiRules);
@@ -502,6 +575,23 @@ app.route("/v1/link-preview", linkPreviewRouter);
 app.route("/v1/integrations", integrationsRouter);
 // Scheduling Analytics — best send times, engagement patterns
 app.route("/v1/analytics/scheduling", schedulingAnalyticsRouter);
+// Onboarding — Gmail + Microsoft 365 guided setup wizard
+app.route("/v1/onboarding", onboardingRouter);
+// Video Meetings — AlecRae Meet (Teams/Zoom replacement)
+app.route("/v1/meetings", videoMeetingsRouter);
+// AI Writing Intelligence — full writing assistant
+app.route("/v1/ai/write", aiWritingRouter);
+// Notification Intelligence — AI-powered smart notification rules + focus sessions
+app.route("/v1/notifications", notificationsRouter);
+app.route("/v1/focus", focusRouter);
+// AI Intelligence Hub — priority scoring, relationships, smart replies, sentiment, writing coach, predictions
+app.route("/v1/ai-intelligence", aiIntelligenceRouter);
+// Email Hygiene — productivity insights, subscription tracking, inbox cleanup
+app.route("/v1/hygiene", hygieneRouter);
+// Documents — AlecRae Docs/Sheets/Slides
+app.route("/v1/documents", documentsRouter);
+// Calendar Events — Smart Calendar with AI scheduling
+app.route("/v1/calendar-events", calendarEventsRouter);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);

@@ -119,6 +119,15 @@ export {
   contactsRelations,
 } from "./schema/contacts.js";
 
+// Schema - Contacts Extended (CRM-lite interactions + reminders)
+export {
+  contactInteractions,
+  contactReminders,
+  contactInteractionTypeEnum,
+  contactInteractionsRelations,
+  contactRemindersRelations,
+} from "./schema/contacts-extended.js";
+
 // Schema - Recall Records
 export {
   recallRecords,
@@ -422,19 +431,103 @@ export {
   chatMessagesRelations,
 } from "./schema/chat.js";
 
-// Schema - Link Previews (URL unfurling cache)
+// Schema - Onboarding Records (guided setup wizard)
 export {
-  linkPreviews,
-} from "./schema/link-previews.js";
-export type { LinkPreviewData } from "./schema/link-previews.js";
+  onboardingRecords,
+  onboardingStepEnum,
+  onboardingProviderEnum,
+  onboardingRecordsRelations,
+} from "./schema/onboarding.js";
+export type { OnboardingPreferences } from "./schema/onboarding.js";
 
-// Schema - Webhook Integrations (Zapier/Make/n8n connectors)
+// Schema - Documents (AlecRae Docs/Sheets/Slides)
 export {
-  webhookIntegrations,
-  integrationPlatformEnum,
-  webhookIntegrationsRelations,
-} from "./schema/webhook-integrations.js";
-export type { IntegrationTriggerConfig } from "./schema/webhook-integrations.js";
+  documents,
+  documentFolders,
+  documentVersions,
+  documentTypeEnum,
+  documentsRelations,
+  documentFoldersRelations,
+  documentVersionsRelations,
+} from "./schema/documents.js";
+
+// Schema - Video Meetings (AlecRae Meet — rooms + recordings)
+export {
+  meetingRooms,
+  meetingRecordings,
+  meetingRoomsRelations,
+  meetingRecordingsRelations,
+} from "./schema/video-meetings.js";
+
+// Schema - AI Writing Intelligence (profiles + suggestion log)
+export {
+  writingProfiles,
+  writingSuggestionsLog,
+  suggestionTypeEnum,
+  writingProfilesRelations,
+  writingSuggestionsLogRelations,
+} from "./schema/ai-writing.js";
+
+// Schema - Calendar Events & Availability
+export {
+  calendarEvents,
+  calendarAvailability,
+  calendarEventStatusEnum,
+  calendarEventsRelations,
+  calendarAvailabilityRelations,
+} from "./schema/calendar-events.js";
+export type {
+  RecurrenceRule,
+  EventAttendee,
+  EventReminder,
+} from "./schema/calendar-events.js";
+
+// Schema - Notification Intelligence (smart notifications + focus sessions)
+export {
+  notificationRules,
+  notificationBatches,
+  focusSessions,
+  notificationActionEnum,
+  focusModeEnum,
+  notificationRulesRelations,
+  notificationBatchesRelations,
+  focusSessionsRelations,
+} from "./schema/notification-intelligence.js";
+export type { NotificationRuleConditions } from "./schema/notification-intelligence.js";
+
+// Schema - Email Hygiene (habits, subscriptions, productivity goals)
+export {
+  emailHabits,
+  subscriptionTracker,
+  emailProductivityGoals,
+  emailHabitsRelations,
+  subscriptionTrackerRelations,
+  emailProductivityGoalsRelations,
+} from "./schema/email-hygiene.js";
+export type { ProductivityGoals } from "./schema/email-hygiene.js";
+
+// Schema - AI Intelligence (priority scoring, relationship insights, smart replies, sentiment, writing coach, predictive actions)
+export {
+  emailPriorityScores,
+  relationshipInsights,
+  smartReplies,
+  emailSentiments,
+  writingCoachResults,
+  predictiveActions,
+  urgencyLevelEnum,
+  emailSentimentEnum,
+  emailPriorityScoresRelations,
+  relationshipInsightsRelations,
+  smartRepliesRelations,
+  emailSentimentsRelations,
+  writingCoachResultsRelations,
+  predictiveActionsRelations,
+} from "./schema/ai-intelligence.js";
+export type {
+  ContentSignals,
+  SmartReplyOption,
+  WritingCoachSuggestion,
+} from "./schema/ai-intelligence.js";
 
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
@@ -456,6 +549,7 @@ import type { templates } from "./schema/templates.js";
 import type { emailEmbeddings } from "./schema/email-embeddings.js";
 import type { passkeys, passkeyChallenges } from "./schema/passkeys.js";
 import type { contacts } from "./schema/contacts.js";
+import type { contactInteractions, contactReminders } from "./schema/contacts-extended.js";
 import type { recallRecords } from "./schema/recall.js";
 import type {
   screenerDecisions,
@@ -511,6 +605,21 @@ import type { files } from "./schema/files.js";
 import type { chatChannels, chatMembers, chatMessages } from "./schema/chat.js";
 import type { linkPreviews } from "./schema/link-previews.js";
 import type { webhookIntegrations } from "./schema/webhook-integrations.js";
+import type { onboardingRecords } from "./schema/onboarding.js";
+import type { documents, documentFolders, documentVersions } from "./schema/documents.js";
+import type { meetingRooms, meetingRecordings } from "./schema/video-meetings.js";
+import type { writingProfiles, writingSuggestionsLog } from "./schema/ai-writing.js";
+import type { calendarEvents, calendarAvailability } from "./schema/calendar-events.js";
+import type { notificationRules, notificationBatches, focusSessions } from "./schema/notification-intelligence.js";
+import type { emailHabits, subscriptionTracker, emailProductivityGoals } from "./schema/email-hygiene.js";
+import type {
+  emailPriorityScores,
+  relationshipInsights,
+  smartReplies,
+  emailSentiments,
+  writingCoachResults,
+  predictiveActions,
+} from "./schema/ai-intelligence.js";
 
 // Select types (what you get back from queries)
 export type Account = InferSelectModel<typeof accounts>;
@@ -553,6 +662,10 @@ export type PasskeyChallenge = InferSelectModel<typeof passkeyChallenges>;
 export type NewPasskeyChallenge = InferInsertModel<typeof passkeyChallenges>;
 export type Contact = InferSelectModel<typeof contacts>;
 export type NewContact = InferInsertModel<typeof contacts>;
+export type ContactInteraction = InferSelectModel<typeof contactInteractions>;
+export type NewContactInteraction = InferInsertModel<typeof contactInteractions>;
+export type ContactReminder = InferSelectModel<typeof contactReminders>;
+export type NewContactReminder = InferInsertModel<typeof contactReminders>;
 export type RecallRecord = InferSelectModel<typeof recallRecords>;
 export type NewRecallRecord = InferInsertModel<typeof recallRecords>;
 export type ScreenerDecision = InferSelectModel<typeof screenerDecisions>;
@@ -649,3 +762,47 @@ export type LinkPreview = InferSelectModel<typeof linkPreviews>;
 export type NewLinkPreview = InferInsertModel<typeof linkPreviews>;
 export type WebhookIntegration = InferSelectModel<typeof webhookIntegrations>;
 export type NewWebhookIntegration = InferInsertModel<typeof webhookIntegrations>;
+export type OnboardingRecord = InferSelectModel<typeof onboardingRecords>;
+export type NewOnboardingRecord = InferInsertModel<typeof onboardingRecords>;
+export type Document = InferSelectModel<typeof documents>;
+export type NewDocument = InferInsertModel<typeof documents>;
+export type DocumentFolder = InferSelectModel<typeof documentFolders>;
+export type NewDocumentFolder = InferInsertModel<typeof documentFolders>;
+export type DocumentVersion = InferSelectModel<typeof documentVersions>;
+export type NewDocumentVersion = InferInsertModel<typeof documentVersions>;
+export type MeetingRoom = InferSelectModel<typeof meetingRooms>;
+export type NewMeetingRoom = InferInsertModel<typeof meetingRooms>;
+export type MeetingRecording = InferSelectModel<typeof meetingRecordings>;
+export type NewMeetingRecording = InferInsertModel<typeof meetingRecordings>;
+export type WritingProfile = InferSelectModel<typeof writingProfiles>;
+export type NewWritingProfile = InferInsertModel<typeof writingProfiles>;
+export type WritingSuggestionLog = InferSelectModel<typeof writingSuggestionsLog>;
+export type NewWritingSuggestionLog = InferInsertModel<typeof writingSuggestionsLog>;
+export type CalendarEvent = InferSelectModel<typeof calendarEvents>;
+export type NewCalendarEvent = InferInsertModel<typeof calendarEvents>;
+export type CalendarAvailability = InferSelectModel<typeof calendarAvailability>;
+export type NewCalendarAvailability = InferInsertModel<typeof calendarAvailability>;
+export type NotificationRule = InferSelectModel<typeof notificationRules>;
+export type NewNotificationRule = InferInsertModel<typeof notificationRules>;
+export type NotificationBatch = InferSelectModel<typeof notificationBatches>;
+export type NewNotificationBatch = InferInsertModel<typeof notificationBatches>;
+export type FocusSession = InferSelectModel<typeof focusSessions>;
+export type NewFocusSession = InferInsertModel<typeof focusSessions>;
+export type EmailHabit = InferSelectModel<typeof emailHabits>;
+export type NewEmailHabit = InferInsertModel<typeof emailHabits>;
+export type SubscriptionTracker = InferSelectModel<typeof subscriptionTracker>;
+export type NewSubscriptionTracker = InferInsertModel<typeof subscriptionTracker>;
+export type EmailProductivityGoal = InferSelectModel<typeof emailProductivityGoals>;
+export type NewEmailProductivityGoal = InferInsertModel<typeof emailProductivityGoals>;
+export type EmailPriorityScore = InferSelectModel<typeof emailPriorityScores>;
+export type NewEmailPriorityScore = InferInsertModel<typeof emailPriorityScores>;
+export type RelationshipInsight = InferSelectModel<typeof relationshipInsights>;
+export type NewRelationshipInsight = InferInsertModel<typeof relationshipInsights>;
+export type SmartReply = InferSelectModel<typeof smartReplies>;
+export type NewSmartReply = InferInsertModel<typeof smartReplies>;
+export type EmailSentiment = InferSelectModel<typeof emailSentiments>;
+export type NewEmailSentiment = InferInsertModel<typeof emailSentiments>;
+export type WritingCoachResult = InferSelectModel<typeof writingCoachResults>;
+export type NewWritingCoachResult = InferInsertModel<typeof writingCoachResults>;
+export type PredictiveAction = InferSelectModel<typeof predictiveActions>;
+export type NewPredictiveAction = InferInsertModel<typeof predictiveActions>;
