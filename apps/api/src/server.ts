@@ -114,6 +114,12 @@ import { workflowsRouter } from "./routes/workflows.js";
 import { aiCategorizationRouter } from "./routes/ai-categorization.js";
 import { searchIntelligenceRouter } from "./routes/search-intelligence.js";
 import { securityIntelligenceRouter } from "./routes/security-intelligence.js";
+import { sentimentTimelineRouter } from "./routes/sentiment-timeline.js";
+import { attachmentIntelligenceRouter } from "./routes/attachment-intelligence.js";
+import { schedulingIntelligenceRouter } from "./routes/scheduling-intelligence.js";
+import { contextIntelligenceRouter } from "./routes/context-intelligence.js";
+import { productivityAnalyticsRouter } from "./routes/productivity-analytics.js";
+import { knowledgeGraphRouter } from "./routes/knowledge-graph.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue, getSendQueue } from "./lib/queue.js";
@@ -508,6 +514,47 @@ app.use("/v1/security-intelligence/scan/*", authMiddleware, writeRateLimit);
 app.use("/v1/security-intelligence/report-phishing", authMiddleware, writeRateLimit);
 app.use("/v1/security-intelligence/*", authMiddleware, readRateLimit);
 app.use("/v1/security-intelligence", authMiddleware, readRateLimit);
+// Sentiment Timeline: write-level for analyze, read-level for queries
+app.use("/v1/sentiment/analyze", authMiddleware, writeRateLimit);
+app.use("/v1/sentiment/batch-analyze", authMiddleware, writeRateLimit);
+app.use("/v1/sentiment/*", authMiddleware, readRateLimit);
+app.use("/v1/sentiment", authMiddleware, readRateLimit);
+// Attachment Intelligence: write-level for analyze/scan, read-level for queries
+app.use("/v1/attachments/intelligence/analyze", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/scan", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/batch-scan", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/extract-text", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/organize/*/action", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/*", authMiddleware, readRateLimit);
+app.use("/v1/attachments/intelligence", authMiddleware, readRateLimit);
+// Scheduling Intelligence: write-level for propose/detect, read-level for queries
+app.use("/v1/scheduling/detect", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/propose", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/auto-respond", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/patterns/learn", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/patterns", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/*", authMiddleware, readRateLimit);
+app.use("/v1/scheduling", authMiddleware, readRateLimit);
+// Context Intelligence: write-level for extract, read-level for queries
+app.use("/v1/context/extract", authMiddleware, writeRateLimit);
+app.use("/v1/context/batch-extract", authMiddleware, writeRateLimit);
+app.use("/v1/context/action-items/*", authMiddleware, writeRateLimit);
+app.use("/v1/context/deadlines/*/remind", authMiddleware, writeRateLimit);
+app.use("/v1/context/promises/*", authMiddleware, writeRateLimit);
+app.use("/v1/context/*", authMiddleware, readRateLimit);
+app.use("/v1/context", authMiddleware, readRateLimit);
+// Productivity Analytics: write-level for track/generate, read-level for queries
+app.use("/v1/productivity/track", authMiddleware, writeRateLimit);
+app.use("/v1/productivity/insights/generate", authMiddleware, writeRateLimit);
+app.use("/v1/productivity/insights/*", authMiddleware, writeRateLimit);
+app.use("/v1/productivity/*", authMiddleware, readRateLimit);
+app.use("/v1/productivity", authMiddleware, readRateLimit);
+// Knowledge Graph: write-level for extract/update/delete, read-level for queries
+app.use("/v1/knowledge/extract", authMiddleware, writeRateLimit);
+app.use("/v1/knowledge/batch-extract", authMiddleware, writeRateLimit);
+app.use("/v1/knowledge/entities/*", authMiddleware, writeRateLimit);
+app.use("/v1/knowledge/*", authMiddleware, readRateLimit);
+app.use("/v1/knowledge", authMiddleware, readRateLimit);
 // Mount route handlers
 app.route("/v1/messages", messages);
 app.route("/v1/domains", domains);
@@ -647,6 +694,18 @@ app.route("/v1/ai/categorize", aiCategorizationRouter);
 app.route("/v1/search-intelligence", searchIntelligenceRouter);
 // Security Intelligence — threat detection, policies, audit log
 app.route("/v1/security-intelligence", securityIntelligenceRouter);
+// Sentiment Timeline — sentiment tracking + relationship health
+app.route("/v1/sentiment", sentimentTimelineRouter);
+// Attachment Intelligence — AI file analysis, virus scanning, PII detection
+app.route("/v1/attachments/intelligence", attachmentIntelligenceRouter);
+// Scheduling Intelligence — AI meeting proposals + availability patterns
+app.route("/v1/scheduling", schedulingIntelligenceRouter);
+// Context Intelligence — action items, deadlines, promises
+app.route("/v1/context", contextIntelligenceRouter);
+// Productivity Analytics — time tracking, insights, behavior patterns
+app.route("/v1/productivity", productivityAnalyticsRouter);
+// Knowledge Graph — entity extraction, relationships, graph visualization
+app.route("/v1/knowledge", knowledgeGraphRouter);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);

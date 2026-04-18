@@ -619,6 +619,68 @@ export {
   smartFileOrganizationRelations,
 } from "./schema/attachment-intelligence.js";
 
+// Schema - Sentiment Timeline (sentiment tracking + relationship health)
+export {
+  sentimentTimeline,
+  relationshipHealth,
+  sentimentLevelEnum,
+  sentimentTimelineRelations,
+  relationshipHealthRelations,
+} from "./schema/sentiment-timeline.js";
+
+// Schema - Scheduling Intelligence (meeting proposals + availability patterns)
+export {
+  meetingProposals,
+  availabilityPatterns,
+  meetingTypeEnum,
+  meetingProposalStatusEnum,
+  meetingProposalsRelations,
+  availabilityPatternsRelations,
+} from "./schema/scheduling-intelligence.js";
+export type {
+  ProposedTime,
+  MeetingPreferences,
+  BusyBlock,
+} from "./schema/scheduling-intelligence.js";
+
+// Schema - Context Intelligence (action items + deadlines + promises)
+export {
+  emailActionItems,
+  emailDeadlines,
+  emailPromises,
+  actionItemPriorityEnum,
+  actionItemStatusEnum,
+  actionItemSourceEnum,
+  promiseStatusEnum,
+  emailActionItemsRelations,
+  emailDeadlinesRelations,
+  emailPromisesRelations,
+} from "./schema/context-intelligence.js";
+
+// Schema - Productivity Analytics (time tracking + insights + behavior patterns)
+export {
+  emailTimeTracking,
+  productivityInsights,
+  emailBehaviorPatterns,
+  emailActivityTypeEnum,
+  productivityInsightTypeEnum,
+  insightSeverityEnum,
+  emailTimeTrackingRelations,
+  productivityInsightsRelations,
+  emailBehaviorPatternsRelations,
+} from "./schema/productivity-analytics.js";
+
+// Schema - Knowledge Graph (entities + relationships + extractions)
+export {
+  knowledgeEntities,
+  knowledgeRelationships,
+  knowledgeExtractions,
+  knowledgeEntityTypeEnum,
+  knowledgeEntitiesRelations,
+  knowledgeRelationshipsRelations,
+  knowledgeExtractionsRelations,
+} from "./schema/knowledge-graph.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -945,3 +1007,37 @@ export type AttachmentAnalysis = InferSelectModel<typeof attachmentAnalysis>;
 export type NewAttachmentAnalysis = InferInsertModel<typeof attachmentAnalysis>;
 export type SmartFileOrganization = InferSelectModel<typeof smartFileOrganization>;
 export type NewSmartFileOrganization = InferInsertModel<typeof smartFileOrganization>;
+
+// Tier 8 types
+import type { sentimentTimeline, relationshipHealth } from "./schema/sentiment-timeline.js";
+import type { meetingProposals, availabilityPatterns } from "./schema/scheduling-intelligence.js";
+import type { emailActionItems, emailDeadlines, emailPromises } from "./schema/context-intelligence.js";
+import type { emailTimeTracking, productivityInsights, emailBehaviorPatterns } from "./schema/productivity-analytics.js";
+import type { knowledgeEntities, knowledgeRelationships, knowledgeExtractions } from "./schema/knowledge-graph.js";
+
+export type SentimentTimelineEntry = InferSelectModel<typeof sentimentTimeline>;
+export type NewSentimentTimelineEntry = InferInsertModel<typeof sentimentTimeline>;
+export type RelationshipHealthRecord = InferSelectModel<typeof relationshipHealth>;
+export type NewRelationshipHealthRecord = InferInsertModel<typeof relationshipHealth>;
+export type MeetingProposal = InferSelectModel<typeof meetingProposals>;
+export type NewMeetingProposal = InferInsertModel<typeof meetingProposals>;
+export type AvailabilityPattern = InferSelectModel<typeof availabilityPatterns>;
+export type NewAvailabilityPattern = InferInsertModel<typeof availabilityPatterns>;
+export type EmailActionItem = InferSelectModel<typeof emailActionItems>;
+export type NewEmailActionItem = InferInsertModel<typeof emailActionItems>;
+export type EmailDeadline = InferSelectModel<typeof emailDeadlines>;
+export type NewEmailDeadline = InferInsertModel<typeof emailDeadlines>;
+export type EmailPromise = InferSelectModel<typeof emailPromises>;
+export type NewEmailPromise = InferInsertModel<typeof emailPromises>;
+export type EmailTimeTrackingRecord = InferSelectModel<typeof emailTimeTracking>;
+export type NewEmailTimeTrackingRecord = InferInsertModel<typeof emailTimeTracking>;
+export type ProductivityInsight = InferSelectModel<typeof productivityInsights>;
+export type NewProductivityInsight = InferInsertModel<typeof productivityInsights>;
+export type EmailBehaviorPattern = InferSelectModel<typeof emailBehaviorPatterns>;
+export type NewEmailBehaviorPattern = InferInsertModel<typeof emailBehaviorPatterns>;
+export type KnowledgeEntity = InferSelectModel<typeof knowledgeEntities>;
+export type NewKnowledgeEntity = InferInsertModel<typeof knowledgeEntities>;
+export type KnowledgeRelationship = InferSelectModel<typeof knowledgeRelationships>;
+export type NewKnowledgeRelationship = InferInsertModel<typeof knowledgeRelationships>;
+export type KnowledgeExtraction = InferSelectModel<typeof knowledgeExtractions>;
+export type NewKnowledgeExtraction = InferInsertModel<typeof knowledgeExtractions>;
