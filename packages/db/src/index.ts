@@ -529,6 +529,85 @@ export type {
   WritingCoachSuggestion,
 } from "./schema/ai-intelligence.js";
 
+// Schema - Analytics Dashboard (snapshots + goals)
+export {
+  analyticsSnapshots,
+  analyticsGoals,
+  analyticsSnapshotsRelations,
+  analyticsGoalsRelations,
+} from "./schema/analytics-dashboard.js";
+
+// Schema - Delegation (email delegation + shared drafts)
+export {
+  emailDelegations,
+  sharedDrafts,
+  emailDelegationsRelations,
+  sharedDraftsRelations,
+} from "./schema/delegation.js";
+export type {
+  DelegationPermissions,
+  SharedDraftComment,
+} from "./schema/delegation.js";
+
+// Schema - Workflows (automated email workflows)
+export {
+  workflows,
+  workflowRuns,
+  workflowTemplates,
+  workflowTriggerTypeEnum,
+  workflowActionTypeEnum,
+  workflowRunStatusEnum,
+  workflowTemplateCategoryEnum,
+  workflowsRelations,
+  workflowRunsRelations,
+} from "./schema/workflows.js";
+export type {
+  WorkflowTrigger,
+  WorkflowAction,
+  WorkflowTriggerConditions,
+} from "./schema/workflows.js";
+
+// Schema - AI Categorization (email categories + smart labels + feedback)
+export {
+  emailCategories,
+  smartLabelRules,
+  categoryFeedback,
+  emailPrimaryCategoryEnum,
+  emailCategoriesRelations,
+  smartLabelRulesRelations,
+  categoryFeedbackRelations,
+} from "./schema/ai-categorization.js";
+export type { SmartLabelConditions } from "./schema/ai-categorization.js";
+
+// Schema - Search Intelligence (history + bookmarks + suggestions)
+export {
+  searchHistory,
+  searchBookmarks,
+  searchSuggestions,
+  searchTypeEnum,
+  searchSuggestionCategoryEnum,
+  searchHistoryRelations,
+  searchBookmarksRelations,
+  searchSuggestionsRelations,
+} from "./schema/search-intelligence.js";
+export type { SearchBookmarkFilters } from "./schema/search-intelligence.js";
+
+// Schema - Security Intelligence (threats + policies + audit log)
+export {
+  threatDetections,
+  securityPolicies,
+  securityAuditLog,
+  threatTypeEnum,
+  threatSeverityEnum,
+  threatUserActionEnum,
+  securityPolicyTypeEnum,
+  securityEventTypeEnum,
+  threatDetectionsRelations,
+  securityPoliciesRelations,
+  securityAuditLogRelations,
+} from "./schema/security-intelligence.js";
+export type { ThreatSignals } from "./schema/security-intelligence.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -806,3 +885,44 @@ export type WritingCoachResult = InferSelectModel<typeof writingCoachResults>;
 export type NewWritingCoachResult = InferInsertModel<typeof writingCoachResults>;
 export type PredictiveAction = InferSelectModel<typeof predictiveActions>;
 export type NewPredictiveAction = InferInsertModel<typeof predictiveActions>;
+
+// Tier 7 types
+import type { analyticsSnapshots, analyticsGoals } from "./schema/analytics-dashboard.js";
+import type { emailDelegations, sharedDrafts } from "./schema/delegation.js";
+import type { workflows, workflowRuns, workflowTemplates } from "./schema/workflows.js";
+import type { emailCategories, smartLabelRules, categoryFeedback } from "./schema/ai-categorization.js";
+import type { searchHistory, searchBookmarks, searchSuggestions } from "./schema/search-intelligence.js";
+import type { threatDetections, securityPolicies, securityAuditLog } from "./schema/security-intelligence.js";
+
+export type AnalyticsSnapshot = InferSelectModel<typeof analyticsSnapshots>;
+export type NewAnalyticsSnapshot = InferInsertModel<typeof analyticsSnapshots>;
+export type AnalyticsGoal = InferSelectModel<typeof analyticsGoals>;
+export type NewAnalyticsGoal = InferInsertModel<typeof analyticsGoals>;
+export type EmailDelegation = InferSelectModel<typeof emailDelegations>;
+export type NewEmailDelegation = InferInsertModel<typeof emailDelegations>;
+export type SharedDraft = InferSelectModel<typeof sharedDrafts>;
+export type NewSharedDraft = InferInsertModel<typeof sharedDrafts>;
+export type Workflow = InferSelectModel<typeof workflows>;
+export type NewWorkflow = InferInsertModel<typeof workflows>;
+export type WorkflowRun = InferSelectModel<typeof workflowRuns>;
+export type NewWorkflowRun = InferInsertModel<typeof workflowRuns>;
+export type WorkflowTemplate = InferSelectModel<typeof workflowTemplates>;
+export type NewWorkflowTemplate = InferInsertModel<typeof workflowTemplates>;
+export type EmailCategory = InferSelectModel<typeof emailCategories>;
+export type NewEmailCategory = InferInsertModel<typeof emailCategories>;
+export type SmartLabelRule = InferSelectModel<typeof smartLabelRules>;
+export type NewSmartLabelRule = InferInsertModel<typeof smartLabelRules>;
+export type CategoryFeedbackRecord = InferSelectModel<typeof categoryFeedback>;
+export type NewCategoryFeedbackRecord = InferInsertModel<typeof categoryFeedback>;
+export type SearchHistoryRecord = InferSelectModel<typeof searchHistory>;
+export type NewSearchHistoryRecord = InferInsertModel<typeof searchHistory>;
+export type SearchBookmark = InferSelectModel<typeof searchBookmarks>;
+export type NewSearchBookmark = InferInsertModel<typeof searchBookmarks>;
+export type SearchSuggestion = InferSelectModel<typeof searchSuggestions>;
+export type NewSearchSuggestion = InferInsertModel<typeof searchSuggestions>;
+export type ThreatDetection = InferSelectModel<typeof threatDetections>;
+export type NewThreatDetection = InferInsertModel<typeof threatDetections>;
+export type SecurityPolicy = InferSelectModel<typeof securityPolicies>;
+export type NewSecurityPolicy = InferInsertModel<typeof securityPolicies>;
+export type SecurityAuditLogEntry = InferSelectModel<typeof securityAuditLog>;
+export type NewSecurityAuditLogEntry = InferInsertModel<typeof securityAuditLog>;

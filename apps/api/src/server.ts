@@ -108,6 +108,12 @@ import { aiIntelligenceRouter } from "./routes/ai-intelligence.js";
 import { contactsExtendedRouter } from "./routes/contacts-extended.js";
 import { documentsRouter } from "./routes/documents.js";
 import { calendarEventsRouter } from "./routes/calendar-events.js";
+import { analyticsDashboardRouter } from "./routes/analytics-dashboard.js";
+import { delegationRouter, sharedDraftsRouter } from "./routes/delegation.js";
+import { workflowsRouter } from "./routes/workflows.js";
+import { aiCategorizationRouter } from "./routes/ai-categorization.js";
+import { searchIntelligenceRouter } from "./routes/search-intelligence.js";
+import { securityIntelligenceRouter } from "./routes/security-intelligence.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue, getSendQueue } from "./lib/queue.js";
@@ -466,6 +472,42 @@ app.use("/v1/calendar-events/availability", authMiddleware, writeRateLimit);
 app.use("/v1/calendar-events/*/prep", authMiddleware, readRateLimit);
 app.use("/v1/calendar-events/*", authMiddleware, writeRateLimit);
 app.use("/v1/calendar-events", authMiddleware, writeRateLimit);
+// Analytics Dashboard: read-level for snapshots/goals, write-level for create/update
+app.use("/v1/analytics/dashboard/goals/*", authMiddleware, writeRateLimit);
+app.use("/v1/analytics/dashboard/goals", authMiddleware, writeRateLimit);
+app.use("/v1/analytics/dashboard/*", authMiddleware, readRateLimit);
+app.use("/v1/analytics/dashboard", authMiddleware, readRateLimit);
+// Delegation: write-level for create/update, read-level for listing
+app.use("/v1/delegation/*", authMiddleware, writeRateLimit);
+app.use("/v1/delegation", authMiddleware, writeRateLimit);
+// Shared Drafts: write-level for CRUD
+app.use("/v1/shared-drafts/*", authMiddleware, writeRateLimit);
+app.use("/v1/shared-drafts", authMiddleware, writeRateLimit);
+// Workflows: write-level for CRUD + trigger, read-level for runs
+app.use("/v1/workflows/*/runs", authMiddleware, readRateLimit);
+app.use("/v1/workflows/templates", authMiddleware, readRateLimit);
+app.use("/v1/workflows/*", authMiddleware, writeRateLimit);
+app.use("/v1/workflows", authMiddleware, writeRateLimit);
+// AI Categorization: write-level for categorize/train, read-level for listing
+app.use("/v1/ai/categorize/feedback", authMiddleware, writeRateLimit);
+app.use("/v1/ai/categorize/batch", authMiddleware, writeRateLimit);
+app.use("/v1/ai/categorize/smart-labels/*", authMiddleware, writeRateLimit);
+app.use("/v1/ai/categorize/smart-labels", authMiddleware, writeRateLimit);
+app.use("/v1/ai/categorize/*", authMiddleware, readRateLimit);
+app.use("/v1/ai/categorize", authMiddleware, writeRateLimit);
+// Search Intelligence: search-level for queries, write-level for bookmarks
+app.use("/v1/search-intelligence/bookmarks/*", authMiddleware, writeRateLimit);
+app.use("/v1/search-intelligence/bookmarks", authMiddleware, writeRateLimit);
+app.use("/v1/search-intelligence/*", authMiddleware, searchRateLimit);
+app.use("/v1/search-intelligence", authMiddleware, searchRateLimit);
+// Security Intelligence: write-level for policies/actions, read-level for dashboard
+app.use("/v1/security-intelligence/policies/*", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/policies", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/threats/*/action", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/scan/*", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/report-phishing", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/*", authMiddleware, readRateLimit);
+app.use("/v1/security-intelligence", authMiddleware, readRateLimit);
 // Mount route handlers
 app.route("/v1/messages", messages);
 app.route("/v1/domains", domains);
@@ -592,6 +634,19 @@ app.route("/v1/hygiene", hygieneRouter);
 app.route("/v1/documents", documentsRouter);
 // Calendar Events — Smart Calendar with AI scheduling
 app.route("/v1/calendar-events", calendarEventsRouter);
+// Analytics Dashboard — periodic snapshots + goals
+app.route("/v1/analytics/dashboard", analyticsDashboardRouter);
+// Delegation — email delegation + shared drafts
+app.route("/v1/delegation", delegationRouter);
+app.route("/v1/shared-drafts", sharedDraftsRouter);
+// Workflows — automated email workflows + templates
+app.route("/v1/workflows", workflowsRouter);
+// AI Categorization — email categories + smart labels + feedback
+app.route("/v1/ai/categorize", aiCategorizationRouter);
+// Search Intelligence — search history, bookmarks, suggestions
+app.route("/v1/search-intelligence", searchIntelligenceRouter);
+// Security Intelligence — threat detection, policies, audit log
+app.route("/v1/security-intelligence", securityIntelligenceRouter);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);
