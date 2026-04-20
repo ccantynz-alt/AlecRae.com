@@ -16,7 +16,9 @@
   },
   "dependencies": {
     "@emailed/shared": "workspace:*",
-    "@emailed/db": "workspace:*"
+    "@emailed/db": "workspace:*",
+    "@emailed/crypto": "workspace:*",
+    "drizzle-orm": "^0.36.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",
