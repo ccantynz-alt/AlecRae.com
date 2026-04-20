@@ -69,14 +69,39 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
     }
   }, [user]);
 
+  const [error, setError] = useState<string | null>(null);
+
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
-    // TODO: wire to profile update endpoint when available
-    await new Promise((r) => setTimeout(r, 500));
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setError(null);
+    try {
+      const payload: { name?: string; email?: string } = {};
+      if (name !== user?.name) payload.name = name;
+      if (email !== user?.email) payload.email = email;
+
+      if (Object.keys(payload).length === 0) {
+        // Nothing changed
+        setSaving(false);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+        return;
+      }
+
+      const res = await accountApi.updateProfile(payload);
+      // Update local state with the response
+      if (res.data) {
+        setName(res.data.name);
+        setEmail(res.data.email);
+      }
+      setSaving(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaving(false);
+      setError(err instanceof Error ? err.message : "Failed to save profile");
+      setTimeout(() => setError(null), 4000);
+    }
   };
 
   const initials = (name || "U")
@@ -120,6 +145,11 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
       </CardContent>
       <CardFooter>
         <Box className="flex items-center justify-end gap-3">
+          {error && (
+            <Text variant="body-sm" className="text-status-error">
+              {error}
+            </Text>
+          )}
           {saved && (
             <Text variant="body-sm" className="text-status-success">
               Saved
@@ -304,14 +334,28 @@ NotificationSection.displayName = "NotificationSection";
 
 function DangerZone() {
   const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!confirming) {
       setConfirming(true);
       return;
     }
-    // TODO: wire to account deletion endpoint
-    setConfirming(false);
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await accountApi.deleteAccount();
+      // Clear auth state and redirect to landing page
+      authApi.logout();
+      window.location.href = "/";
+    } catch (err) {
+      setDeleting(false);
+      setError(err instanceof Error ? err.message : "Failed to delete account");
+      setConfirming(false);
+      setTimeout(() => setError(null), 4000);
+    }
   };
 
   return (
@@ -330,15 +374,29 @@ function DangerZone() {
             <Text variant="body-sm" muted>
               Permanently delete your account and all associated data. This action cannot be undone.
             </Text>
+            {error && (
+              <Text variant="body-sm" className="text-status-error mt-2">
+                {error}
+              </Text>
+            )}
           </Box>
           <Box className="flex items-center gap-2">
-            {confirming && (
+            {confirming && !deleting && (
               <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
                 Cancel
               </Button>
             )}
-            <Button variant="destructive" size="sm" onClick={handleDelete}>
-              {confirming ? "Confirm Delete" : "Delete Account"}
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting
+                ? "Deleting..."
+                : confirming
+                  ? "Confirm Delete"
+                  : "Delete Account"}
             </Button>
           </Box>
         </Box>
