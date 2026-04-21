@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { createDefaultShortcuts, registerShortcuts } from "../../../lib/keyboard-shortcuts";
 import {
   Box,
   Text,
@@ -154,6 +155,122 @@ export default function InboxPage(): React.ReactNode {
   // Whether to show full email content (toggled from newsletter summary)
   const [showFullEmail, setShowFullEmail] = useState(true);
 
+  const filteredEmails = useMemo(() => emailItems.filter((e) => {
+    if (filter === "unread") return !e.read;
+    if (filter === "starred") return e.starred;
+    return true;
+  }), [emailItems, filter]);
+
+  const handleStar = useCallback((email: EmailListItem) => {
+    const newStarred = !email.starred;
+    setEmailItems((prev) =>
+      prev.map((e) => (e.id === email.id ? { ...e, starred: newStarred } : e)),
+    );
+    messagesApi.star(email.id, newStarred).catch(() => {
+      setEmailItems((prev) =>
+        prev.map((e) => (e.id === email.id ? { ...e, starred: !newStarred } : e)),
+      );
+    });
+  }, []);
+
+  const selectedIndexRef = useRef(0);
+
+  useEffect(() => {
+    const idx = filteredEmails.findIndex((e) => e.id === selectedEmailId);
+    if (idx >= 0) selectedIndexRef.current = idx;
+  }, [selectedEmailId, filteredEmails]);
+
+  useEffect(() => {
+    const shortcuts = createDefaultShortcuts({
+      openCommandPalette: () => {},
+      compose: () => router.push("/compose"),
+      search: () => {
+        const input = document.querySelector<HTMLInputElement>('input[type="search"], input[placeholder*="Search"]');
+        input?.focus();
+      },
+      goToInbox: () => router.push("/inbox"),
+      goToSent: () => {},
+      goToDrafts: () => {},
+      goToSettings: () => router.push("/settings"),
+      nextEmail: () => {
+        const next = Math.min(selectedIndexRef.current + 1, filteredEmails.length - 1);
+        const item = filteredEmails[next];
+        if (item) { setSelectedEmailId(item.id); selectedIndexRef.current = next; }
+      },
+      prevEmail: () => {
+        const prev = Math.max(selectedIndexRef.current - 1, 0);
+        const item = filteredEmails[prev];
+        if (item) { setSelectedEmailId(item.id); selectedIndexRef.current = prev; }
+      },
+      openEmail: () => {},
+      archiveEmail: () => {
+        if (selectedEmailId) {
+          const id = selectedEmailId;
+          const next = filteredEmails[selectedIndexRef.current + 1] ?? filteredEmails[selectedIndexRef.current - 1];
+          setEmailItems((prev) => prev.filter((e) => e.id !== id));
+          setSelectedEmailId(next?.id);
+          setSelectedEmail(null);
+          messagesApi.archive(id).catch(() => {});
+        }
+      },
+      deleteEmail: () => {
+        if (selectedEmailId) {
+          const id = selectedEmailId;
+          const next = filteredEmails[selectedIndexRef.current + 1] ?? filteredEmails[selectedIndexRef.current - 1];
+          setEmailItems((prev) => prev.filter((e) => e.id !== id));
+          setSelectedEmailId(next?.id);
+          setSelectedEmail(null);
+          messagesApi.delete(id).catch(() => {});
+        }
+      },
+      starEmail: () => {
+        if (selectedEmailId) {
+          const item = emailItems.find((e) => e.id === selectedEmailId);
+          if (item) handleStar(item);
+        }
+      },
+      markRead: () => {
+        if (selectedEmailId) {
+          setEmailItems((prev) => prev.map((e) => e.id === selectedEmailId ? { ...e, read: true } : e));
+        }
+      },
+      markUnread: () => {
+        if (selectedEmailId) {
+          setEmailItems((prev) => prev.map((e) => e.id === selectedEmailId ? { ...e, read: false } : e));
+        }
+      },
+      replyEmail: () => {
+        if (selectedEmail) {
+          const params = new URLSearchParams({ mode: "reply", to: selectedEmail.sender.email, subject: selectedEmail.subject, body: selectedEmail.bodyParts.map((p) => "content" in p ? p.content : "").join("\n\n") });
+          router.push(`/compose?${params.toString()}`);
+        }
+      },
+      replyAllEmail: () => {
+        if (selectedEmail) {
+          const params = new URLSearchParams({ mode: "replyAll", to: selectedEmail.sender.email, cc: (selectedEmail.recipients ?? []).map((r) => r.email).join(","), subject: selectedEmail.subject, body: selectedEmail.bodyParts.map((p) => "content" in p ? p.content : "").join("\n\n") });
+          router.push(`/compose?${params.toString()}`);
+        }
+      },
+      forwardEmail: () => {
+        if (selectedEmail) {
+          const params = new URLSearchParams({ mode: "forward", subject: selectedEmail.subject, body: selectedEmail.bodyParts.map((p) => "content" in p ? p.content : "").join("\n\n") });
+          router.push(`/compose?${params.toString()}`);
+        }
+      },
+      snoozeEmail: () => {},
+      undoAction: () => {},
+      aiCompose: () => router.push("/compose"),
+      aiReply: () => {},
+      aiSummarize: () => {},
+      toggleDarkMode: () => {},
+      toggleFocusMode: () => {},
+    });
+
+    return registerShortcuts(shortcuts, () =>
+      selectedEmail ? "thread" : "inbox",
+    );
+  }, [router, selectedEmailId, selectedEmail, emailItems, filteredEmails, handleStar]);
+
   const fetchEmails = useCallback(async () => {
     try {
       setLoading(true);
@@ -205,24 +322,6 @@ export default function InboxPage(): React.ReactNode {
       prev.map((e) => (e.id === email.id ? { ...e, read: true } : e)),
     );
   };
-
-  const handleStar = (email: EmailListItem) => {
-    const newStarred = !email.starred;
-    setEmailItems((prev) =>
-      prev.map((e) => (e.id === email.id ? { ...e, starred: newStarred } : e)),
-    );
-    messagesApi.star(email.id, newStarred).catch(() => {
-      setEmailItems((prev) =>
-        prev.map((e) => (e.id === email.id ? { ...e, starred: !newStarred } : e)),
-      );
-    });
-  };
-
-  const filteredEmails = emailItems.filter((e) => {
-    if (filter === "unread") return !e.read;
-    if (filter === "starred") return e.starred;
-    return true;
-  });
 
   const handleSearch = useCallback(
     (query: string) => {
