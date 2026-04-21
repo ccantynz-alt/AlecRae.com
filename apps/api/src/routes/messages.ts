@@ -796,4 +796,70 @@ messages.get(
   },
 );
 
+// PATCH /v1/messages/:id — Update message (archive, star, status)
+messages.patch(
+  "/:id",
+  requireScope("messages:read"),
+  async (c) => {
+    const id = c.req.param("id");
+    const auth = c.get("auth");
+    const db = getDatabase();
+    const body = await c.req.json() as Record<string, unknown>;
+
+    const [existing] = await db
+      .select({ id: emails.id })
+      .from(emails)
+      .where(and(eq(emails.id, id), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!existing) {
+      return c.json(
+        { error: { type: "not_found", message: `Message ${id} not found`, code: "message_not_found" } },
+        404,
+      );
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+
+    if (typeof body["status"] === "string") {
+      updates["status"] = body["status"];
+    }
+    if (typeof body["tags"] === "object" && Array.isArray(body["tags"])) {
+      updates["tags"] = body["tags"];
+    }
+
+    await db.update(emails).set(updates).where(eq(emails.id, id));
+
+    return c.json({ data: { id, updated: true } });
+  },
+);
+
+// DELETE /v1/messages/:id — Soft-delete a message
+messages.delete(
+  "/:id",
+  requireScope("messages:read"),
+  async (c) => {
+    const id = c.req.param("id");
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const [existing] = await db
+      .select({ id: emails.id })
+      .from(emails)
+      .where(and(eq(emails.id, id), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!existing) {
+      return c.json(
+        { error: { type: "not_found", message: `Message ${id} not found`, code: "message_not_found" } },
+        404,
+      );
+    }
+
+    await db.update(emails).set({ status: "dropped", updatedAt: new Date() }).where(eq(emails.id, id));
+
+    return c.json({ data: { id, deleted: true } });
+  },
+);
+
 export { messages };

@@ -207,9 +207,15 @@ export default function InboxPage(): React.ReactNode {
   };
 
   const handleStar = (email: EmailListItem) => {
+    const newStarred = !email.starred;
     setEmailItems((prev) =>
-      prev.map((e) => (e.id === email.id ? { ...e, starred: !e.starred } : e)),
+      prev.map((e) => (e.id === email.id ? { ...e, starred: newStarred } : e)),
     );
+    messagesApi.star(email.id, newStarred).catch(() => {
+      setEmailItems((prev) =>
+        prev.map((e) => (e.id === email.id ? { ...e, starred: !newStarred } : e)),
+      );
+    });
   };
 
   const filteredEmails = emailItems.filter((e) => {
@@ -460,16 +466,20 @@ export default function InboxPage(): React.ReactNode {
               }}
               onArchive={() => {
                 if (selectedEmailId) {
-                  setEmailItems((prev) => prev.filter((e) => e.id !== selectedEmailId));
+                  const id = selectedEmailId;
+                  setEmailItems((prev) => prev.filter((e) => e.id !== id));
                   setSelectedEmailId(undefined);
                   setSelectedEmail(null);
+                  messagesApi.archive(id).catch(() => {});
                 }
               }}
               onDelete={() => {
                 if (selectedEmailId) {
-                  setEmailItems((prev) => prev.filter((e) => e.id !== selectedEmailId));
+                  const id = selectedEmailId;
+                  setEmailItems((prev) => prev.filter((e) => e.id !== id));
                   setSelectedEmailId(undefined);
                   setSelectedEmail(null);
+                  messagesApi.delete(id).catch(() => {});
                 }
               }}
             />

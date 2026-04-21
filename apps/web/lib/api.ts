@@ -417,6 +417,28 @@ export const messagesApi = {
     );
   },
 
+  archive(id: string) {
+    return apiFetch<{ data: { id: string; updated: boolean } }>(
+      `/v1/messages/${id}`,
+      { method: "PATCH", body: JSON.stringify({ status: "dropped", tags: ["archived"] }) },
+    );
+  },
+
+  delete(id: string) {
+    return apiFetch<{ data: { id: string; deleted: boolean } }>(
+      `/v1/messages/${id}`,
+      { method: "DELETE" },
+    );
+  },
+
+  star(id: string, starred: boolean) {
+    const tags = starred ? ["starred"] : [];
+    return apiFetch<{ data: { id: string; updated: boolean } }>(
+      `/v1/messages/${id}`,
+      { method: "PATCH", body: JSON.stringify({ tags }) },
+    );
+  },
+
   search(params: { q: string; mailbox?: string; limit?: number; offset?: number }) {
     const qs = new URLSearchParams();
     qs.set("q", params.q);
@@ -942,6 +964,38 @@ export const emailExplainerApi = {
       method: "POST",
       body: JSON.stringify(payload),
     });
+  },
+};
+
+// ─── Grammar & AI Compose Suggestions ────────────────────────────────────
+
+export interface GrammarIssue {
+  type: string;
+  message: string;
+  offset: number;
+  length: number;
+  replacements: string[];
+}
+
+export interface GrammarCheckResponse {
+  issues: GrammarIssue[];
+  score: number;
+  correctedText?: string;
+}
+
+export const grammarApi = {
+  check(payload: { text: string; language?: string }) {
+    return apiFetch<{ data: GrammarCheckResponse }>("/v1/grammar/check", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  correct(payload: { text: string; language?: string }) {
+    return apiFetch<{ data: { correctedText: string; changes: number } }>(
+      "/v1/grammar/correct",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
   },
 };
 
