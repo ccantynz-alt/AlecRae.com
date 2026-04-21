@@ -10,6 +10,7 @@ import { FocusModeOverlay, type FocusModeOverlayEmail } from "../../components/F
 import { FocusModeToggle } from "../../components/FocusModeToggle";
 import { useFocusMode } from "../../lib/focus-mode";
 import { authApi } from "../../lib/api";
+import { KeyboardShortcutHelp } from "../../components/KeyboardShortcutHelp";
 
 const navigationSections: AnimatedSidebarSection[] = [
   {
@@ -179,6 +180,9 @@ export default function DashboardLayout({
 
       {/* Focus Mode Overlay — covers entire screen when active */}
       <FocusModeOverlay emails={focusModeEmails} />
+
+      {/* Keyboard shortcut help — toggle with ? */}
+      <KeyboardShortcutHelp />
     </Box>
   );
 }

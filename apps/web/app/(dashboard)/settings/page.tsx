@@ -16,6 +16,7 @@ import { motion } from "motion/react";
 import { authApi, accountApi, type PasskeyInfo, type NotificationPrefs } from "../../../lib/api";
 import { PressableScale } from "../../../components/PressableScale";
 import { AnimatedPresence } from "../../../components/AnimatedPresence";
+import { SignatureManager } from "../../../components/SignatureManager";
 import {
   staggerSlow,
   fadeInUp,
@@ -73,6 +74,19 @@ export default function SettingsPage(): React.ReactNode {
         </motion.div>
         <motion.div variants={itemVariants}>
           <NotificationSection />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <Card>
+            <CardHeader>
+              <Text variant="heading-md">Email Signatures</Text>
+              <Text variant="body-sm" muted>
+                Create and manage email signatures. Your default signature is auto-appended to new emails.
+              </Text>
+            </CardHeader>
+            <CardContent>
+              <SignatureManager />
+            </CardContent>
+          </Card>
         </motion.div>
         <motion.div variants={itemVariants}>
           <DangerZone />
