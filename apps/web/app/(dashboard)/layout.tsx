@@ -11,6 +11,7 @@ import { FocusModeToggle } from "../../components/FocusModeToggle";
 import { useFocusMode } from "../../lib/focus-mode";
 import { authApi } from "../../lib/api";
 import { KeyboardShortcutHelp } from "../../components/KeyboardShortcutHelp";
+import { CommandPalette } from "../../components/CommandPalette";
 
 const navigationSections: AnimatedSidebarSection[] = [
   {
@@ -183,6 +184,9 @@ export default function DashboardLayout({
 
       {/* Keyboard shortcut help — toggle with ? */}
       <KeyboardShortcutHelp />
+
+      {/* Command palette — Cmd+K */}
+      <CommandPalette />
     </Box>
   );
 }
