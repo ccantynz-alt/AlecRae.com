@@ -999,6 +999,30 @@ export const grammarApi = {
   },
 };
 
+// ─── Snooze ───────────────────────────────────────────────────────────────
+
+export const snoozeApi = {
+  snooze(emailId: string, until: string) {
+    return apiFetch<{ data: { id: string; emailId: string; snoozedUntil: string } }>(
+      `/v1/snooze/${emailId}`,
+      { method: "POST", body: JSON.stringify({ until }) },
+    );
+  },
+
+  unsnooze(emailId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/v1/snooze/${emailId}`,
+      { method: "DELETE" },
+    );
+  },
+
+  list() {
+    return apiFetch<{ data: Array<{ id: string; emailId: string; snoozedUntil: string; subject: string }> }>(
+      "/v1/snooze",
+    );
+  },
+};
+
 // ─── Suppressions ──────────────────────────────────────────────────────────
 
 export const suppressionsApi = {
