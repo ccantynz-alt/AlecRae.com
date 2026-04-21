@@ -1700,3 +1700,97 @@ export const emailQueryApi = {
     );
   },
 };
+
+// ─── Templates ────────────────────────────────────────────────────────────
+
+export interface Template {
+  id: string;
+  name: string;
+  subject: string;
+  htmlBody: string | null;
+  textBody: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TemplateRenderResult {
+  subject: string;
+  htmlBody: string | null;
+  textBody: string | null;
+}
+
+export const templatesApi = {
+  /** List templates with optional pagination and name filter. */
+  list(params?: {
+    limit?: number;
+    cursor?: string;
+    name?: string;
+  }): Promise<PaginatedResponse<Template>> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.name) qs.set("name", params.name);
+    const query = qs.toString();
+    return apiFetch<PaginatedResponse<Template>>(
+      `/v1/templates${query ? `?${query}` : ""}`,
+    );
+  },
+
+  /** Get a single template by ID. */
+  get(id: string): Promise<{ data: Template }> {
+    return apiFetch<{ data: Template }>(
+      `/v1/templates/${encodeURIComponent(id)}`,
+    );
+  },
+
+  /** Create a new template. */
+  create(payload: {
+    name: string;
+    subject: string;
+    htmlBody?: string;
+    textBody?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ data: Template }> {
+    return apiFetch<{ data: Template }>("/v1/templates", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Update an existing template. */
+  update(
+    id: string,
+    payload: {
+      name?: string;
+      subject?: string;
+      htmlBody?: string;
+      textBody?: string;
+      metadata?: Record<string, unknown>;
+    },
+  ): Promise<{ data: Template }> {
+    return apiFetch<{ data: Template }>(
+      `/v1/templates/${encodeURIComponent(id)}`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** Delete a template. */
+  delete(id: string): Promise<{ data: { deleted: boolean; id: string } }> {
+    return apiFetch<{ data: { deleted: boolean; id: string } }>(
+      `/v1/templates/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  /** Render a template with variable substitution. */
+  render(
+    id: string,
+    variables: Record<string, unknown>,
+  ): Promise<{ data: TemplateRenderResult }> {
+    return apiFetch<{ data: TemplateRenderResult }>(
+      `/v1/templates/${encodeURIComponent(id)}/render`,
+      { method: "POST", body: JSON.stringify({ variables }) },
+    );
+  },
+};

@@ -16,6 +16,16 @@ const navigationSections: AnimatedSidebarSection[] = [
     items: [
       { id: "inbox", label: "Inbox", href: "/inbox" },
       { id: "compose", label: "Compose", href: "/compose" },
+      { id: "sent", label: "Sent", href: "/sent" },
+      { id: "drafts", label: "Drafts", href: "/drafts" },
+      { id: "snoozed", label: "Snoozed", href: "/snoozed" },
+    ],
+  },
+  {
+    title: "Tools",
+    items: [
+      { id: "templates", label: "Templates", href: "/templates" },
+      { id: "contacts", label: "Contacts", href: "/contacts" },
     ],
   },
   {
