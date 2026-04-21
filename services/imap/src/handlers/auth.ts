@@ -4,6 +4,9 @@
  *
  * These handlers validate credentials and transition the session
  * from "not_authenticated" to "authenticated" state.
+ *
+ * Credentials are validated against the PostgreSQL users table using
+ * the same password hashing scheme as the web UI and API (SHA-256).
  */
 
 import type { ImapSession, ImapCommand, Result } from "../types.js";
@@ -15,6 +18,7 @@ import {
   parseQuotedString,
   parseAtom,
 } from "../server/commands.js";
+import { eq } from "drizzle-orm";
 
 // ─── Rate Limiting ──────────────────────────────────────────────────────────
 
@@ -72,26 +76,34 @@ function clearRateLimit(remoteAddress: string): void {
   authAttempts.delete(remoteAddress);
 }
 
+// ─── Password Hashing (matches apps/api/src/routes/auth.ts) ────────────────
+
+/**
+ * Hash a password using SHA-256.
+ * This matches the hashing scheme used by the API auth routes.
+ */
+async function hashPasswordSha256(password: string): Promise<string> {
+  const data = new TextEncoder().encode(password);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 // ─── Credential Validation ──────────────────────────────────────────────────
 
 /**
- * Validate user credentials.
- * In production, this would check against the database and password hashing service.
- * Currently returns a placeholder validation result.
+ * Validate user credentials against the PostgreSQL users table.
+ * Uses the same SHA-256 hashing scheme as the web UI and API auth routes.
  *
  * @param username - The username or email address.
  * @param password - The plaintext password.
- * @returns Result indicating success or failure with error message.
+ * @returns Result indicating success (canonical email) or failure with error message.
  */
 async function validateCredentials(
   username: string,
   password: string,
 ): Promise<Result<string, string>> {
-  // TODO: Integrate with the platform's authentication service
-  // This should validate against the same credential store as JMAP and the web UI.
-  // For now, reject empty credentials and accept any non-empty credentials
-  // in development mode.
-
   if (!username || !password) {
     return err("Empty username or password");
   }
@@ -100,16 +112,51 @@ async function validateCredentials(
     return err("Credentials too long");
   }
 
-  // In production, this would:
-  // 1. Look up the user by email/username in PostgreSQL
-  // 2. Verify the password hash (argon2id)
-  // 3. Check if the account is active and IMAP access is enabled
-  // 4. Return the canonical username (email address)
+  try {
+    // Lazy-import @emailed/db to avoid hard failures when DATABASE_URL is not set
+    // (e.g. during unit tests or local development without a database).
+    const { getDatabase, users } = await import("@emailed/db");
+    const db = getDatabase();
 
-  return ok(username);
+    // Look up user by email (case-insensitive, matching API behavior)
+    const email = username.toLowerCase();
+    const [user] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        passwordHash: users.passwordHash,
+        accountId: users.accountId,
+      })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (!user) {
+      return err("Invalid credentials");
+    }
+
+    if (!user.passwordHash) {
+      return err("Password authentication not configured for this account");
+    }
+
+    // Verify password hash using SHA-256 (same as API auth route)
+    const passwordHash = await hashPasswordSha256(password);
+    if (user.passwordHash !== passwordHash) {
+      return err("Invalid credentials");
+    }
+
+    // Return the canonical email address as the authenticated identity
+    return ok(user.email);
+  } catch (error) {
+    // If database is unavailable, fall back to rejecting all credentials
+    // with a generic error. This prevents leaking infrastructure details.
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[IMAP Auth] Database error during credential validation: ${message}`);
+    return err("Authentication service temporarily unavailable");
+  }
 }
 
-// ─── LOGIN Command ──────────────────────────────────────────────────────────
+// ─── LOGIN Command ─────────────────────────────────────────────────────────
 
 /**
  * Handle the LOGIN command per RFC 9051 Section 6.2.3.

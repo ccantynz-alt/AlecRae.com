@@ -20,6 +20,14 @@ export {
   formatUntagged as formatUntaggedResponse,
   formatContinuation,
   buildCapabilityString,
+  parseSequenceSet as parseSequenceSetRanges,
+  parseFetchItems,
+  parseStoreArgs,
+  parseNextArgument,
+  parseParenList,
+  parseQuotedString,
+  parseAtom,
+  isCommandValidForState,
 } from "./server/commands.js";
 
 // Handlers
