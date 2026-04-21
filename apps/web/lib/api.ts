@@ -452,6 +452,22 @@ export const accountApi = {
   get() {
     return apiFetch<{ data: Account }>("/v1/account");
   },
+
+  updateProfile(payload: { name?: string; email?: string }) {
+    return apiFetch<{ data: { id: string; email: string; name: string; role: string; accountId: string } }>(
+      "/v1/account/profile",
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
+  deleteAccount() {
+    return apiFetch<{ deleted: boolean }>("/v1/account", {
+      method: "DELETE",
+    });
+  },
 };
 
 // ─── Billing ──────────────────────────────────────────────────────────────

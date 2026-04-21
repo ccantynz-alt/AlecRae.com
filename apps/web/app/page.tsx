@@ -33,12 +33,67 @@ const features = [
   },
 ] as const;
 
+const pricingTiers = [
+  {
+    name: "Free",
+    price: "$0",
+    period: "forever",
+    description: "Perfect for getting started and personal projects.",
+    features: [
+      "1,000 emails per month",
+      "1 verified domain",
+      "2 webhooks",
+      "Basic analytics",
+      "Community support",
+    ],
+    cta: "Get Started",
+    href: "/register",
+    highlighted: false,
+  },
+  {
+    name: "Pro",
+    price: "$29",
+    period: "/mo",
+    description: "For growing teams that need more power and insights.",
+    features: [
+      "10,000 emails per month",
+      "5 verified domains",
+      "10 webhooks",
+      "Full analytics & deliverability insights",
+      "Template system",
+      "Email support",
+    ],
+    cta: "Start Pro Trial",
+    href: "/register?plan=pro",
+    highlighted: true,
+  },
+  {
+    name: "Enterprise",
+    price: "$99",
+    period: "/mo",
+    description: "For businesses that demand the best deliverability and support.",
+    features: [
+      "100,000 emails per month",
+      "25 verified domains",
+      "50 webhooks",
+      "Advanced analytics & AI insights",
+      "IP warm-up orchestrator",
+      "Custom DKIM key rotation",
+      "Priority support",
+    ],
+    cta: "Start Enterprise Trial",
+    href: "/register?plan=enterprise",
+    highlighted: false,
+  },
+] as const;
+
 export default function LandingPage() {
   return (
     <Box className="min-h-full">
       <LandingNav />
       <HeroSection />
       <FeaturesSection />
+      <PricingSection />
       <CTASection />
       <LandingFooter />
     </Box>
@@ -88,10 +143,10 @@ function HeroSection() {
           place.
         </Text>
         <Box className="flex items-center justify-center gap-4">
-          <Button variant="primary" size="lg">
+          <Button variant="primary" size="lg" {...{ as: "a", href: "/register" } as any}>
             Start for Free
           </Button>
-          <Button variant="secondary" size="lg">
+          <Button variant="secondary" size="lg" {...{ as: "a", href: "#pricing" } as any}>
             See How It Works
           </Button>
         </Box>
@@ -135,6 +190,82 @@ function FeaturesSection() {
 
 FeaturesSection.displayName = "FeaturesSection";
 
+function PricingSection() {
+  return (
+    <Box as="section" id="pricing" className="py-20 px-6">
+      <Box className="max-w-6xl mx-auto">
+        <Box className="text-center mb-16">
+          <Text variant="display-sm" className="mb-4">
+            Simple, transparent pricing
+          </Text>
+          <Text variant="body-lg" muted className="max-w-2xl mx-auto">
+            Start free and scale as you grow. No hidden fees, no surprises.
+          </Text>
+        </Box>
+        <Box className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+          {pricingTiers.map((tier) => (
+            <Card
+              key={tier.name}
+              className={`relative flex flex-col ${
+                tier.highlighted
+                  ? "border-brand-500 ring-2 ring-brand-500/20 scale-[1.02]"
+                  : ""
+              }`}
+            >
+              {tier.highlighted && (
+                <Box className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-brand-500 text-white">
+                  <Text variant="caption" className="font-semibold text-white">
+                    Most Popular
+                  </Text>
+                </Box>
+              )}
+              <CardContent className="flex flex-col flex-1 pt-8 pb-8">
+                <Box className="mb-6">
+                  <Text variant="heading-sm" className="mb-2">
+                    {tier.name}
+                  </Text>
+                  <Box className="flex items-baseline gap-1">
+                    <Text variant="display-sm">{tier.price}</Text>
+                    <Text variant="body-sm" muted>
+                      {tier.period}
+                    </Text>
+                  </Box>
+                  <Text variant="body-sm" muted className="mt-2">
+                    {tier.description}
+                  </Text>
+                </Box>
+                <Box className="space-y-3 flex-1 mb-8">
+                  {tier.features.map((feature) => (
+                    <Box key={feature} className="flex items-start gap-2">
+                      <Text
+                        variant="body-sm"
+                        className="text-status-success flex-shrink-0 mt-0.5"
+                      >
+                        &#10003;
+                      </Text>
+                      <Text variant="body-sm">{feature}</Text>
+                    </Box>
+                  ))}
+                </Box>
+                <Button
+                  variant={tier.highlighted ? "primary" : "secondary"}
+                  size="lg"
+                  className="w-full"
+                  {...{ as: "a", href: tier.href } as any}
+                >
+                  {tier.cta}
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
+PricingSection.displayName = "PricingSection";
+
 function CTASection() {
   return (
     <Box as="section" className="py-20 px-6">
@@ -145,7 +276,7 @@ function CTASection() {
         <Text variant="body-lg" muted className="mb-8">
           Join thousands of professionals who have already made the switch to intelligent email.
         </Text>
-        <Button variant="primary" size="lg">
+        <Button variant="primary" size="lg" {...{ as: "a", href: "/register" } as any}>
           Get Started Free
         </Button>
       </Box>
@@ -158,19 +289,27 @@ CTASection.displayName = "CTASection";
 function LandingFooter() {
   return (
     <Box as="footer" className="border-t border-border py-12 px-6">
-      <Box className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-        <Text variant="body-sm" muted>
-          2026 Emailed. All rights reserved.
-        </Text>
+      <Box className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+        <Box className="flex flex-col items-center md:items-start gap-1">
+          <Text variant="heading-sm" className="text-brand-600 font-bold">
+            Emailed
+          </Text>
+          <Text variant="caption" muted>
+            &copy; 2026 Emailed. All rights reserved.
+          </Text>
+        </Box>
         <Box className="flex items-center gap-6">
-          <Box as="a" href="/privacy">
+          <Box as="a" href="/privacy" className="hover:text-content transition-colors">
             <Text variant="body-sm" muted>Privacy</Text>
           </Box>
-          <Box as="a" href="/terms">
+          <Box as="a" href="/terms" className="hover:text-content transition-colors">
             <Text variant="body-sm" muted>Terms</Text>
           </Box>
-          <Box as="a" href="/docs">
-            <Text variant="body-sm" muted>Documentation</Text>
+          <Box as="a" href="/docs" className="hover:text-content transition-colors">
+            <Text variant="body-sm" muted>Docs</Text>
+          </Box>
+          <Box as="a" href="/login" className="hover:text-content transition-colors">
+            <Text variant="body-sm" muted>Sign In</Text>
           </Box>
         </Box>
       </Box>
