@@ -47,6 +47,13 @@ export {
   dnsRecordsRelations,
 } from "./schema/domains.js";
 
+// Schema - Connected Accounts (Gmail, Outlook, IMAP)
+export {
+  connectedAccounts,
+  emailProviderEnum,
+  connectedAccountsRelations,
+} from "./schema/connected-accounts.js";
+
 // Schema - Events & Webhooks
 export {
   events,
