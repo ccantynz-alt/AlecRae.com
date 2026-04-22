@@ -266,7 +266,11 @@ export class DeliveryOptimizer {
         attempt.status = "deferred";
         attempt.lastError = response.message;
         if (currentAttempt + 1 < this.retryStrategy.maxAttempts) {
-          const retryAt = this.computeRetryTime(currentAttempt);
+          const isGreylist = response.code === 421 || response.code === 450 ||
+            /try again|greylisting|too many connections|rate limit/i.test(response.message);
+          const retryAt = isGreylist
+            ? new Date(Date.now() + (currentAttempt === 0 ? 30 * 60_000 : 60 * 60_000) + Math.random() * 5 * 60_000)
+            : this.computeRetryTime(currentAttempt);
           attempt.nextRetryAt = retryAt;
           this.releaseConnection(mxHost.value.exchange);
           return ok({ attempt, shouldRetry: true, retryAt });

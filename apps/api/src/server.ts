@@ -27,7 +27,7 @@ import {
   searchRateLimit,
   closeRateLimitRedis,
 } from "./middleware/rate-limit.js";
-import { messages } from "./routes/messages.js";
+import { messages, unifiedSend } from "./routes/messages.js";
 import { domains } from "./routes/domains.js";
 import { webhooks } from "./routes/webhooks.js";
 import { analytics } from "./routes/analytics.js";
@@ -78,6 +78,8 @@ import { voiceMessageRouter } from "./routes/voice-message.js";
 import { scripts } from "./routes/scripts.js";
 import { emailQuery } from "./routes/email-query.js";
 import { fbl } from "./routes/fbl.js";
+import { realtime, bunWebSocket } from "./routes/realtime.js";
+import { getConnectionManager } from "./lib/realtime.js";
 import { signaturesRouter } from "./routes/signatures.js";
 import { contactGroupsRouter } from "./routes/contact-groups.js";
 import { threadMutesRouter } from "./routes/thread-mutes.js";
@@ -223,6 +225,9 @@ app.route("/v1/sso", sso);
 // Tracking endpoints (no auth — embedded in emails)
 app.route("/t", tracking);
 
+// Real-time WebSocket endpoint (auth via query param token — no middleware)
+app.route("/v1/realtime", realtime);
+
 // ─── Authenticated routes ──────────────────────────────────────────────────
 
 // ─── Per-category rate limits on authenticated routes ─────────────────────
@@ -294,7 +299,8 @@ app.use("/v1/connect/accounts", authMiddleware, readRateLimit);
 app.use("/v1/connect/accounts/*", authMiddleware, writeRateLimit);
 // Snooze: write-level (200 req/min)
 app.use("/v1/snooze/*", authMiddleware, writeRateLimit);
-// Schedule/Undo send: write-level (200 req/min)
+// Unified send + Schedule/Undo send: send-level (100 req/min for POST /v1/send), write-level for sub-routes
+app.use("/v1/send", authMiddleware, sendRateLimit);
 app.use("/v1/send/*", authMiddleware, writeRateLimit);
 // Import: write-level (200 req/min)
 app.use("/v1/import/*", authMiddleware, writeRateLimit);
@@ -578,6 +584,7 @@ app.route("/v1/translate", translate);
 app.route("/v1/collaborate", collaborate);
 app.route("/v1/connect", connect);
 app.route("/v1/snooze", snooze);
+app.route("/v1/send", unifiedSend);
 app.route("/v1/send", scheduleSend);
 app.route("/v1/import", importRouter);
 app.route("/v1/search", aiSearch);
@@ -776,6 +783,16 @@ startWebhookWorker();
 // Start the semantic search auto-indexer (embeds new emails in background)
 startAutoIndexer();
 
+// Start blocklist monitoring (checks every 15 min for IP/domain listings)
+import("@alecrae/reputation").then(({ BlocklistMonitor }) => {
+  const monitor = new BlocklistMonitor();
+  monitor.startMonitoring().catch((err: unknown) => {
+    console.warn("[api] Blocklist monitor start failed:", err);
+  });
+}).catch(() => {
+  console.warn("[api] Blocklist monitor unavailable");
+});
+
 // Register DLQ processor repeat job (every 15 minutes)
 const dlqInterval = setInterval(() => {
   processDLQ().catch((err) => {
@@ -808,6 +825,10 @@ async function shutdown(signal: string): Promise<void> {
   }, 15_000);
 
   try {
+    // Close all real-time WebSocket connections
+    getConnectionManager().closeAll();
+    console.log("[api] WebSocket connections closed");
+
     // Stop the semantic search auto-indexer (drains remaining queue)
     await stopAutoIndexer();
     console.log("[api] Auto-indexer stopped");
@@ -854,6 +875,7 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 export default {
   port,
   fetch: app.fetch,
+  websocket: bunWebSocket,
 };
 
 export { app };

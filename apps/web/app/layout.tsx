@@ -24,9 +24,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AlecRae — Email, Evolved.",
+  title: "AlecRae — Email, considered.",
   description:
-    "The fastest, smartest, most beautiful email client ever made. One subscription. All your accounts. AI in every layer.",
+    "The email client you'd sign your name to. One subscription. All your accounts. Every detail considered.",
   applicationName: "AlecRae",
   authors: [{ name: "AlecRae" }],
   keywords: [
@@ -34,22 +34,20 @@ export const metadata: Metadata = {
     "Gmail alternative",
     "Outlook alternative",
     "AI email",
-    "email app",
+    "sophisticated email",
     "AlecRae",
   ],
   openGraph: {
-    title: "AlecRae — Email, Evolved.",
-    description:
-      "The fastest, smartest, most beautiful email client ever made.",
+    title: "AlecRae — Email, considered.",
+    description: "The email client you'd sign your name to.",
     url: "https://alecrae.com",
     siteName: "AlecRae",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "AlecRae — Email, Evolved.",
-    description:
-      "The fastest, smartest, most beautiful email client ever made.",
+    title: "AlecRae — Email, considered.",
+    description: "The email client you'd sign your name to.",
   },
   robots: {
     index: true,
