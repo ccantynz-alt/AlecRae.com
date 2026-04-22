@@ -31,7 +31,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { requireScope } from "../middleware/auth.js";
@@ -42,8 +42,10 @@ import {
   type AgentReport,
   type DraftedReply,
 } from "@alecrae/ai-engine/agent";
+import { getSendQueue } from "../lib/queue.js";
 import {
   getDatabase,
+  emails,
   agentRuns,
   agentDrafts,
   agentConfigs,
@@ -237,16 +239,39 @@ function getAgent(): InboxAgent {
     },
   };
 
-  // Email loader — production should query the messages table for the
-  // account. For now we return an empty list so the agent runs cleanly in
-  // dev without a DB. Wire this to your DB layer in production.
+  // Email loader — queries the emails table for the given account,
+  // filtering to emails received after `since`, ordered newest-first.
   const loadEmails = async (
-    _accountId: string,
-    _since: Date,
-    _limit: number,
+    accountId: string,
+    since: Date,
+    limit: number,
   ): Promise<AgentEmail[]> => {
-    // TODO: integrate with @alecrae/db messages query.
-    return [];
+    const db = getDatabase();
+    const rows = await db
+      .select()
+      .from(emails)
+      .where(
+        and(
+          eq(emails.accountId, accountId),
+          gte(emails.createdAt, since),
+        ),
+      )
+      .orderBy(desc(emails.createdAt))
+      .limit(limit);
+
+    return rows.map((row): AgentEmail => ({
+      id: row.id,
+      accountId: row.accountId,
+      from: row.fromAddress,
+      fromName: row.fromName ?? row.fromAddress,
+      to: (row.toAddresses ?? []).map(
+        (r: { name?: string; address: string }) => r.address,
+      ),
+      subject: row.subject,
+      body: row.textBody ?? "",
+      receivedAt: row.createdAt,
+      headers: row.customHeaders ?? undefined,
+    }));
   };
 
   _agent = new InboxAgent({
@@ -255,9 +280,53 @@ function getAgent(): InboxAgent {
     persistReport: async (report) => {
       await persistReportToDb(report);
     },
-    queueDraft: async (_draft) => {
-      // TODO: hand off to schedule-send queue. Kept as a no-op so the agent
-      // can run in dev without the full send pipeline.
+    queueDraft: async (draft) => {
+      const queue = getSendQueue();
+      const jobId = generateId("agdraft");
+      const now = new Date();
+
+      let delay: number | undefined;
+      if (draft.scheduledFor) {
+        const delayMs = draft.scheduledFor.getTime() - Date.now();
+        if (delayMs > 0) {
+          delay = delayMs;
+        }
+      }
+
+      await queue.add(
+        jobId,
+        {
+          email: {
+            id: jobId,
+            accountId: draft.to[0] ?? "unknown",
+            messageId: `<${jobId}@alecrae.com>`,
+            from: "agent-draft",
+            to: draft.to,
+            rawMessage: draft.draft,
+            priority: 5 as const,
+            attempts: 0,
+            maxAttempts: 8,
+            scheduledAt: draft.scheduledFor ?? now,
+            createdAt: now,
+            domain: "alecrae.com",
+            metadata: {
+              source: "inbox-agent",
+              emailId: draft.emailId,
+              threadId: draft.threadId ?? "",
+              subject: draft.subject,
+            },
+          },
+          addedAt: now.toISOString(),
+        },
+        {
+          priority: 5,
+          attempts: 8,
+          backoff: { type: "exponential" as const, delay: 60_000 },
+          removeOnComplete: true,
+          removeOnFail: false,
+          ...(delay !== undefined ? { delay } : {}),
+        },
+      );
     },
   });
 
