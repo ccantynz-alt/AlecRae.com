@@ -29,7 +29,8 @@ import { checkQuota, incrementQuota } from "../lib/quota.js";
 import { indexEmail, searchEmails } from "@alecrae/shared";
 import { usageEnforcement } from "../middleware/usage.js";
 import { idempotency } from "../middleware/idempotency.js";
-import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED } from "@alecrae/reputation";
+import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED, ComplianceEngine } from "@alecrae/reputation";
+import type { EmailMetadata } from "@alecrae/reputation";
 import {
   validateCustomHeaders,
   HEADER_INJECTION_REJECTED,
@@ -399,6 +400,53 @@ async function handleSend(c: Context) {
         422,
       );
     }
+  }
+
+  // ── 1b2. Compliance check (CAN-SPAM / GDPR / CASL) ────────────────
+  // Transactional emails (password reset, verification) are exempt from
+  // marketing-only rules but must still pass basic compliance. The engine
+  // is configured to exempt transactional by default.
+  const complianceEngine = new ComplianceEngine({ exemptTransactional: true });
+  const isTransactional = (input.tags ?? []).includes("transactional") ||
+    (input.template_id ?? "").includes("verify") ||
+    (input.template_id ?? "").includes("password-reset") ||
+    (input.template_id ?? "").includes("magic-link");
+  const complianceMeta: EmailMetadata = {
+    from: input.from.email,
+    to: allRecipientAddresses,
+    subject: resolvedSubject,
+    headers: input.headers ?? {},
+    isTransactional,
+    senderDomain: domainOf(input.from.email),
+  };
+  const complianceResult = complianceEngine.checkAll(complianceMeta);
+  if (!complianceResult.ok) {
+    return c.json(
+      {
+        error: {
+          type: "compliance_error",
+          message: complianceResult.error instanceof Error
+            ? complianceResult.error.message
+            : "Compliance check failed",
+          code: "compliance_violation",
+        },
+      },
+      422,
+    );
+  }
+  const violations = complianceResult.value.flatMap((r) => r.violations ?? []);
+  if (violations.length > 0) {
+    return c.json(
+      {
+        error: {
+          type: "compliance_error",
+          message: `Email blocked: ${violations.map((v) => v.message ?? v.rule).join("; ")}`,
+          code: "compliance_violation",
+          violations,
+        },
+      },
+      422,
+    );
   }
 
   // ── 1c. Validate customer-supplied custom headers ─────────────────

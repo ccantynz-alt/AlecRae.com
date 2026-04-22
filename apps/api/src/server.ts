@@ -453,6 +453,16 @@ startWebhookWorker();
 // Start the semantic search auto-indexer (embeds new emails in background)
 startAutoIndexer();
 
+// Start blocklist monitoring (checks every 15 min for IP/domain listings)
+import("@alecrae/reputation").then(({ BlocklistMonitor }) => {
+  const monitor = new BlocklistMonitor();
+  monitor.startMonitoring().catch((err: unknown) => {
+    console.warn("[api] Blocklist monitor start failed:", err);
+  });
+}).catch(() => {
+  console.warn("[api] Blocklist monitor unavailable");
+});
+
 // Register DLQ processor repeat job (every 15 minutes)
 const dlqInterval = setInterval(() => {
   processDLQ().catch((err) => {
