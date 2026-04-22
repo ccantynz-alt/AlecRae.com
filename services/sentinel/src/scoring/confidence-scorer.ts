@@ -34,7 +34,7 @@ interface SignalEvaluator {
 
 export class ConfidenceScorer {
   private evaluators: SignalEvaluator[] = [];
-  private dynamicWeights: Map<SignalType, number> = new Map();
+  private dynamicWeights = new Map<SignalType, number>();
 
   constructor(private config: SentinelConfig) {
     this.registerDefaultEvaluators();
@@ -84,7 +84,7 @@ export class ConfidenceScorer {
   updateWeights(
     signalType: SignalType,
     wasCorrect: boolean,
-    learningRate: number = 0.01
+    learningRate = 0.01
   ): void {
     const currentWeight = this.dynamicWeights.get(signalType) ?? 1.0;
     const adjustment = wasCorrect ? learningRate : -learningRate;

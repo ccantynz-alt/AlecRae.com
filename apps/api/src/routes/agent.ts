@@ -177,6 +177,25 @@ function reportToStoredFlaggedSuspicious(
 // dev. The first /run call will surface a clear error if creds are missing.
 
 let _agent: InboxAgent | null = null;
+let _emailLoaderOverride:
+  | ((accountId: string, since: Date, limit: number) => Promise<AgentEmail[]>)
+  | undefined;
+
+/**
+ * Inject a custom email loader for the agent. Used by the imap service when
+ * it boots to wire its inbox projection into the agent. Also used by tests.
+ */
+export function setAgentEmailLoader(
+  loader: (
+    accountId: string,
+    since: Date,
+    limit: number,
+  ) => Promise<AgentEmail[]>,
+): void {
+  _emailLoaderOverride = loader;
+  _agent = null; // Force re-init so the new loader takes effect
+}
+
 function getAgent(): InboxAgent {
   if (_agent) return _agent;
 
@@ -232,7 +251,7 @@ function getAgent(): InboxAgent {
         );
       }
       const json = (await res.json()) as {
-        content?: Array<{ type: string; text?: string }>;
+        content?: { type: string; text?: string }[];
       };
       const block = json.content?.find((b) => b.type === "text");
       return block?.text ?? "";
@@ -274,6 +293,12 @@ function getAgent(): InboxAgent {
     }));
   };
 
+  // Draft queueing is intentionally omitted from the agent factory. Drafts in
+  // Vienna ALWAYS require explicit user approval (DraftedReply.requiresApproval
+  // is hard-coded to true), so the queueDraft hook would only fire for drafts
+  // the user has *not* yet approved. The real send path lives in the
+  // /drafts/:id/approve and /runs/:id/approve routes below, which call
+  // enqueueAgentDraftForSend() once the user has confirmed.
   _agent = new InboxAgent({
     ai,
     loadEmails,
@@ -695,7 +720,35 @@ agent.post(
       })
       .where(eq(agentDrafts.id, draftId));
 
-    // TODO: enqueue into schedule-send pipeline for actual delivery.
+    // Enqueue the approved draft into the outbound MTA pipeline. We re-read
+    // the row so sentAt and delayMs can be returned to the caller.
+    const [approvedRow] = await db
+      .select()
+      .from(agentDrafts)
+      .where(eq(agentDrafts.id, draftId))
+      .limit(1);
+
+    let sendResult: { emailId: string; delayMs: number } | null = null;
+    if (approvedRow) {
+      try {
+        const result = await enqueueAgentDraftForSend(approvedRow);
+        sendResult = { emailId: result.emailId, delayMs: result.delayMs };
+      } catch (err) {
+        if (err instanceof AgentSendError) {
+          return c.json(
+            {
+              error: {
+                type: "validation_error",
+                message: err.message,
+                code: err.code,
+              },
+            },
+            422,
+          );
+        }
+        throw err;
+      }
+    }
 
     return c.json({
       data: {
@@ -703,7 +756,12 @@ agent.post(
         status: "approved",
         approvedAt: now,
         scheduledFor: draft.scheduledFor,
-        message: "Draft approved. It will be sent at the scheduled time.",
+        emailId: sendResult?.emailId ?? null,
+        delayMs: sendResult?.delayMs ?? 0,
+        message:
+          sendResult && sendResult.delayMs === 0
+            ? "Draft approved and queued for immediate delivery."
+            : "Draft approved. It will be sent at the scheduled time.",
       },
     });
   },
@@ -1127,54 +1185,56 @@ agent.post(
       );
     }
 
-    // Find all pending drafts for this run
-    const pendingDrafts = await db
-      .select({ id: agentDrafts.id })
+    // Find all pending + edited drafts for this run in one pass so we can
+    // both approve them and hand them off to the send pipeline.
+    const draftsToApprove = await db
+      .select()
       .from(agentDrafts)
       .where(
         and(
           eq(agentDrafts.runId, id),
-          eq(agentDrafts.status, "pending"),
+          eq(agentDrafts.accountId, auth.accountId),
         ),
       );
 
     const now = new Date();
     let approvedCount = 0;
+    let queuedCount = 0;
+    const failed: { id: string; reason: string }[] = [];
 
-    for (const draft of pendingDrafts) {
+    for (const draft of draftsToApprove) {
+      if (draft.status !== "pending" && draft.status !== "edited") continue;
+
       await db
         .update(agentDrafts)
         .set({ status: "approved", approvedAt: now, updatedAt: now })
         .where(eq(agentDrafts.id, draft.id));
       approvedCount++;
+
+      try {
+        await enqueueAgentDraftForSend({
+          ...draft,
+          status: "approved",
+          approvedAt: now,
+          updatedAt: now,
+        });
+        queuedCount++;
+      } catch (err) {
+        failed.push({
+          id: draft.id,
+          reason: err instanceof Error ? err.message : "unknown",
+        });
+      }
     }
-
-    // Also approve any edited drafts
-    const editedDrafts = await db
-      .select({ id: agentDrafts.id })
-      .from(agentDrafts)
-      .where(
-        and(
-          eq(agentDrafts.runId, id),
-          eq(agentDrafts.status, "edited"),
-        ),
-      );
-
-    for (const draft of editedDrafts) {
-      await db
-        .update(agentDrafts)
-        .set({ status: "approved", approvedAt: now, updatedAt: now })
-        .where(eq(agentDrafts.id, draft.id));
-      approvedCount++;
-    }
-
-    // TODO: enqueue all approved drafts into the schedule-send pipeline.
 
     return c.json({
       data: {
         runId: id,
         approvedCount,
-        message: `Approved ${approvedCount} draft(s) for scheduled send.`,
+        queuedCount,
+        failedCount: failed.length,
+        failures: failed,
+        message: `Approved ${approvedCount} draft(s); ${queuedCount} queued for send.`,
       },
     });
   },

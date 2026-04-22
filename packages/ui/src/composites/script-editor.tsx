@@ -32,7 +32,7 @@ export interface ScriptRunEntry {
   id: string;
   status: ScriptRunStatus;
   executionTimeMs: number;
-  actionsExecuted: Array<{ type: string; params: Record<string, unknown> }>;
+  actionsExecuted: { type: string; params: Record<string, unknown> }[];
   logs: string[];
   error?: string | null;
   createdAt: string;
@@ -51,7 +51,7 @@ export interface ScriptData {
 export interface TestResult {
   success: boolean;
   runId: string;
-  actions?: Array<{ type: string; params: Record<string, unknown> }>;
+  actions?: { type: string; params: Record<string, unknown> }[];
   logs?: string[];
   error?: string;
   executionTimeMs: number;
@@ -59,7 +59,7 @@ export interface TestResult {
 }
 
 export interface ScriptEditorProps
-  extends Omit<HTMLAttributes<HTMLDivElement>, "onSubmit"> {
+  extends Omit<HTMLAttributes<HTMLDivElement>, "onSubmit" | "onToggle"> {
   /** Initial script data (for editing existing scripts). */
   initialData?: ScriptData;
   /** Available templates for the template selector. */
@@ -85,7 +85,7 @@ export interface ScriptEditorProps
 
 // ─── Trigger labels ───────────────────────────────────────────────────────────
 
-const TRIGGER_OPTIONS: Array<{ value: ScriptTrigger; label: string; description: string }> = [
+const TRIGGER_OPTIONS: { value: ScriptTrigger; label: string; description: string }[] = [
   {
     value: "on_receive",
     label: "On Receive",
@@ -109,37 +109,6 @@ const TRIGGER_OPTIONS: Array<{ value: ScriptTrigger; label: string; description:
 ];
 
 // ─── Keyword highlighting (basic) ─────────────────────────────────────────────
-
-const TS_KEYWORDS = new Set([
-  "const",
-  "let",
-  "var",
-  "if",
-  "else",
-  "for",
-  "while",
-  "return",
-  "function",
-  "async",
-  "await",
-  "true",
-  "false",
-  "null",
-  "undefined",
-  "new",
-  "import",
-  "export",
-  "default",
-  "break",
-  "continue",
-  "switch",
-  "case",
-  "try",
-  "catch",
-  "throw",
-  "typeof",
-  "instanceof",
-]);
 
 function getLineCount(code: string): number {
   return code.split("\n").length;
@@ -248,13 +217,13 @@ export const ScriptEditor = forwardRef<HTMLDivElement, ScriptEditorProps>(
 
     const currentData: ScriptData = useMemo(
       () => ({
-        id: initialData?.id,
         name,
-        description: description || undefined,
         code,
         trigger,
         schedule: trigger === "scheduled" ? schedule : null,
         isActive,
+        ...(initialData?.id !== undefined ? { id: initialData.id } : {}),
+        ...(description ? { description } : {}),
       }),
       [initialData?.id, name, description, code, trigger, schedule, isActive],
     );

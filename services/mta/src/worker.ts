@@ -18,7 +18,7 @@ import { eq, and } from "drizzle-orm";
 import { getDatabase, emails, deliveryResults, domains, suppressionLists, events, webhooks as webhooksTable } from "@alecrae/db";
 import { signMessage, addSignatureToMessage } from "./dkim/signer.js";
 import { SmtpClient } from "./smtp/client.js";
-import { RelayClient, relayConfigFromEnv, type RelaySendResult } from "./relay/relay.js";
+import { RelayClient, relayConfigFromEnv } from "./relay/relay.js";
 import { DeliveryOptimizer } from "./delivery/optimizer.js";
 import { getTracer, recordEmailSent, recordEmailSendDuration, recordActiveConnection, SpanKind } from "@alecrae/shared";
 import type { QueuedEmail, DkimSignOptions } from "./types.js";
@@ -162,7 +162,6 @@ export class MtaWorker {
     const db = getDatabase();
     const attemptNumber = job.attemptsMade;
     const sendStart = performance.now();
-    const tracer = getTracer("mta-worker");
 
     console.log(
       `[mta-worker] Processing job ${job.id} (messageId=${email.messageId}, ` +
@@ -320,7 +319,7 @@ export class MtaWorker {
           }
         } else {
           // Relay failure — check if it looks permanent (5xx) or transient
-          const isPermanent = relayResult.error?.match(/\b5\d{2}\b/) != null;
+          const isPermanent = /\b5\d{2}\b/.exec(relayResult.error ?? "") !== null;
 
           if (isPermanent) {
             for (const recipient of activeRecipients) {
@@ -395,8 +394,8 @@ export class MtaWorker {
         return { code: 250, message: result.value.response };
       }
       // Parse response code from error message
-      const codeMatch = result.error.message.match(/\b([45]\d{2})\b/);
-      const code = codeMatch ? parseInt(codeMatch[1]!, 10) : 450;
+      const codeMatch = /\b([45]\d{2})\b/.exec(result.error.message);
+      const code = codeMatch?.[1] !== undefined ? parseInt(codeMatch[1], 10) : 450;
       throw Object.assign(new Error(result.error.message), { code });
     };
 
@@ -492,7 +491,7 @@ export class MtaWorker {
                 reason: "bounce",
               })
               .onConflictDoNothing()
-              .catch(() => {});
+              .catch(() => { /* no-op */ });
 
             console.log(
               `[mta-worker] Auto-suppressed ${recipient} (hard bounce)`,
@@ -574,7 +573,7 @@ export class MtaWorker {
       recordEmailSent(email.domain, "bounced");
 
       // Record bounce event
-      await this.recordDeliveryEvent(db, email, "email.bounced").catch(() => {});
+      await this.recordDeliveryEvent(db, email, "email.bounced").catch(() => { /* no-op */ });
     } else if (anyDelivered && !anyDeferred) {
       await db
         .update(emails)
@@ -588,7 +587,7 @@ export class MtaWorker {
       recordEmailSent(email.domain, "delivered");
 
       // Record delivery event
-      await this.recordDeliveryEvent(db, email, "email.delivered").catch(() => {});
+      await this.recordDeliveryEvent(db, email, "email.delivered").catch(() => { /* no-op */ });
     } else if (anyDeferred) {
       await db
         .update(emails)
@@ -598,7 +597,7 @@ export class MtaWorker {
       recordEmailSent(email.domain, "deferred");
 
       // Record deferred event
-      await this.recordDeliveryEvent(db, email, "email.deferred").catch(() => {});
+      await this.recordDeliveryEvent(db, email, "email.deferred").catch(() => { /* no-op */ });
 
       // Throw so BullMQ retries with exponential backoff
       throw new Error(

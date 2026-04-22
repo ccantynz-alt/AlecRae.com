@@ -167,6 +167,16 @@
       "types": "./src/grammar/spellcheck.ts",
       "import": "./dist/grammar/spellcheck.js"
     },
+    "./grammar": {
+      "bun": "./src/grammar/agent.ts",
+      "types": "./src/grammar/agent.ts",
+      "import": "./dist/grammar/agent.js"
+    },
+    "./dictation": {
+      "bun": "./src/dictation/engine.ts",
+      "types": "./src/dictation/engine.ts",
+      "import": "./dist/dictation/engine.js"
+    },
     "./query/email-sql": {
       "bun": "./src/query/email-sql.ts",
       "types": "./src/query/email-sql.ts",
@@ -195,6 +205,7 @@
     "ioredis": "^5.4.0",
     "playwright": "^1.47.0",
     "pino": "^9.0.0",
+    "quickjs-emscripten": "^0.29.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

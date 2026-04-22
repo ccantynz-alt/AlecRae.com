@@ -25,7 +25,6 @@ function normalizeCharset(charset: string): string {
 function decodeCharset(bytes: Uint8Array, charset: string): string {
   const normalized = normalizeCharset(charset);
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-unknown -- charset strings come from email headers
     const decoder = new TextDecoder(normalized as ConstructorParameters<typeof TextDecoder>[0]);
     return decoder.decode(bytes);
   } catch {
@@ -54,7 +53,9 @@ function decodeQuotedPrintable(input: string): Uint8Array {
   const lines = input.split(/\r?\n/);
 
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
-    let line = lines[lineIdx]!;
+    const originalLine = lines[lineIdx];
+    if (originalLine === undefined) continue;
+    let line = originalLine;
 
     // Soft line break: line ending with '='
     const softBreak = line.endsWith("=");
@@ -130,7 +131,9 @@ function parseHeaderLine(line: string): MimeHeader | null {
   const fullStr = ";" + paramStr;
   let paramMatch: RegExpExecArray | null;
   while ((paramMatch = paramRegex.exec(fullStr)) !== null) {
-    const paramName = paramMatch[1]!.toLowerCase();
+    const rawName = paramMatch[1];
+    if (rawName === undefined) continue;
+    const paramName = rawName.toLowerCase();
     const paramValue = paramMatch[2] ?? paramMatch[3] ?? "";
     params[paramName] = paramValue;
   }
@@ -177,11 +180,11 @@ function parseAddressList(value: string | undefined): EmailAddress[] {
     if (!trimmed) continue;
 
     // Format: "Display Name" <email@example.com> or email@example.com
-    const angleMatch = trimmed.match(/^(?:"?([^"]*?)"?\s*)?<([^>]+)>$/);
-    if (angleMatch) {
+    const angleMatch = /^(?:"?([^"]*?)"?\s*)?<([^>]+)>$/.exec(trimmed);
+    if (angleMatch?.[2] !== undefined) {
       addresses.push({
         name: angleMatch[1]?.trim() || undefined,
-        address: angleMatch[2]!.trim(),
+        address: angleMatch[2].trim(),
       });
     } else if (trimmed.includes("@")) {
       addresses.push({ address: trimmed });
@@ -198,7 +201,8 @@ function splitAddresses(input: string): string[] {
   let current = "";
 
   for (let i = 0; i < input.length; i++) {
-    const ch = input[i]!;
+    const ch = input[i];
+    if (ch === undefined) continue;
     if (ch === '"' && (i === 0 || input[i - 1] !== "\\")) {
       inQuote = !inQuote;
     }
@@ -272,7 +276,8 @@ function splitMultipart(body: Uint8Array, boundary: string): Uint8Array[] {
   const segments = text.split(delimiter);
 
   for (let i = 1; i < segments.length; i++) {
-    const segment = segments[i]!;
+    const segment = segments[i];
+    if (segment === undefined) continue;
 
     // Skip the closing delimiter segment
     if (segment.trimStart().startsWith("--")) continue;
@@ -396,13 +401,12 @@ async function extractContentRecursive(part: MimePart, result: ExtractedContent)
 }
 
 function parseDispositionFilename(disposition: string): string | undefined {
-  const match = disposition.match(/filename\*?=(?:"([^"]+)"|([^\s;]+))/i);
+  const match = /filename\*?=(?:"([^"]+)"|([^\s;]+))/i.exec(disposition);
   if (match) {
     const value = match[1] ?? match[2];
     // Handle RFC 5987 encoding: charset'language'encoded_value
     if (value?.includes("''")) {
       const parts = value.split("''");
-      const charset = parts[0] ?? "utf-8";
       const encoded = parts[1] ?? "";
       return decodeURIComponent(encoded);
     }
@@ -419,7 +423,8 @@ function parseMessageIdList(value: string | undefined): string[] {
   const regex = /<([^>]+)>/g;
   let match: RegExpExecArray | null;
   while ((match = regex.exec(value)) !== null) {
-    ids.push(match[1]!);
+    const id = match[1];
+    if (id !== undefined) ids.push(id);
   }
   return ids;
 }

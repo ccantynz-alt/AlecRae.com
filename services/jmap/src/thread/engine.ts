@@ -1,4 +1,4 @@
-import type { JmapId, JmapThread, JmapEmail } from "../types.js";
+import type { JmapId, JmapThread } from "../types.js";
 
 /**
  * Email threading engine.
@@ -13,13 +13,6 @@ interface ThreadedMessage {
   references: string[];
   subject: string;
   receivedAt: Date;
-}
-
-interface ThreadNode {
-  messageId: string;
-  emailId?: JmapId;
-  parent?: ThreadNode;
-  children: ThreadNode[];
 }
 
 export class ThreadingEngine {
@@ -46,12 +39,16 @@ export class ThreadingEngine {
 
   private getMessageIndex(accountId: JmapId): Map<string, JmapId> {
     this.getAccountThreads(accountId); // ensure initialized
-    return this.messageToThread.get(accountId)!;
+    const index = this.messageToThread.get(accountId);
+    if (!index) throw new Error(`Message index missing for account ${accountId}`);
+    return index;
   }
 
   private getEmailIndex(accountId: JmapId): Map<JmapId, JmapId> {
     this.getAccountThreads(accountId);
-    return this.emailToThread.get(accountId)!;
+    const index = this.emailToThread.get(accountId);
+    if (!index) throw new Error(`Email index missing for account ${accountId}`);
+    return index;
   }
 
   private generateId(): JmapId {
@@ -93,7 +90,7 @@ export class ThreadingEngine {
     if (relatedThreadIds.size === 0) {
       const normalizedSubject = this.normalizeSubject(email.subject);
       if (normalizedSubject.length > 0 && this.isReply(email.subject)) {
-        for (const [threadId, thread] of threads) {
+        for (const [, thread] of threads) {
           // Check if any email in this thread has a matching subject
           // In production, maintain a subject index for efficient lookup
           const firstEmailId = thread.emailIds[0];
@@ -116,8 +113,11 @@ export class ThreadingEngine {
       });
     } else if (relatedThreadIds.size === 1) {
       // Add to existing thread
-      threadId = [...relatedThreadIds][0]!;
-      const thread = threads.get(threadId)!;
+      const [firstRelated] = [...relatedThreadIds];
+      if (!firstRelated) throw new Error("Expected related thread id");
+      threadId = firstRelated;
+      const thread = threads.get(threadId);
+      if (!thread) throw new Error(`Thread not found: ${threadId}`);
       if (!thread.emailIds.includes(email.emailId)) {
         thread.emailIds.push(email.emailId);
         this.sortThreadEmails(thread);
@@ -155,12 +155,15 @@ export class ThreadingEngine {
     const emailIndex = this.getEmailIndex(accountId);
 
     // Use the first thread as the target
-    const targetId = threadIds[0]!;
-    const targetThread = threads.get(targetId)!;
+    const targetId = threadIds[0];
+    if (!targetId) throw new Error("mergeThreads requires at least one thread id");
+    const targetThread = threads.get(targetId);
+    if (!targetThread) throw new Error(`Target thread not found: ${targetId}`);
 
     // Merge all other threads into the target
     for (let i = 1; i < threadIds.length; i++) {
-      const sourceId = threadIds[i]!;
+      const sourceId = threadIds[i];
+      if (!sourceId) continue;
       const sourceThread = threads.get(sourceId);
       if (!sourceThread) continue;
 
@@ -196,7 +199,7 @@ export class ThreadingEngine {
   /**
    * Sort emails within a thread by received date.
    */
-  private sortThreadEmails(thread: JmapThread): void {
+  private sortThreadEmails(_thread: JmapThread): void {
     // In production, sort by actual received dates.
     // Email IDs are kept in order of insertion as a proxy for chronological order.
   }

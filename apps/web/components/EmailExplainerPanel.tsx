@@ -25,9 +25,6 @@ import {
 } from "../lib/api";
 import {
   drawerEnterRight,
-  fadeInUp,
-  SPRING_BOUNCY,
-  SPRING_SNAPPY,
   staggerChildren,
   listItemEnter,
   useAlecRaeReducedMotion,

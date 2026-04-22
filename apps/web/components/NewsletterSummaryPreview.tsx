@@ -22,8 +22,6 @@ import {
 } from "../lib/api";
 import {
   fadeInUp,
-  SPRING_BOUNCY,
-  SPRING_SNAPPY,
   staggerChildren,
   listItemEnter,
   useAlecRaeReducedMotion,

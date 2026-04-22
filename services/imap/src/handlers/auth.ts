@@ -10,88 +10,32 @@ import type { ImapSession, ImapCommand, Result } from "../types.js";
 import { ok, err } from "../types.js";
 import {
   formatTagged,
-  formatUntagged,
   buildCapabilityString,
   parseQuotedString,
   parseAtom,
 } from "../server/commands.js";
-
-// ─── Rate Limiting ──────────────────────────────────────────────────────────
-
-/**
- * Tracks authentication attempts per remote address for rate limiting.
- */
-const authAttempts = new Map<string, { count: number; lastAttempt: number }>();
-
-/** Maximum failed auth attempts before connection is rejected. */
-const MAX_FAILED_ATTEMPTS = 5;
-
-/** Window in milliseconds for rate limiting (15 minutes). */
-const RATE_LIMIT_WINDOW = 15 * 60 * 1000;
+import { eq } from "drizzle-orm";
+import { getDatabase, users, accounts } from "@alecrae/db";
+import {
+  hashPassword,
+  constantTimeEqual,
+  isRateLimited,
+  recordFailedAttempt,
+  clearRateLimit,
+} from "./auth-crypto.js";
 
 /**
- * Check if an IP address has exceeded the auth rate limit.
+ * Validate IMAP LOGIN/AUTHENTICATE credentials against the shared user store.
  *
- * @param remoteAddress - The client's IP address.
- * @returns Whether the client is rate-limited.
- */
-function isRateLimited(remoteAddress: string): boolean {
-  const entry = authAttempts.get(remoteAddress);
-  if (!entry) return false;
-
-  // Reset if outside the window
-  if (Date.now() - entry.lastAttempt > RATE_LIMIT_WINDOW) {
-    authAttempts.delete(remoteAddress);
-    return false;
-  }
-
-  return entry.count >= MAX_FAILED_ATTEMPTS;
-}
-
-/**
- * Record a failed authentication attempt for rate limiting.
- *
- * @param remoteAddress - The client's IP address.
- */
-function recordFailedAttempt(remoteAddress: string): void {
-  const entry = authAttempts.get(remoteAddress);
-  if (entry) {
-    entry.count++;
-    entry.lastAttempt = Date.now();
-  } else {
-    authAttempts.set(remoteAddress, { count: 1, lastAttempt: Date.now() });
-  }
-}
-
-/**
- * Clear rate limiting state for a remote address after successful auth.
- *
- * @param remoteAddress - The client's IP address.
- */
-function clearRateLimit(remoteAddress: string): void {
-  authAttempts.delete(remoteAddress);
-}
-
-// ─── Credential Validation ──────────────────────────────────────────────────
-
-/**
- * Validate user credentials.
- * In production, this would check against the database and password hashing service.
- * Currently returns a placeholder validation result.
- *
- * @param username - The username or email address.
- * @param password - The plaintext password.
- * @returns Result indicating success or failure with error message.
+ * Looks up the user by email, verifies the SHA-256 password hash in
+ * constant time, and confirms the owning account is not suspended or
+ * scheduled for deletion. Returns the canonical lower-cased email on
+ * success.
  */
 async function validateCredentials(
   username: string,
   password: string,
 ): Promise<Result<string, string>> {
-  // TODO: Integrate with the platform's authentication service
-  // This should validate against the same credential store as JMAP and the web UI.
-  // For now, reject empty credentials and accept any non-empty credentials
-  // in development mode.
-
   if (!username || !password) {
     return err("Empty username or password");
   }
@@ -100,13 +44,36 @@ async function validateCredentials(
     return err("Credentials too long");
   }
 
-  // In production, this would:
-  // 1. Look up the user by email/username in PostgreSQL
-  // 2. Verify the password hash (argon2id)
-  // 3. Check if the account is active and IMAP access is enabled
-  // 4. Return the canonical username (email address)
+  const email = username.toLowerCase().trim();
+  const db = getDatabase();
 
-  return ok(username);
+  const [row] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      passwordHash: users.passwordHash,
+      accountId: users.accountId,
+      accountStatus: accounts.status,
+    })
+    .from(users)
+    .innerJoin(accounts, eq(users.accountId, accounts.id))
+    .where(eq(users.email, email))
+    .limit(1);
+
+  if (!row || !row.passwordHash) {
+    return err("Invalid credentials");
+  }
+
+  if (row.accountStatus !== "active") {
+    return err(`Account is ${row.accountStatus}`);
+  }
+
+  const candidate = await hashPassword(password);
+  if (!constantTimeEqual(candidate, row.passwordHash)) {
+    return err("Invalid credentials");
+  }
+
+  return ok(row.email);
 }
 
 // ─── LOGIN Command ──────────────────────────────────────────────────────────
@@ -377,4 +344,11 @@ async function processSaslPlain(
 
 // ─── Exports for Testing ────────────────────────────────────────────────────
 
-export { isRateLimited, recordFailedAttempt, clearRateLimit };
+export {
+  isRateLimited,
+  recordFailedAttempt,
+  clearRateLimit,
+  hashPassword,
+  constantTimeEqual,
+};
+

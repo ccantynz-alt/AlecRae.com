@@ -95,14 +95,21 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
     }
   }, [user]);
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
-    // TODO: wire to profile update endpoint when available
-    await new Promise((r) => setTimeout(r, 500));
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaveError(null);
+    try {
+      await accountApi.update({ name });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Could not save changes");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const initials = (name || "U")
@@ -151,6 +158,11 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
               Saved
             </Text>
           </AnimatedPresence>
+          {saveError && (
+            <Text variant="body-sm" className="text-status-error">
+              {saveError}
+            </Text>
+          )}
           <PressableScale as="button" tapScale={0.95}>
             <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || loading}>
               {saving ? "Saving..." : "Save Changes"}
@@ -321,17 +333,6 @@ function NotificationSection() {
 NotificationSection.displayName = "NotificationSection";
 
 function DangerZone() {
-  const [confirming, setConfirming] = useState(false);
-
-  const handleDelete = () => {
-    if (!confirming) {
-      setConfirming(true);
-      return;
-    }
-    // TODO: wire to account deletion endpoint
-    setConfirming(false);
-  };
-
   return (
     <Card className="border-status-error/30">
       <CardHeader>
@@ -346,22 +347,18 @@ function DangerZone() {
               Delete Account
             </Text>
             <Text variant="body-sm" muted>
-              Permanently delete your account and all associated data. This action cannot be undone.
+              Account deletion requires identity verification. Email{" "}
+              <Box
+                as="a"
+                href="mailto:support@alecrae.com?subject=Account%20Deletion%20Request"
+                className="inline text-brand-600 hover:text-brand-700 font-medium"
+              >
+                <Text as="span" variant="body-sm" className="text-brand-600">
+                  support@alecrae.com
+                </Text>
+              </Box>{" "}
+              from your account address and we&apos;ll process the deletion with a 30-day recovery window.
             </Text>
-          </Box>
-          <Box className="flex items-center gap-2">
-            <AnimatedPresence show={confirming} presenceKey="cancel-delete">
-              <PressableScale as="button" tapScale={0.95}>
-                <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
-                  Cancel
-                </Button>
-              </PressableScale>
-            </AnimatedPresence>
-            <PressableScale as="button" tapScale={0.95}>
-              <Button variant="destructive" size="sm" onClick={handleDelete}>
-                {confirming ? "Confirm Delete" : "Delete Account"}
-              </Button>
-            </PressableScale>
           </Box>
         </Box>
       </CardContent>

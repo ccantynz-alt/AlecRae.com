@@ -55,7 +55,17 @@ async function initKeys(): Promise<void> {
   }
 
   // HS256 fallback
-  const secret = process.env["JWT_SECRET"] ?? "dev_secret";
+  const explicitSecret = process.env["JWT_SECRET"];
+  if (!explicitSecret && process.env["NODE_ENV"] === "production") {
+    throw new Error(
+      "[jwt] Refusing to start in production without JWT_PRIVATE_KEY + JWT_PUBLIC_KEY or JWT_SECRET. " +
+        "Set one of these env vars before starting the API.",
+    );
+  }
+  if (explicitSecret && explicitSecret.length < 32 && process.env["NODE_ENV"] === "production") {
+    throw new Error("[jwt] JWT_SECRET must be at least 32 characters in production.");
+  }
+  const secret = explicitSecret ?? "dev_secret";
   if (secret === "dev_secret") {
     console.warn("[jwt] WARNING: Using default HS256 secret. Set JWT_PRIVATE_KEY + JWT_PUBLIC_KEY for RS256 in production.");
   }

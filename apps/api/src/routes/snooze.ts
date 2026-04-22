@@ -229,7 +229,7 @@ scheduleSend.get(
       ))
       .limit(50);
 
-    const filtered = scheduled.filter((e) => e.scheduledAt != null);
+    const filtered = scheduled.filter((e) => e.scheduledAt !== null && e.scheduledAt !== undefined);
 
     return c.json({
       data: filtered.map((e) => ({

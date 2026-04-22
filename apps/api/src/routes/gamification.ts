@@ -14,7 +14,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { eq, and, gte, desc, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -194,10 +194,6 @@ type LeaderboardQuery = z.infer<typeof LeaderboardQuerySchema>;
 
 function generateId(): string {
   return `gam_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function todayDateString(): string {
-  return new Date().toISOString().split("T")[0] ?? "";
 }
 
 function isConsecutiveDay(lastDate: string | null, currentDate: string): boolean {
@@ -384,7 +380,19 @@ gamification.post(
           enabled: true,
         })
         .returning();
-      streak = created!;
+      if (!created) {
+        return c.json(
+          {
+            error: {
+              type: "internal_error",
+              message: "Failed to create streak record",
+              code: "create_streak_failed",
+            },
+          },
+          500,
+        );
+      }
+      streak = created;
     }
 
     // Check if gamification is disabled
@@ -434,11 +442,11 @@ gamification.post(
         streakUpdated = true;
 
         // Check achievements
-        const achievementsToCheck: Array<{
+        const achievementsToCheck: {
           key: AchievementKey;
           progress: number;
           target: number;
-        }> = [
+        }[] = [
           { key: "first_zero", progress: newTotal, target: 1 },
           { key: "zero_hero", progress: newTotal, target: 100 },
           { key: "week_warrior", progress: newStreak, target: 7 },

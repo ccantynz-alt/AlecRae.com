@@ -17,6 +17,7 @@
  * Tailwind-styled components. Fully accessible with ARIA attributes.
  */
 
+import * as React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { SPRING_SNAPPY, useAlecRaeReducedMotion } from "../lib/animations";
@@ -253,7 +254,7 @@ export function LocalAIStatusIndicator({
   className,
   autoInit = true,
   compact = false,
-}: LocalAIStatusIndicatorProps): JSX.Element {
+}: LocalAIStatusIndicatorProps): React.ReactElement {
   const [status, setStatus] = useState<LocalAIStatus | null>(null);
   const [downloadProgress, setDownloadProgress] =
     useState<ModelDownloadProgress | null>(null);
@@ -350,8 +351,7 @@ export function LocalAIStatusIndicator({
         aria-expanded={expanded}
         aria-label={`Local AI status: ${indicatorState.label}. ${indicatorState.detail}`}
         title={indicatorState.detail}
-        whileHover={reduced ? undefined : { scale: 1.04 }}
-        whileTap={reduced ? undefined : { scale: 0.96 }}
+        {...(reduced ? {} : { whileHover: { scale: 1.04 }, whileTap: { scale: 0.96 } })}
         transition={SPRING_SNAPPY}
       >
         {/* Status dot */}
@@ -445,7 +445,7 @@ function LocalAIDetailPanel({
   indicatorState,
   status,
   downloadProgress,
-}: DetailPanelProps): JSX.Element {
+}: DetailPanelProps): React.ReactElement {
   return (
     <div className="space-y-2.5">
       {/* Header row */}
@@ -559,7 +559,7 @@ LocalAIDetailPanel.displayName = "LocalAIDetailPanel";
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-function StatusBadge({ phase }: { phase: IndicatorPhase }): JSX.Element {
+function StatusBadge({ phase }: { phase: IndicatorPhase }): React.ReactElement {
   const colorMap: Record<IndicatorPhase, string> = {
     unavailable: "bg-white/10 text-white/40",
     probing: "bg-amber-500/20 text-amber-300",
@@ -597,7 +597,7 @@ function DetailRow({
 }: {
   label: string;
   value: string;
-}): JSX.Element {
+}): React.ReactElement {
   return (
     <div className="flex items-center justify-between">
       <span className="text-[10px] text-white/40">{label}</span>

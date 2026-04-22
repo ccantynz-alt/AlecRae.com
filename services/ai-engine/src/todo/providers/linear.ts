@@ -13,7 +13,7 @@ import {
 
 interface LinearGraphQLResponse<T> {
   data?: T;
-  errors?: Array<{ message: string }>;
+  errors?: { message: string }[];
 }
 
 interface CreateIssueData {
@@ -24,7 +24,7 @@ interface CreateIssueData {
 }
 
 interface TeamsData {
-  teams: { nodes: Array<{ id: string; name: string }> };
+  teams: { nodes: { id: string; name: string }[] };
 }
 
 export class LinearProvider implements TodoProvider {

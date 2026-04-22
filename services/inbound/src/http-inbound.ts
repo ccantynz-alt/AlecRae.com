@@ -10,9 +10,9 @@
  */
 
 import { Hono } from "hono";
-import { MimeParser } from "./parser/mime-parser.js";
-import { FilterPipeline } from "./filter/pipeline.js";
-import { MailboxRouter } from "./routing/router.js";
+import type { MimeParser } from "./parser/mime-parser.js";
+import type { FilterPipeline } from "./filter/pipeline.js";
+import type { MailboxRouter } from "./routing/router.js";
 import type { EmailStore } from "./storage/store.js";
 import type { SmtpSession, SmtpEnvelope } from "./types.js";
 
@@ -123,7 +123,7 @@ export function createHttpInbound(config: HttpInboundConfig): Hono {
 
       // Build a synthetic SMTP session for the pipeline
       const senderIp = c.req.header("X-Sender-IP") ?? c.req.header("X-Real-IP") ?? "0.0.0.0";
-      const session: SmtpSession = {
+      const _session: SmtpSession = {
         id: `http-${crypto.randomUUID()}`,
         remoteAddress: senderIp,
         remotePort: 0,
@@ -159,7 +159,7 @@ export function createHttpInbound(config: HttpInboundConfig): Hono {
 
       // 5. Store for each resolved recipient
       let deliveryCount = 0;
-      const deliveries: Array<{ id: string; recipient: string; mailbox: string }> = [];
+      const deliveries: { id: string; recipient: string; mailbox: string }[] = [];
 
       for (const [recipient, resolution] of resolved) {
         if (!resolution) {
@@ -217,12 +217,12 @@ export function createHttpInbound(config: HttpInboundConfig): Hono {
       }
     }
 
-    const body = await c.req.json<{ messages: Array<{ raw: string; envelope?: { from?: string; to?: string[] }; senderIp?: string }> }>();
+    const body = await c.req.json<{ messages: { raw: string; envelope?: { from?: string; to?: string[] }; senderIp?: string }[] }>();
     if (!body.messages || !Array.isArray(body.messages)) {
       return c.json({ error: "Request must contain a 'messages' array" }, 400);
     }
 
-    const results: Array<{ messageId?: string | undefined; status: string; error?: string | undefined }> = [];
+    const results: { messageId?: string | undefined; status: string; error?: string | undefined }[] = [];
 
     for (const msg of body.messages) {
       try {
@@ -250,11 +250,9 @@ export function createHttpInbound(config: HttpInboundConfig): Hono {
         }
 
         const resolved = await router.resolve(envelope.rcptTo);
-        let deliveryCount = 0;
         for (const [, resolution] of resolved) {
           if (!resolution || resolution.rule.action === "forward") continue;
           await store.store(parsed, resolution, verdict);
-          deliveryCount++;
         }
 
         results.push({ messageId: parsed.messageId, status: "accepted" });

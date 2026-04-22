@@ -170,7 +170,12 @@ function parseRawSummary(text: string): RawSummary {
   const topics = isStringArray(obj["topics"]) ? obj["topics"] : [];
   const keyLinkText =
     typeof obj["keyLinkText"] === "string" ? obj["keyLinkText"] : undefined;
-  return { headline, bullets, topics, keyLinkText };
+  return {
+    headline,
+    bullets,
+    topics,
+    ...(keyLinkText !== undefined ? { keyLinkText } : {}),
+  };
 }
 
 async function callHaiku(prompt: string): Promise<string> {
@@ -313,9 +318,10 @@ export async function summarizeNewsletter(
   const chunks = chunkText(baseText, MAX_CHARS_PER_CHUNK);
 
   let raw: RawSummary;
+  const firstChunk = chunks[0] ?? baseText;
   if (chunks.length === 1) {
     const response = await callHaiku(
-      buildChunkPrompt(subject, chunks[0]!, links, false),
+      buildChunkPrompt(subject, firstChunk, links, false),
     );
     raw = parseRawSummary(response);
   } else {
@@ -346,7 +352,7 @@ export async function summarizeNewsletter(
       );
     if (fuzzy) keyLink = fuzzy.url;
   }
-  if (!keyLink && links.length > 0) keyLink = links[0]!.url;
+  if (!keyLink && links[0]) keyLink = links[0].url;
 
   const trimmedBullets = raw.bullets
     .map((b) => b.trim())

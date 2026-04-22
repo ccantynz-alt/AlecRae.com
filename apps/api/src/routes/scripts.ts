@@ -420,6 +420,10 @@ scripts.post(
     }
 
     // Build email context from sample or use default
+    const normalizeAddress = (a: { name?: string | undefined; address: string }) => ({
+      address: a.address,
+      ...(a.name !== undefined ? { name: a.name } : {}),
+    });
     const emailContext: EmailContextData = body.sampleEmail
       ? createSampleEmailContext({
           id: body.sampleEmail.id ?? "test_email_001",

@@ -560,13 +560,19 @@ async function handleSend(c: Context) {
     fromName: input.from.name ?? null,
     toAddresses: input.to.map((r) => ({
       address: r.email,
-      name: r.name,
+      ...(r.name !== undefined ? { name: r.name } : {}),
     })),
     ccAddresses: input.cc
-      ? input.cc.map((r) => ({ address: r.email, name: r.name }))
+      ? input.cc.map((r) => ({
+          address: r.email,
+          ...(r.name !== undefined ? { name: r.name } : {}),
+        }))
       : null,
     bccAddresses: input.bcc
-      ? input.bcc.map((r) => ({ address: r.email, name: r.name }))
+      ? input.bcc.map((r) => ({
+          address: r.email,
+          ...(r.name !== undefined ? { name: r.name } : {}),
+        }))
       : null,
     replyToAddress: input.replyTo?.email ?? null,
     replyToName: input.replyTo?.name ?? null,
@@ -642,7 +648,7 @@ async function handleSend(c: Context) {
   );
 
   // ── 6b. Record send against warm-up counter (fire-and-forget) ────
-  warmupOrchestrator.recordSend(domainRecord.id).catch(() => {});
+  warmupOrchestrator.recordSend(domainRecord.id).catch(() => { /* fire-and-forget */ });
 
   // ── 6c. Increment quota counter in Redis (fire-and-forget) ──────
   incrementQuota(auth.accountId).catch(() => {});
@@ -658,7 +664,7 @@ async function handleSend(c: Context) {
     fromName: input.from.name ?? null,
     toAddresses: input.to.map((r) => ({
       address: r.email,
-      name: r.name,
+      ...(r.name !== undefined ? { name: r.name } : {}),
     })),
     snippet: (input.text ?? input.html ?? "").replace(/<[^>]+>/g, " ").slice(0, 200),
     hasAttachments: false,
@@ -675,7 +681,7 @@ async function handleSend(c: Context) {
       updatedAt: now,
     })
     .where(eq(accounts.id, auth.accountId))
-    .catch(() => {});
+    .catch(() => { /* fire-and-forget */ });
 
   // ── 9. Broadcast real-time event (fire-and-forget) ────────────────
   try {
@@ -738,7 +744,7 @@ messages.get(
 
     try {
       const result = await searchEmails(auth.accountId, q, {
-        mailboxId: mailbox,
+        ...(mailbox !== undefined ? { mailboxId: mailbox } : {}),
         limit,
         offset,
       });
@@ -909,9 +915,10 @@ messages.get(
 
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const lastPageItem = page[page.length - 1];
     const nextCursor =
-      hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+      hasMore && lastPageItem
+        ? lastPageItem.createdAt.toISOString()
         : null;
 
     const data = page.map((row) => ({

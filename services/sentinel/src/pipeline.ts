@@ -41,7 +41,6 @@ import type {
   ValidationDecision,
   ValidationItem,
   ValidationResult,
-  DEFAULT_CONFIG,
 } from './types.js';
 
 export class SentinelPipeline {
@@ -51,7 +50,7 @@ export class SentinelPipeline {
   private inspector: ParallelInspector;
 
   /** Items delivered via fast path, pending async verification */
-  private pendingVerification: Map<string, ValidationItem> = new Map();
+  private pendingVerification = new Map<string, ValidationItem>();
 
   /** Pipeline metrics */
   private metrics = {

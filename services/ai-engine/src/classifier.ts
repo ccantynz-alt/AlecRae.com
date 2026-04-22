@@ -7,7 +7,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createHash } from "node:crypto";
-import type { Result, AIEngineError } from "./types.js";
+import type { Result } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Public Types
@@ -27,7 +27,7 @@ export interface EmailClassificationInput {
   readonly subject: string;
   readonly textBody?: string;
   readonly htmlBody?: string;
-  readonly headers?: ReadonlyArray<{ key: string; value: string }>;
+  readonly headers?: readonly { key: string; value: string }[];
 }
 
 export interface EmailClassificationResult {
@@ -523,7 +523,7 @@ Respond with this exact JSON structure:
     classificationCache.set(contentHash, result);
 
     return { ok: true, value: result };
-  } catch (err) {
+  } catch {
     // Timeout, network error, or parse failure — fall back to rule-based
     const result = ruleBasedClassify(email);
     return { ok: true, value: result };
@@ -629,12 +629,12 @@ Respond with this exact JSON structure:
     }
 
     const parsed = JSON.parse(jsonMatch[0]) as {
-      indicators?: Array<{
+      indicators?: {
         type?: string;
         detected?: boolean;
         confidence?: number;
         details?: string;
-      }>;
+      }[];
       overallThreatScore?: number;
     };
 

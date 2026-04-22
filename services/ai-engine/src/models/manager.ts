@@ -14,14 +14,11 @@ import type {
   ABTestConfig,
   ABTestResult,
   Result,
-  AIEngineError,
 } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-const MODEL_VERSION = '1.0.0';
 
 /** Default minimum sample size for A/B test conclusions */
 const DEFAULT_MIN_SAMPLE_SIZE = 1000;
@@ -221,7 +218,11 @@ export class ModelManager {
     }
     history.push(modelId);
 
-    this.emit({ type: 'deployed', modelId, previousModelId });
+    this.emit({
+      type: 'deployed',
+      modelId,
+      ...(previousModelId !== undefined ? { previousModelId } : {}),
+    });
 
     return { ok: true, value: deployedMetadata };
   }
@@ -606,7 +607,8 @@ export class ModelManager {
   getABTest(testId: string): { config: ABTestConfig; result?: ABTestResult } | undefined {
     const config = this.abTests.get(testId);
     if (!config) return undefined;
-    return { config, result: this.abTestResults.get(testId) };
+    const result = this.abTestResults.get(testId);
+    return { config, ...(result !== undefined ? { result } : {}) };
   }
 
   // -----------------------------------------------------------------------
@@ -701,7 +703,7 @@ export class ModelManager {
       timestamp: Date.now(),
       latencyMs,
       success,
-      error,
+      ...(error !== undefined ? { error } : {}),
     });
 
     // Cap records to prevent unbounded memory growth

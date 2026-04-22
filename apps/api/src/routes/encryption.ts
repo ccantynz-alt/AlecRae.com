@@ -24,20 +24,8 @@ const GenerateKeysSchema = z.object({
   passphrase: z.string().min(8),
 });
 
-const EncryptSchema = z.object({
-  /** Recipient's email to look up their public key */
-  recipientEmail: z.string().email(),
-  /** Plaintext content to encrypt */
-  subject: z.string(),
-  body: z.string(),
-});
-
-const DecryptSchema = z.object({
-  /** Encrypted content (base64) */
-  encryptedContent: z.string(),
-  /** User's encrypted private key passphrase */
-  passphrase: z.string(),
-});
+// Note: Encrypt/Decrypt schemas not currently used — encryption is handled
+// entirely client-side with keys stored per-user on the server.
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 

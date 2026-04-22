@@ -9,7 +9,6 @@
 import type {
   EmailMessage,
   SentimentResult,
-  ConfidenceScore,
   Result,
   AIEngineError,
 } from '../types.js';
@@ -303,7 +302,7 @@ export class SentimentAnalyzer {
           averageSentiment: Math.round(averageSentiment * 100) / 100,
           toneProgression: tones,
           hasEscalation,
-          escalationPoint,
+          ...(escalationPoint !== undefined ? { escalationPoint } : {}),
         },
       };
     } catch (err) {
@@ -588,7 +587,7 @@ export class SentimentAnalyzer {
 
     return {
       hasEscalation: consecutiveDeclines >= 2,
-      escalationPoint,
+      ...(escalationPoint !== undefined ? { escalationPoint } : {}),
     };
   }
 

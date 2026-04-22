@@ -69,9 +69,9 @@ export interface SyncedMessage {
   /** Labels (Gmail labels, Outlook categories) */
   labels: string[];
   from: { name: string | null; email: string };
-  to: Array<{ name: string | null; email: string }>;
-  cc: Array<{ name: string | null; email: string }>;
-  bcc: Array<{ name: string | null; email: string }>;
+  to: { name: string | null; email: string }[];
+  cc: { name: string | null; email: string }[];
+  bcc: { name: string | null; email: string }[];
   replyTo: { name: string | null; email: string } | null;
   subject: string;
   snippet: string;
@@ -229,16 +229,27 @@ async function refreshGoogleToken(refreshToken: string): Promise<{ accessToken: 
 
 export async function syncGmailMessages(
   account: EmailAccount,
-  maxResults: number = 100,
+  maxResults = 100,
 ): Promise<SyncResult> {
   const start = performance.now();
-  let token = account.accessToken!;
   const result: SyncResult = { messagesAdded: 0, messagesUpdated: 0, messagesDeleted: 0, errors: [], syncDurationMs: 0 };
+
+  if (!account.accessToken) {
+    result.errors.push("Missing access token for Gmail sync");
+    result.syncDurationMs = performance.now() - start;
+    return result;
+  }
+  let token = account.accessToken;
 
   // Refresh token if expired
   if (account.tokenExpiresAt && account.tokenExpiresAt <= new Date()) {
+    if (!account.refreshToken) {
+      result.errors.push("Missing refresh token for expired Gmail access token");
+      result.syncDurationMs = performance.now() - start;
+      return result;
+    }
     try {
-      const refreshed = await refreshGoogleToken(account.refreshToken!);
+      const refreshed = await refreshGoogleToken(account.refreshToken);
       token = refreshed.accessToken;
     } catch (err) {
       result.errors.push(`Token refresh failed: ${err}`);
@@ -259,10 +270,10 @@ export async function syncGmailMessages(
 
       if (historyRes.ok) {
         const historyData = (await historyRes.json()) as {
-          history?: Array<{
-            messagesAdded?: Array<{ message: { id: string; threadId: string } }>;
-            messagesDeleted?: Array<{ message: { id: string } }>;
-          }>;
+          history?: {
+            messagesAdded?: { message: { id: string; threadId: string } }[];
+            messagesDeleted?: { message: { id: string } }[];
+          }[];
           historyId: string;
         };
 
@@ -317,7 +328,7 @@ async function fullGmailSync(
   }
 
   const listData = (await listRes.json()) as {
-    messages?: Array<{ id: string; threadId: string }>;
+    messages?: { id: string; threadId: string }[];
     resultSizeEstimate: number;
   };
 
@@ -372,14 +383,14 @@ interface GmailMessage {
   internalDate: string;
   sizeEstimate: number;
   payload: {
-    headers: Array<{ name: string; value: string }>;
+    headers: { name: string; value: string }[];
     body?: { data?: string; size: number };
-    parts?: Array<{
+    parts?: {
       mimeType: string;
       body?: { data?: string; size: number; attachmentId?: string };
       filename?: string;
-      headers?: Array<{ name: string; value: string }>;
-    }>;
+      headers?: { name: string; value: string }[];
+    }[];
     mimeType: string;
   };
 }
@@ -390,11 +401,15 @@ function parseGmailMessage(msg: GmailMessage, accountId: string): Partial<Synced
     return h?.value ?? null;
   };
 
-  const parseAddresses = (header: string | null): Array<{ name: string | null; email: string }> => {
+  const parseAddresses = (header: string | null): { name: string | null; email: string }[] => {
     if (!header) return [];
     return header.split(",").map((addr) => {
       const match = addr.trim().match(/^(.+?)\s*<(.+?)>$/);
-      if (match) return { name: match[1]!.trim().replace(/^"|"$/g, ""), email: match[2]! };
+      const matchName = match?.[1];
+      const matchEmail = match?.[2];
+      if (matchName && matchEmail) {
+        return { name: matchName.trim().replace(/^"|"$/g, ""), email: matchEmail };
+      }
       return { name: null, email: addr.trim() };
     });
   };
@@ -498,7 +513,7 @@ export async function exchangeMicrosoftCode(code: string): Promise<{
 
 export async function syncOutlookMessages(
   account: EmailAccount,
-  maxResults: number = 100,
+  maxResults = 100,
 ): Promise<SyncResult> {
   const start = performance.now();
   const result: SyncResult = { messagesAdded: 0, messagesUpdated: 0, messagesDeleted: 0, errors: [], syncDurationMs: 0 };
@@ -530,7 +545,10 @@ export async function syncOutlookMessages(
       console.log(`[sync] Stored Outlook message: ${parsed.subject?.slice(0, 50)}`);
     }
 
-    result.newSyncState = data["@odata.deltaLink"] ?? data["@odata.nextLink"];
+    const nextState = data["@odata.deltaLink"] ?? data["@odata.nextLink"];
+    if (nextState !== undefined) {
+      result.newSyncState = nextState;
+    }
   } catch (err) {
     result.errors.push(`Outlook sync error: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -546,8 +564,8 @@ interface OutlookMessage {
   bodyPreview: string;
   body?: { contentType: string; content: string };
   from?: { emailAddress: { name: string; address: string } };
-  toRecipients: Array<{ emailAddress: { name: string; address: string } }>;
-  ccRecipients: Array<{ emailAddress: { name: string; address: string } }>;
+  toRecipients: { emailAddress: { name: string; address: string } }[];
+  ccRecipients: { emailAddress: { name: string; address: string } }[];
   receivedDateTime: string;
   isRead: boolean;
   flag?: { flagStatus: string };

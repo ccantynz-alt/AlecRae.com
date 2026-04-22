@@ -11,6 +11,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { eq, and, lt } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
+import { issueTokenPair } from "../lib/jwt.js";
 import {
   getDatabase,
   users,
@@ -24,8 +25,9 @@ const passkeyRouter = new Hono();
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const RP_NAME = "AlecRae";
-const RP_ID = process.env["WEBAUTHN_RP_ID"] ?? "localhost";
-const RP_ORIGIN = process.env["WEBAUTHN_ORIGIN"] ?? "http://localhost:3000";
+const IS_PRODUCTION = process.env["NODE_ENV"] === "production";
+const RP_ID = process.env["WEBAUTHN_RP_ID"] ?? (IS_PRODUCTION ? (() => { throw new Error("[passkey] WEBAUTHN_RP_ID must be set in production (e.g. 'alecrae.com')"); })() : "localhost");
+const RP_ORIGIN = process.env["WEBAUTHN_ORIGIN"] ?? (IS_PRODUCTION ? (() => { throw new Error("[passkey] WEBAUTHN_ORIGIN must be set in production (e.g. 'https://mail.alecrae.com')"); })() : "http://localhost:3000");
 const CHALLENGE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -44,8 +46,8 @@ function generateChallenge(): string {
 
 function bufferToBase64Url(buffer: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < buffer.length; i++) {
-    binary += String.fromCharCode(buffer[i]!);
+  for (const byte of buffer) {
+    binary += String.fromCharCode(byte);
   }
   return btoa(binary)
     .replace(/\+/g, "-")
@@ -64,19 +66,8 @@ function base64UrlToBuffer(base64url: string): Uint8Array {
   return bytes;
 }
 
-function createToken(payload: Record<string, unknown>): string {
-  const secret = process.env["JWT_SECRET"] ?? "dev_secret";
-  const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const body = btoa(
-    JSON.stringify({
-      ...payload,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + 86400 * 7,
-    }),
-  );
-  const signature = btoa(`${header}.${body}.${secret}`);
-  return `${header}.${body}.${signature}`;
-}
+// Token issuance is delegated to the shared JWT library (proper RS256/HS256 signing
+// with refresh token rotation). See lib/jwt.ts.
 
 /**
  * Parse the authenticator data buffer from an attestation/assertion response.
@@ -89,7 +80,7 @@ function parseAuthenticatorData(authDataB64: string): {
 } {
   const authData = base64UrlToBuffer(authDataB64);
   const rpIdHash = authData.slice(0, 32);
-  const flags = authData[32]!;
+  const flags = authData[32] ?? 0;
   const signCountView = new DataView(authData.buffer, authData.byteOffset + 33, 4);
   const signCount = signCountView.getUint32(0, false);
   return { rpIdHash, flags, signCount };
@@ -516,17 +507,20 @@ passkeyRouter.post(
       lastUsedAt: new Date(),
     });
 
-    const token = createToken({
+    const tokenPair = await issueTokenPair({
       sub: accountId,
       userId,
       email,
       role: "owner",
+      tier: "free",
     });
 
     return c.json(
       {
         data: {
-          token,
+          token: tokenPair.accessToken,
+          refreshToken: tokenPair.refreshToken,
+          expiresIn: tokenPair.expiresIn,
           user: {
             id: userId,
             email,
@@ -557,7 +551,7 @@ passkeyRouter.post(
     const challengeId = generateId();
 
     // If email provided, look up allowed credentials for that user
-    let allowCredentials: Array<{ type: "public-key"; id: string; transports?: string[] }> = [];
+    let allowCredentials: { type: "public-key"; id: string; transports?: string[] }[] = [];
 
     if (input.email) {
       const [user] = await db
@@ -575,13 +569,16 @@ passkeyRouter.post(
           .from(passkeys)
           .where(eq(passkeys.userId, user.id));
 
-        allowCredentials = userPasskeys.map((pk) => ({
-          type: "public-key" as const,
-          id: pk.credentialId,
-          transports: pk.transports
+        allowCredentials = userPasskeys.map((pk) => {
+          const transports = pk.transports
             ? (JSON.parse(pk.transports) as string[])
-            : undefined,
-        }));
+            : undefined;
+          return {
+            type: "public-key" as const,
+            id: pk.credentialId,
+            ...(transports !== undefined ? { transports } : {}),
+          };
+        });
       }
     }
 
@@ -835,16 +832,31 @@ passkeyRouter.post(
       .set({ lastLoginAt: new Date() })
       .where(eq(users.id, user.id));
 
-    const token = createToken({
+    let tier = "free";
+    try {
+      const [account] = await db
+        .select({ planTier: accounts.planTier })
+        .from(accounts)
+        .where(eq(accounts.id, user.accountId))
+        .limit(1);
+      if (account) tier = account.planTier ?? "free";
+    } catch {
+      // fall through
+    }
+
+    const tokenPair = await issueTokenPair({
       sub: user.accountId,
       userId: user.id,
       email: user.email,
       role: user.role,
+      tier,
     });
 
     return c.json({
       data: {
-        token,
+        token: tokenPair.accessToken,
+        refreshToken: tokenPair.refreshToken,
+        expiresIn: tokenPair.expiresIn,
         user: {
           id: user.id,
           email: user.email,
