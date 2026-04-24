@@ -31,11 +31,25 @@ function generateId(): string {
 }
 
 async function hashPassword(password: string): Promise<string> {
+  return Bun.password.hash(password, { algorithm: "argon2id", memoryCost: 19456, timeCost: 2 });
+}
+
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  if (storedHash.startsWith("$argon2")) {
+    return Bun.password.verify(password, storedHash);
+  }
+  // Legacy SHA-256 hashes (pre-Argon2 migration) — verify constant-time and auto-upgrade handled by caller
   const data = new TextEncoder().encode(password);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash))
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  const legacyHex = Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+  if (legacyHex.length !== storedHash.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < legacyHex.length; i++) {
+    mismatch |= legacyHex.charCodeAt(i) ^ storedHash.charCodeAt(i);
+  }
+  return mismatch === 0;
 }
 
 // ─── Schemas ───────────────────────────────────────────────────────────────
@@ -76,8 +90,8 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
     );
   }
 
-  const passwordHash = await hashPassword(input.password);
-  if (user.passwordHash !== passwordHash) {
+  const valid = user.passwordHash ? await verifyPassword(input.password, user.passwordHash) : false;
+  if (!valid) {
     return c.json(
       {
         error: {
@@ -90,11 +104,12 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
     );
   }
 
-  // Update last login
-  await db
-    .update(users)
-    .set({ lastLoginAt: new Date() })
-    .where(eq(users.id, user.id));
+  // Transparent upgrade: legacy SHA-256 hashes migrate to Argon2id on successful login
+  const updates: Record<string, unknown> = { lastLoginAt: new Date() };
+  if (user.passwordHash && !user.passwordHash.startsWith("$argon2")) {
+    updates.passwordHash = await hashPassword(input.password);
+  }
+  await db.update(users).set(updates).where(eq(users.id, user.id));
 
   // Look up account tier
   let tier = "free";

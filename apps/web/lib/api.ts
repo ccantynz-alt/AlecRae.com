@@ -632,6 +632,12 @@ export const accountApi = {
   get() {
     return apiFetch<{ data: Account }>("/v1/account");
   },
+  update(input: { name?: string; accountName?: string; billingEmail?: string }) {
+    return apiFetch<{ data: { success: boolean } }>("/v1/account", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    });
+  },
 };
 
 // ─── Suppressions ──────────────────────────────────────────────────────────

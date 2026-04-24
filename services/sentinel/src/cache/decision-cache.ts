@@ -27,8 +27,6 @@ interface CacheConfig {
 export class DecisionCache {
   private cache = new Map<string, CacheEntry>();
   private accessOrder = new Map<string, number>();
-  /** Monotonic access counter — guarantees strict LRU ordering even within a single millisecond. */
-  private accessCounter = 0;
   private stats = {
     hits: 0,
     misses: 0,

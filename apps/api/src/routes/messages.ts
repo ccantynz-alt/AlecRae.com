@@ -23,18 +23,23 @@ import type {
   PaginationParams,
   PaginatedResponse,
 } from "../types.js";
-import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists } from "@alecrae/db";
+import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists, templates } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
 import { checkQuota, incrementQuota } from "../lib/quota.js";
 import { indexEmail, searchEmails } from "@alecrae/shared";
 import { usageEnforcement } from "../middleware/usage.js";
 import { idempotency } from "../middleware/idempotency.js";
-import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED } from "@alecrae/reputation";
+import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED, ComplianceEngine } from "@alecrae/reputation";
+import type { EmailMetadata } from "@alecrae/reputation";
 import {
   validateCustomHeaders,
   HEADER_INJECTION_REJECTED,
 } from "@alecrae/mta/lib";
 import { scanAttachment, isSafe } from "@alecrae/security";
+import {
+  renderTemplate,
+  validateVariables,
+} from "../lib/template-renderer.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -112,7 +117,7 @@ function buildRawMessage(
   }
 
   // Subject
-  lines.push(`Subject: ${input.subject}`);
+  lines.push(`Subject: ${input.subject ?? ""}`);
 
   // Message-ID
   lines.push(`Message-ID: ${messageId}`);
@@ -222,6 +227,80 @@ async function handleSend(c: Context) {
   const auth = c.get("auth");
   const db = getDatabase();
 
+  // ── 0a. message_id → Idempotency-Key promotion ───────────────────
+  // If the caller passes message_id in the body (Crontech contract),
+  // promote it to the standard Idempotency-Key header so the existing
+  // Redis-backed idempotency middleware catches replays automatically.
+  if (input.message_id && !c.req.header("Idempotency-Key")) {
+    c.req.raw.headers.set("Idempotency-Key", input.message_id);
+  }
+
+  // ── 0b. Template resolution ───────────────────────────────────────
+  // If template_id is provided, look it up by name (e.g. "crontech.verify-email"),
+  // render with variables, and merge subject/html/text into the input.
+  if (input.template_id) {
+    const [tmpl] = await db
+      .select()
+      .from(templates)
+      .where(
+        and(
+          eq(templates.name, input.template_id),
+          eq(templates.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
+
+    if (!tmpl) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Template "${input.template_id}" not found for this account.`,
+            code: "template_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    const vars = (input.variables ?? {}) as Record<string, unknown>;
+    const allContent = [tmpl.subject, tmpl.htmlBody ?? "", tmpl.textBody ?? ""].join(" ");
+    const missing = validateVariables(allContent, vars);
+    if (missing.length > 0) {
+      return c.json(
+        {
+          error: {
+            type: "validation_error",
+            message: `Missing template variables: ${missing.join(", ")}`,
+            code: "missing_variables",
+            missing,
+          },
+        },
+        400,
+      );
+    }
+
+    input.subject = input.subject ?? renderTemplate(tmpl.subject, vars);
+    input.html = input.html ?? (tmpl.htmlBody ? renderTemplate(tmpl.htmlBody, vars) : undefined);
+    input.text = input.text ?? (tmpl.textBody ? renderTemplate(tmpl.textBody, vars) : undefined);
+  }
+
+  // After template resolution, subject must exist
+  if (!input.subject) {
+    return c.json(
+      {
+        error: {
+          type: "validation_error",
+          message: "Subject is required (either directly or from template).",
+          code: "missing_subject",
+        },
+      },
+      400,
+    );
+  }
+
+  const resolvedSubject: string = input.subject;
+
   const id = generateId();
   const senderDomain = domainOf(input.from.email);
   const messageId = generateMessageId(senderDomain);
@@ -321,6 +400,53 @@ async function handleSend(c: Context) {
         422,
       );
     }
+  }
+
+  // ── 1b2. Compliance check (CAN-SPAM / GDPR / CASL) ────────────────
+  // Transactional emails (password reset, verification) are exempt from
+  // marketing-only rules but must still pass basic compliance. The engine
+  // is configured to exempt transactional by default.
+  const complianceEngine = new ComplianceEngine({ exemptTransactional: true });
+  const isTransactional = (input.tags ?? []).includes("transactional") ||
+    (input.template_id ?? "").includes("verify") ||
+    (input.template_id ?? "").includes("password-reset") ||
+    (input.template_id ?? "").includes("magic-link");
+  const complianceMeta: EmailMetadata = {
+    from: input.from.email,
+    to: allRecipientAddresses,
+    subject: resolvedSubject,
+    headers: input.headers ?? {},
+    isTransactional,
+    senderDomain: domainOf(input.from.email),
+  };
+  const complianceResult = complianceEngine.checkAll(complianceMeta);
+  if (!complianceResult.ok) {
+    return c.json(
+      {
+        error: {
+          type: "compliance_error",
+          message: complianceResult.error instanceof Error
+            ? complianceResult.error.message
+            : "Compliance check failed",
+          code: "compliance_violation",
+        },
+      },
+      422,
+    );
+  }
+  const violations = complianceResult.value.flatMap((r) => r.violations ?? []);
+  if (violations.length > 0) {
+    return c.json(
+      {
+        error: {
+          type: "compliance_error",
+          message: `Email blocked: ${violations.map((v) => v.message ?? v.rule).join("; ")}`,
+          code: "compliance_violation",
+          violations,
+        },
+      },
+      422,
+    );
   }
 
   // ── 1c. Validate customer-supplied custom headers ─────────────────
@@ -450,7 +576,7 @@ async function handleSend(c: Context) {
       : null,
     replyToAddress: input.replyTo?.email ?? null,
     replyToName: input.replyTo?.name ?? null,
-    subject: input.subject,
+    subject: resolvedSubject,
     textBody: input.text ?? null,
     htmlBody: input.html ?? null,
     customHeaders:
@@ -534,7 +660,7 @@ async function handleSend(c: Context) {
     id,
     accountId: auth.accountId,
     mailboxId: "sent",
-    subject: input.subject,
+    subject: resolvedSubject,
     textBody: input.text ?? null,
     fromAddress: input.from.email,
     fromName: input.from.name ?? null,
@@ -559,7 +685,25 @@ async function handleSend(c: Context) {
     .where(eq(accounts.id, auth.accountId))
     .catch(() => { /* fire-and-forget */ });
 
-  // ── 9. Return response ────────────────────────────────────────────
+  // ── 9. Broadcast real-time event (fire-and-forget) ────────────────
+  try {
+    const { getConnectionManager } = await import("../lib/realtime.js");
+    getConnectionManager().broadcast(auth.accountId, {
+      type: "email.sent",
+      payload: {
+        id,
+        messageId,
+        subject: resolvedSubject,
+        to: allRecipients,
+        status: "queued",
+      },
+      timestamp: now.toISOString(),
+    });
+  } catch {
+    // Non-critical — don't fail the send if broadcast errors
+  }
+
+  // ── 10. Return response ───────────────────────────────────────────
   return c.json({ id, messageId, status: "queued" as const }, 202);
 }
 
@@ -805,4 +949,8 @@ messages.get(
   },
 );
 
-export { messages };
+// POST /v1/send — Crontech-compatible unified send (mounted at /v1/send in server.ts)
+const unifiedSend = new Hono();
+unifiedSend.post("/", ...sendMiddleware, handleSend);
+
+export { messages, unifiedSend };

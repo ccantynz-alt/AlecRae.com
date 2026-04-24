@@ -116,7 +116,7 @@ const TIER_C_ITEMS: RoadmapItem[] = [
   { id: "C6-bounty", title: "Bug bounty program", description: "Responsible disclosure via security.txt and /security. HackerOne program to follow.", status: "in_progress", tier: "C" },
   { id: "C7-roadmap", title: "Public roadmap", description: "This page. Live view of what&apos;s shipped, in progress, and planned.", status: "shipped", tier: "C", shippedAt: "2026-04" },
   { id: "C8-changelog", title: "Changelog page", description: "Public changelog at changelog.alecrae.com with release notes and breaking changes.", status: "shipped", tier: "C", shippedAt: "2026-04" },
-  { id: "C9-migration-guides", title: "Migration guides", description: "Step-by-step guides: &quot;From Gmail to AlecRae in 5 minutes.&quot;", status: "shipped", tier: "C", shippedAt: "2026-04" },
+  { id: "C9-migration-guides", title: "Migration guides", description: "Step-by-step guides: &quot;From Gmail to alecrae.com in 5 minutes.&quot;", status: "shipped", tier: "C", shippedAt: "2026-04" },
   { id: "C10-spellcheck", title: "Multi-language spell check", description: "Native browser spell-check integration with user-editable custom dictionary.", status: "shipped", tier: "C", shippedAt: "2026-04" },
 ];
 

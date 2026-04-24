@@ -241,7 +241,7 @@ export default function RoadmapPage(): React.JSX.Element {
               </Box>
               <Box
                 as="a"
-                href="https://github.com/ccantynz-alt/AlecRae.com/issues/new"
+                href="https://github.com/ccantynz-alt/emailed/issues/new"
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border text-content font-medium hover:bg-surface-hover transition-colors"
                 rel="noopener noreferrer"
               >

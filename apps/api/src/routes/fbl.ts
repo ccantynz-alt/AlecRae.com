@@ -21,6 +21,7 @@ import {
   suppressionLists,
   domains,
 } from "@alecrae/db";
+import { getWarmupOrchestrator } from "@alecrae/reputation";
 
 // ---------------------------------------------------------------------------
 // ARF Parser
@@ -309,12 +310,15 @@ fbl.post("/report", async (c) => {
   let throttled = false;
 
   if (!complaintRate.isHealthy) {
-    // Complaint rate exceeds 0.1% — log a warning. The warmup orchestrator
-    // reads this signal to auto-throttle. We record the signal in metadata.
     console.warn(
-      `[fbl] Domain ${report.reportedDomain} complaint rate ${(complaintRate.rate * 100).toFixed(3)}% exceeds threshold. Auto-throttling.`,
+      `[fbl] Domain ${report.reportedDomain} complaint rate ${(complaintRate.rate * 100).toFixed(3)}% exceeds threshold. Auto-pausing warmup.`,
     );
     throttled = true;
+
+    const orchestrator = getWarmupOrchestrator();
+    orchestrator.pauseWarmup(domainRecord.id).catch((err: unknown) => {
+      console.error("[fbl] Failed to pause warmup:", err instanceof Error ? err.message : err);
+    });
   }
 
   return c.json(

@@ -6,7 +6,7 @@ import { Box, Text } from "@alecrae/ui";
 const legalPages = [
   { href: "/terms", label: "Terms of Service" },
   { href: "/privacy", label: "Privacy Policy" },
-  { href: "/aup", label: "Acceptable Use Policy" },
+  { href: "/acceptable-use", label: "Acceptable Use Policy" },
   { href: "/dpa", label: "Data Processing Agreement" },
   { href: "/sla", label: "Service Level Agreement" },
   { href: "/dmca", label: "DMCA / Copyright Policy" },

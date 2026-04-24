@@ -1,15 +1,15 @@
-# alecrae.com Security Policy (RFC 9116)
+# 48co.ai Security Policy (RFC 9116)
 # ────────────────────────────────────
 # If you discover a security issue, please report it via the channels below.
 # We commit to responding within 72 hours and will credit researchers who
 # follow this policy in our public hall of fame.
 
-Contact: mailto:security@alecrae.com
-Contact: https://alecrae.com/security
+Contact: mailto:security@48co.ai
+Contact: https://48co.ai/security
 Expires: 2027-04-10T00:00:00.000Z
-Encryption: https://alecrae.com/.well-known/pgp-key.txt
+Encryption: https://48co.ai/.well-known/pgp-key.txt
 Preferred-Languages: en
-Canonical: https://alecrae.com/.well-known/security.txt
-Policy: https://alecrae.com/security
-Hiring: https://alecrae.com/careers
-Acknowledgments: https://alecrae.com/security#hall-of-fame
+Canonical: https://48co.ai/.well-known/security.txt
+Policy: https://48co.ai/security
+Hiring: https://48co.ai/careers
+Acknowledgments: https://48co.ai/security#hall-of-fame

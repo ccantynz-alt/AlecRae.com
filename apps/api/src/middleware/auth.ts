@@ -23,6 +23,7 @@ export interface AuthContext {
   keyId: string;
   tier: PlanTier;
   scopes: string[];
+  userId?: string;
 }
 
 declare module "hono" {
@@ -209,7 +210,12 @@ async function validateBearerToken(
       accountId: payload.sub as string,
       keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
       tier: normaliseTier(payload.tier as string),
-      scopes: (payload.scope as string)?.split(" ") ?? [],
+      scopes: (payload.scope as string)?.split(" ") ?? [
+        "messages:send",
+        "messages:read",
+        "account:manage",
+      ],
+      userId: payload.userId as string | undefined,
     };
   } catch {
     // Fallback: try raw decode for legacy tokens (unsigned / HS256 dev tokens)
@@ -229,7 +235,12 @@ async function validateBearerToken(
         accountId: payload.sub as string,
         keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
         tier: normaliseTier(payload.tier as string),
-        scopes: (payload.scope as string)?.split(" ") ?? [],
+        scopes: (payload.scope as string)?.split(" ") ?? [
+          "messages:send",
+          "messages:read",
+          "account:manage",
+        ],
+        userId: payload.userId as string | undefined,
       };
     } catch {
       return null;

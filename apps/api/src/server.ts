@@ -27,7 +27,7 @@ import {
   searchRateLimit,
   closeRateLimitRedis,
 } from "./middleware/rate-limit.js";
-import { messages } from "./routes/messages.js";
+import { messages, unifiedSend } from "./routes/messages.js";
 import { domains } from "./routes/domains.js";
 import { webhooks } from "./routes/webhooks.js";
 import { analytics } from "./routes/analytics.js";
@@ -78,6 +78,50 @@ import { voiceMessageRouter } from "./routes/voice-message.js";
 import { scripts } from "./routes/scripts.js";
 import { emailQuery } from "./routes/email-query.js";
 import { fbl } from "./routes/fbl.js";
+import { realtime, bunWebSocket } from "./routes/realtime.js";
+import { getConnectionManager } from "./lib/realtime.js";
+import { signaturesRouter } from "./routes/signatures.js";
+import { contactGroupsRouter } from "./routes/contact-groups.js";
+import { threadMutesRouter } from "./routes/thread-mutes.js";
+import { bulkActionsRouter } from "./routes/bulk-actions.js";
+import { abTestsRouter } from "./routes/ab-tests.js";
+import { mailMergeRouter } from "./routes/mail-merge.js";
+import { contactEnrichmentRouter } from "./routes/contact-enrichment.js";
+import { autoResponderRouter } from "./routes/auto-responder.js";
+import { pushNotificationsRouter } from "./routes/push-notifications.js";
+import { smartFoldersRouter } from "./routes/smart-folders.js";
+import { labelsRouter } from "./routes/labels.js";
+import { notesRouter, emailNotesRouter, threadNotesRouter } from "./routes/notes.js";
+import { filesRouter, emailAttachmentsRouter } from "./routes/files.js";
+import { chatRouter } from "./routes/chat.js";
+// NOTE: warmup route is built but mounting it pulls in @alecrae/reputation + services/dns,
+// which have pre-existing exactOptionalPropertyTypes errors blocking the typecheck gate.
+// Fix those errors first, then re-enable this import and the route mount below.
+// import { warmup } from "./routes/warmup.js";
+import { linkPreviewRouter } from "./routes/link-previews.js";
+import { integrationsRouter } from "./routes/integrations.js";
+import { schedulingAnalyticsRouter } from "./routes/scheduling-analytics.js";
+import { onboardingRouter } from "./routes/onboarding.js";
+import { videoMeetingsRouter } from "./routes/video-meetings.js";
+import { aiWritingRouter } from "./routes/ai-writing.js";
+import { notificationsRouter, focusRouter } from "./routes/notification-intelligence.js";
+import { hygieneRouter } from "./routes/email-hygiene.js";
+import { aiIntelligenceRouter } from "./routes/ai-intelligence.js";
+import { contactsExtendedRouter } from "./routes/contacts-extended.js";
+import { documentsRouter } from "./routes/documents.js";
+import { calendarEventsRouter } from "./routes/calendar-events.js";
+import { analyticsDashboardRouter } from "./routes/analytics-dashboard.js";
+import { delegationRouter, sharedDraftsRouter } from "./routes/delegation.js";
+import { workflowsRouter } from "./routes/workflows.js";
+import { aiCategorizationRouter } from "./routes/ai-categorization.js";
+import { searchIntelligenceRouter } from "./routes/search-intelligence.js";
+import { securityIntelligenceRouter } from "./routes/security-intelligence.js";
+import { sentimentTimelineRouter } from "./routes/sentiment-timeline.js";
+import { attachmentIntelligenceRouter } from "./routes/attachment-intelligence.js";
+import { schedulingIntelligenceRouter } from "./routes/scheduling-intelligence.js";
+import { contextIntelligenceRouter } from "./routes/context-intelligence.js";
+import { productivityAnalyticsRouter } from "./routes/productivity-analytics.js";
+import { knowledgeGraphRouter } from "./routes/knowledge-graph.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue } from "./lib/queue.js";
@@ -111,11 +155,24 @@ app.use("*", secureHeaders());
 // Global IP-based rate limit (DDoS baseline: 1000 req/min per IP)
 app.use("*", globalIpRateLimit);
 
-// CORS
+// CORS — explicit allowlist (never reflect arbitrary origins with credentials)
+const DEFAULT_CORS_ORIGINS = [
+  "https://alecrae.com",
+  "https://mail.alecrae.com",
+  "https://admin.alecrae.com",
+  "https://docs.alecrae.com",
+  "https://status.alecrae.com",
+  "https://changelog.alecrae.com",
+];
+const corsOrigins = (process.env["CORS_ORIGINS"]?.split(",").map((s) => s.trim()).filter(Boolean)) ??
+  (process.env["NODE_ENV"] === "production"
+    ? DEFAULT_CORS_ORIGINS
+    : [...DEFAULT_CORS_ORIGINS, "http://localhost:3000", "http://localhost:3001", "http://localhost:3002"]);
+
 app.use(
   "*",
   cors({
-    origin: (origin) => origin,
+    origin: (origin) => (corsOrigins.includes(origin) ? origin : null),
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: [
       "Authorization",
@@ -168,6 +225,9 @@ app.route("/v1/sso", sso);
 // Tracking endpoints (no auth — embedded in emails)
 app.route("/t", tracking);
 
+// Real-time WebSocket endpoint (auth via query param token — no middleware)
+app.route("/v1/realtime", realtime);
+
 // ─── Authenticated routes ──────────────────────────────────────────────────
 
 // ─── Per-category rate limits on authenticated routes ─────────────────────
@@ -179,6 +239,7 @@ app.use("/v1/messages/search", authMiddleware, searchRateLimit);
 app.use("/v1/messages/*", authMiddleware, readRateLimit);
 // Domains: write-level limits (200 req/min)
 app.use("/v1/domains/*", authMiddleware, writeRateLimit);
+// app.use("/v1/domains/:id/warmup/*", authMiddleware, writeRateLimit); // see warmup import note
 // Webhooks: write-level limits (200 req/min)
 app.use("/v1/webhooks/*", authMiddleware, writeRateLimit);
 // Analytics: read-level limits (600 req/min)
@@ -238,7 +299,8 @@ app.use("/v1/connect/accounts", authMiddleware, readRateLimit);
 app.use("/v1/connect/accounts/*", authMiddleware, writeRateLimit);
 // Snooze: write-level (200 req/min)
 app.use("/v1/snooze/*", authMiddleware, writeRateLimit);
-// Schedule/Undo send: write-level (200 req/min)
+// Unified send + Schedule/Undo send: send-level (100 req/min for POST /v1/send), write-level for sub-routes
+app.use("/v1/send", authMiddleware, sendRateLimit);
 app.use("/v1/send/*", authMiddleware, writeRateLimit);
 // Import: write-level (200 req/min)
 app.use("/v1/import/*", authMiddleware, writeRateLimit);
@@ -249,6 +311,13 @@ app.use("/v1/semantic/*", authMiddleware, searchRateLimit);
 // Contacts: read-level (600 req/min)
 app.use("/v1/contacts/*", authMiddleware, readRateLimit);
 app.use("/v1/contacts", authMiddleware, readRateLimit);
+// Contacts Extended (CRM-lite): read + write level
+app.use("/v1/contacts-extended/interactions/*", authMiddleware, readRateLimit);
+app.use("/v1/contacts-extended/interactions", authMiddleware, writeRateLimit);
+app.use("/v1/contacts-extended/reminders/*/complete", authMiddleware, writeRateLimit);
+app.use("/v1/contacts-extended/reminders/*", authMiddleware, writeRateLimit);
+app.use("/v1/contacts-extended/reminders", authMiddleware, writeRateLimit);
+app.use("/v1/contacts-extended/insights/*", authMiddleware, readRateLimit);
 // Calendar: read-level (600 req/min)
 app.use("/v1/calendar/*", authMiddleware, readRateLimit);
 // Encryption: write-level (200 req/min)
@@ -315,10 +384,187 @@ app.use("/v1/voice-messages", authMiddleware, writeRateLimit);
 // Programmable Email Scripts (B1): write-level (200 req/min)
 app.use("/v1/scripts/*", authMiddleware, writeRateLimit);
 app.use("/v1/scripts", authMiddleware, writeRateLimit);
+// Thread Mutes: write-level for mute/unmute, read-level for listing
+app.use("/v1/threads/muted", authMiddleware, readRateLimit);
+app.use("/v1/threads/*/mute", authMiddleware, writeRateLimit);
+// Bulk Actions: write-level (200 req/min)
+app.use("/v1/bulk/*", authMiddleware, writeRateLimit);
+app.use("/v1/bulk", authMiddleware, writeRateLimit);
+// A/B Tests: write-level (200 req/min)
+app.use("/v1/ab-tests/*", authMiddleware, writeRateLimit);
+app.use("/v1/ab-tests", authMiddleware, writeRateLimit);
+// Mail Merge: write-level (200 req/min)
+app.use("/v1/mail-merge/*", authMiddleware, writeRateLimit);
+app.use("/v1/mail-merge", authMiddleware, writeRateLimit);
 
+// Notes: write-level for create/update/delete/pin
+app.use("/v1/notes/*", authMiddleware, writeRateLimit);
+app.use("/v1/notes", authMiddleware, writeRateLimit);
+// Per-email notes + per-thread notes: read-level
+app.use("/v1/emails/*/notes", authMiddleware, readRateLimit);
+app.use("/v1/threads/*/notes", authMiddleware, readRateLimit);
+// Files: write-level for upload/delete, read-level for listing
+app.use("/v1/files/*", authMiddleware, writeRateLimit);
+app.use("/v1/files", authMiddleware, readRateLimit);
+// Per-email attachments: read-level
+app.use("/v1/emails/*/attachments", authMiddleware, readRateLimit);
+// Chat: write-level for send/create/edit/delete
+app.use("/v1/chat/*", authMiddleware, writeRateLimit);
+app.use("/v1/chat", authMiddleware, writeRateLimit);
+
+// Smart Folders / Saved Searches: write-level for CRUD, read-level for email queries
+app.use("/v1/smart-folders/*/emails", authMiddleware, readRateLimit);
+app.use("/v1/smart-folders/*", authMiddleware, writeRateLimit);
+app.use("/v1/smart-folders", authMiddleware, writeRateLimit);
+// Labels / Tags: write-level for CRUD + apply/remove, read-level for listing
+app.use("/v1/labels/*/apply", authMiddleware, writeRateLimit);
+app.use("/v1/labels/*", authMiddleware, writeRateLimit);
+app.use("/v1/labels", authMiddleware, writeRateLimit);
+// Link Previews: read-level for cached lookups, write-level for fetch
+app.use("/v1/link-preview/*", authMiddleware, readRateLimit);
+app.use("/v1/link-preview", authMiddleware, readRateLimit);
+// Integrations (Zapier/Make/n8n): write-level for CRUD + test
+app.use("/v1/integrations/*", authMiddleware, writeRateLimit);
+app.use("/v1/integrations", authMiddleware, writeRateLimit);
+// Scheduling Analytics: read-level for analytics queries
+app.use("/v1/analytics/scheduling/*", authMiddleware, readRateLimit);
+app.use("/v1/analytics/scheduling", authMiddleware, readRateLimit);
+// Onboarding: write-level (200 req/min) — guided setup wizard
+app.use("/v1/onboarding/*", authMiddleware, writeRateLimit);
+app.use("/v1/onboarding", authMiddleware, writeRateLimit);
+// Video Meetings (AlecRae Meet): write-level for room CRUD + schedule, read-level for listing
+app.use("/v1/meetings/rooms/*/recordings", authMiddleware, readRateLimit);
+app.use("/v1/meetings/rooms/*/schedule", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/rooms/*", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/rooms", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/recordings/*/summarize", authMiddleware, writeRateLimit);
+app.use("/v1/meetings/recordings/*", authMiddleware, readRateLimit);
+app.use("/v1/meetings/instant", authMiddleware, writeRateLimit);
+// AI Writing Intelligence: write-level for compose/rewrite/expand, read-level for stats/profiles
+app.use("/v1/ai/write/profiles/*", authMiddleware, writeRateLimit);
+app.use("/v1/ai/write/profiles", authMiddleware, readRateLimit);
+app.use("/v1/ai/write/stats", authMiddleware, readRateLimit);
+app.use("/v1/ai/write/*", authMiddleware, writeRateLimit);
+app.use("/v1/ai/write", authMiddleware, writeRateLimit);
+// Notification Intelligence: write-level for rule CRUD + evaluate, read-level for batches/digest
+app.use("/v1/notifications/rules/*", authMiddleware, writeRateLimit);
+app.use("/v1/notifications/rules", authMiddleware, writeRateLimit);
+app.use("/v1/notifications/evaluate", authMiddleware, writeRateLimit);
+app.use("/v1/notifications/batches/*/deliver", authMiddleware, writeRateLimit);
+app.use("/v1/notifications/batches/*", authMiddleware, readRateLimit);
+app.use("/v1/notifications/batches", authMiddleware, readRateLimit);
+app.use("/v1/notifications/digest", authMiddleware, readRateLimit);
+// Focus Sessions: write-level for start/end, read-level for current/deferred
+app.use("/v1/focus/start", authMiddleware, writeRateLimit);
+app.use("/v1/focus/end", authMiddleware, writeRateLimit);
+app.use("/v1/focus/current", authMiddleware, readRateLimit);
+app.use("/v1/focus/deferred", authMiddleware, readRateLimit);
+// Email Hygiene: write-level for goals/cleanup/audit, read-level for analytics
+app.use("/v1/hygiene/subscriptions/audit", authMiddleware, readRateLimit);
+app.use("/v1/hygiene/subscriptions/*/wanted", authMiddleware, writeRateLimit);
+app.use("/v1/hygiene/subscriptions/*", authMiddleware, readRateLimit);
+app.use("/v1/hygiene/subscriptions", authMiddleware, readRateLimit);
+app.use("/v1/hygiene/inbox-cleanup", authMiddleware, writeRateLimit);
+app.use("/v1/hygiene/goals", authMiddleware, writeRateLimit);
+app.use("/v1/hygiene/*", authMiddleware, readRateLimit);
+// Documents (AlecRae Docs): write-level for CRUD, read-level for listing
+app.use("/v1/documents/folders/*", authMiddleware, writeRateLimit);
+app.use("/v1/documents/folders", authMiddleware, writeRateLimit);
+app.use("/v1/documents/*/ai-assist", authMiddleware, writeRateLimit);
+app.use("/v1/documents/*/export", authMiddleware, writeRateLimit);
+app.use("/v1/documents/*/restore/*", authMiddleware, writeRateLimit);
+app.use("/v1/documents/*/versions", authMiddleware, readRateLimit);
+app.use("/v1/documents/*", authMiddleware, writeRateLimit);
+app.use("/v1/documents", authMiddleware, writeRateLimit);
+// Calendar Events: write-level for CRUD + scheduling, read-level for queries
+app.use("/v1/calendar-events/find-time", authMiddleware, writeRateLimit);
+app.use("/v1/calendar-events/schedule-from-text", authMiddleware, writeRateLimit);
+app.use("/v1/calendar-events/today", authMiddleware, readRateLimit);
+app.use("/v1/calendar-events/availability", authMiddleware, writeRateLimit);
+app.use("/v1/calendar-events/*/prep", authMiddleware, readRateLimit);
+app.use("/v1/calendar-events/*", authMiddleware, writeRateLimit);
+app.use("/v1/calendar-events", authMiddleware, writeRateLimit);
+// Analytics Dashboard: read-level for snapshots/goals, write-level for create/update
+app.use("/v1/analytics/dashboard/goals/*", authMiddleware, writeRateLimit);
+app.use("/v1/analytics/dashboard/goals", authMiddleware, writeRateLimit);
+app.use("/v1/analytics/dashboard/*", authMiddleware, readRateLimit);
+app.use("/v1/analytics/dashboard", authMiddleware, readRateLimit);
+// Delegation: write-level for create/update, read-level for listing
+app.use("/v1/delegation/*", authMiddleware, writeRateLimit);
+app.use("/v1/delegation", authMiddleware, writeRateLimit);
+// Shared Drafts: write-level for CRUD
+app.use("/v1/shared-drafts/*", authMiddleware, writeRateLimit);
+app.use("/v1/shared-drafts", authMiddleware, writeRateLimit);
+// Workflows: write-level for CRUD + trigger, read-level for runs
+app.use("/v1/workflows/*/runs", authMiddleware, readRateLimit);
+app.use("/v1/workflows/templates", authMiddleware, readRateLimit);
+app.use("/v1/workflows/*", authMiddleware, writeRateLimit);
+app.use("/v1/workflows", authMiddleware, writeRateLimit);
+// AI Categorization: write-level for categorize/train, read-level for listing
+app.use("/v1/ai/categorize/feedback", authMiddleware, writeRateLimit);
+app.use("/v1/ai/categorize/batch", authMiddleware, writeRateLimit);
+app.use("/v1/ai/categorize/smart-labels/*", authMiddleware, writeRateLimit);
+app.use("/v1/ai/categorize/smart-labels", authMiddleware, writeRateLimit);
+app.use("/v1/ai/categorize/*", authMiddleware, readRateLimit);
+app.use("/v1/ai/categorize", authMiddleware, writeRateLimit);
+// Search Intelligence: search-level for queries, write-level for bookmarks
+app.use("/v1/search-intelligence/bookmarks/*", authMiddleware, writeRateLimit);
+app.use("/v1/search-intelligence/bookmarks", authMiddleware, writeRateLimit);
+app.use("/v1/search-intelligence/*", authMiddleware, searchRateLimit);
+app.use("/v1/search-intelligence", authMiddleware, searchRateLimit);
+// Security Intelligence: write-level for policies/actions, read-level for dashboard
+app.use("/v1/security-intelligence/policies/*", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/policies", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/threats/*/action", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/scan/*", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/report-phishing", authMiddleware, writeRateLimit);
+app.use("/v1/security-intelligence/*", authMiddleware, readRateLimit);
+app.use("/v1/security-intelligence", authMiddleware, readRateLimit);
+// Sentiment Timeline: write-level for analyze, read-level for queries
+app.use("/v1/sentiment/analyze", authMiddleware, writeRateLimit);
+app.use("/v1/sentiment/batch-analyze", authMiddleware, writeRateLimit);
+app.use("/v1/sentiment/*", authMiddleware, readRateLimit);
+app.use("/v1/sentiment", authMiddleware, readRateLimit);
+// Attachment Intelligence: write-level for analyze/scan, read-level for queries
+app.use("/v1/attachments/intelligence/analyze", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/scan", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/batch-scan", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/extract-text", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/organize/*/action", authMiddleware, writeRateLimit);
+app.use("/v1/attachments/intelligence/*", authMiddleware, readRateLimit);
+app.use("/v1/attachments/intelligence", authMiddleware, readRateLimit);
+// Scheduling Intelligence: write-level for propose/detect, read-level for queries
+app.use("/v1/scheduling/detect", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/propose", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/auto-respond", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/patterns/learn", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/patterns", authMiddleware, writeRateLimit);
+app.use("/v1/scheduling/*", authMiddleware, readRateLimit);
+app.use("/v1/scheduling", authMiddleware, readRateLimit);
+// Context Intelligence: write-level for extract, read-level for queries
+app.use("/v1/context/extract", authMiddleware, writeRateLimit);
+app.use("/v1/context/batch-extract", authMiddleware, writeRateLimit);
+app.use("/v1/context/action-items/*", authMiddleware, writeRateLimit);
+app.use("/v1/context/deadlines/*/remind", authMiddleware, writeRateLimit);
+app.use("/v1/context/promises/*", authMiddleware, writeRateLimit);
+app.use("/v1/context/*", authMiddleware, readRateLimit);
+app.use("/v1/context", authMiddleware, readRateLimit);
+// Productivity Analytics: write-level for track/generate, read-level for queries
+app.use("/v1/productivity/track", authMiddleware, writeRateLimit);
+app.use("/v1/productivity/insights/generate", authMiddleware, writeRateLimit);
+app.use("/v1/productivity/insights/*", authMiddleware, writeRateLimit);
+app.use("/v1/productivity/*", authMiddleware, readRateLimit);
+app.use("/v1/productivity", authMiddleware, readRateLimit);
+// Knowledge Graph: write-level for extract/update/delete, read-level for queries
+app.use("/v1/knowledge/extract", authMiddleware, writeRateLimit);
+app.use("/v1/knowledge/batch-extract", authMiddleware, writeRateLimit);
+app.use("/v1/knowledge/entities/*", authMiddleware, writeRateLimit);
+app.use("/v1/knowledge/*", authMiddleware, readRateLimit);
+app.use("/v1/knowledge", authMiddleware, readRateLimit);
 // Mount route handlers
 app.route("/v1/messages", messages);
 app.route("/v1/domains", domains);
+// app.route("/v1/domains/:id/warmup", warmup); // see warmup import note
 app.route("/v1/webhooks", webhooks);
 app.route("/v1/analytics", analytics);
 app.route("/v1/suppressions", suppressions);
@@ -338,11 +584,14 @@ app.route("/v1/translate", translate);
 app.route("/v1/collaborate", collaborate);
 app.route("/v1/connect", connect);
 app.route("/v1/snooze", snooze);
+app.route("/v1/send", unifiedSend);
 app.route("/v1/send", scheduleSend);
 app.route("/v1/import", importRouter);
 app.route("/v1/search", aiSearch);
 app.route("/v1/semantic", semanticSearch);
 app.route("/v1/contacts", contacts);
+// Contacts Extended (CRM-lite) — interactions, reminders, AI insights
+app.route("/v1/contacts-extended", contactsExtendedRouter);
 app.route("/v1/calendar", calendar);
 app.route("/v1/encryption", encryption);
 app.route("/v1/rules", aiRules);
@@ -381,6 +630,89 @@ app.route("/v1/query", emailQuery);
 // FBL: ISP Feedback Loop — complaint reports (no auth — ISPs call this)
 app.use("/v1/fbl/*", webhookRateLimit);
 app.route("/v1/fbl", fbl);
+// Signatures — multiple per account, auto-switch by context
+app.route("/v1/signatures", signaturesRouter);
+// Contact Groups / Distribution Lists — group contacts, send to groups
+app.route("/v1/contact-groups", contactGroupsRouter);
+// Thread Mutes — silence a thread without unsubscribing
+app.route("/v1/threads", threadMutesRouter);
+// Bulk Actions — select multiple emails and act on them at once
+app.route("/v1/bulk", bulkActionsRouter);
+// Email A/B Testing — send variants, track performance
+app.route("/v1/ab-tests", abTestsRouter);
+// Mail Merge — personalized mass emails from CSV/contacts
+app.route("/v1/mail-merge", mailMergeRouter);
+// Contact Enrichment — auto-pull company info, social profiles
+// Mounts under /v1/contacts (enrichment routes use /:contactId/enrich etc.)
+app.route("/v1/contacts", contactEnrichmentRouter);
+// Auto-Responder / Vacation Mode — AI-powered OOO with smart replies
+app.route("/v1/auto-responder", autoResponderRouter);
+// Push Notifications — Web Push subscription management
+app.route("/v1/push", pushNotificationsRouter);
+// Smart Folders / Saved Searches — custom auto-populating views
+app.route("/v1/smart-folders", smartFoldersRouter);
+// Labels / Tags — shared across team, nested hierarchy
+app.route("/v1/labels", labelsRouter);
+// Notes — email-linked notes (like Notion meets email)
+app.route("/v1/notes", notesRouter);
+// Per-email notes: /v1/emails/:emailId/notes
+app.route("/v1/emails", emailNotesRouter);
+// Per-thread notes: /v1/threads/:threadId/notes
+app.route("/v1/threads", threadNotesRouter);
+// Files — attachment management + cloud storage browser
+app.route("/v1/files", filesRouter);
+// Per-email attachments: /v1/emails/:emailId/attachments
+app.route("/v1/emails", emailAttachmentsRouter);
+// Chat — secure internal messaging for teams
+app.route("/v1/chat", chatRouter);
+// Link Previews — URL unfurling with 7-day cache
+app.route("/v1/link-preview", linkPreviewRouter);
+// Integrations — Zapier/Make/n8n webhook connectors
+app.route("/v1/integrations", integrationsRouter);
+// Scheduling Analytics — best send times, engagement patterns
+app.route("/v1/analytics/scheduling", schedulingAnalyticsRouter);
+// Onboarding — Gmail + Microsoft 365 guided setup wizard
+app.route("/v1/onboarding", onboardingRouter);
+// Video Meetings — AlecRae Meet (Teams/Zoom replacement)
+app.route("/v1/meetings", videoMeetingsRouter);
+// AI Writing Intelligence — full writing assistant
+app.route("/v1/ai/write", aiWritingRouter);
+// Notification Intelligence — AI-powered smart notification rules + focus sessions
+app.route("/v1/notifications", notificationsRouter);
+app.route("/v1/focus", focusRouter);
+// AI Intelligence Hub — priority scoring, relationships, smart replies, sentiment, writing coach, predictions
+app.route("/v1/ai-intelligence", aiIntelligenceRouter);
+// Email Hygiene — productivity insights, subscription tracking, inbox cleanup
+app.route("/v1/hygiene", hygieneRouter);
+// Documents — AlecRae Docs/Sheets/Slides
+app.route("/v1/documents", documentsRouter);
+// Calendar Events — Smart Calendar with AI scheduling
+app.route("/v1/calendar-events", calendarEventsRouter);
+// Analytics Dashboard — periodic snapshots + goals
+app.route("/v1/analytics/dashboard", analyticsDashboardRouter);
+// Delegation — email delegation + shared drafts
+app.route("/v1/delegation", delegationRouter);
+app.route("/v1/shared-drafts", sharedDraftsRouter);
+// Workflows — automated email workflows + templates
+app.route("/v1/workflows", workflowsRouter);
+// AI Categorization — email categories + smart labels + feedback
+app.route("/v1/ai/categorize", aiCategorizationRouter);
+// Search Intelligence — search history, bookmarks, suggestions
+app.route("/v1/search-intelligence", searchIntelligenceRouter);
+// Security Intelligence — threat detection, policies, audit log
+app.route("/v1/security-intelligence", securityIntelligenceRouter);
+// Sentiment Timeline — sentiment tracking + relationship health
+app.route("/v1/sentiment", sentimentTimelineRouter);
+// Attachment Intelligence — AI file analysis, virus scanning, PII detection
+app.route("/v1/attachments/intelligence", attachmentIntelligenceRouter);
+// Scheduling Intelligence — AI meeting proposals + availability patterns
+app.route("/v1/scheduling", schedulingIntelligenceRouter);
+// Context Intelligence — action items, deadlines, promises
+app.route("/v1/context", contextIntelligenceRouter);
+// Productivity Analytics — time tracking, insights, behavior patterns
+app.route("/v1/productivity", productivityAnalyticsRouter);
+// Knowledge Graph — entity extraction, relationships, graph visualization
+app.route("/v1/knowledge", knowledgeGraphRouter);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);
@@ -451,6 +783,16 @@ startWebhookWorker();
 // Start the semantic search auto-indexer (embeds new emails in background)
 startAutoIndexer();
 
+// Start blocklist monitoring (checks every 15 min for IP/domain listings)
+import("@alecrae/reputation").then(({ BlocklistMonitor }) => {
+  const monitor = new BlocklistMonitor();
+  monitor.startMonitoring().catch((err: unknown) => {
+    console.warn("[api] Blocklist monitor start failed:", err);
+  });
+}).catch(() => {
+  console.warn("[api] Blocklist monitor unavailable");
+});
+
 // Register DLQ processor repeat job (every 15 minutes)
 const dlqInterval = setInterval(() => {
   processDLQ().catch((err) => {
@@ -483,6 +825,10 @@ async function shutdown(signal: string): Promise<void> {
   }, 15_000);
 
   try {
+    // Close all real-time WebSocket connections
+    getConnectionManager().closeAll();
+    console.log("[api] WebSocket connections closed");
+
     // Stop the semantic search auto-indexer (drains remaining queue)
     await stopAutoIndexer();
     console.log("[api] Auto-indexer stopped");
@@ -529,6 +875,7 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 export default {
   port,
   fetch: app.fetch,
+  websocket: bunWebSocket,
 };
 
 export { app };

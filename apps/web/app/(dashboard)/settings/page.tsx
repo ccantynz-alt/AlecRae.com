@@ -95,17 +95,18 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
     }
   }, [user]);
 
-  const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
-    setError(null);
+    setSaveError(null);
     try {
-      await authApi.updateProfile({ name, email });
+      await accountApi.update({ name });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save profile");
+      setSaveError(err instanceof Error ? err.message : "Could not save changes");
     } finally {
       setSaving(false);
     }
@@ -162,6 +163,11 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
               Saved
             </Text>
           </AnimatedPresence>
+          {saveError && (
+            <Text variant="body-sm" className="text-status-error">
+              {saveError}
+            </Text>
+          )}
           <PressableScale as="button" tapScale={0.95}>
             <Button variant="primary" size="sm" onClick={handleSave} disabled={saving || loading}>
               {saving ? "Saving..." : "Save Changes"}
@@ -332,35 +338,6 @@ function NotificationSection() {
 NotificationSection.displayName = "NotificationSection";
 
 function DangerZone() {
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleDelete = async () => {
-    if (!confirming) {
-      setConfirming(true);
-      return;
-    }
-    setDeleting(true);
-    setError(null);
-    try {
-      const res = await authApi.deleteAccount();
-      setResult(res.data.message);
-      setConfirming(false);
-      // Log the user out after successful scheduling
-      authApi.logout();
-      // Bounce them to login after 3s so they see the confirmation
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 3000);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete account");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   return (
     <Card className="border-status-error/30">
       <CardHeader>
@@ -375,8 +352,17 @@ function DangerZone() {
               Delete Account
             </Text>
             <Text variant="body-sm" muted>
-              Your account will be soft-deleted. You have 30 days to log back in and
-              cancel before all data is permanently removed.
+              Account deletion requires identity verification. Email{" "}
+              <Box
+                as="a"
+                href="mailto:support@alecrae.com?subject=Account%20Deletion%20Request"
+                className="inline text-brand-600 hover:text-brand-700 font-medium"
+              >
+                <Text as="span" variant="body-sm" className="text-brand-600">
+                  support@alecrae.com
+                </Text>
+              </Box>{" "}
+              from your account address and we&apos;ll process the deletion with a 30-day recovery window.
             </Text>
             {error && (
               <Text variant="body-sm" className="text-status-error mt-2">
@@ -388,31 +374,6 @@ function DangerZone() {
                 {result}
               </Text>
             )}
-          </Box>
-          <Box className="flex items-center gap-2">
-            <AnimatedPresence show={confirming && !result} presenceKey="cancel-delete">
-              <PressableScale as="button" tapScale={0.95}>
-                <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
-                  Cancel
-                </Button>
-              </PressableScale>
-            </AnimatedPresence>
-            <PressableScale as="button" tapScale={0.95}>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleDelete}
-                disabled={deleting || result !== null}
-              >
-                {deleting
-                  ? "Deleting..."
-                  : result
-                    ? "Scheduled"
-                    : confirming
-                      ? "Confirm Delete"
-                      : "Delete Account"}
-              </Button>
-            </PressableScale>
           </Box>
         </Box>
       </CardContent>
