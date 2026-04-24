@@ -15,7 +15,7 @@ import {
   validateBody,
   getValidatedBody,
 } from "../middleware/validator.js";
-import { getDatabase, emails } from "@alecrae/db";
+import { getDatabase, emails, meetingProviderConnections } from "@alecrae/db";
 import { detectMeetingFromThread } from "@alecrae/ai-engine/meetings/transcript-linker";
 import {
   fetchTranscript,
@@ -31,35 +31,41 @@ import type {
   LinkerEmail,
 } from "@alecrae/ai-engine/meetings/types";
 
-// ─── Provider connection storage (in-memory; production: encrypted DB) ───────
+// ─── Provider connection storage (DB-backed via meetingProviderConnections) ───
+//
+// Tokens are stored as-is in the `access_token_encrypted` column.  In
+// production they MUST be encrypted with AES-256-GCM before being persisted
+// (the column name signals the intent).  For now the route stores the raw
+// token so the flow is functional end-to-end; a dedicated encryption helper
+// should be wired in before launch.
 
-interface ProviderCredentials {
-  readonly provider: "zoom" | "otter" | "fathom" | "granola" | "read.ai";
-  readonly accessToken: string;
-  readonly connectedAt: string;
-}
+async function buildProvidersFor(accountId: string): Promise<TranscriptProvider[]> {
+  const db = getDatabase();
+  const rows = await db
+    .select()
+    .from(meetingProviderConnections)
+    .where(eq(meetingProviderConnections.accountId, accountId));
 
-const providerConnections = new Map<string, ProviderCredentials[]>();
-
-function buildProvidersFor(accountId: string): TranscriptProvider[] {
-  const creds = providerConnections.get(accountId) ?? [];
   const providers: TranscriptProvider[] = [];
-  for (const c of creds) {
-    switch (c.provider) {
+  for (const row of rows) {
+    // `accessTokenEncrypted` holds the raw token until the encryption layer
+    // is wired in — see TODO above.
+    const token = row.accessTokenEncrypted;
+    switch (row.provider) {
       case "zoom":
-        providers.push(new ZoomTranscriptProvider({ accessToken: c.accessToken }));
+        providers.push(new ZoomTranscriptProvider({ accessToken: token }));
         break;
       case "otter":
-        providers.push(new OtterTranscriptProvider({ apiToken: c.accessToken }));
+        providers.push(new OtterTranscriptProvider({ apiToken: token }));
         break;
       case "fathom":
-        providers.push(createFathomProvider(c.accessToken));
+        providers.push(createFathomProvider(token));
         break;
       case "granola":
-        providers.push(createGranolaProvider(c.accessToken));
+        providers.push(createGranolaProvider(token));
         break;
       case "read.ai":
-        providers.push(createReadAiProvider(c.accessToken));
+        providers.push(createReadAiProvider(token));
         break;
     }
   }
@@ -152,7 +158,7 @@ meetingLink.post(
     const input = getValidatedBody<z.infer<typeof FetchSchema>>(c);
     const auth = c.get("auth");
 
-    const providers = buildProvidersFor(auth.accountId);
+    const providers = await buildProvidersFor(auth.accountId);
     if (providers.length === 0) {
       return c.json(
         {
@@ -253,7 +259,7 @@ meetingLink.get(
       return c.json({ data: { meeting: null, transcript: null } });
     }
 
-    const providers = buildProvidersFor(auth.accountId);
+    const providers = await buildProvidersFor(auth.accountId);
     const transcript =
       providers.length > 0 ? await fetchTranscript(meeting, providers) : null;
 
@@ -269,21 +275,44 @@ meetingLink.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof ConnectProviderSchema>>(c);
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const existing = providerConnections.get(auth.accountId) ?? [];
-    const filtered = existing.filter((e) => e.provider !== input.provider);
-    filtered.push({
+    const connectedAt = new Date();
+    const rowId = `mpc_${auth.accountId}_${input.provider}_${Date.now()}`;
+
+    // Upsert: delete the existing row for this provider (if any), then insert
+    // a fresh one.  A true ON CONFLICT upsert requires a unique constraint on
+    // (account_id, provider) — that migration can be added later.
+    await db
+      .delete(meetingProviderConnections)
+      .where(
+        and(
+          eq(meetingProviderConnections.accountId, auth.accountId),
+          eq(meetingProviderConnections.provider, input.provider),
+        ),
+      );
+
+    await db.insert(meetingProviderConnections).values({
+      id: rowId,
+      accountId: auth.accountId,
       provider: input.provider,
-      accessToken: input.accessToken,
-      connectedAt: new Date().toISOString(),
+      // TODO: encrypt with AES-256-GCM before storing in production
+      accessTokenEncrypted: input.accessToken,
+      connectedAt,
+      updatedAt: connectedAt,
     });
-    providerConnections.set(auth.accountId, filtered);
+
+    // Count total connections for this account after the upsert
+    const allRows = await db
+      .select({ provider: meetingProviderConnections.provider })
+      .from(meetingProviderConnections)
+      .where(eq(meetingProviderConnections.accountId, auth.accountId));
 
     return c.json({
       data: {
         provider: input.provider,
-        connectedAt: new Date().toISOString(),
-        totalProviders: filtered.length,
+        connectedAt: connectedAt.toISOString(),
+        totalProviders: allRows.length,
       },
     });
   },

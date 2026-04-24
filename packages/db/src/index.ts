@@ -268,6 +268,9 @@ export {
   meetingProviderEnum,
   meetingLinkStatusEnum,
   meetingLinksRelations,
+  meetingProviderConnections,
+  transcriptProviderEnum,
+  meetingProviderConnectionsRelations,
 } from "./schema/meeting-links.js";
 
 // Schema - Saved Queries & Query History (B2 — email-as-database)
@@ -734,7 +737,10 @@ import type {
   userAchievements,
   dailyStats,
 } from "./schema/gamification.js";
-import type { meetingLinks } from "./schema/meeting-links.js";
+import type {
+  meetingLinks,
+  meetingProviderConnections,
+} from "./schema/meeting-links.js";
 import type { savedQueries, queryHistory } from "./schema/saved-queries.js";
 import type { emailScripts, scriptRuns } from "./schema/email-scripts.js";
 import type { changelogEntries } from "./schema/changelog.js";
@@ -857,6 +863,8 @@ export type TaskProviderConfig = InferSelectModel<typeof taskProviderConfigs>;
 export type NewTaskProviderConfig = InferInsertModel<typeof taskProviderConfigs>;
 export type MeetingLink = InferSelectModel<typeof meetingLinks>;
 export type NewMeetingLink = InferInsertModel<typeof meetingLinks>;
+export type MeetingProviderConnection = InferSelectModel<typeof meetingProviderConnections>;
+export type NewMeetingProviderConnection = InferInsertModel<typeof meetingProviderConnections>;
 export type SavedQuery = InferSelectModel<typeof savedQueries>;
 export type NewSavedQuery = InferInsertModel<typeof savedQueries>;
 export type QueryHistoryRecord = InferSelectModel<typeof queryHistory>;
