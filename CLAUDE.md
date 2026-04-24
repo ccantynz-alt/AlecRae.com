@@ -604,27 +604,32 @@ After writing the code:
 | 13 | No error boundaries in web app (error.tsx / not-found.tsx) | MEDIUM | 2026-04-12 | FIXED 2026-04-12 — root + dashboard error boundaries + 404 page |
 | 14 | No sitemap.xml or robots.txt for SEO | LOW | 2026-04-12 | FIXED 2026-04-12 — Next.js route-based sitemap.ts + robots.ts |
 | 15 | Craig couldn't actually see an admin page on iPad — admin sub-app not deployed | HIGH | 2026-04-16 | FIXED 2026-04-16 — added /admin preview route to apps/web (KPIs, recent activity, launch gates, section nav). Brand-correct (ivory + Italianno wordmark), robots-disallowed, builds clean (23/23 static pages). Standalone admin.alecrae.com still ships from apps/admin once DNS cuts over. |
+| 16 | Landing page (page.tsx) had two versions concatenated — merge conflict artifact | HIGH | 2026-04-24 | FIXED 2026-04-24 — rewrote as clean server component (nav + hero + features + pricing + CTA + footer). 29/29 static pages build clean. |
+| 17 | Admin /admin page used static illustrative data only | MEDIUM | 2026-04-24 | FIXED 2026-04-24 — rebuilt as full client component with API health polling, system services grid, launch gates progress bar, plans + competitive stack tabs. Fetches live from API when available, degrades gracefully when offline. |
+| 18 | next.config.ts used experimental.typedRoutes — deprecated in Next.js 15 | LOW | 2026-04-24 | FIXED 2026-04-24 — moved to top-level typedRoutes in both apps/web and apps/admin |
+| 19 | GateTest CI gate was advisory (continue-on-error: true) | MEDIUM | 2026-04-24 | FIXED 2026-04-24 — now a hard gate, failures block merges |
+| 20 | E2E test suite was a 2-test skeleton | LOW | 2026-04-24 | FIXED 2026-04-24 — expanded to 20 tests across 6 describe blocks (landing, login, auth guard, health, robots, sitemap) |
 
 ---
 
 ## 🗓️ NEXT ACTIONS — IN ORDER
 
 1. ~~Build "Coming Soon" landing page~~ DONE
-2. ~~Verify monorepo build end-to-end~~ DONE 2026-04-09 — 26/26 tasks pass
-3. ~~Fix any build errors~~ DONE 2026-04-09
+2. ~~Verify monorepo build end-to-end~~ DONE 2026-04-24 — 29/29 static pages, zero errors
+3. ~~Fix any build errors~~ DONE 2026-04-24 — landing page merge conflict fixed
 4. ~~Wire passkey login handler~~ DONE 2026-04-09
-5. ~~Build Electron desktop app~~ DONE 2026-04-09 — builds clean, native menus, tray, IPC
-6. ~~Build React Native mobile app~~ DONE 2026-04-09 — all screens, auth, API client
-7. ~~Wire in-memory stores to DB~~ DONE 2026-04-09 — Drizzle schemas for contacts, recall, screener
-8. ~~Complete Admin SSO~~ DONE 2026-04-09 — SAML 2.0 SP, admin login page
-9. ~~Fix Vercel deployment~~ DONE 2026-04-09 — Root Directory = apps/web
-10. ~~**Rebrand Vienna/48co/@emailed → AlecRae/alecrae.com/@alecrae**~~ DONE 2026-04-12 — full codebase rebrand
-11. **Verify Vercel deployment succeeds** (Craig — check Vercel dashboard)
-12. **Set up Neon database** + run setup SQL (Craig action)
-13. **Set up Upstash Redis** (Craig action)
-14. **Configure DNS** for alecrae.com (Craig action)
-15. **Set up Stripe account** + configure webhook URLs (Craig action)
-16. **Add API keys** (Anthropic, OpenAI, Google, Microsoft) to production env (Craig action)
+5. ~~Build Electron desktop app~~ DONE 2026-04-09
+6. ~~Build React Native mobile app~~ DONE 2026-04-09
+7. ~~Wire in-memory stores to DB~~ DONE 2026-04-09
+8. ~~Complete Admin SSO~~ DONE 2026-04-09
+9. ~~Fix Vercel deployment~~ DONE 2026-04-09
+10. ~~Rebrand Vienna/48co/@emailed → AlecRae~~ DONE 2026-04-12
+11. **Provision Neon Postgres** + run `bun run db:migrate` (Craig)
+12. **Provision Upstash Redis** (Craig)
+13. **Configure DNS** for alecrae.com — MX, SPF, DKIM, DMARC, CNAMEs (Craig)
+14. **Set up Stripe** live keys + webhook URL → api.alecrae.com/billing/webhook (Craig)
+15. **Add API keys** — Anthropic, OpenAI, Google OAuth, Microsoft OAuth (Craig)
+16. **Deploy to Crontec** — connect repo, set env vars, point domain (Craig + Claude)
 
 ---
 
@@ -705,10 +710,10 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Admin preview (`/admin` on web app) added so Craig can SEE the admin surface from his iPad ahead of admin.alecrae.com cutover. Production deployment still awaiting Craig's infra setup.
 **Build completion:** TIER 1-4 ALL DONE (36/36) + 7 bonus + 31 advanced features (S10/10 + A7/7 + B8/8 + C6/10)
-**Date last updated:** 2026-04-18
-**Current phase:** Phase 1 — Ready for Beta Launch
-**Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Production deployment awaiting Craig's infra setup.
-**Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
+**Date last updated:** 2026-04-24
+**Current phase:** Phase 1 — Launch Imminent
+**Current focus:** Build is 100% clean (29/29 static pages). Landing page merge conflict fixed. Admin console rebuilt as full live dashboard. CI gate hardened. E2E suite expanded. All code done — blocked only on Craig's infra provisioning (Neon, Upstash, Stripe, API keys, DNS, Crontec deploy).
+**Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8) = 84 features total
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
 

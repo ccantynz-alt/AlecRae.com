@@ -26,12 +26,12 @@ const STEP_LABELS: Record<OnboardingStep, string> = {
   3: "Ready",
 };
 
-const DENSITY_OPTIONS: Array<{
+const DENSITY_OPTIONS: {
   value: Density;
   label: string;
   description: string;
   lineCount: number;
-}> = [
+}[] = [
   {
     value: "compact",
     label: "Compact",
