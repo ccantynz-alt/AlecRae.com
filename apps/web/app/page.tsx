@@ -8,26 +8,32 @@ export const metadata: Metadata = {
 
 const FEATURES = [
   {
+    icon: "✦",
     title: "AI that sounds like you",
     body: "Voice profile learns your writing style. Drafts are indistinguishable from you — not generic AI.",
   },
   {
+    icon: "⌕",
     title: "Semantic search",
     body: "Find emails by meaning, not keywords. \"The one where someone mentioned the budget\" actually works.",
   },
   {
+    icon: "✎",
     title: "Built-in grammar agent",
     body: "Replaces Grammarly. Multi-language. Real-time. Included free — saves you $30/month.",
   },
   {
+    icon: "◉",
     title: "Works while you sleep",
     body: "AI agent triages overnight, drafts replies, schedules sends. You approve in the morning with one tap.",
   },
   {
+    icon: "⊞",
     title: "Every account, one inbox",
     body: "Gmail + Outlook + iCloud + IMAP. Unified AI across all of them. No other client does this.",
   },
   {
+    icon: "↩",
     title: "Real email recall",
     body: "Actually revokes sent emails. Not Outlook theater — link-based with cryptographic revocation.",
   },
@@ -39,35 +45,29 @@ const REPLACEMENTS = [
   { name: "Superhuman", price: "$30/mo" },
   { name: "Front (per user)", price: "$19–59/mo" },
   { name: "Otter.ai", price: "$10/mo" },
-  { name: "Dragon Professional", price: "$500 (discontinued)" },
+  { name: "Dragon Professional", price: "$500+" },
 ] as const;
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-[#f5f4ef] text-neutral-900">
+    <main className="min-h-screen bg-white text-gray-900 font-sans">
 
       {/* ─── Nav ──────────────────────────────────────────────────── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-[#f5f4ef]/80 border-b border-neutral-300/40">
-        <div
-          className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between"
-          style={{ fontFamily: "var(--font-inter), sans-serif" }}
-        >
-          <span
-            className="text-2xl"
-            style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
-          >
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <span className="text-xl font-bold text-indigo-600 tracking-tight">
             AlecRae
           </span>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
             <a
               href="/login"
-              className="text-xs tracking-[0.18em] uppercase text-neutral-600 hover:text-neutral-900 transition-colors"
+              className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
             >
               Sign in
             </a>
             <a
               href="/register"
-              className="text-xs tracking-[0.18em] uppercase bg-neutral-900 text-[#f5f4ef] px-5 py-2 rounded-full hover:bg-neutral-800 transition-colors"
+              className="text-sm font-medium bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
             >
               Get Early Access
             </a>
@@ -76,67 +76,47 @@ export default function LandingPage() {
       </nav>
 
       {/* ─── Hero ─────────────────────────────────────────────────── */}
-      <section className="pt-40 pb-24 px-6 flex flex-col items-center text-center">
-        <h1
-          className="text-[5rem] sm:text-[8rem] md:text-[11rem] lg:text-[14rem] leading-[0.85] text-neutral-900 select-none"
-          style={{
-            fontFamily: "var(--font-italianno), 'Snell Roundhand', cursive",
-            fontWeight: 400,
-            letterSpacing: "-0.01em",
-          }}
-        >
-          AlecRae
-        </h1>
-        <div className="mt-3 mb-8 w-48 md:w-64 h-px bg-neutral-400/50" aria-hidden="true" />
-        <p
-          className="max-w-2xl text-lg sm:text-xl text-neutral-600 leading-relaxed font-light"
-          style={{ fontFamily: "var(--font-inter), sans-serif" }}
-        >
-          The email client you&rsquo;d sign your name to. AI in every layer.
-          One subscription replaces Gmail, Grammarly, Superhuman, and five other tools.
-        </p>
-        <div
-          className="mt-10 flex flex-col sm:flex-row gap-4"
-          style={{ fontFamily: "var(--font-inter), sans-serif" }}
-        >
-          <a
-            href="/register"
-            className="px-8 py-3.5 bg-neutral-900 text-[#f5f4ef] rounded-full text-sm tracking-[0.12em] uppercase hover:bg-neutral-800 transition-colors"
-          >
-            Get Early Access
-          </a>
-          <a
-            href="#features"
-            className="px-8 py-3.5 border border-neutral-400/60 rounded-full text-sm tracking-[0.12em] uppercase text-neutral-700 hover:border-neutral-600 transition-colors"
-          >
-            See What&rsquo;s Inside
-          </a>
+      <section className="pt-36 pb-20 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-xs font-medium px-3 py-1.5 rounded-full mb-6 border border-indigo-200/60">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+            Now in early access
+          </div>
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-gray-900 leading-[1.05] tracking-tight mb-6">
+            Email for the{" "}
+            <span className="text-indigo-600">AI era.</span>
+          </h1>
+          <p className="text-lg sm:text-xl text-gray-500 leading-relaxed max-w-2xl mx-auto mb-10">
+            The email client you&rsquo;d sign your name to. AI in every layer.
+            One subscription replaces Gmail, Grammarly, Superhuman, and five other tools.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <a
+              href="/register"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
+            >
+              Get Early Access — Free
+            </a>
+            <a
+              href="#features"
+              className="inline-flex items-center justify-center px-6 py-3 border border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              See what&rsquo;s inside
+            </a>
+          </div>
         </div>
       </section>
 
       {/* ─── Social proof strip ───────────────────────────────────── */}
-      <section className="border-y border-neutral-300/50 py-6">
-        <div className="max-w-4xl mx-auto px-6 flex flex-wrap items-center justify-center gap-x-12 gap-y-3">
-          <span
-            className="text-[11px] tracking-[0.25em] uppercase text-neutral-500"
-            style={{ fontFamily: "var(--font-inter), sans-serif" }}
-          >
+      <section className="border-y border-gray-100 bg-gray-50/60 py-5">
+        <div className="max-w-5xl mx-auto px-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-2">
+          <span className="text-[11px] tracking-widest uppercase text-gray-400 font-medium">
             Replaces
           </span>
           {REPLACEMENTS.map((r) => (
-            <span key={r.name} className="flex items-baseline gap-2">
-              <span
-                className="text-sm text-neutral-700"
-                style={{ fontFamily: "var(--font-inter), sans-serif" }}
-              >
-                {r.name}
-              </span>
-              <span
-                className="text-xs text-neutral-400 line-through"
-                style={{ fontFamily: "var(--font-inter), sans-serif" }}
-              >
-                {r.price}
-              </span>
+            <span key={r.name} className="flex items-baseline gap-1.5">
+              <span className="text-sm text-gray-700 font-medium">{r.name}</span>
+              <span className="text-xs text-gray-400 line-through">{r.price}</span>
             </span>
           ))}
         </div>
@@ -145,36 +125,25 @@ export default function LandingPage() {
       {/* ─── Features grid ────────────────────────────────────────── */}
       <section id="features" className="py-24 px-6">
         <div className="max-w-6xl mx-auto">
-          <h2
-            className="text-center text-4xl sm:text-5xl mb-4"
-            style={{
-              fontFamily: "var(--font-italianno), cursive",
-              fontWeight: 400,
-            }}
-          >
-            What makes it different
-          </h2>
-          <p
-            className="text-center text-sm text-neutral-500 mb-16 tracking-[0.12em] uppercase"
-            style={{ fontFamily: "var(--font-inter), sans-serif" }}
-          >
-            Not bolt-on AI. AI in every layer.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-px bg-neutral-300/50 border border-neutral-300/50 rounded-2xl overflow-hidden">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight mb-3">
+              What makes it different
+            </h2>
+            <p className="text-sm text-gray-500 uppercase tracking-widest">
+              Not bolt-on AI. AI in every layer.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {FEATURES.map((f) => (
-              <article key={f.title} className="bg-[#f5f4ef] p-8 flex flex-col gap-3">
-                <h3
-                  className="text-base font-medium text-neutral-900"
-                  style={{ fontFamily: "var(--font-inter), sans-serif" }}
-                >
-                  {f.title}
-                </h3>
-                <p
-                  className="text-sm text-neutral-600 leading-relaxed"
-                  style={{ fontFamily: "var(--font-inter), sans-serif" }}
-                >
-                  {f.body}
-                </p>
+              <article
+                key={f.title}
+                className="p-6 rounded-xl border border-gray-200 bg-white hover:border-indigo-200 hover:shadow-sm hover:shadow-indigo-100/50 transition-all"
+              >
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 text-base mb-4">
+                  {f.icon}
+                </div>
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">{f.title}</h3>
+                <p className="text-sm text-gray-500 leading-relaxed">{f.body}</p>
               </article>
             ))}
           </div>
@@ -182,83 +151,88 @@ export default function LandingPage() {
       </section>
 
       {/* ─── Pricing ──────────────────────────────────────────────── */}
-      <section className="py-24 px-6 border-t border-neutral-300/50">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2
-            className="text-4xl sm:text-5xl mb-4"
-            style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
-          >
-            Simple pricing
-          </h2>
-          <p
-            className="text-sm text-neutral-500 mb-16 tracking-[0.12em] uppercase"
-            style={{ fontFamily: "var(--font-inter), sans-serif" }}
-          >
-            One subscription replaces your entire stack
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="rounded-2xl border border-neutral-300/60 bg-[#fafaf6] p-8 text-left">
-              <p className="text-xs tracking-[0.18em] uppercase text-neutral-500 mb-2" style={{ fontFamily: "var(--font-inter), sans-serif" }}>Free</p>
-              <p className="text-3xl font-light text-neutral-900 mb-4" style={{ fontFamily: "var(--font-inter), sans-serif" }}>$0<span className="text-sm text-neutral-500">/mo</span></p>
-              <ul className="space-y-2 text-sm text-neutral-600" style={{ fontFamily: "var(--font-inter), sans-serif" }}>
-                <li>1 email account</li>
-                <li>Basic AI (5 composes/day)</li>
-                <li>30-day search</li>
+      <section className="py-24 px-6 bg-gray-50/60 border-t border-gray-100">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight mb-3">
+              Simple pricing
+            </h2>
+            <p className="text-sm text-gray-500 uppercase tracking-widest">
+              One subscription replaces your entire stack
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Free */}
+            <div className="rounded-xl border border-gray-200 bg-white p-7 flex flex-col">
+              <p className="text-xs tracking-widest uppercase text-gray-500 font-medium mb-2">Free</p>
+              <p className="text-3xl font-bold text-gray-900 mb-1">$0<span className="text-base font-normal text-gray-400">/mo</span></p>
+              <p className="text-xs text-gray-400 mb-5">Get started, no card needed</p>
+              <ul className="space-y-2.5 text-sm text-gray-600 flex-1">
+                <li className="flex items-center gap-2"><span className="text-indigo-500">✓</span> 1 email account</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-500">✓</span> Basic AI (5 composes/day)</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-500">✓</span> 30-day search</li>
               </ul>
+              <a href="/register" className="mt-6 block text-center text-sm font-medium border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
+                Get started free
+              </a>
             </div>
-            <div className="rounded-2xl border-2 border-neutral-900 bg-neutral-900 text-[#f5f4ef] p-8 text-left relative">
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-neutral-900 text-[#f5f4ef] text-[10px] tracking-[0.2em] uppercase px-4 py-1 rounded-full" style={{ fontFamily: "var(--font-inter), sans-serif" }}>Most popular</span>
-              <p className="text-xs tracking-[0.18em] uppercase text-neutral-400 mb-2" style={{ fontFamily: "var(--font-inter), sans-serif" }}>Personal</p>
-              <p className="text-3xl font-light mb-4" style={{ fontFamily: "var(--font-inter), sans-serif" }}>$9<span className="text-sm text-neutral-400">/mo</span></p>
-              <ul className="space-y-2 text-sm text-neutral-300" style={{ fontFamily: "var(--font-inter), sans-serif" }}>
-                <li>3 email accounts</li>
-                <li>Full AI + voice profile</li>
-                <li>Unlimited search</li>
-                <li>E2E encryption</li>
-                <li>Snooze + schedule send</li>
+
+            {/* Personal — highlighted */}
+            <div className="rounded-xl border-2 border-indigo-600 bg-indigo-600 p-7 flex flex-col relative">
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-semibold tracking-widest uppercase px-4 py-1 rounded-full">
+                Most popular
+              </span>
+              <p className="text-xs tracking-widest uppercase text-indigo-200 font-medium mb-2">Personal</p>
+              <p className="text-3xl font-bold text-white mb-1">$9<span className="text-base font-normal text-indigo-300">/mo</span></p>
+              <p className="text-xs text-indigo-300 mb-5">Billed monthly, cancel anytime</p>
+              <ul className="space-y-2.5 text-sm text-indigo-100 flex-1">
+                <li className="flex items-center gap-2"><span className="text-indigo-300">✓</span> 3 email accounts</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-300">✓</span> Full AI + voice profile</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-300">✓</span> Unlimited search</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-300">✓</span> E2E encryption</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-300">✓</span> Snooze + schedule send</li>
               </ul>
+              <a href="/register" className="mt-6 block text-center text-sm font-semibold bg-white text-indigo-600 py-2.5 rounded-lg hover:bg-indigo-50 transition-colors">
+                Get early access
+              </a>
             </div>
-            <div className="rounded-2xl border border-neutral-300/60 bg-[#fafaf6] p-8 text-left">
-              <p className="text-xs tracking-[0.18em] uppercase text-neutral-500 mb-2" style={{ fontFamily: "var(--font-inter), sans-serif" }}>Pro</p>
-              <p className="text-3xl font-light text-neutral-900 mb-4" style={{ fontFamily: "var(--font-inter), sans-serif" }}>$19<span className="text-sm text-neutral-500">/mo</span></p>
-              <ul className="space-y-2 text-sm text-neutral-600" style={{ fontFamily: "var(--font-inter), sans-serif" }}>
-                <li>Unlimited accounts</li>
-                <li>Priority AI (Sonnet)</li>
-                <li>Team features</li>
-                <li>API access</li>
-                <li>Analytics</li>
+
+            {/* Pro */}
+            <div className="rounded-xl border border-gray-200 bg-white p-7 flex flex-col">
+              <p className="text-xs tracking-widest uppercase text-gray-500 font-medium mb-2">Pro</p>
+              <p className="text-3xl font-bold text-gray-900 mb-1">$19<span className="text-base font-normal text-gray-400">/mo</span></p>
+              <p className="text-xs text-gray-400 mb-5">For power users & small teams</p>
+              <ul className="space-y-2.5 text-sm text-gray-600 flex-1">
+                <li className="flex items-center gap-2"><span className="text-indigo-500">✓</span> Unlimited accounts</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-500">✓</span> Priority AI (Sonnet)</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-500">✓</span> Team features</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-500">✓</span> API access</li>
+                <li className="flex items-center gap-2"><span className="text-indigo-500">✓</span> Analytics</li>
               </ul>
+              <a href="/register" className="mt-6 block text-center text-sm font-medium border border-gray-300 text-gray-700 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
+                Get started
+              </a>
             </div>
           </div>
-          <p
-            className="mt-8 text-xs text-neutral-500"
-            style={{ fontFamily: "var(--font-inter), sans-serif" }}
-          >
-            Team plan: $12/user/mo with shared inboxes, SSO, and admin console. Enterprise: custom.
+          <p className="mt-6 text-center text-xs text-gray-400">
+            Team plan: $12/user/mo · Enterprise: custom pricing with SLA and dedicated support
           </p>
         </div>
       </section>
 
       {/* ─── CTA ──────────────────────────────────────────────────── */}
-      <section className="py-24 px-6 border-t border-neutral-300/50">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2
-            className="text-5xl sm:text-6xl mb-6"
-            style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
-          >
+      <section className="py-24 px-6 border-t border-gray-100">
+        <div className="max-w-2xl mx-auto text-center">
+          <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 tracking-tight mb-4">
             Email, evolved.
           </h2>
-          <p
-            className="text-neutral-600 mb-10 text-base leading-relaxed"
-            style={{ fontFamily: "var(--font-inter), sans-serif" }}
-          >
+          <p className="text-gray-500 mb-10 text-base leading-relaxed">
             Gmail is 22 years old. Outlook predates the iPhone. It&rsquo;s time
             for email that works the way you think.
           </p>
           <a
             href="/register"
-            className="inline-block px-10 py-4 bg-neutral-900 text-[#f5f4ef] rounded-full text-sm tracking-[0.12em] uppercase hover:bg-neutral-800 transition-colors"
-            style={{ fontFamily: "var(--font-inter), sans-serif" }}
+            className="inline-flex items-center justify-center gap-2 px-8 py-3.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm shadow-indigo-200"
           >
             Get Early Access — Free
           </a>
@@ -266,28 +240,20 @@ export default function LandingPage() {
       </section>
 
       {/* ─── Footer ───────────────────────────────────────────────── */}
-      <footer className="border-t border-neutral-300/50 py-10 px-6">
-        <div
-          className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6"
-          style={{ fontFamily: "var(--font-inter), sans-serif" }}
-        >
-          <span
-            className="text-xl"
-            style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
-          >
-            AlecRae
-          </span>
-          <div className="flex gap-8">
-            <a href="/terms" className="text-xs text-neutral-500 hover:text-neutral-900 transition-colors">Terms</a>
-            <a href="/privacy" className="text-xs text-neutral-500 hover:text-neutral-900 transition-colors">Privacy</a>
-            <a href="/roadmap" className="text-xs text-neutral-500 hover:text-neutral-900 transition-colors">Roadmap</a>
-            <a href="/admin" className="text-xs text-neutral-500 hover:text-neutral-900 transition-colors">Admin</a>
+      <footer className="border-t border-gray-100 py-10 px-6 bg-gray-50/40">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
+          <span className="text-base font-bold text-indigo-600">AlecRae</span>
+          <div className="flex gap-6">
+            <a href="/terms" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Terms</a>
+            <a href="/privacy" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Privacy</a>
+            <a href="/security" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Security</a>
+            <a href="/roadmap" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Roadmap</a>
+            <a href="/admin" className="text-xs text-gray-400 hover:text-gray-700 transition-colors">Admin</a>
           </div>
-          <span className="text-[10px] text-neutral-500/70 tracking-[0.25em] uppercase">
-            &copy; 2026 AlecRae
-          </span>
+          <span className="text-xs text-gray-400">&copy; 2026 AlecRae, Inc.</span>
         </div>
       </footer>
 
     </main>
+  );
 }

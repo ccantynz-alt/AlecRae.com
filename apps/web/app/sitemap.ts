@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 const LEGAL_LAST_UPDATED = new Date("2026-04-16");
 
-const legalRoutes: ReadonlyArray<string> = [
+const legalRoutes: readonly string[] = [
   "/terms",
   "/privacy",
   "/cookies",

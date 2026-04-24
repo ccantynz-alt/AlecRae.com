@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Box, Text, Card, CardContent } from "@alecrae/ui";
+import { Box, Text } from "@alecrae/ui";
 
 export const metadata: Metadata = {
   title: "Corporate Compliance | AlecRae",

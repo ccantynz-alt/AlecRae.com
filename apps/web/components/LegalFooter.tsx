@@ -12,7 +12,7 @@
 
 import { openConsentPreferences } from "./ConsentBanner";
 
-const primaryLinks: ReadonlyArray<{ href: string; label: string }> = [
+const primaryLinks: readonly { href: string; label: string }[] = [
   { href: "/terms", label: "Terms" },
   { href: "/privacy", label: "Privacy" },
   { href: "/cookies", label: "Cookies" },
