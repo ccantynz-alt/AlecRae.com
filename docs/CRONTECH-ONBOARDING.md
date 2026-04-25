@@ -65,10 +65,10 @@ infrastructure/crontech/.env.alecrae.tenant.template
      AlecRae uses Postgres on Neon (Drizzle Postgres schema); Turso is
      SQLite-flavored and incompatible with our schema. Keep `DATABASE_URL`
      as-is. Crontech runtime supports Postgres via Neon directly.
-   - **Auto-mapped (REJECT for AlecRae):** `RESEND_API_KEY → ALECRAE_API_KEY`
-     and `SENDGRID_API_KEY → ALECRAE_API_KEY` will not appear in our env
-     because AlecRae **is** the email service. Confirm these mappings are
-     not flagged as missing.
+   - **Legacy-vendor email mappings — N/A:** the wizard offers mappings from
+     legacy transactional-email vendors into `ALECRAE_API_KEY`. Those don't
+     apply to us — AlecRae **is** the email service in Crontech's stack.
+     Skip; do not let the wizard flag those keys as missing.
    - **Crontech required vars to confirm:** `JWT_SECRET`, `SESSION_SECRET`,
      `ANTHROPIC_API_KEY`, `DEPLOY_AGENT_SECRET` — all present in our template.
    - **Crontech required vars NOT applicable:** `TURSO_DATABASE_URL`,
