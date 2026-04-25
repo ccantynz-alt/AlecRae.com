@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Box, Text, Button, Input, Card, CardContent } from "@alecrae/ui";
 import { authApi } from "../../../lib/api";
 import {
   isWebAuthnSupported,
@@ -11,54 +10,70 @@ import {
 
 export default function RegisterPage(): React.ReactElement {
   return (
-    <Box className="min-h-full flex items-center justify-center px-4 py-12 bg-surface-secondary">
-      <Box className="w-full max-w-md">
-        <Box className="text-center mb-8">
-          <Text variant="heading-lg" className="text-brand-600 font-bold mb-2">
+    <main
+      className="min-h-screen bg-[#f5f4ef] text-neutral-900"
+      style={{ fontFamily: "var(--font-inter), sans-serif" }}
+    >
+      <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-[#f5f4ef]/80 border-b border-neutral-300/40">
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <a
+            href="/"
+            className="text-2xl"
+            style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
+          >
             AlecRae
-          </Text>
-          <Text variant="display-sm">Create your account</Text>
-          <Text variant="body-md" muted className="mt-2">
-            Get started with AI-native email in minutes
-          </Text>
-        </Box>
+          </a>
+          <a
+            href="/login"
+            className="text-xs tracking-[0.18em] uppercase text-neutral-600 hover:text-neutral-900 transition-colors"
+          >
+            Sign in
+          </a>
+        </div>
+      </nav>
 
-        <Card>
-          <CardContent>
-            <Box className="space-y-6">
-              <PasskeyRegistration />
-              <RegistrationDivider />
-              <EmailRegistration />
-            </Box>
-          </CardContent>
-        </Card>
+      <section className="pt-32 pb-16 px-6 flex flex-col items-center">
+        <h1
+          className="text-[5rem] sm:text-[6.5rem] leading-[0.85] text-neutral-900 select-none"
+          style={{
+            fontFamily: "var(--font-italianno), 'Snell Roundhand', cursive",
+            fontWeight: 400,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          Create account
+        </h1>
+        <div className="mt-3 mb-8 w-32 h-px bg-neutral-400/50" aria-hidden="true" />
+        <p className="text-sm text-neutral-600 font-light">
+          Get started with AI-native email in minutes
+        </p>
 
-        <Box className="text-center mt-6">
-          <Text variant="body-sm" muted>
-            Already have an account?{" "}
-          </Text>
-          <Box as="a" href="/login" className="inline">
-            <Text as="span" variant="body-sm" className="text-brand-600 hover:text-brand-700 font-medium">
-              Sign in
-            </Text>
-          </Box>
-        </Box>
+        <div className="mt-10 w-full max-w-md bg-white/60 backdrop-blur-sm border border-neutral-300/60 rounded-2xl p-8 shadow-sm">
+          <PasskeyRegistration />
+          <RegistrationDivider />
+          <EmailRegistration />
+        </div>
 
-        <Box className="text-center mt-4">
-          <Text variant="caption" muted>
-            By creating an account, you agree to our{" "}
-            <Box as="a" href="/terms" className="text-brand-600 hover:underline inline">
-              <Text as="span" variant="caption">Terms of Service</Text>
-            </Box>
-            {" "}and{" "}
-            <Box as="a" href="/privacy" className="text-brand-600 hover:underline inline">
-              <Text as="span" variant="caption">Privacy Policy</Text>
-            </Box>
-            .
-          </Text>
-        </Box>
-      </Box>
-    </Box>
+        <p className="mt-8 text-sm text-neutral-600">
+          Already have an account?{" "}
+          <a href="/login" className="text-neutral-900 hover:underline font-medium">
+            Sign in
+          </a>
+        </p>
+
+        <p className="mt-3 text-xs text-neutral-500 max-w-md text-center font-light">
+          By creating an account, you agree to our{" "}
+          <a href="/terms" className="text-neutral-700 hover:text-neutral-900 underline">
+            Terms of Service
+          </a>{" "}
+          and{" "}
+          <a href="/privacy" className="text-neutral-700 hover:text-neutral-900 underline">
+            Privacy Policy
+          </a>
+          .
+        </p>
+      </section>
+    </main>
   );
 }
 
@@ -121,101 +136,99 @@ function PasskeyRegistration(): React.ReactElement {
 
   if (!supported) {
     return (
-      <Box className="space-y-3">
-        <Text variant="label">Passkey</Text>
-        <Text variant="caption" className="text-center" muted>
+      <div className="space-y-3">
+        <p className="text-xs tracking-[0.18em] uppercase text-neutral-500">Passkey</p>
+        <p className="text-sm text-neutral-600 text-center font-light">
           Passkey registration is not available on this device. Please use email and password below.
-        </Text>
-      </Box>
+        </p>
+      </div>
     );
   }
 
   if (step === "initial") {
     return (
-      <Box className="space-y-3">
-        <Text variant="label">Fastest way to get started</Text>
-        <Button
-          variant="primary"
-          size="lg"
-          className="w-full"
+      <div className="space-y-4">
+        <p className="text-xs tracking-[0.18em] uppercase text-neutral-500">
+          Fastest way to get started
+        </p>
+        <button
+          type="button"
           onClick={() => setStep("details")}
+          className="w-full text-xs tracking-[0.18em] uppercase bg-neutral-900 text-[#f5f4ef] px-5 py-3.5 rounded-full hover:bg-neutral-800 transition-colors"
         >
           Register with Passkey
-        </Button>
-        <Text variant="caption" className="text-center">
-          Create a passkey using your device biometrics. No password needed -- ever.
-        </Text>
-      </Box>
+        </button>
+        <p className="text-xs text-neutral-500 text-center font-light">
+          Create a passkey using your device biometrics. No password needed — ever.
+        </p>
+      </div>
     );
   }
 
   return (
-    <Box className="space-y-3">
-      <Text variant="label">Create your passkey</Text>
+    <div className="space-y-4">
+      <p className="text-xs tracking-[0.18em] uppercase text-neutral-500">
+        Create your passkey
+      </p>
       {error && (
-        <Box className="p-3 rounded-lg bg-red-50 border border-red-200">
-          <Text variant="body-sm" className="text-red-800">
-            {error}
-          </Text>
-        </Box>
+        <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+          <p className="text-sm text-red-800">{error}</p>
+        </div>
       )}
-      <Input
-        label="Your name"
-        variant="text"
-        placeholder="Jane Doe"
+      <FieldLabel htmlFor="passkey-name">Your name</FieldLabel>
+      <input
+        id="passkey-name"
+        type="text"
         autoComplete="name"
+        placeholder="Jane Doe"
         value={name}
         onChange={(e) => setName(e.target.value)}
+        className="w-full bg-transparent border border-neutral-300/70 rounded-lg px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
       />
-      <Input
-        label="Email address"
-        variant="email"
-        placeholder="you@example.com"
+      <FieldLabel htmlFor="passkey-email">Email address</FieldLabel>
+      <input
+        id="passkey-email"
+        type="email"
         autoComplete="email"
+        placeholder="you@example.com"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        className="w-full bg-transparent border border-neutral-300/70 rounded-lg px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
       />
-      <Button
-        variant="primary"
-        size="lg"
-        className="w-full"
+      <button
+        type="button"
         onClick={handlePasskeyRegister}
-        loading={loading}
         disabled={loading || !name.trim() || !email.trim()}
+        className="w-full text-xs tracking-[0.18em] uppercase bg-neutral-900 text-[#f5f4ef] px-5 py-3.5 rounded-full hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? "Creating passkey..." : "Create Passkey"}
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="w-full"
+        {loading ? "Creating passkey…" : "Create Passkey"}
+      </button>
+      <button
+        type="button"
         onClick={() => {
           setStep("initial");
           setError(null);
         }}
         disabled={loading}
+        className="w-full text-xs tracking-[0.18em] uppercase text-neutral-500 hover:text-neutral-900 transition-colors py-2 disabled:opacity-50"
       >
         Back
-      </Button>
-    </Box>
+      </button>
+    </div>
   );
 }
-
-PasskeyRegistration.displayName = "PasskeyRegistration";
 
 function RegistrationDivider(): React.ReactElement {
   return (
-    <Box className="flex items-center gap-4">
-      <Box className="flex-1 h-px bg-border" />
-      <Text variant="caption" muted>
+    <div className="my-7 flex items-center gap-4">
+      <div className="flex-1 h-px bg-neutral-300/70" />
+      <span className="text-[10px] tracking-[0.2em] uppercase text-neutral-500">
         or register with email
-      </Text>
-      <Box className="flex-1 h-px bg-border" />
-    </Box>
+      </span>
+      <div className="flex-1 h-px bg-neutral-300/70" />
+    </div>
   );
 }
-
-RegistrationDivider.displayName = "RegistrationDivider";
 
 function EmailRegistration(): React.ReactElement {
   const [firstName, setFirstName] = useState("");
@@ -249,60 +262,85 @@ function EmailRegistration(): React.ReactElement {
   };
 
   return (
-    <Box as="form" className="space-y-4" onSubmit={handleSubmit}>
+    <form className="space-y-4" onSubmit={handleSubmit}>
       {error && (
-        <Box className="p-3 rounded-lg bg-red-50 border border-red-200">
-          <Text variant="body-sm" className="text-red-800">
-            {error}
-          </Text>
-        </Box>
+        <div className="p-3 rounded-lg bg-red-50 border border-red-200">
+          <p className="text-sm text-red-800">{error}</p>
+        </div>
       )}
-      <Box className="grid grid-cols-2 gap-4">
-        <Input
-          label="First name"
-          variant="text"
-          placeholder="Jane"
-          autoComplete="given-name"
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-        />
-        <Input
-          label="Last name"
-          variant="text"
-          placeholder="Doe"
-          autoComplete="family-name"
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-        />
-      </Box>
-      <Input
-        label="Email address"
-        variant="email"
-        placeholder="you@example.com"
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <FieldLabel htmlFor="first-name">First name</FieldLabel>
+          <input
+            id="first-name"
+            type="text"
+            autoComplete="given-name"
+            placeholder="Jane"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            className="w-full bg-transparent border border-neutral-300/70 rounded-lg px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+          />
+        </div>
+        <div>
+          <FieldLabel htmlFor="last-name">Last name</FieldLabel>
+          <input
+            id="last-name"
+            type="text"
+            autoComplete="family-name"
+            placeholder="Doe"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            className="w-full bg-transparent border border-neutral-300/70 rounded-lg px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
+          />
+        </div>
+      </div>
+      <FieldLabel htmlFor="reg-email">Email address</FieldLabel>
+      <input
+        id="reg-email"
+        type="email"
         autoComplete="email"
+        placeholder="you@example.com"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
+        className="w-full bg-transparent border border-neutral-300/70 rounded-lg px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
       />
-      <Input
-        label="Password"
-        variant="password"
-        placeholder="Create a strong password"
+      <FieldLabel htmlFor="reg-password">Password</FieldLabel>
+      <input
+        id="reg-password"
+        type="password"
         autoComplete="new-password"
-        hint="Must be at least 8 characters."
+        placeholder="Create a strong password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        className="w-full bg-transparent border border-neutral-300/70 rounded-lg px-4 py-3 text-sm placeholder:text-neutral-400 focus:outline-none focus:border-neutral-900 transition-colors"
       />
-      <Button
-        variant="secondary"
-        size="lg"
-        className="w-full"
+      <p className="text-xs text-neutral-500 font-light -mt-2">
+        Must be at least 8 characters.
+      </p>
+      <button
         type="submit"
         disabled={loading || !firstName || !email || !password}
+        className="w-full text-xs tracking-[0.18em] uppercase border border-neutral-900 text-neutral-900 px-5 py-3.5 rounded-full hover:bg-neutral-900 hover:text-[#f5f4ef] transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-neutral-900"
       >
-        {loading ? "Creating account..." : "Create Account"}
-      </Button>
-    </Box>
+        {loading ? "Creating account…" : "Create account"}
+      </button>
+    </form>
   );
 }
 
-EmailRegistration.displayName = "EmailRegistration";
+function FieldLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <label
+      htmlFor={htmlFor}
+      className="block text-xs tracking-[0.18em] uppercase text-neutral-500 mb-1"
+    >
+      {children}
+    </label>
+  );
+}
