@@ -153,11 +153,6 @@ function ProfileSection({ user, loading }: { user: UserData | null; loading: boo
       </CardContent>
       <CardFooter>
         <Box className="flex items-center justify-end gap-3">
-          {error && (
-            <Text variant="body-sm" className="text-status-error">
-              {error}
-            </Text>
-          )}
           <AnimatedPresence show={saved} presenceKey="saved-indicator">
             <Text variant="body-sm" className="text-status-success">
               Saved
@@ -364,16 +359,6 @@ function DangerZone() {
               </Box>{" "}
               from your account address and we&apos;ll process the deletion with a 30-day recovery window.
             </Text>
-            {error && (
-              <Text variant="body-sm" className="text-status-error mt-2">
-                {error}
-              </Text>
-            )}
-            {result && (
-              <Text variant="body-sm" className="text-status-success mt-2">
-                {result}
-              </Text>
-            )}
           </Box>
         </Box>
       </CardContent>
