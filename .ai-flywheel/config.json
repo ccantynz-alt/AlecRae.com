@@ -1,0 +1,117 @@
+{
+  "version": "1.0.0",
+  "product": "alecrae.com",
+  "description": "AI flywheel configuration for the AlecRae.com personal platform",
+
+  "signal_collection": {
+    "page_engagement": [
+      "session_id",
+      "page_path",
+      "referrer",
+      "utm_source",
+      "time_on_page_seconds",
+      "scroll_depth_pct",
+      "exits_on_page",
+      "clicked_links",
+      "is_returning_visitor",
+      "device_type"
+    ],
+    "blog_posts": [
+      "post_slug",
+      "publish_date",
+      "topic_category",
+      "word_count",
+      "unique_reads_7d",
+      "unique_reads_30d",
+      "avg_scroll_depth_pct",
+      "social_shares",
+      "product_page_clicks_from_post",
+      "contact_form_submissions_from_post"
+    ],
+    "product_pages": [
+      "product",
+      "page_path",
+      "cta_clicked",
+      "cta_type",
+      "time_before_cta_click_seconds",
+      "scroll_depth_at_cta_click_pct"
+    ],
+    "contact_events": [
+      "form_submitted",
+      "origin_page",
+      "inquiry_type",
+      "lead_quality_score"
+    ]
+  },
+
+  "learning_cycles": {
+    "on_blog_publish": {
+      "action": "set_engagement_baseline_then_score_at_7d",
+      "model": "claude-sonnet-4-6",
+      "scoring_delay_days": 7
+    },
+    "weekly_content_strategy": {
+      "action": "analyse_top_performing_posts_and_suggest_next_3_topics",
+      "model": "claude-sonnet-4-6",
+      "schedule": "0 9 * * 1",
+      "output": "content_calendar_webhook"
+    },
+    "on_product_page_visit": {
+      "action": "track_conversion_funnel_step",
+      "model": "claude-haiku-4-5",
+      "latency_budget_ms": 100
+    },
+    "monthly_strategy_review": {
+      "action": "generate_full_content_and_conversion_report",
+      "model": "claude-sonnet-4-6",
+      "schedule": "0 9 1 * *",
+      "output": "email_to_site_owner"
+    }
+  },
+
+  "improvement_targets": [
+    {
+      "metric": "blog_to_product_conversion_rate",
+      "measure": "product_page_clicks_from_blog / blog_unique_reads",
+      "target": 0.05
+    },
+    {
+      "metric": "avg_scroll_depth",
+      "measure": "mean scroll depth across all blog posts",
+      "target": 0.75
+    },
+    {
+      "metric": "returning_visitor_rate",
+      "measure": "returning_sessions / total_sessions",
+      "target": 0.30
+    },
+    {
+      "metric": "content_freshness",
+      "measure": "days_since_last_blog_post",
+      "target": 14,
+      "direction": "minimize"
+    }
+  ],
+
+  "personalization": {
+    "enabled": true,
+    "returning_visitor_rules": [
+      {
+        "condition": "previously_read_crontech_posts",
+        "action": "surface_crontech_updates_first_in_blog_feed"
+      },
+      {
+        "condition": "previously_visited_product_page",
+        "action": "show_product_status_banner_on_homepage"
+      }
+    ],
+    "privacy": "first_party_cookies_only_no_third_party_tracking"
+  },
+
+  "data_retention": {
+    "engagement_events_days": 365,
+    "aggregated_metrics_years": 3,
+    "pii_fields": ["session_id"],
+    "pii_retention_days": 90
+  }
+}

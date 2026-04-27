@@ -1,0 +1,122 @@
+name: AlecRae.com Standalone CI + Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  quality:
+    name: Lint + Typecheck + Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build
+        run: bun run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ github.sha }}
+          path: apps/web/dist/
+          retention-days: 7
+
+  gate:
+    name: GateTest Quality Gate
+    runs-on: ubuntu-latest
+    needs: quality
+    if: always()
+    steps:
+      - name: Report to GateTest
+        env:
+          GATETEST_API_URL: ${{ secrets.GATETEST_API_URL }}
+          FLYWHEEL_API_KEY: ${{ secrets.FLYWHEEL_API_KEY }}
+        run: |
+          STATUS="${{ needs.quality.result == 'success' && 'passed' || 'failed' }}"
+          curl -s -X POST "${GATETEST_API_URL}/api/gate/result" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${FLYWHEEL_API_KEY}" \
+            -d "{
+              \"repo\": \"${{ github.repository }}\",
+              \"commit_sha\": \"${{ github.sha }}\",
+              \"branch\": \"${{ github.ref_name }}\",
+              \"status\": \"${STATUS}\",
+              \"product\": \"alecrae.com\"
+            }" \
+            --max-time 10 || echo "GateTest report failed (non-blocking)"
+
+  deploy:
+    name: Deploy to Crontech
+    runs-on: ubuntu-latest
+    needs: quality
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.quality.result == 'success'
+    environment: production
+    steps:
+      - name: Trigger Crontech deployment
+        env:
+          CRONTECH_DEPLOY_WEBHOOK: ${{ secrets.CRONTECH_DEPLOY_WEBHOOK }}
+          CRONTECH_DEPLOY_TOKEN: ${{ secrets.CRONTECH_DEPLOY_TOKEN }}
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${CRONTECH_DEPLOY_WEBHOOK}" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${CRONTECH_DEPLOY_TOKEN}" \
+            -d "{
+              \"repo\": \"alecrae.com\",
+              \"commit_sha\": \"${{ github.sha }}\",
+              \"commit_message\": \"${{ github.event.head_commit.message }}\",
+              \"author\": \"${{ github.actor }}\",
+              \"environment\": \"production\"
+            }" \
+            --max-time 30)
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          echo "Deploy response: $BODY"
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "202" ]; then
+            echo "Deploy trigger failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          echo "Deploy triggered successfully"
+
+  flywheel:
+    name: Emit Flywheel Telemetry
+    runs-on: ubuntu-latest
+    needs: [quality, deploy]
+    if: always()
+    steps:
+      - name: Send build metadata to flywheel
+        env:
+          FLYWHEEL_API_KEY: ${{ secrets.FLYWHEEL_API_KEY }}
+          GATETEST_API_URL: ${{ secrets.GATETEST_API_URL }}
+        run: |
+          curl -s -X POST "${GATETEST_API_URL}/api/flywheel/run" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${FLYWHEEL_API_KEY}" \
+            -d "{
+              \"product\": \"alecrae.com\",
+              \"event\": \"ci_complete\",
+              \"commit_sha\": \"${{ github.sha }}\",
+              \"branch\": \"${{ github.ref_name }}\",
+              \"quality_result\": \"${{ needs.quality.result }}\",
+              \"deploy_result\": \"${{ needs.deploy.result }}\",
+              \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+            }" \
+            --max-time 10 || echo "Flywheel emit failed (non-blocking)"

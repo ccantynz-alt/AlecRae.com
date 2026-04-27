@@ -1,0 +1,72 @@
+{
+  "product": "AlecRae.com",
+  "tagline": "The personal platform of Alec Rae — builder of Crontech, Gluecron, and GateTest",
+  "version": "1.0.0",
+  "type": "standalone-product",
+  "category": "personal-brand-platform",
+  "purpose": "Personal site, portfolio, technical blog, product launch hub, and business presence for Alec Rae",
+  "standalone": true,
+  "sections": [
+    "About / Bio",
+    "Product showcase: Crontech, Gluecron, GateTest",
+    "Technical blog",
+    "Contact / Business"
+  ],
+  "stack": {
+    "runtime": "Bun v1.x",
+    "framework": "Astro (static + SSR, maximum performance)",
+    "monorepo": "Turborepo",
+    "database": "PostgreSQL 16 via Drizzle ORM (blog, contact, analytics)",
+    "styling": "Tailwind CSS"
+  },
+  "hosting": {
+    "platform": "Crontech bare metal",
+    "note": "NOT Vercel. Hosted on owned infrastructure via Crontech.",
+    "deploy_trigger": "Gluecron push to main -> Crontech deploy webhook",
+    "cdn": "Crontech edge CDN"
+  },
+  "integrates_with_via_api_only": {
+    "crontech": {
+      "relationship": "AlecRae.com is HOSTED on Crontech",
+      "deploy": "POST /api/v1/deploy on merge to main"
+    },
+    "gluecron": {
+      "relationship": "Repo is hosted on Gluecron",
+      "status_badges": "GET /api/repos/alecrae.com/badge"
+    },
+    "gatetest": {
+      "relationship": "GateTest gates every PR before merge",
+      "build_badges": "GET /api/badge/:repo/:branch"
+    }
+  },
+  "ai_flywheel": {
+    "enabled": true,
+    "models": {
+      "content_analysis": "claude-sonnet-4-6",
+      "real_time_personalization": "claude-haiku-4-5"
+    },
+    "learns_from": [
+      "page_views_by_path",
+      "time_on_page",
+      "scroll_depth",
+      "blog_post_engagement",
+      "product_page_conversion_clicks",
+      "contact_form_submissions_by_origin_page",
+      "site_search_queries"
+    ],
+    "improves": [
+      "blog_topic_selection",
+      "content_length_optimization",
+      "publish_timing",
+      "product_page_conversion",
+      "returning_visitor_personalization"
+    ],
+    "public_flywheel_role": "AlecRae.com IS the public face of the flywheel — it demonstrates in practice what AI-native products look like, and every visitor interaction makes the content strategy smarter"
+  },
+  "performance_targets": {
+    "lcp_ms": 1000,
+    "ttfb_ms": 50,
+    "lighthouse_score": 100,
+    "core_web_vitals": "all green"
+  }
+}
