@@ -22,8 +22,11 @@ import { QuickReply } from "../../../components/QuickReply";
 import { UndoToastManager, type UndoAction } from "../../../components/UndoToast";
 import { BatchActionBar } from "../../../components/BatchActionBar";
 import { SnoozePicker } from "../../../components/SnoozePicker";
+import { SyncStatusBar } from "../../../components/SyncStatusBar";
 import { EmailListSkeleton } from "../../../components/AnimatedSkeleton";
 import { PressableScale } from "../../../components/PressableScale";
+import { useSyncEngine } from "../../../lib/sync-engine";
+import { getCachedEmails, cacheEmails, type CachedEmail } from "../../../lib/offline-store";
 import {
   fadeInUp,
   threadExpand,
@@ -164,6 +167,8 @@ export default function InboxPage(): React.ReactNode {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [snoozePickerOpen, setSnoozePickerOpen] = useState(false);
   const snoozeTargetRef = useRef<string | null>(null);
+
+  const sync = useSyncEngine();
 
   const filteredEmails = useMemo(() => emailItems.filter((e) => {
     if (filter === "unread") return !e.read;
@@ -422,9 +427,35 @@ export default function InboxPage(): React.ReactNode {
     try {
       setLoading(true);
       setError(null);
+
+      // Cache-first: try IndexedDB for instant load
+      try {
+        const cached = await getCachedEmails({ limit: 50, filter: "all" });
+        if (cached.length > 0) {
+          const cachedItems: EmailListItem[] = cached.map((c) => ({
+            id: c.id,
+            sender: { name: c.from.name ?? c.from.email, email: c.from.email },
+            subject: c.subject || "(no subject)",
+            preview: c.preview || "",
+            timestamp: formatTimestamp(c.createdAt),
+            read: c.read,
+            starred: c.starred,
+            priority: "normal" as const,
+            hasAttachments: c.hasAttachments,
+          }));
+          setEmailItems(cachedItems);
+          if (cachedItems.length > 0 && !selectedEmailId) {
+            setSelectedEmailId(cachedItems[0]!.id);
+          }
+          setLoading(false);
+        }
+      } catch {
+        // Cache miss — proceed to network
+      }
+
+      // Network: fetch fresh data and update cache
       const res = await messagesApi.list({ limit: 50 });
       const items = res.data.map(toEmailListItem);
-      // S6: Build newsletter classification map
       const nlMap = new Map<string, boolean>();
       for (const msg of res.data) {
         nlMap.set(msg.id, isLikelyNewsletter(msg));
@@ -434,6 +465,27 @@ export default function InboxPage(): React.ReactNode {
       if (items.length > 0 && !selectedEmailId) {
         setSelectedEmailId(items[0]!.id);
       }
+
+      // Update cache in background
+      const toCache: CachedEmail[] = res.data.map((msg) => ({
+        id: msg.id,
+        messageId: msg.messageId,
+        from: msg.from,
+        to: msg.to,
+        cc: msg.cc,
+        subject: msg.subject,
+        preview: msg.preview,
+        status: msg.status,
+        tags: msg.tags,
+        hasAttachments: msg.hasAttachments,
+        starred: msg.tags.includes("starred"),
+        read: msg.status === "delivered" || msg.status === "sent",
+        createdAt: msg.createdAt,
+        updatedAt: msg.updatedAt,
+        sentAt: msg.sentAt,
+        cachedAt: Date.now(),
+      }));
+      cacheEmails(toCache).catch(() => {});
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load emails");
     } finally {
@@ -584,6 +636,14 @@ export default function InboxPage(): React.ReactNode {
 
   return (
     <PageLayout header={searchHeader} fullWidth>
+      <SyncStatusBar
+        isOnline={sync.isOnline}
+        isSyncing={sync.isSyncing}
+        pendingOutbox={sync.pendingOutbox}
+        lastSyncAt={sync.lastSyncAt}
+        error={sync.error}
+        onSyncNow={() => void sync.syncNow()}
+      />
       <Box className="flex flex-1 h-full">
         <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
           <AnimatePresence>
