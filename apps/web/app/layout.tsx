@@ -24,9 +24,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AlecRae — Email, considered.",
+  title: "AlecRae — Email, Evolved.",
   description:
-    "The email client you'd sign your name to. One subscription. All your accounts. Every detail considered.",
+    "The email client that replaces Gmail, Grammarly, and 5 other subscriptions. AI-powered. Lightning fast. $9/month.",
   applicationName: "AlecRae",
   authors: [{ name: "AlecRae" }],
   keywords: [
@@ -34,20 +34,22 @@ export const metadata: Metadata = {
     "Gmail alternative",
     "Outlook alternative",
     "AI email",
-    "sophisticated email",
+    "best email app",
     "AlecRae",
+    "email AI",
+    "smart inbox",
   ],
   openGraph: {
-    title: "AlecRae — Email, considered.",
-    description: "The email client you'd sign your name to.",
+    title: "AlecRae — Email, Evolved.",
+    description: "AI-powered email that replaces your entire stack. One app. $9/month.",
     url: "https://alecrae.com",
     siteName: "AlecRae",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "AlecRae — Email, considered.",
-    description: "The email client you'd sign your name to.",
+    title: "AlecRae — Email, Evolved.",
+    description: "AI-powered email that replaces your entire stack. One app. $9/month.",
   },
   robots: {
     index: true,
@@ -58,7 +60,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f5f4ef",
+  themeColor: "#0a0a0f",
 };
 
 export default function RootLayout({
@@ -71,7 +73,7 @@ export default function RootLayout({
       lang="en"
       className={`h-full antialiased ${italianno.variable} ${inter.variable}`}
     >
-      <body className="h-full bg-[#f5f4ef] text-neutral-900 font-sans">
+      <body className="h-full bg-[#0a0a0f] text-white font-sans">
         {children}
       </body>
     </html>

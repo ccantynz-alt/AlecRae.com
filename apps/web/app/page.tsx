@@ -10,9 +10,9 @@ import { Platforms } from "../components/landing/Platforms";
 import { CTA } from "../components/landing/CTA";
 import { Footer } from "../components/landing/Footer";
 
-export default function LandingPage() {
+export default function LandingPage(): React.ReactNode {
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-[#0a0a0f] text-white overflow-x-hidden">
       <Navbar />
       <Hero />
       <Problem />
