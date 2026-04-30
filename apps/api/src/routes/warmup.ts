@@ -38,6 +38,12 @@ warmup.post(
   validateBody(StartWarmupSchema),
   async (c) => {
     const domainId = c.req.param("id");
+    if (!domainId) {
+      return c.json(
+        { error: { type: "validation_error", message: "Missing domain id", code: "missing_domain_id" } },
+        400,
+      );
+    }
     const input = getValidatedBody<StartWarmupInput>(c);
     const auth = c.get("auth");
 
@@ -77,6 +83,12 @@ warmup.get(
   requireScope("domains:manage"),
   async (c) => {
     const domainId = c.req.param("id");
+    if (!domainId) {
+      return c.json(
+        { error: { type: "validation_error", message: "Missing domain id", code: "missing_domain_id" } },
+        400,
+      );
+    }
 
     const orchestrator = getWarmupOrchestrator();
     const result = await orchestrator.checkWarmupStatus(domainId);
@@ -104,6 +116,12 @@ warmup.post(
   requireScope("domains:manage"),
   async (c) => {
     const domainId = c.req.param("id");
+    if (!domainId) {
+      return c.json(
+        { error: { type: "validation_error", message: "Missing domain id", code: "missing_domain_id" } },
+        400,
+      );
+    }
 
     const orchestrator = getWarmupOrchestrator();
     const result = await orchestrator.pauseWarmup(domainId);
@@ -134,6 +152,12 @@ warmup.post(
   requireScope("domains:manage"),
   async (c) => {
     const domainId = c.req.param("id");
+    if (!domainId) {
+      return c.json(
+        { error: { type: "validation_error", message: "Missing domain id", code: "missing_domain_id" } },
+        400,
+      );
+    }
 
     const orchestrator = getWarmupOrchestrator();
     const result = await orchestrator.resumeWarmup(domainId);
@@ -164,6 +188,12 @@ warmup.post(
   requireScope("domains:manage"),
   async (c) => {
     const domainId = c.req.param("id");
+    if (!domainId) {
+      return c.json(
+        { error: { type: "validation_error", message: "Missing domain id", code: "missing_domain_id" } },
+        400,
+      );
+    }
 
     const orchestrator = getWarmupOrchestrator();
     const result = await orchestrator.cancelWarmup(domainId);
@@ -194,6 +224,12 @@ warmup.get(
   requireScope("domains:manage"),
   async (c) => {
     const domainId = c.req.param("id");
+    if (!domainId) {
+      return c.json(
+        { error: { type: "validation_error", message: "Missing domain id", code: "missing_domain_id" } },
+        400,
+      );
+    }
 
     const monitor = getWarmupMonitor();
     const report = await monitor.generateReport(domainId);

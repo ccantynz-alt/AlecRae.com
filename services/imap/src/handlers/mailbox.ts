@@ -10,7 +10,6 @@ import type {
   ImapSession,
   ImapCommand,
   ImapMailbox,
-  SelectedMailbox,
 } from "../types.js";
 import { SYSTEM_FLAGS } from "../types.js";
 import {
@@ -22,7 +21,6 @@ import {
   formatFlags,
   parseQuotedString,
   parseAtom,
-  parseNextArgument,
   parseParenList,
 } from "../server/commands.js";
 
@@ -51,7 +49,7 @@ function getUserMailboxes(username: string): Map<string, ImapMailbox> {
 
   // Initialize default mailboxes per RFC 9051
   userBoxes = new Map<string, ImapMailbox>();
-  const defaults: Array<{ name: string; attributes: string[] }> = [
+  const defaults: { name: string; attributes: string[] }[] = [
     { name: "INBOX", attributes: ["\\HasNoChildren"] },
     { name: "Drafts", attributes: ["\\HasNoChildren", "\\Drafts"] },
     { name: "Sent", attributes: ["\\HasNoChildren", "\\Sent"] },
@@ -255,8 +253,8 @@ export function handleCreate(
       mailboxes.set(parentName, parent);
     } else {
       // Update parent to indicate it has children
-      const parent = mailboxes.get(parentName)!;
-      if (!parent.attributes.includes("\\HasChildren")) {
+      const parent = mailboxes.get(parentName);
+      if (parent && !parent.attributes.includes("\\HasChildren")) {
         parent.attributes = parent.attributes.filter((a) => a !== "\\HasNoChildren");
         parent.attributes.push("\\HasChildren");
       }
@@ -311,7 +309,11 @@ export function handleDelete(
 
   if (hasChildren) {
     // Per RFC 9051, if mailbox has inferiors, mark as \Noselect instead of deleting
-    const mailbox = mailboxes.get(parsed.name)!;
+    const mailbox = mailboxes.get(parsed.name);
+    if (!mailbox) {
+      writer(formatTagged(command.tag, "NO", "[NONEXISTENT] Mailbox does not exist"));
+      return;
+    }
     mailbox.attributes = mailbox.attributes.filter(
       (a) => a !== "\\HasNoChildren",
     );
@@ -378,14 +380,18 @@ export function handleRename(
   }
 
   // Rename the mailbox and all children
-  const oldMailbox = mailboxes.get(oldName)!;
+  const oldMailbox = mailboxes.get(oldName);
+  if (!oldMailbox) {
+    writer(formatTagged(command.tag, "NO", "[NONEXISTENT] Source mailbox does not exist"));
+    return;
+  }
   const newMailbox = { ...oldMailbox, name: newName };
   mailboxes.delete(oldName);
   mailboxes.set(newName, newMailbox);
 
   // Rename children
   const prefix = oldName + HIERARCHY_DELIMITER;
-  const childEntries: Array<[string, ImapMailbox]> = [];
+  const childEntries: [string, ImapMailbox][] = [];
 
   for (const [name, mb] of mailboxes) {
     if (name.startsWith(prefix)) {

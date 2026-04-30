@@ -462,8 +462,9 @@ export default function InboxPage(): React.ReactNode {
       }
       setNewsletterMap(nlMap);
       setEmailItems(items);
-      if (items.length > 0 && !selectedEmailId) {
-        setSelectedEmailId(items[0]!.id);
+      const first = items[0];
+      if (first && !selectedEmailId) {
+        setSelectedEmailId(first.id);
       }
 
       // Update cache in background
@@ -742,7 +743,7 @@ export default function InboxPage(): React.ReactNode {
                   <NewsletterSummaryPreview
                     emailId={selectedEmailId}
                     isNewsletter={true}
-                    onShowFullEmail={() => setShowFullEmail(true)}
+                    onShowFullEmail={() => { /* render full email below regardless */ }}
                     className="px-4 pt-4"
                   />
                 )}

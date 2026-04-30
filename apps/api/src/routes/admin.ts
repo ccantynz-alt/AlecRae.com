@@ -21,7 +21,6 @@ import {
   domains as domainsTable,
   accounts,
   users,
-  dnsRecords,
 } from "@alecrae/db";
 import { getDlqRecords, getDlqStats, clearDlqRecord, clearPermanentlyFailed } from "../lib/dlq-processor.js";
 

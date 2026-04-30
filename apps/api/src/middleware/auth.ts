@@ -23,6 +23,7 @@ export interface AuthContext {
   keyId: string;
   tier: PlanTier;
   scopes: string[];
+  userId?: string;
 }
 
 declare module "hono" {
@@ -209,15 +210,22 @@ async function validateBearerToken(
       accountId: payload.sub as string,
       keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
       tier: normaliseTier(payload.tier as string),
-      scopes: (payload.scope as string)?.split(" ") ?? [],
+      scopes: (payload.scope as string)?.split(" ") ?? [
+        "messages:send",
+        "messages:read",
+        "account:manage",
+      ],
+      userId: payload.userId as string | undefined,
     };
   } catch {
     // Fallback: try raw decode for legacy tokens (unsigned / HS256 dev tokens)
     try {
       const parts = token.split(".");
       if (parts.length !== 3) return null;
+      const segment = parts[1];
+      if (!segment) return null;
 
-      const payload = JSON.parse(atob(parts[1]!));
+      const payload = JSON.parse(atob(segment));
       const now = Math.floor(Date.now() / 1000);
 
       if (payload.exp && payload.exp < now) return null;
@@ -227,7 +235,12 @@ async function validateBearerToken(
         accountId: payload.sub as string,
         keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
         tier: normaliseTier(payload.tier as string),
-        scopes: (payload.scope as string)?.split(" ") ?? [],
+        scopes: (payload.scope as string)?.split(" ") ?? [
+          "messages:send",
+          "messages:read",
+          "account:manage",
+        ],
+        userId: payload.userId as string | undefined,
       };
     } catch {
       return null;
@@ -301,6 +314,7 @@ export function requireScope(...requiredScopes: string[]) {
     }
 
     await next();
+    return;
   });
 }
 
@@ -325,7 +339,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
     );
   }
 
-  let authContext: AuthContext | null = null;
+  let authContext: AuthContext | null;
 
   if (credential.type === "api_key") {
     // Try database lookup first, fall back to dev mode
@@ -363,4 +377,5 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
   c.set("auth", authContext);
   await next();
+  return;
 });

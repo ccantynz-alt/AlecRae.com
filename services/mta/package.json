@@ -19,7 +19,7 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "build": "echo 'Service builds independently \u2014 not part of Vercel web deployment'",
-    "test": "vitest run",
+    "test": "bun test",
     "test:watch": "vitest watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
@@ -30,9 +30,11 @@
     "@alecrae/db": "workspace:*",
     "@alecrae/crypto": "workspace:*",
     "@alecrae/email-parser": "workspace:*",
+    "@hono/node-server": "^1.13.0",
     "bullmq": "^5.0.0",
-    "ioredis": "^5.4.0",
-    "drizzle-orm": "^0.36.0"
+    "drizzle-orm": "^0.36.0",
+    "hono": "^4.6.0",
+    "ioredis": "^5.4.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

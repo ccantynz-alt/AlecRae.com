@@ -13,3 +13,6 @@ export {
   HEADER_INJECTION_REJECTED,
   type HeaderValidationResult,
 } from "./smtp/header-validator.js";
+
+export { checkSpf } from "./spf/validator.js";
+export { evaluateDmarc, determineAction } from "./dmarc/enforcer.js";

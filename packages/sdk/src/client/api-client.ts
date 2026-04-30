@@ -196,8 +196,8 @@ export class ApiClient {
         const response = await fetch(url, {
           method: options.method,
           headers,
-          body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
           signal: controller.signal,
+          ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
         });
 
         clearTimeout(timeoutId);
@@ -215,11 +215,12 @@ export class ApiClient {
             console.log(`[alecrae-sdk] Response ${response.status}:`, JSON.stringify(data, null, 2));
           }
 
+          const requestId = response.headers.get("x-request-id");
           return {
             data,
             status: response.status,
             headers: responseHeaders,
-            requestId: response.headers.get("x-request-id") ?? undefined,
+            ...(requestId ? { requestId } : {}),
           };
         }
 
@@ -289,7 +290,11 @@ export class ApiClient {
     path: string,
     query?: Readonly<Record<string, string | number | boolean | undefined>>,
   ): Promise<ApiResponse<T>> {
-    return this.request<T>({ method: "GET", path, query });
+    return this.request<T>({
+      method: "GET",
+      path,
+      ...(query !== undefined ? { query } : {}),
+    });
   }
 
   /**

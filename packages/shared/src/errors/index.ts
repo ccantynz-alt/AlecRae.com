@@ -5,9 +5,7 @@
  * an HTTP-friendly `statusCode`, and optional structured context.
  */
 
-export interface ErrorContext {
-  readonly [key: string]: unknown;
-}
+export type ErrorContext = Readonly<Record<string, unknown>>;
 
 /** Base error class for all platform errors. */
 export abstract class BaseError extends Error {

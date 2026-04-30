@@ -1,0 +1,88 @@
+# ─── .dockerignore (Fly MTA) ────────────────────────────────────────────────
+# Keeps the build context small — excludes everything the MTA does NOT need.
+# ────────────────────────────────────────────────────────────────────────────
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Node / build artifacts
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+.turbo
+
+# Tests (not needed at runtime)
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment / secrets — NEVER bake into image
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Other services + apps — MTA image stays lean
+apps/web
+apps/admin
+apps/api
+apps/mobile
+apps/desktop
+apps/docs
+apps/status
+apps/changelog
+services/ai-engine
+services/analytics
+services/collab
+services/dns
+services/imap
+services/inbound
+services/jmap
+services/reputation
+services/security
+services/sentinel
+services/support
+packages/sdk
+packages/ui
+
+# Infrastructure files (not needed in runtime image)
+infrastructure/kubernetes
+infrastructure/pulumi
+infrastructure/scripts
+infrastructure/cloudflare
+infrastructure/docker/Dockerfile.api
+infrastructure/docker/Dockerfile.web
+infrastructure/docker/Dockerfile.base
+
+# Docs
+docs
+ALECRAE-BRIEF.md
+CLAUDE.md
+*.md
+!README.md
+
+# CI
+.github

@@ -28,7 +28,7 @@ export interface DlqRecord {
 }
 
 // In-memory DLQ store (production would persist to DB)
-const dlqStore: Map<string, DlqRecord> = new Map();
+const dlqStore = new Map<string, DlqRecord>();
 
 // ─── DLQ processor ───────────────────────────────────────────────────────────
 
@@ -69,7 +69,9 @@ export async function processDLQ(): Promise<number> {
     return 0;
   } finally {
     if (queue) {
-      await queue.close().catch(() => {});
+      await queue.close().catch(() => {
+        /* intentional no-op: best-effort cleanup */
+      });
     }
   }
 }
@@ -129,7 +131,9 @@ async function processFailedJob(queue: Queue, job: Job): Promise<void> {
       });
 
       // Remove the original failed job from the queue
-      await job.remove().catch(() => {});
+      await job.remove().catch(() => {
+        /* intentional no-op: best-effort cleanup */
+      });
 
       console.log(`[dlq] Job ${jobId} scheduled for retry at ${retryAt.toISOString()}`);
     } catch (err) {
@@ -142,7 +146,9 @@ async function processFailedJob(queue: Queue, job: Job): Promise<void> {
     markPermanentlyFailed(jobId, job.name, job.data, failedReason, attemptsMade);
 
     // Remove from queue
-    await job.remove().catch(() => {});
+    await job.remove().catch(() => {
+        /* intentional no-op: best-effort cleanup */
+      });
   }
 }
 

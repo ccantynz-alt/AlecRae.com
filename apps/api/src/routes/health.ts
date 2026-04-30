@@ -80,7 +80,7 @@ async function checkMtaQueue(): Promise<ServiceStatus> {
     queue = new Queue(MTA_QUEUE_NAME, {
       connection: { url: REDIS_URL },
     });
-    const counts = await queue.getJobCounts(
+    await queue.getJobCounts(
       "waiting",
       "active",
       "delayed",

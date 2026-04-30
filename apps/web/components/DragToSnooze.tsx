@@ -268,7 +268,7 @@ export function DragToSnooze({
       <SnoozeDropOverlay
         visible={overlayVisible}
         dragEmailId={dragEmail?.emailId ?? null}
-        dragSubject={dragEmail?.subject}
+        {...(dragEmail?.subject !== undefined ? { dragSubject: dragEmail.subject } : {})}
         onSnooze={handleOverlaySnooze}
         onDismiss={handleOverlayDismiss}
       />

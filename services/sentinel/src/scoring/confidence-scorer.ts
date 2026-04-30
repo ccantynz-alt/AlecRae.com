@@ -34,7 +34,7 @@ interface SignalEvaluator {
 
 export class ConfidenceScorer {
   private evaluators: SignalEvaluator[] = [];
-  private dynamicWeights: Map<SignalType, number> = new Map();
+  private dynamicWeights = new Map<SignalType, number>();
 
   constructor(private config: SentinelConfig) {
     this.registerDefaultEvaluators();
@@ -84,7 +84,7 @@ export class ConfidenceScorer {
   updateWeights(
     signalType: SignalType,
     wasCorrect: boolean,
-    learningRate: number = 0.01
+    learningRate = 0.01
   ): void {
     const currentWeight = this.dynamicWeights.get(signalType) ?? 1.0;
     const adjustment = wasCorrect ? learningRate : -learningRate;
@@ -135,7 +135,7 @@ export class ConfidenceScorer {
         const reasons: string[] = [];
 
         if (headers['dkim-signature']) {
-          score += 20;
+          score += 25;
           reasons.push('DKIM present');
         }
         if (headers['received-spf']?.includes('pass')) {
@@ -152,7 +152,7 @@ export class ConfidenceScorer {
           !headers['dkim-signature'] &&
           !headers['received-spf']
         ) {
-          score = 15;
+          score = 5;
           reasons.push('No authentication');
         }
 
@@ -209,16 +209,16 @@ export class ConfidenceScorer {
         const payload = item.payload as Record<string, unknown>;
         const headers = (payload['headers'] as Record<string, string>) ?? {};
 
-        let score = 70;
+        let score = 100;
         const reasons: string[] = [];
 
         // Missing essential headers
         if (!headers['message-id']) {
-          score -= 20;
+          score -= 40;
           reasons.push('Missing Message-ID');
         }
         if (!headers['date']) {
-          score -= 10;
+          score -= 20;
           reasons.push('Missing Date header');
         }
 
@@ -226,14 +226,8 @@ export class ConfidenceScorer {
         const from = (payload['from'] as string) ?? '';
         const envelopeFrom = (payload['envelopeFrom'] as string) ?? '';
         if (from && envelopeFrom && this.domainOf(from) !== this.domainOf(envelopeFrom)) {
-          score -= 15;
+          score -= 30;
           reasons.push('From/Envelope-From domain mismatch');
-        }
-
-        // List-Unsubscribe present (good sign for legitimate marketing)
-        if (headers['list-unsubscribe']) {
-          score += 10;
-          reasons.push('List-Unsubscribe present');
         }
 
         return {
@@ -252,15 +246,15 @@ export class ConfidenceScorer {
       evaluate: (item) => {
         const prevCount = item.metadata.previousItemCount;
 
-        let score = 80;
+        let score = 95;
         let reason = 'Normal sending rate';
 
         // High volume from this sender in short period = suspicious
         if (prevCount > 1000) {
-          score = 20;
+          score = 5;
           reason = `Very high volume: ${prevCount} recent items`;
         } else if (prevCount > 100) {
-          score = 50;
+          score = 40;
           reason = `Elevated volume: ${prevCount} recent items`;
         } else if (prevCount === 0) {
           score = 60;
@@ -285,7 +279,7 @@ export class ConfidenceScorer {
         const subject = ((payload['subject'] as string) ?? '').toLowerCase();
         const body = ((payload['body'] as string) ?? '').toLowerCase();
 
-        let score = 75;
+        let score = 95;
         const reasons: string[] = [];
 
         // Urgency signals (common in phishing)
@@ -297,23 +291,26 @@ export class ConfidenceScorer {
           (p) => subject.includes(p) || body.includes(p)
         );
         if (urgencyHits.length > 2) {
-          score -= 30;
+          score -= 40;
           reasons.push(`Multiple urgency signals: ${urgencyHits.join(', ')}`);
         } else if (urgencyHits.length > 0) {
-          score -= 10;
+          score -= 15;
           reasons.push(`Urgency language detected`);
         }
 
         // Excessive links
         const linkCount = (body.match(/https?:\/\//g) ?? []).length;
         if (linkCount > 10) {
-          score -= 15;
+          score -= 20;
           reasons.push(`High link count: ${linkCount}`);
         }
 
-        // Empty subject
-        if (!subject) {
-          score -= 10;
+        // Empty subject and body together is a strong spam signal
+        if (!subject && !body) {
+          score -= 90;
+          reasons.push('Empty subject and body');
+        } else if (!subject) {
+          score -= 15;
           reasons.push('Empty subject');
         }
 
@@ -358,7 +355,7 @@ export class ConfidenceScorer {
 
         return {
           signal: 'recipient_relationship',
-          score: hasRelationship ? 95 : 50,
+          score: hasRelationship ? 98 : 45,
           weight: 1.5,
           reason: hasRelationship
             ? 'Recipient has prior relationship with sender'

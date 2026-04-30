@@ -2,7 +2,6 @@ import {
   pgTable,
   text,
   timestamp,
-  boolean,
   index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";

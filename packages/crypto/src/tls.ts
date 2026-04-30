@@ -3,7 +3,6 @@
  * chain validation, and fingerprinting.
  */
 import {
-  createHash,
   X509Certificate,
   generateKeyPairSync,
   createSign,

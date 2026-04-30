@@ -450,7 +450,7 @@ export const SwipeableEmailRow = forwardRef<HTMLDivElement, SwipeableEmailRowPro
               >
                 {email.from}
               </Text>
-              <Text variant="body-xs" muted className="shrink-0">
+              <Text variant="body-sm" muted className="shrink-0">
                 {email.receivedAt}
               </Text>
             </Box>
@@ -460,7 +460,7 @@ export const SwipeableEmailRow = forwardRef<HTMLDivElement, SwipeableEmailRowPro
             >
               {email.subject}
             </Text>
-            <Text variant="body-xs" muted className="truncate">
+            <Text variant="body-sm" muted className="truncate">
               {email.preview}
             </Text>
           </Box>
@@ -492,7 +492,7 @@ export const SwipeableEmailRow = forwardRef<HTMLDivElement, SwipeableEmailRowPro
         {showContextMenu ? (
           <Box className="absolute inset-0 z-50 flex items-center justify-center bg-black/60">
             <Box className="bg-surface rounded-xl p-2 shadow-xl border border-border min-w-48">
-              <Text variant="body-xs" muted className="px-3 py-2 font-semibold uppercase tracking-wide">
+              <Text variant="body-sm" muted className="px-3 py-2 font-semibold uppercase tracking-wide">
                 Actions
               </Text>
               {allActions.map((action) => (

@@ -17,7 +17,6 @@ import {
   useState,
   useCallback,
   useRef,
-  useEffect,
   type KeyboardEvent,
   type ChangeEvent,
   type HTMLAttributes,
@@ -139,8 +138,8 @@ const FIELD_NAMES = [
   "isRead", "size", "threadLength", "status", "domain",
 ];
 
-function highlightSql(text: string): Array<{ text: string; type: "keyword" | "field" | "string" | "number" | "text" }> {
-  const tokens: Array<{ text: string; type: "keyword" | "field" | "string" | "number" | "text" }> = [];
+function highlightSql(text: string): { text: string; type: "keyword" | "field" | "string" | "number" | "text" }[] {
+  const tokens: { text: string; type: "keyword" | "field" | "string" | "number" | "text" }[] = [];
   const words = text.split(/(\s+|,|;|\(|\))/);
 
   for (const word of words) {
@@ -483,7 +482,7 @@ export const QueryConsole = forwardRef<HTMLDivElement, QueryConsoleProps>(
                   </Text>
                 </CardHeader>
                 <CardContent>
-                  <Text variant="body" className="mb-2 text-slate-300">
+                  <Text variant="body-md" className="mb-2 text-slate-300">
                     {explanation.description}
                   </Text>
                   <Text variant="caption" className="text-slate-400">
@@ -510,7 +509,7 @@ export const QueryConsole = forwardRef<HTMLDivElement, QueryConsoleProps>(
             {state === "error" && errorMessage && (
               <Card className="mb-4 border-red-800 bg-red-950/30">
                 <CardContent>
-                  <Text variant="body" className="text-red-400">
+                  <Text variant="body-md" className="text-red-400">
                     {errorMessage}
                   </Text>
                 </CardContent>
@@ -522,7 +521,7 @@ export const QueryConsole = forwardRef<HTMLDivElement, QueryConsoleProps>(
               <Box className="flex items-center justify-center py-12">
                 <Box className="flex items-center gap-3">
                   <Box className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
-                  <Text variant="body" className="text-slate-400">
+                  <Text variant="body-md" className="text-slate-400">
                     {state === "explaining"
                       ? "Analyzing query..."
                       : "Executing query..."}
@@ -618,7 +617,7 @@ export const QueryConsole = forwardRef<HTMLDivElement, QueryConsoleProps>(
                   </Box>
                 ) : (
                   <Box className="rounded-lg border border-slate-700 py-8 text-center">
-                    <Text variant="body" className="text-slate-400">
+                    <Text variant="body-md" className="text-slate-400">
                       No results found
                     </Text>
                   </Box>
@@ -629,10 +628,10 @@ export const QueryConsole = forwardRef<HTMLDivElement, QueryConsoleProps>(
             {/* Idle state */}
             {state === "idle" && !result && !explanation && (
               <Box className="flex flex-col items-center justify-center py-16">
-                <Text variant="heading" className="mb-2 text-slate-500">
+                <Text variant="heading-md" className="mb-2 text-slate-500">
                   Query Your Inbox
                 </Text>
-                <Text variant="body" className="mb-4 max-w-md text-center text-slate-600">
+                <Text variant="body-md" className="mb-4 max-w-md text-center text-slate-600">
                   Use natural language or SQL-like syntax to search and analyze
                   your emails. Try "How many emails did I get from each domain
                   this month?" or "SELECT from, subject FROM emails WHERE

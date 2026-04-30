@@ -12,10 +12,7 @@ import {
   type CollabHistoryEntry,
   type Collaborator,
 } from "@alecrae/ui";
-import {
-  useCollaborativeDraft,
-  type UseCollaborativeDraftOptions,
-} from "../lib/use-collaborative-draft";
+import { useCollaborativeDraft } from "../lib/use-collaborative-draft";
 import { collaborationApi } from "../lib/api";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -64,9 +61,9 @@ export function CollaborativeDraftView({
   isOwner = false,
   initialParticipants = [],
   initialInvites = [],
-  apiBaseUrl = "/api",
-  apiToken,
-  onSend,
+  apiBaseUrl: _apiBaseUrl = "/api",
+  apiToken: _apiToken,
+  onSend: _onSend,
   onContentChange,
   collabEndpoint,
   className = "",

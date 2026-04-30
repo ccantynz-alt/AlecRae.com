@@ -118,6 +118,8 @@ function ProfileSection({
     }
   }, [user]);
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleSave = async () => {
     setSaving(true);
     setStatus("idle");
@@ -465,7 +467,17 @@ function DangerZone() {
               Delete Account
             </Text>
             <Text variant="body-sm" muted>
-              Permanently delete your account and all associated data. This action cannot be undone.
+              Account deletion requires identity verification. Email{" "}
+              <Box
+                as="a"
+                href="mailto:support@alecrae.com?subject=Account%20Deletion%20Request"
+                className="inline text-brand-600 hover:text-brand-700 font-medium"
+              >
+                <Text as="span" variant="body-sm" className="text-brand-600">
+                  support@alecrae.com
+                </Text>
+              </Box>{" "}
+              from your account address and we&apos;ll process the deletion with a 30-day recovery window.
             </Text>
           </Box>
           <Box className="flex items-center gap-2">

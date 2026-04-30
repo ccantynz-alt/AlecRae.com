@@ -13,8 +13,8 @@ import { getDatabase, refreshTokens, users, accounts } from "@alecrae/db";
 
 // ─── Key management ──────────────────────────────────────────────────────────
 
-let privateKey: jose.KeyLike | Uint8Array | null = null;
-let publicKey: jose.KeyLike | Uint8Array | null = null;
+let privateKey: CryptoKey | Uint8Array | null = null;
+let publicKey: CryptoKey | Uint8Array | null = null;
 let algorithm: "RS256" | "HS256" = "HS256";
 let keysInitialized = false;
 
@@ -55,7 +55,17 @@ async function initKeys(): Promise<void> {
   }
 
   // HS256 fallback
-  const secret = process.env["JWT_SECRET"] ?? "dev_secret";
+  const explicitSecret = process.env["JWT_SECRET"];
+  if (!explicitSecret && process.env["NODE_ENV"] === "production") {
+    throw new Error(
+      "[jwt] Refusing to start in production without JWT_PRIVATE_KEY + JWT_PUBLIC_KEY or JWT_SECRET. " +
+        "Set one of these env vars before starting the API.",
+    );
+  }
+  if (explicitSecret && explicitSecret.length < 32 && process.env["NODE_ENV"] === "production") {
+    throw new Error("[jwt] JWT_SECRET must be at least 32 characters in production.");
+  }
+  const secret = explicitSecret ?? "dev_secret";
   if (secret === "dev_secret") {
     console.warn("[jwt] WARNING: Using default HS256 secret. Set JWT_PRIVATE_KEY + JWT_PUBLIC_KEY for RS256 in production.");
   }
@@ -281,7 +291,7 @@ export async function rotateRefreshToken(oldRefreshToken: string): Promise<Token
 export async function revokeAllUserTokens(userId: string): Promise<number> {
   const db = getDatabase();
 
-  const result = await db
+  await db
     .update(refreshTokens)
     .set({ revokedAt: new Date() })
     .where(

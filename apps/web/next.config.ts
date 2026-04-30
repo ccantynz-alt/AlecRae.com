@@ -3,17 +3,13 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   transpilePackages: ["@alecrae/ui"],
   reactStrictMode: true,
-  experimental: {
-    typedRoutes: true,
-  },
-  // TODO: Re-enable strict type checking once UI package strictness is fixed.
-  // Tracked as a known issue in CLAUDE.md. The landing page compiles cleanly;
-  // these are pre-existing dashboard type issues from packages/ui.
+  // typedRoutes moved out of experimental in Next.js 15
+  typedRoutes: true,
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: false,
   },
 };
 

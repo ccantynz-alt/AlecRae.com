@@ -145,8 +145,8 @@ async function checkRedis(
     // Find the oldest entry to calculate retry-after
     const oldest = await redis.zrange(key, 0, 0, "WITHSCORES");
     let retryAfterSec = Math.ceil(windowMs / 1000);
-    if (oldest.length >= 2) {
-      const oldestTs = parseInt(oldest[1]!, 10);
+    if (oldest.length >= 2 && oldest[1] !== undefined) {
+      const oldestTs = parseInt(oldest[1], 10);
       retryAfterSec = Math.max(1, Math.ceil((oldestTs + windowMs - now) / 1000));
     }
     return { allowed: false, limit, remaining: 0, resetAt, retryAfterSec };
@@ -179,7 +179,7 @@ function checkMemory(
   const count = entry.timestamps.length;
 
   if (count >= limit) {
-    const oldest = entry.timestamps[0]!;
+    const oldest = entry.timestamps[0] ?? now;
     const retryAfterSec = Math.max(1, Math.ceil((oldest + windowMs - now) / 1000));
     return { allowed: false, limit, remaining: 0, resetAt, retryAfterSec };
   }
@@ -264,6 +264,7 @@ export function rateLimitByIp(limit: number, windowMs: number): MiddlewareHandle
     }
 
     await next();
+    return;
   });
 }
 
@@ -288,6 +289,7 @@ export function rateLimitByKey(limit: number, windowMs: number): MiddlewareHandl
     }
 
     await next();
+    return;
   });
 }
 
@@ -320,7 +322,7 @@ export const globalIpRateLimit = rateLimitByIp(1000, ONE_MINUTE);
 
 export async function closeRateLimitRedis(): Promise<void> {
   if (redisClient) {
-    await redisClient.quit().catch(() => {});
+    await redisClient.quit().catch(() => { /* ignore */ });
     redisClient = null;
   }
 }

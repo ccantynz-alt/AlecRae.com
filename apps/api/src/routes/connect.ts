@@ -23,9 +23,8 @@ import {
   syncAccount,
   type EmailAccount,
 } from "../sync/engine.js";
-
-// In-memory account store (production: DB table)
-const accountStore = new Map<string, EmailAccount[]>();
+import { getDatabase, connectedAccounts } from "@alecrae/db";
+import { eq, and } from "drizzle-orm";
 
 function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "");
@@ -109,17 +108,28 @@ connect.get(
         updatedAt: new Date(),
       };
 
-      const existing = accountStore.get(state.userId) ?? [];
-      accountStore.set(state.userId, [...existing, account]);
+      const db = getDatabase();
+      const now = new Date();
+      await db.insert(connectedAccounts).values({
+        id: account.id,
+        accountId: state.userId,
+        provider: "gmail",
+        email: tokens.email,
+        displayName: tokens.name ?? null,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      });
 
-      // Trigger initial sync in background
       syncAccount(account).catch((err) => {
         console.error(`[connect] Initial Gmail sync failed for ${account.email}:`, err);
       });
 
-      // Redirect to web app
       const webUrl = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
-      return c.redirect(`${webUrl}/settings/accounts?connected=gmail&email=${encodeURIComponent(tokens.email)}`);
+      return c.redirect(`${webUrl}/onboarding?connected=gmail&email=${encodeURIComponent(tokens.email)}`);
     } catch (err) {
       return c.json({ error: { message: `Gmail auth failed: ${err}` } }, 500);
     }
@@ -155,15 +165,28 @@ connect.get(
         updatedAt: new Date(),
       };
 
-      const existing = accountStore.get(state.userId) ?? [];
-      accountStore.set(state.userId, [...existing, account]);
+      const db = getDatabase();
+      const now = new Date();
+      await db.insert(connectedAccounts).values({
+        id: account.id,
+        accountId: state.userId,
+        provider: "outlook",
+        email: tokens.email,
+        displayName: tokens.name ?? null,
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken,
+        tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      });
 
       syncAccount(account).catch((err) => {
         console.error(`[connect] Initial Outlook sync failed for ${account.email}:`, err);
       });
 
       const webUrl = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
-      return c.redirect(`${webUrl}/settings/accounts?connected=outlook&email=${encodeURIComponent(tokens.email)}`);
+      return c.redirect(`${webUrl}/onboarding?connected=outlook&email=${encodeURIComponent(tokens.email)}`);
     } catch (err) {
       return c.json({ error: { message: `Outlook auth failed: ${err}` } }, 500);
     }
@@ -200,8 +223,26 @@ connect.post(
       updatedAt: new Date(),
     };
 
-    const existing = accountStore.get(auth.accountId) ?? [];
-    accountStore.set(auth.accountId, [...existing, account]);
+    const db = getDatabase();
+    const now = new Date();
+    await db.insert(connectedAccounts).values({
+      id: account.id,
+      accountId: auth.accountId,
+      provider: "imap",
+      email: input.email,
+      displayName: input.displayName ?? input.email,
+      imapHost: input.imapHost,
+      imapPort: String(input.imapPort),
+      imapUsername: input.imapUsername,
+      imapPassword: input.imapPassword,
+      smtpHost: input.smtpHost,
+      smtpPort: String(input.smtpPort),
+      smtpUsername: input.smtpUsername,
+      smtpPassword: input.smtpPassword,
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    });
 
     return c.json({
       data: {
@@ -219,19 +260,30 @@ connect.post(
 connect.get(
   "/accounts",
   requireScope("accounts:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const accounts = (accountStore.get(auth.accountId) ?? []).map((a) => ({
-      id: a.id,
-      provider: a.provider,
-      email: a.email,
-      displayName: a.displayName,
-      status: a.status,
-      lastSyncAt: a.lastSyncAt?.toISOString() ?? null,
-      createdAt: a.createdAt.toISOString(),
-    }));
+    const db = getDatabase();
 
-    return c.json({ data: accounts });
+    const rows = await db
+      .select({
+        id: connectedAccounts.id,
+        provider: connectedAccounts.provider,
+        email: connectedAccounts.email,
+        displayName: connectedAccounts.displayName,
+        status: connectedAccounts.status,
+        lastSyncAt: connectedAccounts.lastSyncAt,
+        createdAt: connectedAccounts.createdAt,
+      })
+      .from(connectedAccounts)
+      .where(eq(connectedAccounts.accountId, auth.accountId));
+
+    return c.json({
+      data: rows.map((a) => ({
+        ...a,
+        lastSyncAt: a.lastSyncAt?.toISOString() ?? null,
+        createdAt: a.createdAt.toISOString(),
+      })),
+    });
   },
 );
 
@@ -239,18 +291,24 @@ connect.get(
 connect.delete(
   "/accounts/:id",
   requireScope("accounts:write"),
-  (c) => {
+  async (c) => {
     const id = c.req.param("id");
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const accounts = accountStore.get(auth.accountId) ?? [];
-    const filtered = accounts.filter((a) => a.id !== id);
+    const [existing] = await db
+      .select({ id: connectedAccounts.id })
+      .from(connectedAccounts)
+      .where(and(eq(connectedAccounts.id, id), eq(connectedAccounts.accountId, auth.accountId)))
+      .limit(1);
 
-    if (filtered.length === accounts.length) {
+    if (!existing) {
       return c.json({ error: { message: "Account not found" } }, 404);
     }
 
-    accountStore.set(auth.accountId, filtered);
+    await db.delete(connectedAccounts)
+      .where(and(eq(connectedAccounts.id, id), eq(connectedAccounts.accountId, auth.accountId)));
+
     return c.json({ data: { deleted: true, id } });
   },
 );
@@ -262,13 +320,31 @@ connect.post(
   async (c) => {
     const id = c.req.param("id");
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const accounts = accountStore.get(auth.accountId) ?? [];
-    const account = accounts.find((a) => a.id === id);
+    const [row] = await db
+      .select()
+      .from(connectedAccounts)
+      .where(and(eq(connectedAccounts.id, id), eq(connectedAccounts.accountId, auth.accountId)))
+      .limit(1);
 
-    if (!account) {
+    if (!row) {
       return c.json({ error: { message: "Account not found" } }, 404);
     }
+
+    const account: EmailAccount = {
+      id: row.id,
+      userId: row.accountId,
+      provider: row.provider,
+      email: row.email,
+      displayName: row.displayName ?? row.email,
+      accessToken: row.accessToken ?? undefined,
+      refreshToken: row.refreshToken ?? undefined,
+      tokenExpiresAt: row.tokenExpiresAt ?? undefined,
+      status: row.status as "active" | "error",
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
 
     const result = await syncAccount(account);
 

@@ -13,7 +13,7 @@
     "build": "echo 'UI package exports source directly via transpilePackages — no build step needed'",
     "dev": "echo 'UI package exports source directly — no dev build needed'",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit || true",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "clean": "rm -rf dist"
   },
@@ -22,11 +22,23 @@
   },
   "peerDependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@react-three/fiber": "^9.5.0",
+    "@react-three/drei": "^10.0.0",
+    "three": "^0.170.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/fiber": { "optional": true },
+    "@react-three/drei": { "optional": true },
+    "three": { "optional": true }
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@react-three/fiber": "^9.5.0",
+    "@react-three/drei": "^10.0.0",
+    "three": "^0.170.0",
+    "@types/three": "^0.170.0",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
   }

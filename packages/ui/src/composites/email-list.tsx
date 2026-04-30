@@ -22,7 +22,7 @@ export interface EmailListItem {
   threadCount?: number;
 }
 
-export interface EmailListProps extends Omit<HTMLAttributes<HTMLDivElement>, "onSelect"> {
+export interface EmailListProps extends Omit<HTMLAttributes<HTMLUListElement>, "onSelect"> {
   emails: EmailListItem[];
   selectedId?: string;
   onSelect?: (email: EmailListItem) => void;
@@ -36,7 +36,7 @@ const priorityIndicator = {
   low: "bg-content-tertiary",
 } as const;
 
-export const EmailList = forwardRef<HTMLDivElement, EmailListProps>(function EmailList(
+export const EmailList = forwardRef<HTMLUListElement, EmailListProps>(function EmailList(
   { emails, selectedId, onSelect, onStar, className = "", ...props },
   ref
 ) {
@@ -47,8 +47,8 @@ export const EmailList = forwardRef<HTMLDivElement, EmailListProps>(function Ema
           key={email.id}
           email={email}
           selected={email.id === selectedId}
-          onSelect={onSelect}
-          onStar={onStar}
+          {...(onSelect ? { onSelect } : {})}
+          {...(onStar ? { onStar } : {})}
         />
       ))}
       {emails.length === 0 && (

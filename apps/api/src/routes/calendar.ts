@@ -31,7 +31,7 @@ interface CalendarEvent {
   endTime: string;
   isAllDay: boolean;
   organizer: { name: string; email: string };
-  attendees: Array<{ name: string; email: string; status: "accepted" | "declined" | "tentative" | "pending" }>;
+  attendees: { name: string; email: string; status: "accepted" | "declined" | "tentative" | "pending" }[];
   conferenceUrl?: string;
   provider: "google" | "outlook" | "ical";
   sourceEmailId?: string;
@@ -101,7 +101,6 @@ function parseICS(ics: string): Partial<CalendarEvent> | null {
   const dtend = getField("DTEND");
   const location = getField("LOCATION");
   const description = getField("DESCRIPTION");
-  const organizer = getField("ORGANIZER");
 
   const parseICSDate = (val: string | null): string | null => {
     if (!val) return null;
@@ -118,7 +117,7 @@ function parseICS(ics: string): Partial<CalendarEvent> | null {
   return {
     title: summary,
     description: description?.replace(/\\n/g, "\n") ?? "",
-    location: location ?? undefined,
+    ...(location !== null ? { location } : {}),
     startTime: parseICSDate(dtstart) ?? new Date().toISOString(),
     endTime: parseICSDate(dtend) ?? new Date().toISOString(),
     isAllDay: dtstart ? !dtstart.includes("T") : false,
@@ -280,7 +279,7 @@ calendar.post(
       .map((e) => ({ start: new Date(e.startTime).getTime(), end: new Date(e.endTime).getTime() }));
 
     // Build availability windows from working hours, excluding busy slots
-    const availabilityWindows: Array<{ start: Date; end: Date }> = [];
+    const availabilityWindows: { start: Date; end: Date }[] = [];
     const durationMs = duration * 60 * 1000;
 
     for (let day = new Date(dateFrom); day <= dateTo; day.setDate(day.getDate() + 1)) {

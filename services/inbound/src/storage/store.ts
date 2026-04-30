@@ -113,7 +113,7 @@ class TextIndex {
   private tokenize(text: string): string[] {
     return text
       .toLowerCase()
-      .replace(/[^\w@.\-]+/g, " ")
+      .replace(/[^\w@.-]+/g, " ")
       .split(/\s+/)
       .filter((t) => t.length >= 2);
   }
@@ -243,8 +243,9 @@ export class InMemoryEmailStore implements EmailStore {
       if (!email) continue;
 
       if (query.to) {
+        const needle = query.to.toLowerCase();
         const toAddresses = email.to.map((a) => a.address.toLowerCase());
-        if (!toAddresses.some((a) => a.includes(query.to!.toLowerCase()))) continue;
+        if (!toAddresses.some((a) => a.includes(needle))) continue;
       }
 
       if (query.hasAttachments !== undefined && email.hasAttachments !== query.hasAttachments) continue;

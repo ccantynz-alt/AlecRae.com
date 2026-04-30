@@ -63,12 +63,12 @@ export const emails = pgTable(
     fromName: text("from_name"),
     toAddresses: jsonb("to_addresses")
       .notNull()
-      .$type<Array<{ name?: string; address: string }>>(),
+      .$type<{ name?: string; address: string }[]>(),
     ccAddresses: jsonb("cc_addresses").$type<
-      Array<{ name?: string; address: string }>
+      { name?: string; address: string }[]
     >(),
     bccAddresses: jsonb("bcc_addresses").$type<
-      Array<{ name?: string; address: string }>
+      { name?: string; address: string }[]
     >(),
     replyToAddress: text("reply_to_address"),
     replyToName: text("reply_to_name"),

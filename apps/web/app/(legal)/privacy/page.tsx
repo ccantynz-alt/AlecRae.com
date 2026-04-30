@@ -26,15 +26,6 @@ function Sub({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function Bullet({ children }: { children: React.ReactNode }) {
-  return (
-    <Box className="ml-6 mb-1 flex gap-2">
-      <Text as="span" className="text-content-tertiary select-none" aria-hidden="true">&#x2022;</Text>
-      <Text as="span">{children}</Text>
-    </Box>
-  );
-}
-
 export default function PrivacyPage() {
   return (
     <Box className="max-w-4xl mx-auto">

@@ -109,12 +109,12 @@ async function checkDmarc(domain: string): Promise<{ ok: boolean; detail: string
   }
 
   const dmarcRecords = txtRecords.filter((r) => r.startsWith("v=DMARC1"));
-  if (dmarcRecords.length === 0) {
+  const record = dmarcRecords[0];
+  if (!record) {
     return { ok: false, detail: "No DMARC record found" };
   }
 
   // Verify it has a valid policy
-  const record = dmarcRecords[0]!;
   const policyMatch = record.match(/;\s*p=(none|quarantine|reject)/);
   if (!policyMatch) {
     return { ok: false, detail: "DMARC record missing valid policy" };

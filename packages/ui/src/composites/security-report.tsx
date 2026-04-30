@@ -225,12 +225,12 @@ export const SecurityReport = forwardRef<HTMLDivElement, SecurityReportProps>(
             <PhishingWarningBanner
               analysis={activeData.phishing}
               emailId={targetEmailId}
-              senderAddress={activeData.from}
-              onReport={onReport}
-              onDelete={onDelete}
-              onError={onError}
               showIndicators={false}
               autoCollapse
+              {...(activeData.from ? { senderAddress: activeData.from } : {})}
+              {...(onReport ? { onReport } : {})}
+              {...(onDelete ? { onDelete } : {})}
+              {...(onError ? { onError } : {})}
             />
           )}
           <SenderTrustBadge
@@ -315,13 +315,13 @@ export const SecurityReport = forwardRef<HTMLDivElement, SecurityReportProps>(
         <PhishingWarningBanner
           analysis={activeData.phishing}
           emailId={targetEmailId}
-          senderAddress={activeData.from}
-          onReport={onReport}
-          onDelete={onDelete}
-          onError={onError}
           showIndicators
           autoCollapse={false}
           dismissible={false}
+          {...(activeData.from ? { senderAddress: activeData.from } : {})}
+          {...(onReport ? { onReport } : {})}
+          {...(onDelete ? { onDelete } : {})}
+          {...(onError ? { onError } : {})}
         />
 
         {/* Sender verification details */}
