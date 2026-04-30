@@ -2005,3 +2005,232 @@ export const contactIntelApi = {
     return apiFetch<{ data: ContactInsights }>(`/v1/contacts/${encodeURIComponent(email)}/insights`);
   },
 };
+
+// ─── Email Coach ──────────────────────────────────────────────────────────
+
+export interface CoachAnalysis {
+  overallScore: number;
+  feedback: {
+    id: string;
+    type: string;
+    severity: "suggestion" | "warning" | "critical";
+    title: string;
+    description: string;
+    fix?: string;
+  }[];
+  toneScores: { label: string; value: number }[];
+}
+
+export const emailCoachApi = {
+  analyze(body: string, subject?: string) {
+    return apiFetch<{ data: CoachAnalysis }>("/v1/ai/coach/analyze", {
+      method: "POST",
+      body: JSON.stringify({ body, subject }),
+    });
+  },
+  applyFix(feedbackId: string) {
+    return apiFetch<{ data: { rewrittenText: string } }>(`/v1/ai/coach/fix/${feedbackId}`, {
+      method: "POST",
+    });
+  },
+};
+
+// ─── Follow-Up Tracker ────────────────────────────────────────────────────
+
+export interface FollowUp {
+  id: string;
+  subject: string;
+  contact: string;
+  contactEmail: string;
+  commitment: string;
+  direction: "by-me" | "to-me";
+  dueDate: string;
+  status: "overdue" | "due-soon" | "upcoming" | "completed";
+  threadId: string;
+}
+
+export const followUpApi = {
+  list(filter?: "all" | "by-me" | "to-me") {
+    const params = filter && filter !== "all" ? `?direction=${filter}` : "";
+    return apiFetch<{ data: FollowUp[] }>(`/v1/follow-ups${params}`);
+  },
+  nudge(id: string) {
+    return apiFetch<{ data: { sent: boolean } }>(`/v1/follow-ups/${id}/nudge`, { method: "POST" });
+  },
+  complete(id: string) {
+    return apiFetch<{ data: { ok: boolean } }>(`/v1/follow-ups/${id}/complete`, { method: "PATCH" });
+  },
+};
+
+// ─── Workflows ────────────────────────────────────────────────────────────
+
+export interface Workflow {
+  id: string;
+  name: string;
+  description: string;
+  trigger: string;
+  conditions: { field: string; operator: string; value: string }[];
+  actions: { type: string; value: string }[];
+  enabled: boolean;
+  runCount: number;
+  lastRun?: string;
+}
+
+export const workflowApi = {
+  list() {
+    return apiFetch<{ data: Workflow[] }>("/v1/workflows");
+  },
+  create(workflow: Omit<Workflow, "id" | "runCount" | "lastRun">) {
+    return apiFetch<{ data: Workflow }>("/v1/workflows", {
+      method: "POST",
+      body: JSON.stringify(workflow),
+    });
+  },
+  toggle(id: string, enabled: boolean) {
+    return apiFetch<{ data: Workflow }>(`/v1/workflows/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    });
+  },
+  delete(id: string) {
+    return apiFetch<{ data: { ok: boolean } }>(`/v1/workflows/${id}`, { method: "DELETE" });
+  },
+};
+
+// ─── Sentiment ────────────────────────────────────────────────────────────
+
+export interface SentimentData {
+  overallScore: number;
+  trend: "up" | "down" | "stable";
+  daily: { date: string; score: number }[];
+  contacts: {
+    name: string;
+    email: string;
+    score: number;
+    trend: "up" | "down" | "stable";
+    lastInteraction: string;
+  }[];
+  toneBreakdown: { label: string; percentage: number }[];
+  insights: string[];
+}
+
+export const sentimentApi = {
+  get(period: "7d" | "30d" | "90d") {
+    return apiFetch<{ data: SentimentData }>(`/v1/analytics/sentiment?period=${period}`);
+  },
+};
+
+// ─── Notifications ────────────────────────────────────────────────────────
+
+export interface AppNotification {
+  id: string;
+  type: "email" | "calendar" | "ai-action" | "system" | "mention";
+  priority: "urgent" | "high" | "normal" | "low";
+  title: string;
+  description: string;
+  timestamp: string;
+  read: boolean;
+}
+
+export const notificationApi = {
+  list(filter?: string) {
+    const params = filter && filter !== "all" ? `?filter=${filter}` : "";
+    return apiFetch<{ data: AppNotification[] }>(`/v1/notifications${params}`);
+  },
+  markRead(id: string) {
+    return apiFetch<{ data: { ok: boolean } }>(`/v1/notifications/${id}/read`, { method: "PATCH" });
+  },
+  markAllRead() {
+    return apiFetch<{ data: { ok: boolean } }>("/v1/notifications/read-all", { method: "POST" });
+  },
+  dismiss(id: string) {
+    return apiFetch<{ data: { ok: boolean } }>(`/v1/notifications/${id}`, { method: "DELETE" });
+  },
+};
+
+// ─── Links Library ────────────────────────────────────────────────────────
+
+export interface SavedLink {
+  id: string;
+  url: string;
+  title: string;
+  domain: string;
+  snippet: string;
+  sourceEmail: string;
+  sourceSubject: string;
+  date: string;
+  bookmarked: boolean;
+  type: "article" | "document" | "image" | "video" | "other";
+}
+
+export const linkLibraryApi = {
+  list(filter?: string) {
+    const params = filter && filter !== "all" ? `?type=${filter}` : "";
+    return apiFetch<{ data: SavedLink[] }>(`/v1/links${params}`);
+  },
+  toggleBookmark(id: string) {
+    return apiFetch<{ data: { bookmarked: boolean } }>(`/v1/links/${id}/bookmark`, { method: "PATCH" });
+  },
+  search(query: string) {
+    return apiFetch<{ data: SavedLink[] }>(`/v1/links/search?q=${encodeURIComponent(query)}`);
+  },
+};
+
+// ─── Thread Timeline ──────────────────────────────────────────────────────
+
+export interface ThreadTimeline {
+  id: string;
+  subject: string;
+  participants: { name: string; email: string }[];
+  startDate: string;
+  endDate: string;
+  messages: {
+    id: string;
+    sender: string;
+    timestamp: string;
+    preview: string;
+    sentiment: "positive" | "neutral" | "negative";
+    isDecision?: boolean;
+    decisionText?: string;
+  }[];
+  stats: {
+    totalMessages: number;
+    avgResponseTime: string;
+    longestGap: string;
+    decisions: string[];
+    actionItems: string[];
+  };
+}
+
+export const threadTimelineApi = {
+  list() {
+    return apiFetch<{ data: { id: string; subject: string; messageCount: number }[] }>("/v1/threads/timelines");
+  },
+  get(threadId: string) {
+    return apiFetch<{ data: ThreadTimeline }>(`/v1/threads/${threadId}/timeline`);
+  },
+};
+
+// ─── Network Graph ────────────────────────────────────────────────────────
+
+export interface NetworkData {
+  totalContacts: number;
+  avgEmailsPerDay: number;
+  mostFrequent: { name: string; count: number };
+  clusters: { name: string; color: string; members: number; volume: number; topMember: string }[];
+  connections: {
+    name: string;
+    email: string;
+    sent: number;
+    received: number;
+    strength: "strong" | "moderate" | "weak";
+    lastInteraction: string;
+  }[];
+  insights: string[];
+}
+
+export const networkApi = {
+  get(period: "30d" | "90d" | "1y" | "all") {
+    return apiFetch<{ data: NetworkData }>(`/v1/analytics/network?period=${period}`);
+  },
+};

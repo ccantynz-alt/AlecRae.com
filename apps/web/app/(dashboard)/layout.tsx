@@ -30,6 +30,7 @@ const navigationSections: AnimatedSidebarSection[] = [
     title: "AI",
     items: [
       { id: "autopilot", label: "Autopilot", href: "/autopilot" },
+      { id: "email-coach", label: "Email Coach", href: "/email-coach" },
       { id: "meeting-prep", label: "Meeting Prep", href: "/meeting-prep" },
     ],
   },
@@ -39,14 +40,27 @@ const navigationSections: AnimatedSidebarSection[] = [
       { id: "templates", label: "Templates", href: "/templates" },
       { id: "contacts", label: "Contacts", href: "/contacts" },
       { id: "attachments", label: "Attachments", href: "/attachments" },
+      { id: "follow-ups", label: "Follow-Ups", href: "/follow-ups" },
+      { id: "links", label: "Link Library", href: "/links" },
+      { id: "workflows", label: "Workflows", href: "/workflows" },
+    ],
+  },
+  {
+    title: "Insights",
+    items: [
+      { id: "analytics", label: "Analytics", href: "/analytics" },
+      { id: "health", label: "Email Health", href: "/health" },
+      { id: "sentiment", label: "Sentiment", href: "/sentiment" },
+      { id: "network", label: "Network Graph", href: "/network" },
+      { id: "thread-timeline", label: "Thread Timeline", href: "/thread-timeline" },
     ],
   },
   {
     title: "Manage",
     items: [
       { id: "domains", label: "Domains", href: "/domains" },
-      { id: "analytics", label: "Analytics", href: "/analytics" },
-      { id: "health", label: "Email Health", href: "/health" },
+      { id: "notifications", label: "Notifications", href: "/notifications" },
+      { id: "split-view", label: "Split View", href: "/split-view" },
       { id: "settings", label: "Settings", href: "/settings" },
     ],
   },

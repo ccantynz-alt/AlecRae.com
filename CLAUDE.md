@@ -559,10 +559,20 @@ After writing the code:
 - Contact Intelligence panel (relationship stats, communication timeline, AI insights)
 - Interactive Email Cards (flight/calendar/receipt/package/newsletter card types)
 - Command Palette expanded (autopilot, meeting-prep, attachments, health commands)
+- AI Email Coach (real-time compose feedback, tone analysis, fix suggestions, writing stats)
+- Follow-Up Tracker (AI commitment extraction, nudge emails, overdue/due-soon/upcoming)
+- Visual Email Workflow Builder (trigger/condition/action builder, 5 presets, toggle enable)
+- Email Sentiment Dashboard (daily chart, contact scores, warming/cooling, tone breakdown)
+- Multi-Inbox Split View (2-3 column accounts, drag to move, mini search per column)
+- Smart Notification Center (priority badges, AI urgency, time groups, dismiss/snooze, preferences)
+- Link & Attachment Library (search, filter, grid/list view, bookmarks, 15+ link types)
+- Thread Timeline Visualization (vertical timeline, response gaps, decisions, action items)
+- AI Writing Style Switcher (6 presets, before/after preview, custom style, confidence score)
+- Email Network Graph (CSS force-directed viz, clusters, top connections, relationship strength)
 
-### Total: 36/36 from original plan + 39 bonus features ✅ ALL TIERS COMPLETE
+### Total: 36/36 from original plan + 49 bonus features ✅ ALL TIERS COMPLETE
 ### API Routes: 30+ route files, 100+ endpoints
-### Code: ~50K lines of TypeScript
+### Code: ~55K lines of TypeScript
 
 ---
 
@@ -702,8 +712,8 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 **Date last updated:** 2026-04-30
 **Current phase:** Phase 1 — Ready for Beta Launch
-**Current focus:** Bold landing page redesign shipped. 10 killer features built (onboarding wizard, autopilot dashboard, attachment hub, email health score, meeting prep, dark theme, smart categories, quick actions, contact intelligence, interactive email cards). Full offline-first stack. Production deployment awaiting Craig's infra setup.
-**Build completion:** TIER 1-4 ALL DONE (36/36) + 39 bonus + 31 advanced features (S10/10 + A7/7 + B8/8 + C6/10)
+**Current focus:** 20 killer features shipped across two sessions. AI Email Coach, Follow-Up Tracker, Workflow Builder, Sentiment Dashboard, Split View, Notification Center, Link Library, Thread Timeline, Writing Style Switcher, Network Graph all built. Production deployment awaiting Craig's infra setup.
+**Build completion:** TIER 1-4 ALL DONE (36/36) + 49 bonus + 31 advanced features (S10/10 + A7/7 + B8/8 + C6/10)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
 
@@ -861,7 +871,7 @@ If you ship something not in this file, you broke the rules.
 | **Tier 7 features (advanced intelligence)** | **6/6 done** | **100%** |
 | **Tier 8 features (deep AI intelligence)** | **6/6 done** | **100%** |
 
-**Overall: ~99% of launch-ready product. All code features complete (96 features, 90 routes, 61 schemas, 290+ endpoints). Remaining: Craig infra setup (Neon/Upstash/Stripe/DNS/API keys) + C4/C5/C6/C7 (compliance/legal — not code tasks).**
+**Overall: ~99% of launch-ready product. All code features complete (106 features, 90 routes, 61 schemas, 290+ endpoints). Remaining: Craig infra setup (Neon/Upstash/Stripe/DNS/API keys) + C4/C5/C6/C7 (compliance/legal — not code tasks).**
 
 ---
 
