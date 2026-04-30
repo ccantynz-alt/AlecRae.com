@@ -94,23 +94,22 @@ type SyncEventCallback = (event: SyncEvent) => void;
 
 // ─── Message → CachedEmail Mapper ───────────────────────────────────────────
 
+function mapContact(addr: { email: string; name?: string }): { email: string; name?: string } {
+  const contact: { email: string; name?: string } = { email: addr.email };
+  if (addr.name !== undefined) {
+    contact.name = addr.name;
+  }
+  return contact;
+}
+
 function mapMessageToCachedEmail(message: Message): CachedEmail {
   const tags: string[] = message.tags ?? [];
   return {
     id: message.id,
     messageId: message.messageId,
-    from: {
-      name: message.from.name,
-      email: message.from.email,
-    },
-    to: message.to.map((addr) => ({
-      name: addr.name,
-      email: addr.email,
-    })),
-    cc: (message.cc ?? []).map((addr) => ({
-      name: addr.name,
-      email: addr.email,
-    })),
+    from: mapContact(message.from),
+    to: message.to.map(mapContact),
+    cc: (message.cc ?? []).map(mapContact),
     subject: message.subject,
     preview: message.preview,
     status: message.status,
@@ -267,10 +266,11 @@ export class SyncEngine {
       const allNewEmails: CachedEmail[] = [];
 
       while (hasMore) {
-        const response = await messagesApi.list({
+        const listParams: Parameters<typeof messagesApi.list>[0] = {
           limit: SYNC_PAGE_LIMIT,
-          cursor: currentCursor ?? undefined,
-        });
+        };
+        if (currentCursor != null) listParams.cursor = currentCursor;
+        const response = await messagesApi.list(listParams);
 
         const emails = response.data;
         if (emails.length > 0) {
@@ -337,8 +337,8 @@ export class SyncEngine {
       const cached = mapMessageToCachedEmail(message);
 
       // Preserve body content from the detail response
-      cached.textBody = message.textBody;
-      cached.htmlBody = message.htmlBody;
+      if (message.textBody !== null) cached.textBody = message.textBody;
+      if (message.htmlBody !== null) cached.htmlBody = message.htmlBody;
 
       await cacheEmails([cached]);
     } catch (err: unknown) {
@@ -362,15 +362,16 @@ export class SyncEngine {
 
     for (const email of outboxEmails) {
       try {
-        await messagesApi.send({
+        const sendPayload: Parameters<typeof messagesApi.send>[0] = {
           from: email.to[0] ?? { email: "" },
           to: email.to,
-          cc: email.cc,
-          bcc: email.bcc,
           subject: email.subject,
-          text: email.bodyFormat === "text" ? email.body : undefined,
-          html: email.bodyFormat === "html" ? email.body : undefined,
-        });
+        };
+        if (email.cc !== undefined) sendPayload.cc = email.cc;
+        if (email.bcc !== undefined) sendPayload.bcc = email.bcc;
+        if (email.bodyFormat === "text") sendPayload.text = email.body;
+        if (email.bodyFormat === "html") sendPayload.html = email.body;
+        await messagesApi.send(sendPayload);
         await removeOutboxEmail(email.id);
 
         this.emit({
