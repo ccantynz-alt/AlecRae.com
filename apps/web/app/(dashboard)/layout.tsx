@@ -12,6 +12,8 @@ import { useFocusMode } from "../../lib/focus-mode";
 import { authApi } from "../../lib/api";
 import { KeyboardShortcutHelp } from "../../components/KeyboardShortcutHelp";
 import { CommandPalette } from "../../components/CommandPalette";
+import { OfflineBadge } from "../../components/SyncStatusBar";
+import { InstallPrompt } from "../../components/InstallPrompt";
 
 const navigationSections: AnimatedSidebarSection[] = [
   {
@@ -172,6 +174,8 @@ export default function DashboardLayout({
       <Box as="main" className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Toolbar bar with focus mode toggle */}
         <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">
+          <OfflineBadge />
+          <Box className="flex-1" />
           <FocusModeToggle />
         </Box>
         <AnimatedPage pageKey={pathname ?? "dashboard"} mode="slide" className="flex flex-col flex-1 min-h-0">
@@ -187,6 +191,9 @@ export default function DashboardLayout({
 
       {/* Command palette — Cmd+K */}
       <CommandPalette />
+
+      {/* PWA install prompt */}
+      <InstallPrompt />
     </Box>
   );
 }

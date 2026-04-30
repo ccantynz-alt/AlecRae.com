@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { messagesApi, authApi, calendarApi, grammarApi } from "../../../lib/api";
 import { SendTimePanel } from "../../../components/SendTimePanel";
 import { AnimatedCompose } from "../../../components/AnimatedCompose";
+import { OfflineComposeBanner } from "../../../components/OfflineComposeBanner";
 import {
   composeEnter,
   fadeInUp,
@@ -166,6 +167,7 @@ function ComposePage(): React.ReactNode {
 
   return (
     <PageLayout title="Compose" fullWidth>
+      <OfflineComposeBanner />
       <AnimatedCompose show={true}>
         <AnimatePresence>
           {status && (
