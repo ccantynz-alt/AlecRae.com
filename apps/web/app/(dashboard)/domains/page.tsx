@@ -30,9 +30,9 @@ function mapDomain(d: Domain): {
     verificationState: (d.verificationStatus === "verifying" ? "pending" : d.verificationStatus) as "pending" | "verified" | "failed",
     dnsRecords: [
       { type: "TXT", name: `_alecrae-verify.${d.domain}`, value: `alecrae-verify=${d.id.slice(0, 8)}`, verified: d.spfVerified },
-      { type: "TXT", name: d.domain, value: `v=spf1 include:spf.alecrae.dev ~all`, verified: d.spfVerified },
-      { type: "CNAME", name: `em._domainkey.${d.domain}`, value: "dkim.alecrae.dev", verified: d.dkimVerified },
-      { type: "TXT", name: `_dmarc.${d.domain}`, value: `v=DMARC1; p=reject; rua=mailto:dmarc@alecrae.dev`, verified: d.dmarcVerified },
+      { type: "TXT", name: d.domain, value: `v=spf1 include:spf.alecrae.com ~all`, verified: d.spfVerified },
+      { type: "CNAME", name: `em._domainkey.${d.domain}`, value: "dkim.alecrae.com", verified: d.dkimVerified },
+      { type: "TXT", name: `_dmarc.${d.domain}`, value: `v=DMARC1; p=reject; rua=mailto:dmarc@alecrae.com`, verified: d.dmarcVerified },
     ],
     spfVerified: d.spfVerified,
     dkimVerified: d.dkimVerified,

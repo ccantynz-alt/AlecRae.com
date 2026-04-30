@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Italianno, Inter } from "next/font/google";
 import "./globals.css";
+import { ConsentBanner } from "../components/ConsentBanner";
 
 /**
  * Italianno — the signature-style handwritten script used for the AlecRae wordmark.
@@ -73,6 +74,7 @@ export default function RootLayout({
     >
       <body className="h-full bg-[#f5f4ef] text-neutral-900 font-sans">
         {children}
+        <ConsentBanner />
       </body>
     </html>
   );

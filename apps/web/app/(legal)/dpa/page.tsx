@@ -213,7 +213,7 @@ export default function DpaPage() {
 
       <Box className="mt-12 pt-6 border-t border-border">
         <Text className="text-content-tertiary text-sm mb-4">
-          This Data Processing Agreement is effective as of the date the Controller begins using the Service. For questions about this DPA or to request a signed copy, contact legal@alecrae.dev or dpo@alecrae.dev.
+          This Data Processing Agreement is effective as of the date the Controller begins using the Service. For questions about this DPA or to request a signed copy, contact legal@alecrae.com or dpo@alecrae.com.
         </Text>
       </Box>
     </Box>

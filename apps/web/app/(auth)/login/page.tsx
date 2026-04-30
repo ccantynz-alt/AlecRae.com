@@ -84,7 +84,12 @@ function PasskeyLogin(): React.ReactElement {
       } else if (err instanceof DOMException && err.name === "AbortError") {
         setError("Passkey authentication timed out. Please try again.");
       } else {
-        setError(err instanceof Error ? err.message : "Passkey login failed");
+        const msg = err instanceof Error ? err.message : "";
+        if (msg.toLowerCase().includes("load failed") || msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("network")) {
+          setError("Can't reach the server right now. We're launching soon — try again shortly.");
+        } else {
+          setError(msg || "Passkey sign-in failed. Please try again.");
+        }
       }
     } finally {
       setLoading(false);
@@ -162,7 +167,12 @@ function EmailLogin(): React.ReactElement {
       await authApi.login(email, password);
       window.location.href = "/inbox";
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.toLowerCase().includes("load failed") || msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("network")) {
+        setError("Can't reach the server right now. We're launching soon — try again shortly.");
+      } else {
+        setError(msg || "Sign in failed. Please check your details and try again.");
+      }
     } finally {
       setLoading(false);
     }

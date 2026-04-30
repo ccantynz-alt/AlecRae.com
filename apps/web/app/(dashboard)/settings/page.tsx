@@ -177,7 +177,7 @@ function ProfileSection({
       </CardContent>
       <CardFooter>
         <Box className="flex items-center justify-end gap-3">
-          <AnimatedPresence show={status === "saved"} presenceKey="saved-indicator">
+          <AnimatedPresence show={saved} presenceKey="saved-indicator">
             <Text variant="body-sm" className="text-status-success">
               Saved
             </Text>
@@ -479,20 +479,6 @@ function DangerZone() {
               </Box>{" "}
               from your account address and we&apos;ll process the deletion with a 30-day recovery window.
             </Text>
-          </Box>
-          <Box className="flex items-center gap-2">
-            <AnimatedPresence show={confirming} presenceKey="cancel-delete">
-              <PressableScale as="button" tapScale={0.95}>
-                <Button variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={deleting}>
-                  Cancel
-                </Button>
-              </PressableScale>
-            </AnimatedPresence>
-            <PressableScale as="button" tapScale={0.95}>
-              <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting}>
-                {deleting ? "Deleting..." : confirming ? "Confirm Delete" : "Delete Account"}
-              </Button>
-            </PressableScale>
           </Box>
         </Box>
       </CardContent>

@@ -572,25 +572,20 @@ After writing the code:
 | 12 | Full rebrand from Vienna/48co/@emailed to AlecRae/alecrae.com/@alecrae | HIGH | 2026-04-12 | DONE 2026-04-12 — all files updated |
 | 13 | No error boundaries in web app (error.tsx / not-found.tsx) | MEDIUM | 2026-04-12 | FIXED 2026-04-12 — root + dashboard error boundaries + 404 page |
 | 14 | No sitemap.xml or robots.txt for SEO | LOW | 2026-04-12 | FIXED 2026-04-12 — Next.js route-based sitemap.ts + robots.ts |
-| 15 | Landing page was "Coming Soon" placeholder | HIGH | 2026-04-21 | FIXED 2026-04-21 — full marketing site (11 sections) |
-| 16 | Settings page TODOs (profile/security/delete) | MEDIUM | 2026-04-21 | FIXED 2026-04-21 — all wired to real API endpoints |
-| 17 | Analytics page showing zero fallback data | MEDIUM | 2026-04-21 | FIXED 2026-04-21 — wired to real deliverability/heatmap APIs |
-| 18 | Inbox archive/delete/star client-side only | MEDIUM | 2026-04-21 | FIXED 2026-04-21 — PATCH/DELETE API + optimistic UI |
-| 19 | AI compose suggestions hardcoded | MEDIUM | 2026-04-21 | FIXED 2026-04-21 — wired to /v1/grammar/check API |
-| 20 | Keyboard shortcuts not connected to inbox | MEDIUM | 2026-04-21 | FIXED 2026-04-21 — j/k/e/#/s/r/a/f all wired |
-| 21 | No inline quick reply in inbox | LOW | 2026-04-21 | FIXED 2026-04-21 — QuickReply component with Cmd+Enter send |
-| 22 | No undo for destructive inbox actions | MEDIUM | 2026-04-30 | FIXED 2026-04-30 — UndoToast with 5s window for archive/delete/snooze |
-| 23 | No batch email selection | MEDIUM | 2026-04-30 | FIXED 2026-04-30 — BatchActionBar with select-all, bulk actions |
-| 24 | Snooze shortcut (S) not wired | MEDIUM | 2026-04-30 | FIXED 2026-04-30 — SnoozePicker with presets + custom time |
-| 25 | Missing Sent/Drafts/Snoozed pages | HIGH | 2026-04-30 | FIXED 2026-04-30 — all 3 pages with full UI |
-| 26 | No Contacts page | MEDIUM | 2026-04-30 | FIXED 2026-04-30 — search, notes, avatars, stats |
-| 27 | No Templates page | MEDIUM | 2026-04-30 | FIXED 2026-04-30 — CRUD, variable detection, preview/render |
-| 28 | No email signatures | MEDIUM | 2026-04-30 | FIXED 2026-04-30 — SignatureManager with HTML preview, settings integration |
-| 29 | No recipient autocomplete | MEDIUM | 2026-04-30 | FIXED 2026-04-30 — RecipientAutocomplete with contact API search |
-| 30 | No keyboard shortcut help | LOW | 2026-04-30 | FIXED 2026-04-30 — Press ? for full reference modal |
-| 31 | No Cmd+K command palette | HIGH | 2026-04-30 | FIXED 2026-04-30 — Superhuman-style with fuzzy search, 13 commands |
-| 32 | No offline/PWA support | HIGH | 2026-04-30 | FIXED 2026-04-30 — Full offline-first stack (IndexedDB + sync engine + SW + PWA manifest) |
-| 33 | Inbox not cache-first | HIGH | 2026-04-30 | FIXED 2026-04-30 — Loads from IndexedDB first, syncs API in background |
+| 15 | Craig couldn't actually see an admin page on iPad — admin sub-app not deployed | HIGH | 2026-04-16 | FIXED 2026-04-16 — added /admin preview route to apps/web (KPIs, recent activity, launch gates, section nav). Brand-correct (ivory + Italianno wordmark), robots-disallowed, builds clean (23/23 static pages). Standalone admin.alecrae.com still ships from apps/admin once DNS cuts over. |
+| 16 | Landing page (page.tsx) had two versions concatenated — merge conflict artifact | HIGH | 2026-04-24 | FIXED 2026-04-24 — rewrote as clean server component (nav + hero + features + pricing + CTA + footer). 29/29 static pages build clean. |
+| 17 | Admin /admin page used static illustrative data only | MEDIUM | 2026-04-24 | FIXED 2026-04-24 — rebuilt as full client component with API health polling, system services grid, launch gates progress bar, plans + competitive stack tabs. Fetches live from API when available, degrades gracefully when offline. |
+| 18 | next.config.ts used experimental.typedRoutes — deprecated in Next.js 15 | LOW | 2026-04-24 | FIXED 2026-04-24 — moved to top-level typedRoutes in both apps/web and apps/admin |
+| 19 | GateTest CI gate was advisory (continue-on-error: true) | MEDIUM | 2026-04-24 | FIXED 2026-04-24 — now a hard gate, failures block merges |
+| 20 | E2E test suite was a 2-test skeleton | LOW | 2026-04-24 | FIXED 2026-04-24 — expanded to 20 tests across 6 describe blocks (landing, login, auth guard, health, robots, sitemap) |
+| 21 | No cookie/consent banner — GDPR/ePrivacy/CCPA exposure | CRITICAL | 2026-04-16 | FIXED 2026-04-16 — typed consent lib + banner, GPC/DNT auto-respect, 11 tests |
+| 22 | No /.well-known/security.txt (RFC 9116) or responsible-disclosure policy | HIGH | 2026-04-16 | FIXED 2026-04-16 — security.txt + SECURITY.md + /security page with scope + safe harbour |
+| 23 | Register page had no affirmative age gate (GDPR Art 7, COPPA, UK Children's Code) | HIGH | 2026-04-16 | FIXED 2026-04-16 — ConsentGatedRegistration (13+/16+EEA, terms acceptance, optional marketing) |
+| 24 | No CCPA/CPRA "Do Not Sell or Share" page or GPC signal endpoint | HIGH | 2026-04-16 | FIXED 2026-04-16 — /do-not-sell, /california-notice, /.well-known/gpc.json |
+| 25 | No EU AI Act transparency disclosure (Art 52, model inventory) | HIGH | 2026-04-16 | FIXED 2026-04-16 — /ai-transparency with per-model inventory + Art 22 rights |
+| 26 | No WCAG / EAA / ADA accessibility statement | MEDIUM | 2026-04-16 | FIXED 2026-04-16 — /accessibility page (WCAG 2.2 AA target, EAA, ADA, Section 508) |
+| 27 | Missing Impressum, Children's Privacy, Refund, Corporate Compliance pages | HIGH | 2026-04-16 | FIXED 2026-04-16 — 4 new pages (TMG §5, COPPA, EU 14-day withdrawal, FCPA/Modern Slavery/OFAC) |
+| 28 | Domain inconsistency — 32x `alecrae.dev` emails in legal copy should be `alecrae.com` | MEDIUM | 2026-04-16 | FIXED 2026-04-16 — normalised across terms/privacy/aup/dmca/dpa/sla/cookies/subprocessors/domains |
 
 ---
 
@@ -688,10 +683,11 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Date last updated:** 2026-04-30
-**Current phase:** Phase 1 — Ready for Beta Launch
-**Current focus:** Full offline-first stack shipped. Inbox loads from cache in <50ms. PWA installable. All major productivity features wired. Production deployment awaiting Craig's infra setup.
-**Build completion:** TIER 1-4 ALL DONE (36/36) + 27 bonus + 31 advanced features (S10/10 + A7/7 + B8/8 + C6/10)
+**Date last updated:** 2026-04-16
+**Current phase:** Phase 1 — Launch Imminent
+**Current focus:** Build 100% clean (29/29 static pages). Legal compliance merged (9 new legal pages, consent banner, GDPR/CCPA/EU AI Act coverage, RFC 9116 security.txt). Landing page rewritten, admin console live. CI hardened. All code complete — blocked only on Craig's infra (Neon, Upstash, Stripe, API keys, DNS, Crontec deploy).
+**Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8) = 84 features total + full legal compliance surface
+**Date last updated:** 2026-04-24
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
 

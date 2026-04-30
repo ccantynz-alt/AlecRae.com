@@ -1,0 +1,91 @@
+{
+  "product": "AlecRae",
+  "tagline": "Email, Evolved.",
+  "version": "1.0.0",
+  "type": "standalone-product",
+  "category": "ai-native-email-client",
+  "purpose": "AI-native email client that replaces Gmail, Outlook, Superhuman, Grammarly, Dragon, Front, and Otter.ai — all in one $9/mo subscription",
+  "standalone": true,
+  "replaces": [
+    "Gmail / Google Workspace ($12-30/mo)",
+    "Outlook / Microsoft 365",
+    "Superhuman ($30/mo)",
+    "Grammarly Premium ($12-30/mo)",
+    "Dragon Professional ($500+)",
+    "Front ($19-59/user/mo)",
+    "Proton Mail ($5-10/mo)",
+    "Otter.ai ($10/mo)"
+  ],
+  "pricing": {
+    "free": "$0/mo — 1 account, basic AI (5 composes/day), 30-day search",
+    "personal": "$9/mo — 3 accounts, full AI, unlimited search, E2EE, snooze, schedule send",
+    "pro": "$19/mo — unlimited accounts, priority AI (Sonnet), team features, API access",
+    "team": "$12/user/mo — shared inboxes, admin console, audit logs, SSO",
+    "enterprise": "Custom — on-prem, compliance, dedicated support, SLA, Opus AI"
+  },
+  "stack": {
+    "runtime": "Bun (52K req/s, native TypeScript)",
+    "api": "Hono + tRPC + REST + OpenAPI",
+    "frontend": "Next.js 15 (App Router, RSC, streaming)",
+    "orm": "Drizzle + Zod",
+    "database": "PostgreSQL (Neon serverless) + Upstash Redis + Meilisearch + ClickHouse",
+    "storage": "Cloudflare R2 + IndexedDB (offline-first)",
+    "infra": "Cloudflare Pages + Workers + Fly.io + Modal (GPU)",
+    "apps": ["Web (Next.js 15)", "Desktop (Electron)", "Mobile (React Native + Expo)", "Admin", "Docs", "Status", "Changelog"]
+  },
+  "ai_layer": {
+    "models": {
+      "haiku": "claude-haiku-4-5 — real-time triage, grammar, quick replies",
+      "sonnet": "claude-sonnet-4-6 — compose, summarise, search (Pro tier)",
+      "opus": "claude-opus-4-7 — deep analysis, voice profile, Enterprise tier"
+    },
+    "local_inference": "WebGPU / Transformers.js — runs on user GPU at $0/token",
+    "transcription": "Whisper API",
+    "embeddings": "Voyage AI (semantic search)"
+  },
+  "compute_tiers": {
+    "client": "WebGPU — $0/token, sub-10ms, grammar/triage",
+    "edge": "Cloudflare Workers — sub-50ms, compose/translate",
+    "cloud": "Modal H100 — full power, voice profile training"
+  },
+  "feature_count": 75,
+  "industry_firsts": [
+    "WebGPU client-side AI inference in the browser (Llama 3.1 8B, 41 tok/sec, $0/token)",
+    "CRDT real-time collaborative email drafting (live cursors via Yjs + WebSocket)",
+    "AI inbox agent that works overnight — drafts replies, you approve in morning",
+    "Voice cloning for AI replies — drafts sound exactly like you",
+    "Email-as-database — query your inbox with natural language or SQL"
+  ],
+  "infrastructure": {
+    "mta": "Full custom MTA — SMTP, relay, bounce processing, DKIM/SPF/DMARC, IP warmup, deliverability monitoring",
+    "microservices": 12,
+    "shared_packages": 6,
+    "codebase_lines": 35000,
+    "api_endpoints": 100
+  },
+  "integrates_with_via_api_only": {
+    "crontech": "Hosted on Crontech bare metal — replaces Cloudflare/Fly.io dependency",
+    "gatetest": "POST /api/gate/result — gates every PR before deploy",
+    "gluecron": "Repo hosted on Gluecron — push triggers Crontech deploy"
+  },
+  "ai_flywheel": {
+    "enabled": true,
+    "learns_from": [
+      "which AI compose suggestions are sent vs discarded",
+      "which reply suggestions are accepted vs ignored",
+      "voice profile refinement from every sent email",
+      "triage accuracy confirmed by user actions (archive, reply, snooze)",
+      "phishing detection confirmed by user reports"
+    ],
+    "improves": [
+      "compose suggestion relevance",
+      "triage priority accuracy",
+      "voice profile fidelity",
+      "smart reply quality",
+      "send-time prediction accuracy"
+    ],
+    "competitive_moat": "Every email sent through AlecRae makes the next suggestion smarter. Superhuman has no learning loop. Gmail's AI is generic. AlecRae learns YOU."
+  },
+  "status": "Code complete. Needs infra accounts (Neon, Upstash, Stripe, Anthropic key, Google/Microsoft OAuth, DNS). Migration path: move from Cloudflare/Fly.io to Crontech.",
+  "competitive_position": "$9/mo replaces $100+/mo of tools. WebGPU AI runs at $0/token in the browser — no competitor has this. CRDT collaborative drafting is an industry first in email. Full MTA owned, no Mailgun dependency. The flywheel: every email makes the AI smarter."
+}

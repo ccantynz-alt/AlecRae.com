@@ -25,11 +25,7 @@ export default function RegisterPage(): React.ReactElement {
 
         <Card>
           <CardContent>
-            <Box className="space-y-6">
-              <PasskeyRegistration />
-              <RegistrationDivider />
-              <EmailRegistration />
-            </Box>
+            <ConsentGatedRegistration />
           </CardContent>
         </Card>
 
@@ -43,24 +39,110 @@ export default function RegisterPage(): React.ReactElement {
             </Text>
           </Box>
         </Box>
-
-        <Box className="text-center mt-4">
-          <Text variant="caption" muted>
-            By creating an account, you agree to our{" "}
-            <Box as="a" href="/terms" className="text-brand-600 hover:underline inline">
-              <Text as="span" variant="caption">Terms of Service</Text>
-            </Box>
-            {" "}and{" "}
-            <Box as="a" href="/privacy" className="text-brand-600 hover:underline inline">
-              <Text as="span" variant="caption">Privacy Policy</Text>
-            </Box>
-            .
-          </Text>
-        </Box>
       </Box>
     </Box>
   );
 }
+
+/**
+ * Legal gate shown before the registration form itself. Requires the user
+ * to affirm (i) minimum age, (ii) acceptance of the Terms and Privacy
+ * Policy, before any credential can be created. This is the affirmative
+ * opt-in required by GDPR Article 7 and by the UK ICO Age-Appropriate
+ * Design Code.
+ */
+function ConsentGatedRegistration(): React.ReactElement {
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+
+  const canProceed = ageConfirmed && termsAccepted;
+
+  return (
+    <Box className="space-y-6">
+      <Box className="space-y-3 rounded-lg border border-border bg-surface-subtle p-4">
+        <Text variant="label">Before you create your account</Text>
+        <Box as="label" className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-neutral-400 text-brand-600 focus:ring-brand-600"
+            checked={ageConfirmed}
+            onChange={(e) => setAgeConfirmed(e.target.checked)}
+            aria-describedby="age-help"
+          />
+          <Box className="flex-1">
+            <Text variant="body-sm" className="text-content">
+              I confirm I am at least 13 years old (or 16 if I live in the
+              European Economic Area or the United Kingdom), and if I am
+              under 18 I have my parent or legal guardian&apos;s consent to
+              use AlecRae.
+            </Text>
+          </Box>
+        </Box>
+        <Box as="label" className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-neutral-400 text-brand-600 focus:ring-brand-600"
+            checked={termsAccepted}
+            onChange={(e) => setTermsAccepted(e.target.checked)}
+            aria-describedby="terms-help"
+          />
+          <Box className="flex-1">
+            <Text variant="body-sm" className="text-content">
+              I have read and agree to the{" "}
+              <Box as="a" href="/terms" className="text-brand-600 hover:underline inline" target="_blank" rel="noopener noreferrer">
+                <Text as="span" variant="body-sm" className="text-brand-600">Terms of Service</Text>
+              </Box>
+              ,{" "}
+              <Box as="a" href="/privacy" className="text-brand-600 hover:underline inline" target="_blank" rel="noopener noreferrer">
+                <Text as="span" variant="body-sm" className="text-brand-600">Privacy Policy</Text>
+              </Box>
+              ,{" "}
+              <Box as="a" href="/acceptable-use" className="text-brand-600 hover:underline inline" target="_blank" rel="noopener noreferrer">
+                <Text as="span" variant="body-sm" className="text-brand-600">Acceptable Use Policy</Text>
+              </Box>
+              {" "}and{" "}
+              <Box as="a" href="/cookies" className="text-brand-600 hover:underline inline" target="_blank" rel="noopener noreferrer">
+                <Text as="span" variant="body-sm" className="text-brand-600">Cookie Policy</Text>
+              </Box>
+              .
+            </Text>
+          </Box>
+        </Box>
+        <Box as="label" className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            className="mt-1 h-4 w-4 rounded border-neutral-400 text-brand-600 focus:ring-brand-600"
+            checked={marketingOptIn}
+            onChange={(e) => setMarketingOptIn(e.target.checked)}
+          />
+          <Box className="flex-1">
+            <Text variant="body-sm" className="text-content">
+              Optional: send me occasional product updates. Unsubscribe any
+              time. We never share your email address with anyone.
+            </Text>
+          </Box>
+        </Box>
+      </Box>
+
+      <Box className={canProceed ? "" : "opacity-50 pointer-events-none"} aria-disabled={!canProceed}>
+        <Box className="space-y-6">
+          <PasskeyRegistration />
+          <RegistrationDivider />
+          <EmailRegistration />
+        </Box>
+      </Box>
+
+      {!canProceed ? (
+        <Text variant="caption" muted className="text-center">
+          Tick the required boxes above to continue.
+        </Text>
+      ) : null}
+    </Box>
+  );
+}
+
+ConsentGatedRegistration.displayName = "ConsentGatedRegistration";
 
 function PasskeyRegistration(): React.ReactElement {
   const [step, setStep] = useState<"initial" | "details">("initial");

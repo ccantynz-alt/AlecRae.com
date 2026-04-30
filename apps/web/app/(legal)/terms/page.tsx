@@ -59,7 +59,7 @@ export default function TermsPage() {
 
       <Section number="3" title="Account Registration and Security">
         <Text>You must provide accurate, current, and complete information during registration and maintain the accuracy of such information. Each account is for a single individual or entity; credential sharing is prohibited.</Text>
-        <Text>You are solely responsible for maintaining the confidentiality of your account credentials, including passwords, API keys, and passkeys. You must immediately notify AlecRae at security@alecrae.dev of any unauthorized access to or use of your account.</Text>
+        <Text>You are solely responsible for maintaining the confidentiality of your account credentials, including passwords, API keys, and passkeys. You must immediately notify AlecRae at security@alecrae.com of any unauthorized access to or use of your account.</Text>
         <Text>AlecRae reserves the right to suspend or terminate accounts that provide false information, are used for fraudulent purposes, or violate these Terms.</Text>
       </Section>
 
@@ -180,12 +180,12 @@ export default function TermsPage() {
             <Text className="text-sm text-amber-700">This section contains a binding arbitration clause and class action waiver.</Text>
           </CardContent>
         </Card>
-        <Sub label="(a) Informal Resolution.">Before filing any formal dispute, you must contact AlecRae at legal@alecrae.dev and attempt to resolve the dispute informally for at least 30 days. Most disputes can be resolved without formal proceedings.</Sub>
+        <Sub label="(a) Informal Resolution.">Before filing any formal dispute, you must contact AlecRae at legal@alecrae.com and attempt to resolve the dispute informally for at least 30 days. Most disputes can be resolved without formal proceedings.</Sub>
         <Sub label="(b) Binding Arbitration.">Any dispute, controversy, or claim arising out of or relating to these Terms or the Service that cannot be resolved informally shall be resolved by binding arbitration administered by the American Arbitration Association (&quot;AAA&quot;) under its Commercial Arbitration Rules. The arbitration shall be conducted in San Francisco, California, by a single arbitrator selected in accordance with AAA rules.</Sub>
         <Sub label="(c) Class Action Waiver.">YOU AND ALECRAE AGREE THAT EACH PARTY MAY BRING CLAIMS AGAINST THE OTHER ONLY IN YOUR OR ITS INDIVIDUAL CAPACITY AND NOT AS A PLAINTIFF OR CLASS MEMBER IN ANY PURPORTED CLASS, CONSOLIDATED, OR REPRESENTATIVE ACTION. The arbitrator may not consolidate more than one person&apos;s claims and may not preside over any form of representative or class proceeding.</Sub>
         <Sub label="(d) Exceptions.">Notwithstanding the above, either party may (i) bring an individual action in small claims court for disputes within that court&apos;s jurisdiction, or (ii) seek injunctive or other equitable relief in any court of competent jurisdiction to prevent the actual or threatened infringement of intellectual property rights.</Sub>
         <Sub label="(e) Costs.">Each party shall bear its own costs and attorneys&apos; fees in arbitration. If the arbitrator finds that the substance of your claim or the relief sought is frivolous or brought for an improper purpose, the arbitrator may award costs and fees to AlecRae.</Sub>
-        <Sub label="(f) Opt-Out.">You may opt out of this arbitration agreement by sending written notice to legal@alecrae.dev within 30 days of first accepting these Terms. Your notice must include your name, account email, and a clear statement that you wish to opt out of arbitration.</Sub>
+        <Sub label="(f) Opt-Out.">You may opt out of this arbitration agreement by sending written notice to legal@alecrae.com within 30 days of first accepting these Terms. Your notice must include your name, account email, and a clear statement that you wish to opt out of arbitration.</Sub>
       </Section>
 
       <Section number="16" title="Governing Law">
@@ -193,7 +193,7 @@ export default function TermsPage() {
       </Section>
 
       <Section number="17" title="Termination">
-        <Sub label="(a) By You.">You may terminate your account at any time through your account settings or by contacting support@alecrae.dev. Upon termination, you will have a 30-day window to export your data.</Sub>
+        <Sub label="(a) By You.">You may terminate your account at any time through your account settings or by contacting support@alecrae.com. Upon termination, you will have a 30-day window to export your data.</Sub>
         <Sub label="(b) By AlecRae for Cause.">AlecRae may suspend or terminate your account immediately upon notice if you breach these Terms, violate the Acceptable Use Policy, fail to pay fees when due, or engage in activity that threatens the security or reputation of the platform.</Sub>
         <Sub label="(c) By AlecRae Without Cause.">AlecRae may terminate your account without cause by providing 90 days&apos; advance written notice. In such case, you will receive a pro-rata refund of any prepaid fees for the unused portion of your subscription.</Sub>
         <Sub label="(d) Effect of Termination.">Upon termination, your right to use the Service immediately ceases (subject to any data export window). AlecRae will delete your Content within 90 days of termination, except as required for backup retention, legal compliance, or dispute resolution. Sections 6(b), 11, 12, 13, 14, 15, 16, and 25 survive termination.</Sub>
@@ -241,9 +241,9 @@ export default function TermsPage() {
           <Text>AlecRae, Inc.</Text>
           <Text>548 Market Street, Suite 45000</Text>
           <Text>San Francisco, CA 94104</Text>
-          <Text>Legal inquiries: legal@alecrae.dev</Text>
-          <Text>General support: support@alecrae.dev</Text>
-          <Text>Security issues: security@alecrae.dev</Text>
+          <Text>Legal inquiries: legal@alecrae.com</Text>
+          <Text>General support: support@alecrae.com</Text>
+          <Text>Security issues: security@alecrae.com</Text>
         </Box>
       </Section>
     </Box>

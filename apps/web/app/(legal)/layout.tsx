@@ -6,12 +6,21 @@ import { Box, Text } from "@alecrae/ui";
 const legalPages = [
   { href: "/terms", label: "Terms of Service" },
   { href: "/privacy", label: "Privacy Policy" },
+  { href: "/cookies", label: "Cookie Policy" },
+  { href: "/do-not-sell", label: "Do Not Sell or Share" },
+  { href: "/california-notice", label: "California Notice" },
+  { href: "/children", label: "Children's Privacy" },
   { href: "/acceptable-use", label: "Acceptable Use Policy" },
   { href: "/dpa", label: "Data Processing Agreement" },
   { href: "/sla", label: "Service Level Agreement" },
   { href: "/dmca", label: "DMCA / Copyright Policy" },
-  { href: "/cookies", label: "Cookie Policy" },
   { href: "/subprocessors", label: "Subprocessors" },
+  { href: "/refund", label: "Refund Policy" },
+  { href: "/ai-transparency", label: "AI Transparency" },
+  { href: "/accessibility", label: "Accessibility" },
+  { href: "/security", label: "Security & Disclosure" },
+  { href: "/compliance", label: "Corporate Compliance" },
+  { href: "/impressum", label: "Impressum / Legal Notice" },
 ] as const;
 
 export default function LegalLayout({

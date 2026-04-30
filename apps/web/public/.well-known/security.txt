@@ -1,15 +1,27 @@
-# 48co.ai Security Policy (RFC 9116)
-# ────────────────────────────────────
-# If you discover a security issue, please report it via the channels below.
-# We commit to responding within 72 hours and will credit researchers who
-# follow this policy in our public hall of fame.
+# AlecRae Security Policy
+# RFC 9116: https://www.rfc-editor.org/rfc/rfc9116
+#
+# We take security seriously. If you believe you have discovered a
+# vulnerability, please report it responsibly using the contacts below.
+# We commit to acknowledging reports within 2 business days and to
+# coordinated disclosure with all researchers acting in good faith.
 
-Contact: mailto:security@48co.ai
-Contact: https://48co.ai/security
-Expires: 2027-04-10T00:00:00.000Z
-Encryption: https://48co.ai/.well-known/pgp-key.txt
+Contact: mailto:security@alecrae.com
+Contact: https://alecrae.com/security
+Expires: 2027-04-16T00:00:00.000Z
+Encryption: https://alecrae.com/.well-known/pgp-key.txt
 Preferred-Languages: en
-Canonical: https://48co.ai/.well-known/security.txt
-Policy: https://48co.ai/security
-Hiring: https://48co.ai/careers
-Acknowledgments: https://48co.ai/security#hall-of-fame
+Canonical: https://alecrae.com/.well-known/security.txt
+Policy: https://alecrae.com/security
+Hiring: https://alecrae.com/careers
+Acknowledgments: https://alecrae.com/security/hall-of-fame
+
+# Scope: *.alecrae.com, the AlecRae mobile and desktop apps, and the
+# AlecRae public API. Out of scope: social engineering, physical security,
+# denial-of-service, issues requiring privileged network position,
+# third-party services we do not operate.
+#
+# Safe harbor: Good-faith security research that follows this policy
+# will not be pursued under the Computer Fraud and Abuse Act, the
+# Digital Millennium Copyright Act, or similar laws. See
+# https://alecrae.com/security for full safe-harbor terms.

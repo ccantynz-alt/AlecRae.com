@@ -85,7 +85,7 @@ export default function PrivacyPage() {
 
         <Sub label="(e) No Human Review.">Your email content is processed exclusively by automated systems. No AlecRae employee, contractor, or agent reads your emails. The only exceptions are: (i) when you voluntarily share email content with our support team for troubleshooting, (ii) when we are compelled by valid legal process (subpoena, court order, national security letter), or (iii) when investigating confirmed abuse reports, in which case review is limited to the specific content at issue.</Sub>
 
-        <Sub label="(f) Automated Decision-Making.">Our AI systems make automated decisions that affect your experience, including: which emails appear in your inbox vs. spam folder, the priority order of your inbox, and whether outbound emails are flagged for compliance review. Under GDPR Article 22, you have the right to object to decisions based solely on automated processing that significantly affect you. To exercise this right, contact dpo@alecrae.dev. We will review any contested automated decision with human oversight within 5 business days.</Sub>
+        <Sub label="(f) Automated Decision-Making.">Our AI systems make automated decisions that affect your experience, including: which emails appear in your inbox vs. spam folder, the priority order of your inbox, and whether outbound emails are flagged for compliance review. Under GDPR Article 22, you have the right to object to decisions based solely on automated processing that significantly affect you. To exercise this right, contact dpo@alecrae.com. We will review any contested automated decision with human oversight within 5 business days.</Sub>
 
         <Sub label="(g) Profiling.">Our AI creates profiles of your communication patterns, relationships, and writing style. These profiles are used solely to personalize your experience within the Service. We do not use these profiles for advertising, do not share them with third parties, and do not use them for automated decision-making that produces legal effects or similarly significant effects on you.</Sub>
       </Section>
@@ -160,7 +160,7 @@ export default function PrivacyPage() {
         <Sub label="(g) Rights Related to Automated Decision-Making (Article 22).">You have the right not to be subject to decisions based solely on automated processing that significantly affect you, and to obtain human intervention, express your point of view, and contest the decision.</Sub>
         <Sub label="(h) Right to Withdraw Consent.">Where processing is based on consent, you may withdraw consent at any time without affecting the lawfulness of processing performed before withdrawal.</Sub>
         <Sub label="(i) Right to Lodge a Complaint.">You have the right to lodge a complaint with your local data protection supervisory authority.</Sub>
-        <Text className="mt-3">To exercise any of these rights, contact our Data Protection Officer at dpo@alecrae.dev. We will respond within 30 days. We may require identity verification before processing your request. Requests are fulfilled free of charge unless they are manifestly unfounded or excessive.</Text>
+        <Text className="mt-3">To exercise any of these rights, contact our Data Protection Officer at dpo@alecrae.com. We will respond within 30 days. We may require identity verification before processing your request. Requests are fulfilled free of charge unless they are manifestly unfounded or excessive.</Text>
       </Section>
 
       <Section number="8" title="Your Rights Under CCPA (California Users)">
@@ -170,7 +170,7 @@ export default function PrivacyPage() {
         <Sub label="(c) Right to Opt-Out of Sale.">We do not sell personal information. We have not sold personal information in the preceding 12 months.</Sub>
         <Sub label="(d) Right to Non-Discrimination.">We will not discriminate against you for exercising your CCPA rights. You will not receive different pricing, quality, or service levels.</Sub>
         <Sub label="(e) Authorized Agents.">You may designate an authorized agent to submit requests on your behalf with proper written authorization.</Sub>
-        <Text className="mt-3">To exercise your CCPA rights, email privacy@alecrae.dev or use the privacy controls in your account settings. We will respond within 45 days.</Text>
+        <Text className="mt-3">To exercise your CCPA rights, email privacy@alecrae.com or use the privacy controls in your account settings. We will respond within 45 days.</Text>
       </Section>
 
       <Section number="9" title="International Data Transfers">
@@ -194,7 +194,7 @@ export default function PrivacyPage() {
 
       <Section number="11" title="Children&apos;s Privacy">
         <Text>The Service is not directed at children under the age of 13 (or 16 in the EEA). We do not knowingly collect personal information from children under these ages. If we discover that we have inadvertently collected personal information from a child under the applicable age, we will promptly delete it.</Text>
-        <Text>If you believe a child under the applicable age has provided personal information to us, please contact us immediately at privacy@alecrae.dev.</Text>
+        <Text>If you believe a child under the applicable age has provided personal information to us, please contact us immediately at privacy@alecrae.com.</Text>
       </Section>
 
       <Section number="12" title="Cookies and Tracking">
@@ -211,11 +211,11 @@ export default function PrivacyPage() {
         <Text>For privacy-related inquiries:</Text>
         <Box className="ml-6 mt-2 space-y-1">
           <Text className="font-semibold">Data Protection Officer</Text>
-          <Text>Email: dpo@alecrae.dev</Text>
+          <Text>Email: dpo@alecrae.com</Text>
         </Box>
         <Box className="ml-6 mt-3 space-y-1">
           <Text className="font-semibold">Privacy Team</Text>
-          <Text>Email: privacy@alecrae.dev</Text>
+          <Text>Email: privacy@alecrae.com</Text>
         </Box>
         <Box className="ml-6 mt-3 space-y-1">
           <Text className="font-semibold">Mailing Address</Text>
@@ -226,8 +226,30 @@ export default function PrivacyPage() {
           <Text>United States</Text>
         </Box>
         <Box className="ml-6 mt-3 space-y-1">
-          <Text className="font-semibold">EU Representative</Text>
-          <Text>To be appointed. Contact dpo@alecrae.dev in the interim.</Text>
+          <Text className="font-semibold">EU Representative (GDPR Article 27)</Text>
+          <Text>
+            For data subjects located in the European Economic Area, our Article 27 representative is in the process of being appointed with a qualified pan-EU representation service. The representative&apos;s name, address and contact details will be published in this Privacy Policy and in our Impressum as soon as the appointment is finalised. In the interim, data subjects may exercise their rights by contacting <strong>dpo@alecrae.com</strong>, and we will treat that contact as constructive notice to the representative for the purposes of Article 27(4) GDPR.
+          </Text>
+        </Box>
+        <Box className="ml-6 mt-3 space-y-1">
+          <Text className="font-semibold">UK Representative (UK GDPR Article 27)</Text>
+          <Text>
+            For data subjects located in the United Kingdom, our Article 27 UK GDPR representative is in the process of being appointed. The representative&apos;s name, address and contact details will be published in this Privacy Policy and in our Impressum as soon as the appointment is finalised. In the interim, UK data subjects may exercise their rights by contacting <strong>dpo@alecrae.com</strong>, which will be treated as constructive notice to the representative.
+          </Text>
+        </Box>
+        <Box className="ml-6 mt-3 space-y-1">
+          <Text className="font-semibold">Right to lodge a complaint</Text>
+          <Text>
+            You always have the right to lodge a complaint with a supervisory authority, in particular in the Member State of your habitual residence, place of work or place of the alleged infringement:
+          </Text>
+          <Box className="ml-4 mt-2 space-y-1">
+            <Text>&bull; EU: see the list of national Data Protection Authorities at <Text as="span" className="font-semibold">edpb.europa.eu</Text>.</Text>
+            <Text>&bull; UK: Information Commissioner&apos;s Office (ICO) at <Text as="span" className="font-semibold">ico.org.uk</Text>, helpline 0303 123 1113.</Text>
+            <Text>&bull; California: California Privacy Protection Agency (CPPA) at <Text as="span" className="font-semibold">cppa.ca.gov</Text> or the Office of the Attorney General at <Text as="span" className="font-semibold">oag.ca.gov/privacy</Text>.</Text>
+            <Text>&bull; Canada: Office of the Privacy Commissioner of Canada (OPC) at <Text as="span" className="font-semibold">priv.gc.ca</Text>.</Text>
+            <Text>&bull; Australia: Office of the Australian Information Commissioner (OAIC) at <Text as="span" className="font-semibold">oaic.gov.au</Text>.</Text>
+            <Text>&bull; Brazil: Autoridade Nacional de Proteção de Dados (ANPD) at <Text as="span" className="font-semibold">www.gov.br/anpd</Text>.</Text>
+          </Box>
         </Box>
       </Section>
     </Box>
