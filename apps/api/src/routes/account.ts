@@ -7,12 +7,6 @@ import { getDatabase, accounts, users, passkeys } from "@alecrae/db";
 
 const account = new Hono();
 
-const UpdateProfileSchema = z.object({
-  name: z.string().trim().min(1).max(256).optional(),
-  accountName: z.string().trim().min(1).max(256).optional(),
-  billingEmail: z.string().email().optional(),
-});
-
 // GET /v1/account — Get current account details
 account.get("/", requireScope("messages:read"), async (c) => {
   const auth = c.get("auth");

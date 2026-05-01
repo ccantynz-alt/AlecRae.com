@@ -58,10 +58,16 @@ export default function AnalyticsPage(): React.ReactNode {
 
       if (delivRes && Array.isArray(delivRes.data) && delivRes.data.length > 0) {
         setDelivChart(
-          delivRes.data.slice(-7).map((d: Record<string, unknown>, i: number) => ({
-            label: dayLabels[i] ?? "",
-            value: typeof d["deliveryRate"] === "number" ? Math.round(d["deliveryRate"] as number * 100) : 0,
-          })),
+          delivRes.data.slice(-7).map((d, i: number) => {
+            const row = d as Record<string, unknown>;
+            return {
+              label: dayLabels[i] ?? "",
+              value:
+                typeof row["deliveryRate"] === "number"
+                  ? Math.round((row["deliveryRate"] as number) * 100)
+                  : 0,
+            };
+          }),
         );
       } else {
         setDelivChart(dayLabels.map((l) => ({ label: l, value: 0 })));

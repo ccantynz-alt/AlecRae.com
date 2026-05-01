@@ -50,7 +50,6 @@ export function useNewEmailNotifications({
         body: `${email.subject}\n${email.preview.slice(0, 100)}`,
         icon: "/icon-192.png",
         tag: `email-${email.id}`,
-        renotify: true,
         silent: false,
       });
 

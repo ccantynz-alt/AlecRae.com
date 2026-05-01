@@ -473,7 +473,7 @@ export default function InboxPage(): React.ReactNode {
         messageId: msg.messageId,
         from: msg.from,
         to: msg.to,
-        cc: msg.cc,
+        cc: msg.cc ?? [],
         subject: msg.subject,
         preview: msg.preview,
         status: msg.status,

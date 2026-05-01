@@ -47,6 +47,8 @@ export interface ComposeEditorProps extends HTMLAttributes<HTMLDivElement> {
   showAIPanel?: boolean;
   /** Callback to fetch AI calendar slot suggestions. When provided, enables B7 feature. */
   onRequestCalendarSlots?: CalendarSlotRequestFn;
+  /** Fires whenever the body text changes — used to drive grammar checks / live AI. */
+  onBodyChange?: (text: string) => void;
   className?: string;
 }
 
@@ -92,6 +94,7 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
     onApplySuggestion,
     showAIPanel = true,
     onRequestCalendarSlots,
+    onBodyChange,
     className = "",
     ...props
   },
@@ -292,7 +295,10 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
               as="textarea"
               ref={textareaRef}
               value={body}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                setBody(e.target.value);
+                onBodyChange?.(e.target.value);
+              }}
               placeholder="Write your email..."
               className="w-full flex-1 resize-none bg-transparent text-body-md text-content focus:outline-none placeholder:text-content-tertiary"
             />

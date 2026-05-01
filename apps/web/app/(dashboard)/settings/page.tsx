@@ -177,7 +177,7 @@ function ProfileSection({
       </CardContent>
       <CardFooter>
         <Box className="flex items-center justify-end gap-3">
-          <AnimatedPresence show={saved} presenceKey="saved-indicator">
+          <AnimatedPresence show={status === "saved"} presenceKey="saved-indicator">
             <Text variant="body-sm" className="text-status-success">
               Saved
             </Text>

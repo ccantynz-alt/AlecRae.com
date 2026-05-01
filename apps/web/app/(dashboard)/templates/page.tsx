@@ -268,11 +268,13 @@ function CreateTemplateForm({
     setFormError(null);
 
     try {
+      const html = form.htmlBody.trim();
+      const text = form.textBody.trim();
       const res = await templatesApi.create({
         name: form.name.trim(),
         subject: form.subject.trim(),
-        htmlBody: form.htmlBody.trim() || undefined,
-        textBody: form.textBody.trim() || undefined,
+        ...(html ? { htmlBody: html } : {}),
+        ...(text ? { textBody: text } : {}),
       });
       onCreated(res.data);
     } catch (err) {
@@ -418,7 +420,7 @@ function TemplateCard({
               </Text>
               {variables.length > 0 && (
                 <Box className="hidden shrink-0 rounded-full bg-surface-secondary px-2 py-0.5 sm:block">
-                  <Text variant="body-xs" muted>
+                  <Text variant="body-sm" muted>
                     {variables.length} variable{variables.length !== 1 ? "s" : ""}
                   </Text>
                 </Box>
@@ -429,7 +431,7 @@ function TemplateCard({
             </Text>
           </Box>
           <Box className="flex shrink-0 items-center gap-2 pl-4">
-            <Text variant="body-xs" muted className="hidden md:block">
+            <Text variant="body-sm" muted className="hidden md:block">
               {formatDate(template.updatedAt)}
             </Text>
             <Box
@@ -549,11 +551,13 @@ function TemplateEditSection({
     setEditError(null);
 
     try {
+      const html = editHtml.trim();
+      const text = editText.trim();
       const res = await templatesApi.update(template.id, {
         name: editName.trim(),
         subject: editSubject.trim(),
-        htmlBody: editHtml.trim() || undefined,
-        textBody: editText.trim() || undefined,
+        ...(html ? { htmlBody: html } : {}),
+        ...(text ? { textBody: text } : {}),
       });
       onUpdated(res.data);
     } catch (err) {
@@ -617,7 +621,7 @@ function TemplateEditSection({
 
         {currentVariables.length > 0 && (
           <Box>
-            <Text variant="body-xs" muted className="mb-1.5">
+            <Text variant="body-sm" muted className="mb-1.5">
               Variables in template:
             </Text>
             <Box className="flex flex-wrap gap-1.5">
@@ -626,7 +630,7 @@ function TemplateEditSection({
                   key={v}
                   className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5"
                 >
-                  <Text variant="body-xs" className="text-accent font-medium">
+                  <Text variant="body-sm" className="text-accent font-medium">
                     {`{{${v}}}`}
                   </Text>
                 </Box>
@@ -816,7 +820,7 @@ function TemplatePreviewPanel({
           {rendered && (
             <Box className="space-y-4">
               <Box>
-                <Text variant="body-xs" muted className="mb-1">
+                <Text variant="body-sm" muted className="mb-1">
                   Rendered Subject
                 </Text>
                 <Box className="rounded-md border border-border bg-surface-secondary p-3">
@@ -828,7 +832,7 @@ function TemplatePreviewPanel({
 
               {rendered.htmlBody && (
                 <Box>
-                  <Text variant="body-xs" muted className="mb-1">
+                  <Text variant="body-sm" muted className="mb-1">
                     Rendered HTML
                   </Text>
                   <Box className="max-h-64 overflow-y-auto rounded-md border border-border bg-white p-4">
@@ -842,7 +846,7 @@ function TemplatePreviewPanel({
 
               {rendered.textBody && (
                 <Box>
-                  <Text variant="body-xs" muted className="mb-1">
+                  <Text variant="body-sm" muted className="mb-1">
                     Rendered Plain Text
                   </Text>
                   <Box className="rounded-md border border-border bg-surface-secondary p-3">
