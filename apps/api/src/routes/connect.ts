@@ -198,7 +198,7 @@ connect.post(
   "/imap",
   requireScope("accounts:write"),
   validateBody(ImapConnectSchema),
-  (c) => {
+  async (c) => {
     const input = getValidatedBody<z.infer<typeof ImapConnectSchema>>(c);
     const auth = c.get("auth");
 
