@@ -125,11 +125,10 @@ filesRouter.get(
       )
         category = "document";
 
-      if (!categories[category]) {
-        categories[category] = { count: 0, size: 0 };
-      }
-      categories[category].count += row.fileCount;
-      categories[category].size += Number(row.totalSize);
+      const bucket = categories[category] ?? { count: 0, size: 0 };
+      bucket.count += row.fileCount;
+      bucket.size += Number(row.totalSize);
+      categories[category] = bucket;
     }
 
     return c.json({

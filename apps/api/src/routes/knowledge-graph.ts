@@ -7,14 +7,17 @@ import {
   knowledgeRelationships,
   knowledgeExtractions,
 } from "@alecrae/db";
-import { generateId } from "../lib/id.js";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
   validateQuery,
   getValidatedBody,
   getValidatedQuery,
-} from "../middleware/validation.js";
+} from "../middleware/validator.js";
+
+function generateId(): string {
+  return crypto.randomUUID().replace(/-/g, "");
+}
 
 const knowledgeGraphRouter = new Hono();
 
@@ -33,7 +36,7 @@ knowledgeGraphRouter.post(
     }),
   ),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<{ emailId: string; content: string; senderEmail?: string }>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
     const startTime = Date.now();
@@ -215,7 +218,7 @@ knowledgeGraphRouter.get(
     }),
   ),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<{ type?: "person" | "company" | "project" | "topic" | "product" | "event" | "location"; search?: string; sortBy: "mentions" | "recent"; limit: number; cursor?: string }>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -297,7 +300,7 @@ knowledgeGraphRouter.put(
   ),
   async (c) => {
     const id = c.req.param("id");
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<{ description?: string; attributes?: Record<string, unknown> }>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -381,7 +384,7 @@ knowledgeGraphRouter.get(
     }),
   ),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<{ type?: string; minStrength?: number; limit: number; cursor?: string }>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -416,7 +419,7 @@ knowledgeGraphRouter.get(
   requireScope("messages:read"),
   validateQuery(z.object({ q: z.string().min(1) })),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<{ q: string }>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -454,7 +457,7 @@ knowledgeGraphRouter.get(
     }),
   ),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<{ centerEntityId?: string; depth: number; maxNodes: number }>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -542,7 +545,7 @@ knowledgeGraphRouter.post(
     }),
   ),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<{ emails: { emailId: string; content: string; senderEmail?: string }[] }>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 

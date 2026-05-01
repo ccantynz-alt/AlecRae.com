@@ -29,13 +29,13 @@ export const calendarEventStatusEnum = pgEnum("calendar_event_status", [
 export interface RecurrenceRule {
   frequency: "daily" | "weekly" | "monthly" | "yearly";
   interval: number;
-  until?: string;
-  count?: number;
+  until?: string | undefined;
+  count?: number | undefined;
 }
 
 export interface EventAttendee {
   email: string;
-  name?: string;
+  name?: string | undefined;
   status: "accepted" | "declined" | "tentative" | "pending";
 }
 

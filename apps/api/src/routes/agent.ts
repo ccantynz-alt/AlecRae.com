@@ -281,19 +281,22 @@ function getAgent(): InboxAgent {
       .orderBy(desc(emails.createdAt))
       .limit(limit);
 
-    return rows.map((row): AgentEmail => ({
-      id: row.id,
-      accountId: row.accountId,
-      from: row.fromAddress,
-      fromName: row.fromName ?? row.fromAddress,
-      to: (row.toAddresses ?? []).map(
-        (r: { name?: string; address: string }) => r.address,
-      ),
-      subject: row.subject,
-      body: row.textBody ?? "",
-      receivedAt: row.createdAt,
-      headers: row.customHeaders ?? undefined,
-    }));
+    return rows.map((row): AgentEmail => {
+      const base: AgentEmail = {
+        id: row.id,
+        accountId: row.accountId,
+        from: row.fromAddress,
+        fromName: row.fromName ?? row.fromAddress,
+        to: (row.toAddresses ?? []).map(
+          (r: { name?: string; address: string }) => r.address,
+        ),
+        subject: row.subject,
+        body: row.textBody ?? "",
+        receivedAt: row.createdAt,
+      };
+      if (row.customHeaders) base.headers = row.customHeaders;
+      return base;
+    });
   };
 
   // Draft queueing is intentionally omitted from the agent factory. Drafts in

@@ -28,12 +28,12 @@ import {
   getValidatedBody,
   getValidatedQuery,
 } from "../middleware/validator.js";
-import { getDatabase } from "@alecrae/db";
 import {
+  getDatabase,
   emailTimeTracking,
   productivityInsights,
   emailBehaviorPatterns,
-} from "@alecrae/db/src/schema/productivity-analytics.js";
+} from "@alecrae/db";
 
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
 

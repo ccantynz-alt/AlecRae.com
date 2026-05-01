@@ -23,7 +23,7 @@ export const integrationPlatformEnum = pgEnum("integration_platform", [
 
 export interface IntegrationTriggerConfig {
   events: string[];
-  filters?: Record<string, unknown>;
+  filters?: Record<string, unknown> | undefined;
 }
 
 export const webhookIntegrations = pgTable(

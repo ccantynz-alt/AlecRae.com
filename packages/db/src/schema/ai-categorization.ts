@@ -74,11 +74,11 @@ export const emailCategories = pgTable(
 
 /** Shape of the conditions JSONB column on smartLabelRules. */
 export interface SmartLabelConditions {
-  senderPatterns?: string[];
-  subjectPatterns?: string[];
-  bodyKeywords?: string[];
-  hasAttachment?: boolean;
-  minImportance?: number;
+  senderPatterns?: string[] | undefined;
+  subjectPatterns?: string[] | undefined;
+  bodyKeywords?: string[] | undefined;
+  hasAttachment?: boolean | undefined;
+  minImportance?: number | undefined;
 }
 
 export const smartLabelRules = pgTable(

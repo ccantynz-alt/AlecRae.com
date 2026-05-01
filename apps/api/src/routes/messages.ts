@@ -411,12 +411,20 @@ async function handleSend(c: Context) {
     (input.template_id ?? "").includes("verify") ||
     (input.template_id ?? "").includes("password-reset") ||
     (input.template_id ?? "").includes("magic-link");
+  const headersMap = new Map<string, string>();
+  for (const [k, v] of Object.entries(input.headers ?? {})) {
+    headersMap.set(k, String(v));
+  }
+  const bodyText = (input.text ?? "") + " " + (input.html ?? "");
   const complianceMeta: EmailMetadata = {
     from: input.from.email,
-    to: allRecipientAddresses,
+    to: allRecipientAddresses[0] ?? "",
     subject: resolvedSubject,
-    headers: input.headers ?? {},
-    isTransactional,
+    headers: headersMap,
+    hasUnsubscribeHeader: headersMap.has("List-Unsubscribe"),
+    hasUnsubscribeLink: /unsubscribe/i.test(bodyText),
+    hasPhysicalAddress: false,
+    contentType: isTransactional ? "transactional" : "marketing",
     senderDomain: domainOf(input.from.email),
   };
   const complianceResult = complianceEngine.checkAll(complianceMeta);
@@ -440,7 +448,7 @@ async function handleSend(c: Context) {
       {
         error: {
           type: "compliance_error",
-          message: `Email blocked: ${violations.map((v) => v.message ?? v.rule).join("; ")}`,
+          message: `Email blocked: ${violations.map((v) => v.description ?? v.rule).join("; ")}`,
           code: "compliance_violation",
           violations,
         },

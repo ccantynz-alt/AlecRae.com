@@ -25,12 +25,12 @@ import {
   getValidatedBody,
   getValidatedQuery,
 } from "../middleware/validator.js";
-import { getDatabase } from "@alecrae/db";
 import {
+  getDatabase,
   emailActionItems,
   emailDeadlines,
   emailPromises,
-} from "@alecrae/db/src/schema/context-intelligence.js";
+} from "@alecrae/db";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 

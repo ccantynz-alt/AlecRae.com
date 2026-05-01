@@ -338,12 +338,12 @@ connect.post(
       provider: row.provider,
       email: row.email,
       displayName: row.displayName ?? row.email,
-      accessToken: row.accessToken ?? undefined,
-      refreshToken: row.refreshToken ?? undefined,
-      tokenExpiresAt: row.tokenExpiresAt ?? undefined,
       status: row.status as "active" | "error",
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
+      ...(row.accessToken ? { accessToken: row.accessToken } : {}),
+      ...(row.refreshToken ? { refreshToken: row.refreshToken } : {}),
+      ...(row.tokenExpiresAt ? { tokenExpiresAt: row.tokenExpiresAt } : {}),
     };
 
     const result = await syncAccount(account);
