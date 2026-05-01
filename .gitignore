@@ -10,6 +10,9 @@ out/
 build/
 *.tsbuildinfo
 
+# Electron-vite cache artifacts
+apps/desktop/electron.vite.config.*.mjs
+
 # Environment
 .env
 .env.local
