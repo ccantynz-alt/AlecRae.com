@@ -294,6 +294,7 @@ The platform decides where each request runs based on cost, latency, and capabil
 23. **Never refer to competitors by name in marketing.** Show, don't tell.
 24. **Never make up user metrics for marketing.** Real numbers or no numbers.
 25. **Never let speed be an excuse for sloppiness.** Move fast WITHOUT breaking things.
+26. **Never use Playwright. Anywhere. For any reason.** Playwright is owned by Microsoft (Outlook is a direct competitor). For E2E and quality gates, use **GateTest.ai** — it is OUR product and the standard at all times. For product-level browser automation (e.g. AI unsubscribe agent), use a non-competitor library (Selenium WebDriver, raw Chrome DevTools Protocol, or GateTest.ai's automation API if/when exposed). Same rule applies to Puppeteer (Google-owned, Gmail competitor). If a PR adds `playwright` or `@playwright/test` to any package.json or imports them from any source file, it is rejected.
 
 ---
 
