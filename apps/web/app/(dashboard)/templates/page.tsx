@@ -479,7 +479,6 @@ function TemplateCard({
             >
               <TemplateEditSection
                 template={template}
-                variables={variables}
                 onUpdated={onUpdated}
                 onPreview={onPreview}
                 deleteConfirm={deleteConfirm}
@@ -501,7 +500,6 @@ TemplateCard.displayName = "TemplateCard";
 
 function TemplateEditSection({
   template,
-  variables,
   onUpdated,
   onPreview,
   deleteConfirm,
@@ -510,7 +508,6 @@ function TemplateEditSection({
   onDeleteConfirm,
 }: {
   template: Template;
-  variables: string[];
   onUpdated: (updated: Template) => void;
   onPreview: () => void;
   deleteConfirm: boolean;

@@ -159,8 +159,6 @@ export default function InboxPage(): React.ReactNode {
   const [newsletterMap, setNewsletterMap] = useState<Map<string, boolean>>(new Map());
   // S7: Email explainer panel
   const [explainerOpen, setExplainerOpen] = useState(false);
-  // Whether to show full email content (toggled from newsletter summary)
-  const [showFullEmail, setShowFullEmail] = useState(true);
   const [quickReplyOpen, setQuickReplyOpen] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [undoActions, setUndoActions] = useState<UndoAction[]>([]);
@@ -254,7 +252,7 @@ export default function InboxPage(): React.ReactNode {
     snoozeApi.snooze(id, until.toISOString()).catch(() => {});
   }, [emailItems, selectedEmailId, addUndoAction]);
 
-  const toggleSelect = useCallback((id: string) => {
+  const _toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);

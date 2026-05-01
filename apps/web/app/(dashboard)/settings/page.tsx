@@ -118,8 +118,6 @@ function ProfileSection({
     }
   }, [user]);
 
-  const [saveError, setSaveError] = useState<string | null>(null);
-
   const handleSave = async () => {
     setSaving(true);
     setStatus("idle");
@@ -434,25 +432,6 @@ function NotificationSection() {
 NotificationSection.displayName = "NotificationSection";
 
 function DangerZone() {
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDelete = async () => {
-    if (!confirming) {
-      setConfirming(true);
-      return;
-    }
-    setDeleting(true);
-    try {
-      await accountApi.deleteAccount();
-      authApi.logout();
-      window.location.href = "/";
-    } catch {
-      setDeleting(false);
-      setConfirming(false);
-    }
-  };
-
   return (
     <Card className="border-status-error/30">
       <CardHeader>

@@ -269,7 +269,7 @@ export class SyncEngine {
         const listParams: Parameters<typeof messagesApi.list>[0] = {
           limit: SYNC_PAGE_LIMIT,
         };
-        if (currentCursor != null) listParams.cursor = currentCursor;
+        if (currentCursor) listParams.cursor = currentCursor;
         const response = await messagesApi.list(listParams);
 
         const emails = response.data;

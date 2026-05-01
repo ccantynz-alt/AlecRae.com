@@ -1,26 +1,34 @@
 import Link from "next/link";
+import type { Route } from "next";
 
-const links = {
+interface FooterLink {
+  label: string;
+  href: Route;
+}
+
+const r = (path: string): Route => path as Route;
+
+const links: Record<string, FooterLink[]> = {
   Product: [
-    { label: "Features", href: "#features" },
-    { label: "AI Engine", href: "#ai" },
-    { label: "Pricing", href: "#pricing" },
-    { label: "Security", href: "#security" },
-    { label: "Changelog", href: "/changelog" },
-    { label: "Status", href: "/status" },
+    { label: "Features", href: r("/#features") },
+    { label: "AI Engine", href: r("/#ai") },
+    { label: "Pricing", href: r("/#pricing") },
+    { label: "Security", href: r("/#security") },
+    { label: "Changelog", href: r("/changelog") },
+    { label: "Status", href: r("/status") },
   ],
   Resources: [
-    { label: "Documentation", href: "/docs" },
-    { label: "API Reference", href: "/docs" },
-    { label: "Migration Guides", href: "/docs" },
+    { label: "Documentation", href: r("/docs") },
+    { label: "API Reference", href: r("/docs") },
+    { label: "Migration Guides", href: r("/docs") },
   ],
   Legal: [
-    { label: "Privacy Policy", href: "/privacy" },
-    { label: "Terms of Service", href: "/terms" },
-    { label: "Cookie Policy", href: "/cookies" },
-    { label: "DPA", href: "/dpa" },
-    { label: "SLA", href: "/sla" },
-    { label: "DMCA", href: "/dmca" },
+    { label: "Privacy Policy", href: r("/privacy") },
+    { label: "Terms of Service", href: r("/terms") },
+    { label: "Cookie Policy", href: r("/cookies") },
+    { label: "DPA", href: r("/dpa") },
+    { label: "SLA", href: r("/sla") },
+    { label: "DMCA", href: r("/dmca") },
   ],
 };
 
