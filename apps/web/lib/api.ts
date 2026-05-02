@@ -1814,3 +1814,132 @@ export const templatesApi = {
     );
   },
 };
+
+// ─── AI Inbox Agent (S3) ──────────────────────────────────────────────────────
+
+export type AgentDraftStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "edited"
+  | "sent"
+  | "expired"
+  | "all";
+
+export interface AgentDraft {
+  id: string;
+  runId: string;
+  emailId: string;
+  threadId: string | null;
+  to: string[];
+  subject: string;
+  body: string;
+  editedBody: string | null;
+  tone: string | null;
+  confidence: number;
+  reasoning: string | null;
+  category: string | null;
+  priority: string | null;
+  action: string | null;
+  status: Exclude<AgentDraftStatus, "all">;
+  scheduledFor: string | null;
+  approvedAt: string | null;
+  rejectedAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentBriefing {
+  runId: string | null;
+  briefingMarkdown: string | null;
+  stats: Record<string, unknown> | null;
+  totalProcessed: number;
+  durationMs: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  status: string;
+}
+
+export interface AgentRunSummary {
+  runId: string;
+  status: "running" | "completed" | "failed";
+  message?: string;
+}
+
+export interface AgentConfig {
+  enabled: boolean;
+  morningHour: number;
+  maxEmails: number;
+  dryRun: boolean;
+  scheduleCron?: string;
+  categoryRules?: { category: string; action: string }[];
+}
+
+export const agentApi = {
+  /** Manually trigger an agent run. */
+  run(payload?: {
+    since?: string;
+    maxEmails?: number;
+    dryRun?: boolean;
+    morningHour?: number;
+  }): Promise<{ data: AgentRunSummary }> {
+    return apiFetch<{ data: AgentRunSummary }>("/v1/agent/run", {
+      method: "POST",
+      body: JSON.stringify(payload ?? {}),
+    });
+  },
+
+  /** Get the latest morning briefing. */
+  getBriefing(): Promise<{ data: AgentBriefing }> {
+    return apiFetch<{ data: AgentBriefing }>("/v1/agent/briefing");
+  },
+
+  /** List drafts (pending by default). */
+  getDrafts(params?: {
+    status?: AgentDraftStatus;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ data: { drafts: AgentDraft[]; total: number; limit: number; offset: number } }> {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.offset) qs.set("offset", String(params.offset));
+    const query = qs.toString();
+    return apiFetch<{
+      data: { drafts: AgentDraft[]; total: number; limit: number; offset: number };
+    }>(`/v1/agent/drafts${query ? `?${query}` : ""}`);
+  },
+
+  approveDraft(id: string): Promise<{ data: { approved: boolean } }> {
+    return apiFetch<{ data: { approved: boolean } }>(
+      `/v1/agent/drafts/${encodeURIComponent(id)}/approve`,
+      { method: "POST" },
+    );
+  },
+
+  rejectDraft(id: string, reason?: string): Promise<{ data: { rejected: boolean } }> {
+    return apiFetch<{ data: { rejected: boolean } }>(
+      `/v1/agent/drafts/${encodeURIComponent(id)}/reject`,
+      { method: "POST", body: JSON.stringify({ reason: reason ?? "" }) },
+    );
+  },
+
+  editDraft(id: string, editedBody: string): Promise<{ data: { edited: boolean } }> {
+    return apiFetch<{ data: { edited: boolean } }>(
+      `/v1/agent/drafts/${encodeURIComponent(id)}/edit`,
+      { method: "POST", body: JSON.stringify({ editedBody }) },
+    );
+  },
+
+  getConfig(): Promise<{ data: AgentConfig }> {
+    return apiFetch<{ data: AgentConfig }>("/v1/agent/config");
+  },
+
+  updateConfig(config: Partial<AgentConfig>): Promise<{ data: AgentConfig }> {
+    return apiFetch<{ data: AgentConfig }>("/v1/agent/config", {
+      method: "PUT",
+      body: JSON.stringify(config),
+    });
+  },
+};
