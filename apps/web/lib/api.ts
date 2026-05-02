@@ -2032,3 +2032,149 @@ export const recallApi = {
     });
   },
 };
+
+// ─── Connected Accounts (multi-account) ───────────────────────────────────────
+
+export type ConnectedProvider = "gmail" | "outlook" | "imap";
+
+export interface ConnectedAccount {
+  id: string;
+  provider: ConnectedProvider;
+  email: string;
+  displayName: string | null;
+  status: "active" | "error";
+  lastSyncAt: string | null;
+  createdAt: string;
+}
+
+export const connectApi = {
+  /** List all connected mailbox accounts for the authenticated user. */
+  list(): Promise<{ data: ConnectedAccount[] }> {
+    return apiFetch<{ data: ConnectedAccount[] }>("/v1/connect/accounts");
+  },
+
+  /** Disconnect a connected account by ID (revokes access tokens). */
+  disconnect(id: string): Promise<{ data: { deleted: boolean; id: string } }> {
+    return apiFetch<{ data: { deleted: boolean; id: string } }>(
+      `/v1/connect/accounts/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  /** Trigger a manual sync on a connected account. */
+  sync(id: string): Promise<{
+    data: {
+      accountId: string;
+      messagesAdded: number;
+      messagesUpdated: number;
+      messagesDeleted: number;
+      errors: string[];
+      syncDurationMs: number;
+    };
+  }> {
+    return apiFetch<{
+      data: {
+        accountId: string;
+        messagesAdded: number;
+        messagesUpdated: number;
+        messagesDeleted: number;
+        errors: string[];
+        syncDurationMs: number;
+      };
+    }>(`/v1/connect/accounts/${encodeURIComponent(id)}/sync`, { method: "POST" });
+  },
+
+  /** OAuth start URLs — full redirects, not API calls. */
+  gmailAuthUrl(): string {
+    return "/v1/connect/gmail";
+  },
+  outlookAuthUrl(): string {
+    return "/v1/connect/outlook";
+  },
+
+  /** Connect an arbitrary IMAP/SMTP account by credentials. */
+  connectImap(payload: {
+    email: string;
+    displayName?: string;
+    imapHost: string;
+    imapPort?: number;
+    imapUsername: string;
+    imapPassword: string;
+    imapTls?: boolean;
+    smtpHost: string;
+    smtpPort?: number;
+    smtpUsername: string;
+    smtpPassword: string;
+    smtpTls?: boolean;
+  }): Promise<{ data: { id: string; provider: "imap"; email: string; status: "active" } }> {
+    return apiFetch<{
+      data: { id: string; provider: "imap"; email: string; status: "active" };
+    }>("/v1/connect/imap", { method: "POST", body: JSON.stringify(payload) });
+  },
+};
+
+// ─── Dictation ────────────────────────────────────────────────────────────────
+
+export type DictationMode = "compose" | "reply" | "triage" | "command";
+
+export interface DictationLanguage {
+  code: string;
+  name: string;
+  nativeName?: string;
+}
+
+export interface DictationProcessResult {
+  mode: DictationMode;
+  /** Cleaned-up structured output. Shape varies per mode. */
+  output: {
+    subject?: string;
+    body?: string;
+    to?: string[];
+    cc?: string[];
+    bcc?: string[];
+    command?: { intent: string; args: Record<string, unknown> };
+    actions?: { type: string; target?: string; reason?: string }[];
+  };
+  detectedLanguage?: string;
+  confidence: number;
+}
+
+export const dictationApi = {
+  /** Convert raw transcription text into a structured email or command. */
+  process(payload: {
+    transcription: string;
+    mode?: DictationMode;
+    sourceLanguage?: string;
+    targetLanguage?: string;
+    replyContext?: { from: string; subject: string; body: string };
+  }): Promise<{ data: DictationProcessResult }> {
+    return apiFetch<{ data: DictationProcessResult }>("/v1/dictation/process", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Server-side Whisper transcription (audio file → text). Requires OPENAI_API_KEY. */
+  async transcribeAudio(
+    audio: Blob,
+    language?: string,
+  ): Promise<{ data: { text: string } }> {
+    const form = new FormData();
+    form.append("audio", audio, "dictation.webm");
+    if (language) form.append("language", language);
+    const res = await fetch("/v1/dictation/transcribe", {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Transcription failed: ${res.status} ${errText}`);
+    }
+    return res.json() as Promise<{ data: { text: string } }>;
+  },
+
+  /** List supported dictation languages. */
+  languages(): Promise<{ data: DictationLanguage[] }> {
+    return apiFetch<{ data: DictationLanguage[] }>("/v1/dictation/languages");
+  },
+};

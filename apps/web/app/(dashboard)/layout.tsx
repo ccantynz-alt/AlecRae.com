@@ -33,12 +33,15 @@ const navigationSections: AnimatedSidebarSection[] = [
       { id: "templates", label: "Templates", href: "/templates" },
       { id: "contacts", label: "Contacts", href: "/contacts" },
       { id: "recall", label: "Recall", href: "/recall" },
+      { id: "voice-profile", label: "Voice Profile", href: "/voice-profile" },
+      { id: "dictation", label: "Dictation", href: "/dictation" },
       { id: "local-ai", label: "Local AI", href: "/local-ai" },
     ],
   },
   {
     title: "Manage",
     items: [
+      { id: "accounts", label: "Accounts", href: "/accounts" },
       { id: "domains", label: "Domains", href: "/domains" },
       { id: "analytics", label: "Analytics", href: "/analytics" },
       { id: "settings", label: "Settings", href: "/settings" },

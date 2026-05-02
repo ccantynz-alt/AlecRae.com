@@ -165,6 +165,9 @@ export default function InboxPage(): React.ReactNode {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [snoozePickerOpen, setSnoozePickerOpen] = useState(false);
   const snoozeTargetRef = useRef<string | null>(null);
+  // #6 visible perf: where did this inbox load come from + how fast?
+  const [loadSource, setLoadSource] = useState<"cache" | "network" | null>(null);
+  const [loadDurationMs, setLoadDurationMs] = useState<number | null>(null);
 
   const sync = useSyncEngine();
 
@@ -428,6 +431,7 @@ export default function InboxPage(): React.ReactNode {
 
       // Cache-first: try IndexedDB for instant load
       try {
+        const cacheStart = performance.now();
         const cached = await getCachedEmails({ limit: 50, filter: "all" });
         if (cached.length > 0) {
           const cachedItems: EmailListItem[] = cached.map((c) => ({
@@ -442,6 +446,8 @@ export default function InboxPage(): React.ReactNode {
             hasAttachments: c.hasAttachments,
           }));
           setEmailItems(cachedItems);
+          setLoadSource("cache");
+          setLoadDurationMs(Math.round(performance.now() - cacheStart));
           if (cachedItems.length > 0 && !selectedEmailId) {
             setSelectedEmailId(cachedItems[0]!.id);
           }
@@ -452,6 +458,7 @@ export default function InboxPage(): React.ReactNode {
       }
 
       // Network: fetch fresh data and update cache
+      const networkStart = performance.now();
       const res = await messagesApi.list({ limit: 50 });
       const items = res.data.map(toEmailListItem);
       const nlMap = new Map<string, boolean>();
@@ -485,12 +492,18 @@ export default function InboxPage(): React.ReactNode {
         cachedAt: Date.now(),
       }));
       cacheEmails(toCache).catch(() => {});
+
+      // Surface the network round-trip if we hadn't already filled from cache
+      if (loadSource === null) {
+        setLoadSource("network");
+        setLoadDurationMs(Math.round(performance.now() - networkStart));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load emails");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadSource, selectedEmailId]);
 
   const fetchDetail = useCallback(async (id: string) => {
     try {
@@ -643,6 +656,29 @@ export default function InboxPage(): React.ReactNode {
         error={sync.error}
         onSyncNow={() => void sync.syncNow()}
       />
+      {loadDurationMs !== null && loadSource !== null && (
+        <Box
+          className={[
+            "px-4 py-1.5 border-b border-border text-xs flex items-center gap-2",
+            loadSource === "cache"
+              ? "bg-status-success/5 text-status-success"
+              : "bg-surface-secondary/50 text-content-secondary",
+          ].join(" ")}
+          aria-live="polite"
+          title={
+            loadSource === "cache"
+              ? "Inbox served from local IndexedDB cache. Network sync runs in the background."
+              : "Inbox served from network (no local cache yet)."
+          }
+        >
+          <Text as="span" variant="caption" className="font-medium">
+            {loadSource === "cache" ? "Local cache" : "Network"}
+          </Text>
+          <Text as="span" variant="caption">
+            · loaded in {loadDurationMs}ms
+          </Text>
+        </Box>
+      )}
       <Box className="flex flex-1 h-full">
         <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
           <AnimatePresence>
