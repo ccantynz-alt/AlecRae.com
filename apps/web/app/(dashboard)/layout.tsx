@@ -14,6 +14,7 @@ import { KeyboardShortcutHelp } from "../../components/KeyboardShortcutHelp";
 import { CommandPalette } from "../../components/CommandPalette";
 import { OfflineBadge } from "../../components/SyncStatusBar";
 import { InstallPrompt } from "../../components/InstallPrompt";
+import { LocalAIStatusIndicator } from "../../components/LocalAIStatusIndicator";
 
 const navigationSections: AnimatedSidebarSection[] = [
   {
@@ -30,6 +31,7 @@ const navigationSections: AnimatedSidebarSection[] = [
     items: [
       { id: "templates", label: "Templates", href: "/templates" },
       { id: "contacts", label: "Contacts", href: "/contacts" },
+      { id: "local-ai", label: "Local AI", href: "/local-ai" },
     ],
   },
   {
@@ -170,6 +172,7 @@ export default function DashboardLayout({
         <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">
           <OfflineBadge />
           <Box className="flex-1" />
+          <LocalAIStatusIndicator autoInit={false} />
           <FocusModeToggle />
         </Box>
         <AnimatedPage pageKey={pathname ?? "dashboard"} mode="slide" className="flex flex-col flex-1 min-h-0">
