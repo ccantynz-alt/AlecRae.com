@@ -618,14 +618,14 @@ After writing the code:
 
 The platform's moat is the AI flywheel — every user action makes every AI feature better, and the data that compounds cannot be cloned by Gmail or Outlook. The signals + learning cycles are wired in `.ai-flywheel/config.json`. What's missing is **visibility, virality, and instrumentation**. These are the highest-leverage next builds AFTER the email-sending stack is operational:
 
-| # | Item | Why | Effort |
+| # | Item | Why | Status |
 |---|---|---|---|
-| F1 | **"Your AlecRae" page** — voice-profile confidence over time, drafts accepted, time saved, words AI has learned | Without it, users can't see the wheel turning, which kills retention narrative + marketing screenshots | ~2 days |
-| F2 | **Voice-primed referral loop** — "Invite a contact → they get 3 months free, you get 1 month free, AND their voice profile is primed from the emails you've already exchanged" | Ties acquisition to the moat; Gmail/Superhuman literally cannot ship the parenthetical | ~1 week |
-| F3 | **AlecRae↔AlecRae network features** — real-time read/draft state, "Sarah is replying", presence in compose, calendar slot proposals that auto-resolve when both ends are on AlecRae | Turns AlecRae from "a client" into "a platform" — each new user makes existing users' product better | ~2 weeks |
-| F4 | **Flywheel instrumentation** — wire `.ai-flywheel/config.json` signals to ClickHouse + surface weekly RPM in `/admin` | Right now the wheel turns but we can't measure it. Need weekly compose-acceptance, triage-accuracy, voice-edit-distance trend lines | ~3 days |
+| F1 | **"Your AlecRae" page** — voice-profile confidence over time, drafts accepted, time saved, words AI has learned | Without it, users can't see the wheel turning, which kills retention narrative + marketing screenshots | ✅ DONE 2026-05-08 — `/your-alecrae` ships pre-launch with placeholder state, lights up automatically when signals flow |
+| F2 | **Voice-primed referral loop** — "Invite a contact → they get 3 months free, you get 1 month free, AND their voice profile is primed from the emails you've already exchanged" | Ties acquisition to the moat; Gmail/Superhuman literally cannot ship the parenthetical | ⏳ ~1 week (next) |
+| F3 | **AlecRae↔AlecRae network features** — real-time read/draft state, "Sarah is replying", presence in compose, calendar slot proposals that auto-resolve when both ends are on AlecRae | Turns AlecRae from "a client" into "a platform" — each new user makes existing users' product better | ⏳ ~2 weeks |
+| F4 | **Flywheel instrumentation** — typed signal pipeline + aggregator + admin RPM dashboard | Right now the wheel turns but we couldn't measure it. Now we can: 8 metrics, weekly trends, composite RPM. | ✅ DONE 2026-05-08 — `packages/flywheel` + `flywheel_signals` table + `/v1/flywheel/{signal,metrics,me,global}` + `/admin/flywheel` + 8 unit tests |
 
-**Build order:** F4 → F1 → F2 → F3. Instrument first so we know the wheel is real, then make it visible, then tie it to virality, then to network effects. None of these block launch — but all four together are what turns AlecRae into a $2.5M MRR exit instead of a $10M lifestyle business.
+**Build order:** F4 → F1 → F2 → F3. Instrument first so we know the wheel is real, then make it visible, then tie it to virality, then to network effects. **F4 + F1 shipped 2026-05-08.** F2 and F3 next, in order.
 
 ---
 
@@ -782,7 +782,7 @@ If you ship something not in this file, you broke the rules.
 | C3 | **Admin console SSO** | SAML for enterprise sales | DONE |
 | C4 | **SOC 2 Type I → Type II** | Required for enterprise | NOT STARTED |
 | C5 | **GDPR DPA template** | Legal pages exist, need DPA workflow | NOT STARTED |
-| C6 | **Bug bounty program** | HackerOne or Intigriti | NOT STARTED |
+| C6 | **Bug bounty program** | HackerOne or Intigriti | ✅ DONE 2026-05-08 — `/security/bounty` page with full scope, severity tiers, USD reward bands, rules of engagement, and CFAA/Computer-Misuse-Act safe harbour. Linked from /security and /.well-known/security.txt. |
 | C7 | **Public roadmap** | Trello/Linear public board | NOT STARTED |
 | C8 | **Changelog page** | changelog.alecrae.com | DONE |
 | C9 | **Migration guides** | "From Gmail to AlecRae in 5 minutes" | DONE |
