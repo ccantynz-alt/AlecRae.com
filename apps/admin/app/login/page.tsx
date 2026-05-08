@@ -41,10 +41,31 @@ function KeyIcon(): React.ReactElement {
   );
 }
 
-type LoginMode = "sso" | "api-key";
+function MailIcon(): React.ReactElement {
+  return (
+    <Box
+      as="svg"
+      className="w-5 h-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <Box as="path" d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+      <Box as="polyline" points="22,6 12,13 2,6" />
+    </Box>
+  );
+}
+
+type LoginMode = "password" | "sso" | "api-key";
 
 export default function LoginPage(): React.ReactElement {
-  const [mode, setMode] = useState<LoginMode>("sso");
+  const [mode, setMode] = useState<LoginMode>("password");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [accountId, setAccountId] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -96,16 +117,63 @@ export default function LoginPage(): React.ReactElement {
     window.location.href = "/";
   }, [apiKey]);
 
+  const handlePasswordLogin = useCallback(async () => {
+    if (!email.trim() || !password) {
+      setError("Email and password are required");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+        credentials: "same-origin",
+      });
+
+      if (res.ok) {
+        const next = new URLSearchParams(window.location.search).get("next");
+        window.location.href = next && next.startsWith("/") ? next : "/";
+        return;
+      }
+
+      let reason = "invalid_credentials";
+      try {
+        const body = (await res.json()) as { reason?: string };
+        if (typeof body.reason === "string") reason = body.reason;
+      } catch {
+        // ignore parse error, keep default reason
+      }
+
+      if (reason === "not_configured") {
+        setError(
+          "Admin login is not configured. Set ADMIN_EMAIL, ADMIN_PASSWORD_HASH, and ADMIN_SESSION_SECRET in your environment.",
+        );
+      } else {
+        setError("Email or password is incorrect.");
+      }
+      setLoading(false);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Login failed");
+      setLoading(false);
+    }
+  }, [email, password]);
+
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
       if (mode === "sso") {
         void handleSsoLogin();
+      } else if (mode === "password") {
+        void handlePasswordLogin();
       } else {
         handleApiKeyLogin();
       }
     },
-    [mode, handleSsoLogin, handleApiKeyLogin],
+    [mode, handleSsoLogin, handlePasswordLogin, handleApiKeyLogin],
   );
 
   return (
@@ -146,6 +214,25 @@ export default function LoginPage(): React.ReactElement {
           <Box
             as="button"
             role="tab"
+            aria-selected={mode === "password"}
+            onClick={() => {
+              setMode("password");
+              setError(null);
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-md text-sm font-medium transition-colors ${
+              mode === "password"
+                ? "bg-surface text-content shadow-sm"
+                : "text-content-secondary hover:text-content"
+            }`}
+          >
+            <MailIcon />
+            <Text as="span" variant="body-sm" className="font-medium">
+              Email
+            </Text>
+          </Box>
+          <Box
+            as="button"
+            role="tab"
             aria-selected={mode === "sso"}
             onClick={() => {
               setMode("sso");
@@ -159,7 +246,7 @@ export default function LoginPage(): React.ReactElement {
           >
             <SsoIcon />
             <Text as="span" variant="body-sm" className="font-medium">
-              SSO / SAML
+              SSO
             </Text>
           </Box>
           <Box
@@ -201,7 +288,62 @@ export default function LoginPage(): React.ReactElement {
           onSubmit={handleSubmit}
           className="rounded-xl bg-surface-secondary border border-border p-6"
         >
-          {mode === "sso" ? (
+          {mode === "password" ? (
+            <Box className="flex flex-col gap-4">
+              <Box>
+                <Text
+                  as="label"
+                  variant="body-sm"
+                  className="text-content font-medium mb-1.5 block"
+                >
+                  Email
+                </Text>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setEmail(e.target.value)
+                  }
+                  placeholder="you@alecrae.com"
+                  aria-label="Admin email"
+                  autoComplete="username"
+                  className="w-full"
+                  autoFocus
+                />
+              </Box>
+              <Box>
+                <Text
+                  as="label"
+                  variant="body-sm"
+                  className="text-content font-medium mb-1.5 block"
+                >
+                  Password
+                </Text>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setPassword(e.target.value)
+                  }
+                  placeholder="••••••••"
+                  aria-label="Admin password"
+                  autoComplete="current-password"
+                  className="w-full"
+                />
+                <Text variant="caption" className="text-content-tertiary mt-1.5">
+                  Single-admin login. Credentials are stored as env vars (ADMIN_EMAIL, ADMIN_PASSWORD_HASH) and never in the repo.
+                </Text>
+              </Box>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={loading || !email.trim() || !password}
+                className="w-full"
+              >
+                {loading ? "Signing in..." : "Sign in"}
+              </Button>
+            </Box>
+          ) : mode === "sso" ? (
             <Box className="flex flex-col gap-4">
               <Box>
                 <Text

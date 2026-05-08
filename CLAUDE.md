@@ -586,6 +586,9 @@ After writing the code:
 | 26 | No WCAG / EAA / ADA accessibility statement | MEDIUM | 2026-04-16 | FIXED 2026-04-16 — /accessibility page (WCAG 2.2 AA target, EAA, ADA, Section 508) |
 | 27 | Missing Impressum, Children's Privacy, Refund, Corporate Compliance pages | HIGH | 2026-04-16 | FIXED 2026-04-16 — 4 new pages (TMG §5, COPPA, EU 14-day withdrawal, FCPA/Modern Slavery/OFAC) |
 | 28 | Domain inconsistency — 32x `alecrae.dev` emails in legal copy should be `alecrae.com` | MEDIUM | 2026-04-16 | FIXED 2026-04-16 — normalised across terms/privacy/aup/dmca/dpa/sla/cookies/subprocessors/domains |
+| 29 | alecrae.com returning Cloudflare 521 — apex+www A records pointed at dead Vultr IP `45.76.171.37` with proxy ON | CRITICAL | 2026-05-08 | FIXED 2026-05-08 — repointed to Vercel `76.76.21.21` apex + `cname.vercel-dns.com` www, proxy off (DNS only). Site live, HTTP 200 confirmed. |
+| 30 | Admin had no real login — only SAML SSO scaffolding + a localStorage API-key tab that never validated server-side | HIGH | 2026-05-08 | FIXED 2026-05-08 — env-var-backed email+password auth (scrypt + HMAC-signed session cookie + edge middleware gate). `bun run scripts/generate-admin-hash.ts` generates hash locally; ADMIN_EMAIL/ADMIN_PASSWORD_HASH/ADMIN_SESSION_SECRET stored only in Vercel env. No new deps. |
+| 31 | API Key login tab on admin still uses localStorage with no server validation | LOW | 2026-05-08 | NOTED — superseded by password login above; tab can be removed in a follow-up PR. |
 
 ---
 
@@ -699,7 +702,7 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Date last updated:** 2026-04-16
+**Date last updated:** 2026-05-08
 **Current phase:** Phase 1 — Launch Imminent
 **Current focus:** Build 100% clean (29/29 static pages). Legal compliance merged (9 new legal pages, consent banner, GDPR/CCPA/EU AI Act coverage, RFC 9116 security.txt). Landing page rewritten, admin console live. CI hardened. All code complete — blocked only on Craig's infra (Neon, Upstash, Stripe, API keys, DNS, Crontec deploy).
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8) = 84 features total + full legal compliance surface
