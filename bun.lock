@@ -24,6 +24,7 @@
       "name": "@alecrae/admin",
       "version": "0.1.0",
       "dependencies": {
+        "@alecrae/flywheel": "workspace:*",
         "@alecrae/shared": "workspace:*",
         "@alecrae/ui": "workspace:*",
         "next": "^15.1.0",
@@ -48,6 +49,7 @@
         "@alecrae/crypto": "workspace:*",
         "@alecrae/db": "workspace:*",
         "@alecrae/dns": "workspace:*",
+        "@alecrae/flywheel": "workspace:*",
         "@alecrae/mta": "workspace:*",
         "@alecrae/reputation": "workspace:*",
         "@alecrae/security": "workspace:*",
@@ -187,6 +189,7 @@
       "name": "@alecrae/web",
       "version": "0.1.0",
       "dependencies": {
+        "@alecrae/flywheel": "workspace:*",
         "@alecrae/shared": "workspace:*",
         "@alecrae/ui": "workspace:*",
         "@mlc-ai/web-llm": "^0.2.73",
@@ -259,6 +262,16 @@
       "devDependencies": {
         "typescript": "^5.7.0",
         "vitest": "^2.1.0",
+      },
+    },
+    "packages/flywheel": {
+      "name": "@alecrae/flywheel",
+      "version": "0.1.0",
+      "dependencies": {
+        "zod": "^3.23.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.7.0",
       },
     },
     "packages/sdk": {
@@ -553,6 +566,8 @@
     "@alecrae/docs": ["@alecrae/docs@workspace:apps/docs"],
 
     "@alecrae/email-parser": ["@alecrae/email-parser@workspace:packages/email-parser"],
+
+    "@alecrae/flywheel": ["@alecrae/flywheel@workspace:packages/flywheel"],
 
     "@alecrae/imap": ["@alecrae/imap@workspace:services/imap"],
 

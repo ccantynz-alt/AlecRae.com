@@ -20,6 +20,7 @@
     "@alecrae/crypto": "workspace:*",
     "@alecrae/db": "workspace:*",
     "@alecrae/dns": "workspace:*",
+    "@alecrae/flywheel": "workspace:*",
     "@alecrae/mta": "workspace:*",
     "@alecrae/reputation": "workspace:*",
     "@alecrae/security": "workspace:*",

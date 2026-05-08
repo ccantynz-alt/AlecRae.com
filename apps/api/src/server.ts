@@ -75,6 +75,7 @@ import { gamification } from "./routes/gamification.js";
 import { changelog } from "./routes/changelog.js";
 import { heatmapAnalytics } from "./routes/heatmap.js";
 import { voiceMessageRouter } from "./routes/voice-message.js";
+import { flywheel } from "./routes/flywheel.js";
 import { scripts } from "./routes/scripts.js";
 import { emailQuery } from "./routes/email-query.js";
 import { fbl } from "./routes/fbl.js";
@@ -613,6 +614,8 @@ app.route("/v1/emails", optimalSendTime);
 app.route("/v1/analytics", recipientPatterns);
 // A3: Inbox Heatmap analytics (heatmap grid, hourly chart, stats dashboard)
 app.route("/v1/analytics", heatmapAnalytics);
+// F4: Flywheel — signal ingestion + aggregated metrics for /admin/flywheel + /your-alecrae
+app.route("/v1/flywheel", flywheel);
 app.route("/v1/compose-assist", composeAssist);
 app.route("/v1/compose/spellcheck", spellcheckRouter);
 app.route("/v1/todo", todo);

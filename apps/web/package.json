@@ -13,6 +13,7 @@
     "clean": "rm -rf .next"
   },
   "dependencies": {
+    "@alecrae/flywheel": "workspace:*",
     "@alecrae/shared": "workspace:*",
     "@alecrae/ui": "workspace:*",
     "@mlc-ai/web-llm": "^0.2.73",

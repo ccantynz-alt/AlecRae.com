@@ -1050,3 +1050,13 @@ export type KnowledgeRelationship = InferSelectModel<typeof knowledgeRelationshi
 export type NewKnowledgeRelationship = InferInsertModel<typeof knowledgeRelationships>;
 export type KnowledgeExtraction = InferSelectModel<typeof knowledgeExtractions>;
 export type NewKnowledgeExtraction = InferInsertModel<typeof knowledgeExtractions>;
+
+// Schema - Flywheel
+export {
+  flywheelSignals,
+  flywheelSignalsRelations,
+} from "./schema/flywheel-signals.js";
+export type {
+  FlywheelSignal,
+  NewFlywheelSignal,
+} from "./schema/flywheel-signals.js";
