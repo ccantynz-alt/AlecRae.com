@@ -146,7 +146,7 @@ export const SignalPayloadSchema = z.discriminatedUnion("category", [
 
 export type SignalPayload = z.infer<typeof SignalPayloadSchema>;
 
-// ─── Aggregated metrics (what /admin/flywheel and /your-alecrae read) ───────
+// ─── Aggregated metrics (what /admin/flywheel and /your-ai read) ────────────
 
 export interface FlywheelMetric {
   readonly key: string;

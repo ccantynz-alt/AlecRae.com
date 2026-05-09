@@ -620,7 +620,7 @@ The platform's moat is the AI flywheel — every user action makes every AI feat
 
 | # | Item | Why | Status |
 |---|---|---|---|
-| F1 | **"Your AlecRae" page** — voice-profile confidence over time, drafts accepted, time saved, words AI has learned | Without it, users can't see the wheel turning, which kills retention narrative + marketing screenshots | ✅ DONE 2026-05-08 — `/your-alecrae` ships pre-launch with placeholder state, lights up automatically when signals flow |
+| F1 | **"Your AI" page** — voice-profile confidence over time, drafts accepted, time saved, words AI has learned | Without it, users can't see the wheel turning, which kills retention narrative + marketing screenshots | ✅ DONE 2026-05-08 — `/your-ai` ships pre-launch with placeholder state, lights up automatically when signals flow |
 | F2 | **Voice-primed referral loop** — "Invite a contact → they get 3 months free, you get 1 month free, AND their voice profile is primed from the emails you've already exchanged" | Ties acquisition to the moat; Gmail/Superhuman literally cannot ship the parenthetical | ⏳ ~1 week (next) |
 | F3 | **AlecRae↔AlecRae network features** — real-time read/draft state, "Sarah is replying", presence in compose, calendar slot proposals that auto-resolve when both ends are on AlecRae | Turns AlecRae from "a client" into "a platform" — each new user makes existing users' product better | ⏳ ~2 weeks |
 | F4 | **Flywheel instrumentation** — typed signal pipeline + aggregator + admin RPM dashboard | Right now the wheel turns but we couldn't measure it. Now we can: 8 metrics, weekly trends, composite RPM. | ✅ DONE 2026-05-08 — `packages/flywheel` + `flywheel_signals` table + `/v1/flywheel/{signal,metrics,me,global}` + `/admin/flywheel` + 8 unit tests |

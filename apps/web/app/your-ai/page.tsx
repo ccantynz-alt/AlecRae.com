@@ -1,5 +1,5 @@
 /**
- * /your-alecrae — the visible flywheel (F1).
+ * /your-ai — the visible flywheel (F1).
  *
  * Marketing-grade page that shows each user how their AI is sharpening
  * over time. Server component for the shell + a client island that
@@ -11,14 +11,14 @@
  */
 
 import type { Metadata } from "next";
-import { YourAlecRaeClient } from "./your-alecrae-client";
+import { YourAiClient } from "./your-ai-client";
 
 export const metadata: Metadata = {
-  title: "Your AlecRae",
+  title: "Your AI",
   description:
     "Watch the AI learn your voice, sharpen your inbox, and give you back hours every week.",
 };
 
-export default function YourAlecRaePage(): React.JSX.Element {
-  return <YourAlecRaeClient />;
+export default function YourAiPage(): React.JSX.Element {
+  return <YourAiClient />;
 }

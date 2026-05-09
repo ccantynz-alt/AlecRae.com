@@ -614,7 +614,7 @@ app.route("/v1/emails", optimalSendTime);
 app.route("/v1/analytics", recipientPatterns);
 // A3: Inbox Heatmap analytics (heatmap grid, hourly chart, stats dashboard)
 app.route("/v1/analytics", heatmapAnalytics);
-// F4: Flywheel — signal ingestion + aggregated metrics for /admin/flywheel + /your-alecrae
+// F4: Flywheel — signal ingestion + aggregated metrics for /admin/flywheel + /your-ai
 app.route("/v1/flywheel", flywheel);
 app.route("/v1/compose-assist", composeAssist);
 app.route("/v1/compose/spellcheck", spellcheckRouter);

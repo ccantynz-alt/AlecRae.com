@@ -88,7 +88,7 @@ function StatCard({ label, value, hint, progress }: StatProps): React.JSX.Elemen
   );
 }
 
-export function YourAlecRaeClient(): React.JSX.Element {
+export function YourAiClient(): React.JSX.Element {
   const [stats, setStats] = useState<UserFlywheelStats>(PLACEHOLDER);
   const [status, setStatus] = useState<"placeholder" | "ready" | "error">("placeholder");
 

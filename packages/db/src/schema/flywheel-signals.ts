@@ -2,7 +2,7 @@
  * Flywheel signals — append-only timeline of every measurable AI event.
  *
  * Aggregated by `@alecrae/flywheel` into FlywheelSnapshot for /admin/flywheel
- * and UserFlywheelStats for /your-alecrae. Cold storage after 365 days per
+ * and UserFlywheelStats for /your-ai. Cold storage after 365 days per
  * `.ai-flywheel/config.json` retention policy.
  */
 

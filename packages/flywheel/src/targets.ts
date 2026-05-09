@@ -3,7 +3,7 @@
  *
  * Each metric has a target value, direction (maximize or minimize), and a
  * threshold below/above which it counts as "warming" vs "tuned" vs "expert".
- * Used by both /admin/flywheel and /your-alecrae rendering.
+ * Used by both /admin/flywheel and /your-ai rendering.
  */
 
 import type { SignalCategory } from "./types.js";
