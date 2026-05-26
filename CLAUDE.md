@@ -579,9 +579,9 @@ After writing the code:
 - [x] Knowledge Graph (entity extraction, relationship mapping, graph visualization)
 
 ### Total: 36/36 original + 7 bonus + 20 expansion + 9 platform + 6 intelligence + 6 deep AI = 84 features ✅ ALL COMPLETE
-### API Routes: 90 route files, 290+ endpoints
-### DB Schemas: 61 schema files
-### Code: ~62K lines of TypeScript
+### API Routes: 91 route files, 310+ endpoints
+### DB Schemas: 62 schema files
+### Code: ~64K lines of TypeScript
 
 ---
 
@@ -603,6 +603,9 @@ After writing the code:
 | 12 | Full rebrand from Vienna/48co/@emailed to AlecRae/alecrae.com/@alecrae | HIGH | 2026-04-12 | DONE 2026-04-12 — all files updated |
 | 13 | No error boundaries in web app (error.tsx / not-found.tsx) | MEDIUM | 2026-04-12 | FIXED 2026-04-12 — root + dashboard error boundaries + 404 page |
 | 14 | No sitemap.xml or robots.txt for SEO | LOW | 2026-04-12 | FIXED 2026-04-12 — Next.js route-based sitemap.ts + robots.ts |
+| 15 | SSO config stored in-memory Map (lost on restart) | HIGH | 2026-05-26 | FIXED 2026-05-26 — DB-backed via ssoConfigs table |
+| 16 | No org/team management (invites, roles, audit log) | HIGH | 2026-05-26 | FIXED 2026-05-26 — organizations route, 18 endpoints |
+| 17 | Admin pages call stub endpoints | MEDIUM | 2026-05-26 | FIXED 2026-05-26 — admin.ts fully wired to DB |
 
 ---
 
@@ -700,7 +703,7 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Date last updated:** 2026-04-18
+**Date last updated:** 2026-05-26
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Production deployment awaiting Craig's infra setup.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)

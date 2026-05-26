@@ -120,6 +120,7 @@ import { schedulingIntelligenceRouter } from "./routes/scheduling-intelligence.j
 import { contextIntelligenceRouter } from "./routes/context-intelligence.js";
 import { productivityAnalyticsRouter } from "./routes/productivity-analytics.js";
 import { knowledgeGraphRouter } from "./routes/knowledge-graph.js";
+import { organizationsRouter } from "./routes/organizations.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue, getSendQueue } from "./lib/queue.js";
@@ -706,6 +707,18 @@ app.route("/v1/context", contextIntelligenceRouter);
 app.route("/v1/productivity", productivityAnalyticsRouter);
 // Knowledge Graph — entity extraction, relationships, graph visualization
 app.route("/v1/knowledge", knowledgeGraphRouter);
+
+// Organizations + Team Management: write-level for mutations, read-level for queries
+app.use("/v1/organizations/invitations/*/accept", writeRateLimit);
+app.use("/v1/organizations/audit-log", authMiddleware, readRateLimit);
+app.use("/v1/organizations/members/*/role", authMiddleware, writeRateLimit);
+app.use("/v1/organizations/members/*", authMiddleware, writeRateLimit);
+app.use("/v1/organizations/members", authMiddleware, readRateLimit);
+app.use("/v1/organizations/sso", authMiddleware, writeRateLimit);
+app.use("/v1/organizations/*", authMiddleware, writeRateLimit);
+app.use("/v1/organizations", authMiddleware, writeRateLimit);
+// Organizations + Team Management + Audit Log
+app.route("/v1/organizations", organizationsRouter);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);
