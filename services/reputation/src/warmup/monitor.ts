@@ -17,7 +17,6 @@ import {
   getWarmupOrchestrator,
   type WarmupSignals,
   type WarmupStatus,
-  type ScheduleStep,
 } from "./orchestrator.js";
 
 // ---------------------------------------------------------------------------
@@ -163,7 +162,8 @@ export class WarmupMonitor {
 
     // Estimate completion date
     const schedule = status.schedule;
-    const lastDay = schedule.length > 0 ? schedule[schedule.length - 1]!.day : 0;
+    const lastStep = schedule.length > 0 ? schedule[schedule.length - 1] : undefined;
+    const lastDay = lastStep?.day ?? 0;
     const remainingDays = Math.max(0, lastDay - status.currentDay);
     let estimatedCompletionDate: string | null = null;
 
@@ -285,7 +285,8 @@ export class WarmupMonitor {
 
     // Progress checks
     const schedule = status.schedule;
-    const lastDay = schedule.length > 0 ? schedule[schedule.length - 1]!.day : 30;
+    const lastStep = schedule.length > 0 ? schedule[schedule.length - 1] : undefined;
+    const lastDay = lastStep?.day ?? 30;
     const progress = status.currentDay / lastDay;
 
     if (progress > 0.5 && status.consecutiveHealthyDays >= 3) {

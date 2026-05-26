@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "build": "echo 'Service builds independently \u2014 not part of Vercel web deployment'",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",

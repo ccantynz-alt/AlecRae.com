@@ -101,7 +101,11 @@ export function tokenize(line: string): ImapToken[] {
 
   const readAtom = (): string => {
     const start = i;
-    while (i < line.length && !isAtomSpecial(line[i]!)) i++;
+    while (i < line.length) {
+      const ch = line[i];
+      if (ch === undefined || isAtomSpecial(ch)) break;
+      i++;
+    }
     return line.slice(start, i);
   };
 
@@ -109,7 +113,8 @@ export function tokenize(line: string): ImapToken[] {
     i++; // skip opening "
     let result = "";
     while (i < line.length) {
-      const ch = line[i]!;
+      const ch = line[i];
+      if (ch === undefined) break;
       if (ch === "\\") {
         i++;
         if (i < line.length) result += line[i];
@@ -143,7 +148,8 @@ export function tokenize(line: string): ImapToken[] {
 
   const readToken = (): ImapToken => {
     skipSpaces();
-    const ch = line[i]!;
+    const ch = line[i];
+    if (ch === undefined) return "";
     if (ch === '"') return readQuoted();
     if (ch === "(") return readList();
     if (ch === "{") {
@@ -214,8 +220,8 @@ export function parseCommand(line: string): ImapCommand {
 export function extractLiteralSize(token: ImapToken): number {
   if (typeof token !== "string") return -1;
   const m = /^\{(\d+)\+?\}$/.exec(token);
-  if (!m) return -1;
-  return parseInt(m[1]!, 10);
+  if (!m || m[1] === undefined) return -1;
+  return parseInt(m[1], 10);
 }
 
 /**

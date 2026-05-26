@@ -1,0 +1,227 @@
+# ─── fly.toml ────────────────────────────────────────────────────────────────
+# Fly.io deployment config for the AlecRae Mail Transfer Agent (MTA).
+#
+# Why Fly.io for the MTA (and nothing else in this stack)?
+#   - Long-lived TCP listeners on privileged ports (25, 465, 587) — Cloudflare
+#     Workers can't serve arbitrary TCP, and Vercel doesn't expose port 25.
+#   - Firecracker microVMs give us per-IP isolation, static IPv4 for PTR/rDNS,
+#     and persistent volumes for mail spool + TLS cert caching.
+#
+# The rest of AlecRae (web, api, workers) ships to Cloudflare. Only the
+# MTA lives here. Deliverability depends on this box behaving like a real
+# mail server — see docs/infra/fly-mta-deploy.md for the runbook.
+# ─────────────────────────────────────────────────────────────────────────────
+
+app           = "alecrae-mta"
+primary_region = "iad"  # Ashburn, VA — sits on major US backbones, short hops
+                        # to AWS/GCP recipient ingress, and close to the bulk
+                        # of North American users at launch. When we grow into
+                        # EU/APAC we'll add regional apps (alecrae-mta-fra,
+                        # alecrae-mta-syd) rather than multi-region a single app
+                        # — mail servers need stable IP ↔ PTR mapping per region.
+kill_signal    = "SIGTERM"
+kill_timeout   = "30s"   # matches the 30s shutdown window in services/mta/src/index.ts
+
+# ── Build ───────────────────────────────────────────────────────────────────
+# Dockerfile lives next to this file; fly launch will pick it up automatically.
+# Build context is the monorepo root so Bun workspace resolution works.
+[build]
+  dockerfile = "Dockerfile"
+
+# ── Deploy ──────────────────────────────────────────────────────────────────
+[deploy]
+  # Rolling to avoid dropping inbound SMTP mid-transaction. "immediate" is
+  # reserved for emergency rollbacks — see runbook §Rollback.
+  strategy        = "rolling"
+  # Run Drizzle migrations against Neon before the new image flips in. The
+  # migrate script is safe to re-run (Drizzle tracks applied migrations).
+  release_command = "bun run packages/db/src/migrate.ts"
+
+# ── Environment ─────────────────────────────────────────────────────────────
+# Non-secret runtime config. Secrets (DATABASE_URL, REDIS_URL, relay creds)
+# are set via `fly secrets set` — see runbook §First Deploy.
+[env]
+  NODE_ENV               = "production"
+  SMTP_HOST              = "0.0.0.0"
+  SMTP_HOSTNAME          = "mx1.alecrae.com"
+  SMTP_PORT              = "25"
+  MTA_QUEUE_NAME         = "alecrae:outbound"
+  MTA_WORKER_CONCURRENCY = "25"   # 25 concurrent outbound deliveries per VM
+  OTEL_SERVICE_NAME      = "alecrae-mta"
+  OTEL_ENABLED           = "true"
+  # Paths the container reads TLS certs + DKIM keys from — the [mounts]
+  # block below wires these to a persistent volume.
+  TLS_CERTS_DIR          = "/data/tls"
+  DKIM_KEYS_DIR          = "/data/dkim"
+  MAIL_SPOOL_DIR         = "/data/spool"
+  HEALTH_PORT            = "8080"
+
+# ── Persistent storage ──────────────────────────────────────────────────────
+# Single volume holds:
+#   /data/tls    — Let's Encrypt certs (persist across deploys)
+#   /data/dkim   — DKIM private keys staged from DB on startup
+#   /data/spool  — outbound queue spool + deferred retries
+#   /data/logs   — local ring buffer for postmortem
+#
+# IMPORTANT: Volumes are per-VM. If we scale to >1 instance we need one
+# volume per VM (fly volumes create alecrae_mta_data --region iad -N 2).
+[mounts]
+  source      = "alecrae_mta_data"
+  destination = "/data"
+
+# ── Services ────────────────────────────────────────────────────────────────
+# Each `[[services]]` block maps one external port to an internal port.
+# Fly's proxy terminates on public IPs; protocol="tcp" means we pass the
+# raw socket through (no L7 rewriting — critical for SMTP state machine).
+#
+# PORT 25 — inbound MX (anonymous delivery from other mail servers)
+[[services]]
+  protocol      = "tcp"
+  internal_port = 25
+  auto_stop_machines  = false   # MX must always answer. No cold starts.
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[services.ports]]
+    port     = 25
+    handlers = []               # pass-through; STARTTLS handled in-app
+
+  # Fly load balancer health probe — cheap TCP open/close. Does NOT validate
+  # the 220 banner; that's covered by the http check on :8080/healthz.
+  [[services.tcp_checks]]
+    interval      = "15s"
+    timeout       = "5s"
+    grace_period  = "30s"
+    restart_limit = 0
+
+  [services.concurrency]
+    type       = "connections"
+    hard_limit = 500            # matches maxConnections in SmtpServer config
+    soft_limit = 400
+
+# PORT 587 — submission (authenticated user send; STARTTLS required)
+[[services]]
+  protocol      = "tcp"
+  internal_port = 587
+  auto_stop_machines   = false
+  auto_start_machines  = false
+  min_machines_running = 1
+
+  [[services.ports]]
+    port     = 587
+    handlers = []
+
+  [[services.tcp_checks]]
+    interval     = "15s"
+    timeout      = "5s"
+    grace_period = "30s"
+
+  [services.concurrency]
+    type       = "connections"
+    hard_limit = 200
+    soft_limit = 150
+
+# PORT 465 — SMTPS submission (implicit TLS from connect)
+[[services]]
+  protocol      = "tcp"
+  internal_port = 465
+  auto_stop_machines   = false
+  auto_start_machines  = false
+  min_machines_running = 1
+
+  [[services.ports]]
+    port     = 465
+    handlers = ["tls"]          # Fly terminates TLS at the edge; if you want
+                                # end-to-end TLS with your own cert, remove
+                                # this handler and serve TLS in-app.
+
+  [[services.tcp_checks]]
+    interval     = "15s"
+    timeout      = "5s"
+    grace_period = "30s"
+
+  [services.concurrency]
+    type       = "connections"
+    hard_limit = 200
+    soft_limit = 150
+
+# PORT 2525 — backup submission for networks that block 587
+# (corporate firewalls, some ISPs). Same handler as 587.
+[[services]]
+  protocol      = "tcp"
+  internal_port = 2525
+  auto_stop_machines   = false
+  auto_start_machines  = false
+  min_machines_running = 1
+
+  [[services.ports]]
+    port     = 2525
+    handlers = []
+
+  [[services.tcp_checks]]
+    interval     = "15s"
+    timeout      = "5s"
+    grace_period = "30s"
+
+  [services.concurrency]
+    type       = "connections"
+    hard_limit = 100
+    soft_limit = 75
+
+# PORT 8080 — HTTP health + metrics (NEVER EXPOSE PUBLICLY FOR MAIL)
+#
+# Separation rationale:
+#   - Mail ports (25/465/587/2525) speak SMTP. Fly's HTTP healthcheck cannot
+#     parse a 220 banner, and asking it to hit port 25 would make the LB
+#     mark us healthy based on TCP open alone — useless if the SMTP worker
+#     is deadlocked but the socket still accepts.
+#   - A tiny HTTP listener on 8080 serves /healthz (checks DB + Redis + queue
+#     worker liveness) and /metrics (Prometheus). Fly's http_checks hit this,
+#     giving us real liveness signal without polluting the SMTP state machine.
+#   - 8080 is bound to 0.0.0.0 inside the VM but ONLY forced-https=false
+#     here means Fly still puts it behind the proxy. If you don't want it
+#     reachable from the internet at all, remove the [[services.ports]] block
+#     below — tcp_checks still run because they're internal. For launch,
+#     leaving a read-only /healthz publicly accessible is fine and helps
+#     status.alecrae.com.
+[[services]]
+  protocol      = "tcp"
+  internal_port = 8080
+  auto_stop_machines   = false
+  auto_start_machines  = false
+  min_machines_running = 1
+
+  [[services.ports]]
+    port        = 8080
+    handlers    = ["http"]
+    force_https = false
+
+  [[services.http_checks]]
+    interval        = "15s"
+    timeout         = "5s"
+    grace_period    = "30s"
+    method          = "GET"
+    path            = "/healthz"
+    protocol        = "http"
+    tls_skip_verify = false
+
+  [services.concurrency]
+    type       = "requests"
+    hard_limit = 100
+    soft_limit = 50
+
+# ── VM sizing ───────────────────────────────────────────────────────────────
+# Start small, scale with volume. SMTP is light per-connection; AI scoring
+# is offloaded to edge/cloud. 2 vCPU / 2GB is comfortable for ~10K msg/hr.
+[[vm]]
+  size       = "shared-cpu-2x"
+  memory     = "2gb"
+  cpu_kind   = "shared"
+  cpus       = 2
+
+# ── Metrics ─────────────────────────────────────────────────────────────────
+# Fly scrapes /metrics on port 8080 every 15s. Data lands in Fly's managed
+# Prometheus and is visible on fly.io/apps/alecrae-mta/metrics.
+[metrics]
+  port = 8080
+  path = "/metrics"

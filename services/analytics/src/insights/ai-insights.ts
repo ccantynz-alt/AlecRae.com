@@ -11,7 +11,6 @@ import type {
   Insight,
   InsightType,
   InsightSeverity,
-  InsightMetric,
   MetricType,
   TrendAnalysis,
   AnomalyDetectionConfig,
@@ -57,18 +56,6 @@ function movingAverage(values: number[], windowSize: number): number[] {
 }
 
 /**
- * Exponentially weighted moving average for trend detection.
- */
-function ewma(values: number[], alpha: number = 0.3): number[] {
-  if (values.length === 0) return [];
-  const result: number[] = [values[0]!];
-  for (let i = 1; i < values.length; i++) {
-    result.push(alpha * values[i]! + (1 - alpha) * result[i - 1]!);
-  }
-  return result;
-}
-
-/**
  * Linear regression using ordinary least squares.
  * Returns slope, intercept, and R-squared.
  */
@@ -85,9 +72,10 @@ function linearRegression(
   let sumX2 = 0;
 
   for (let i = 0; i < n; i++) {
+    const v = values[i] ?? 0;
     sumX += i;
-    sumY += values[i]!;
-    sumXY += i * values[i]!;
+    sumY += v;
+    sumXY += i * v;
     sumX2 += i * i;
   }
 
@@ -104,9 +92,10 @@ function linearRegression(
   let ssRes = 0;
   let ssTot = 0;
   for (let i = 0; i < n; i++) {
+    const v = values[i] ?? 0;
     const predicted = intercept + slope * i;
-    ssRes += (values[i]! - predicted) ** 2;
-    ssTot += (values[i]! - yMean) ** 2;
+    ssRes += (v - predicted) ** 2;
+    ssTot += (v - yMean) ** 2;
   }
 
   const rSquared = ssTot === 0 ? 0 : 1 - ssRes / ssTot;
@@ -119,7 +108,7 @@ function linearRegression(
  */
 function detectChangePoints(
   values: number[],
-  threshold: number = 2.0,
+  threshold = 2.0,
 ): number[] {
   if (values.length < 5) return [];
 
@@ -133,7 +122,8 @@ function detectChangePoints(
   const target = threshold * sd;
 
   for (let i = 0; i < values.length; i++) {
-    const normalized = (values[i]! - avg) / sd;
+    const v = values[i] ?? 0;
+    const normalized = (v - avg) / sd;
     cusumPos = Math.max(0, cusumPos + normalized - 0.5);
     cusumNeg = Math.max(0, cusumNeg - normalized - 0.5);
 
@@ -175,21 +165,24 @@ export function detectAnomalies(
   // Compute residuals (deviations from moving average)
   const offset = config.movingAverageWindow - 1;
   for (let i = 0; i < smoothed.length; i++) {
-    residuals.push(values[i + offset]! - smoothed[i]!);
+    const actual = values[i + offset] ?? 0;
+    const smooth = smoothed[i] ?? 0;
+    residuals.push(actual - smooth);
   }
 
   const residualMean = mean(residuals);
   const residualStd = stddev(residuals);
 
   for (let i = 0; i < residuals.length; i++) {
-    const z = zScore(residuals[i]!, residualMean, residualStd);
+    const residual = residuals[i] ?? 0;
+    const z = zScore(residual, residualMean, residualStd);
     const actualIndex = i + offset;
 
     if (Math.abs(z) > config.zScoreThreshold) {
       anomalies.push({
         index: actualIndex,
-        value: values[actualIndex]!,
-        expected: smoothed[i]!,
+        value: values[actualIndex] ?? 0,
+        expected: smoothed[i] ?? 0,
         zScore: z,
         isAnomaly: true,
         direction: z > 0 ? "high" : "low",
@@ -209,7 +202,7 @@ export function detectAnomalies(
 export function analyzeTrend(
   metric: MetricType,
   values: number[],
-  forecastPeriods: number = 7,
+  forecastPeriods = 7,
 ): TrendAnalysis {
   const regression = linearRegression(values);
 
@@ -388,8 +381,8 @@ function generateInsightCandidates(
       seasonalityPeriod: 7,
     });
 
-    if (anomalies.length > 0) {
-      const latest = anomalies[anomalies.length - 1]!;
+    const latest = anomalies[anomalies.length - 1];
+    if (latest) {
       candidates.push({
         type: "anomaly",
         severity: Math.abs(latest.zScore) > 3 ? "high" : "medium",
@@ -412,7 +405,7 @@ export class AiInsightsEngine {
   private readonly client: Anthropic;
   private readonly modelId: string;
 
-  constructor(modelId: string = "claude-sonnet-4-20250514") {
+  constructor(modelId = "claude-sonnet-4-20250514") {
     this.client = new Anthropic();
     this.modelId = modelId;
   }
@@ -581,11 +574,11 @@ Respond as JSON array with objects: { "index": number, "description": string, "r
         }));
       }
 
-      const enrichments = JSON.parse(jsonMatch[0]) as Array<{
+      const enrichments = JSON.parse(jsonMatch[0]) as {
         index: number;
         description: string;
         recommendation: string;
-      }>;
+      }[];
 
       return candidates.map((c, i) => {
         const enrichment = enrichments.find((e) => e.index === i + 1);

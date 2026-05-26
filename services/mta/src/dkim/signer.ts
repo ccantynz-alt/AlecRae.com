@@ -161,8 +161,8 @@ function parseCanonicalization(c: DkimCanonicalization): ["simple" | "relaxed", 
  * Parse raw headers into an array of { key, raw } tuples.
  * Handles header folding (continuation lines).
  */
-function parseHeaders(headerBlock: string): Array<{ key: string; raw: string }> {
-  const headers: Array<{ key: string; raw: string }> = [];
+function parseHeaders(headerBlock: string): { key: string; raw: string }[] {
+  const headers: { key: string; raw: string }[] = [];
   const lines = headerBlock.split(/\r?\n/);
 
   let currentHeader = "";
@@ -204,7 +204,7 @@ function parseHeaders(headerBlock: string): Array<{ key: string; raw: string }> 
  * Per RFC 6376 Section 3.4.1 and 3.4.2.
  */
 function canonicalizeSignedHeaders(
-  headers: Array<{ key: string; raw: string }>,
+  headers: { key: string; raw: string }[],
   headersToSign: string[],
   mode: "simple" | "relaxed",
 ): string {

@@ -93,7 +93,7 @@ interface EmailRow {
 }
 
 function rowsToHistorical(
-  rows: ReadonlyArray<EmailRow>,
+  rows: readonly EmailRow[],
   recipient: string,
 ): HistoricalEmail[] {
   const lower = recipient.toLowerCase();
@@ -174,7 +174,11 @@ sendTime.post(
     const engagement = await getEngagementRow(auth.accountId, input.recipientEmail);
 
     const recommendation: SendTimeRecommendation = await predictBestSendTime({
-      ...input,
+      recipientEmail: input.recipientEmail,
+      senderTimezone: input.senderTimezone,
+      urgency: input.urgency,
+      ...(input.recipientTimezone !== undefined ? { recipientTimezone: input.recipientTimezone } : {}),
+      ...(input.windowDays !== undefined ? { windowDays: input.windowDays } : {}),
       engagement,
     });
 
@@ -249,7 +253,11 @@ sendTime.post(
     const engagement = await getEngagementRow(auth.accountId, input.recipientEmail);
 
     const recommendation: SendTimeRecommendation = await predictBestSendTime({
-      ...input,
+      recipientEmail: input.recipientEmail,
+      senderTimezone: input.senderTimezone,
+      urgency: input.urgency,
+      ...(input.recipientTimezone !== undefined ? { recipientTimezone: input.recipientTimezone } : {}),
+      ...(input.windowDays !== undefined ? { windowDays: input.windowDays } : {}),
       engagement,
     });
 
@@ -441,10 +449,10 @@ optimalSendTime.post(
     const input = getValidatedBody<z.infer<typeof OptimalSendTimeSchema>>(c);
     const auth = c.get("auth");
 
-    const results: Array<{
+    const results: {
       recipientEmail: string;
       recommendation: SendTimeRecommendation;
-    }> = [];
+    }[] = [];
 
     for (const recipient of input.recipients) {
       const engagement = await getEngagementRow(auth.accountId, recipient);
@@ -452,7 +460,7 @@ optimalSendTime.post(
         recipientEmail: recipient,
         senderTimezone: input.senderTimezone,
         urgency: input.urgency,
-        windowDays: input.windowDays,
+        ...(input.windowDays !== undefined ? { windowDays: input.windowDays } : {}),
         engagement,
       });
 

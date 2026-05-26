@@ -22,7 +22,7 @@ import * as syncProtocol from "y-protocols/sync";
 import * as encoding from "lib0/encoding";
 import * as decoding from "lib0/decoding";
 import type { ServerWebSocket } from "bun";
-import { DraftPersistence } from "./persistence.js";
+import type { DraftPersistence } from "./persistence.js";
 
 // y-websocket message tags
 const MESSAGE_SYNC = 0;
@@ -306,12 +306,12 @@ export class RoomManager {
   /** Get connected users for a given room. */
   getConnectedUsers(
     draftId: string,
-  ): Array<{
+  ): {
     userId: string;
     name: string;
     avatarUrl: string | undefined;
     joinedAt: Date;
-  }> {
+  }[] {
     const room = this.rooms.get(draftId);
     if (!room) return [];
     return Array.from(room.connectedUsers.entries()).map(
@@ -332,21 +332,21 @@ export class RoomManager {
   detailedStats(): {
     rooms: number;
     clients: number;
-    roomDetails: Array<{
+    roomDetails: {
       draftId: string;
       sessionId: string | undefined;
       clientCount: number;
       version: number;
       users: string[];
-    }>;
+    }[];
   } {
-    const roomDetails: Array<{
+    const roomDetails: {
       draftId: string;
       sessionId: string | undefined;
       clientCount: number;
       version: number;
       users: string[];
-    }> = [];
+    }[] = [];
     let totalClients = 0;
 
     for (const room of this.rooms.values()) {

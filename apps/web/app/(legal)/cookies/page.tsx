@@ -22,7 +22,7 @@ export default function CookiesPage() {
       <Text variant="body-md" className="text-content-secondary leading-relaxed">
         This Cookie Policy explains how AlecRae, Inc. (&quot;AlecRae,&quot;
         &quot;we,&quot; &quot;us,&quot; &quot;our&quot;) uses cookies and similar
-        tracking technologies when you visit or use our platform at alecrae.dev (the
+        tracking technologies when you visit or use our platform at alecrae.com (the
         &quot;Service&quot;). This policy should be read alongside our{" "}
         <Text as="span" className="text-brand-600 font-medium">
           Privacy Policy
@@ -472,7 +472,7 @@ export default function CookiesPage() {
 
       <Box className="border-t border-border pt-6">
         <Text variant="body-sm" muted>
-          Questions about our use of cookies? Contact us at privacy@alecrae.dev.
+          Questions about our use of cookies? Contact us at privacy@alecrae.com.
         </Text>
       </Box>
     </Box>

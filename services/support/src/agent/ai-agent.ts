@@ -15,7 +15,8 @@ import type {
   AgentResponse,
   Conversation,
   ConversationContext,
-  ConversationMessage,
+  DiagnosticReport,
+  KnowledgeSearchResult,
   Result,
 } from "../types";
 import { ok, err } from "../types";
@@ -45,10 +46,10 @@ export interface PlatformServices {
     rotateDkimKey(domain: string): Promise<Result<{ selector: string; publicKey: string }>>;
   };
   diagnostics: {
-    runFull(accountId: string, domain: string): Promise<Result<import("../types").DiagnosticReport>>;
+    runFull(accountId: string, domain: string): Promise<Result<DiagnosticReport>>;
   };
   knowledge: {
-    search(query: string, limit?: number): Promise<Result<import("../types").KnowledgeSearchResult[]>>;
+    search(query: string, limit?: number): Promise<Result<KnowledgeSearchResult[]>>;
   };
 }
 
@@ -321,7 +322,6 @@ export class AiSupportAgent {
         }
 
         // Execute tool calls and build tool results
-        const toolResults: Anthropic.MessageParam[] = [];
         const assistantContent: Anthropic.ContentBlockParam[] = [];
 
         // Include text blocks in assistant message
@@ -385,7 +385,7 @@ export class AiSupportAgent {
     try {
       const context: ConversationContext = {
         accountId,
-        domain,
+        ...(domain !== undefined ? { domain } : {}),
         recentErrors: [],
         previousTickets: [],
       };
@@ -483,8 +483,6 @@ export class AiSupportAgent {
       description: `Executing ${actionType}`,
     };
 
-    const startTime = Date.now();
-
     try {
       let data: unknown;
 
@@ -505,12 +503,13 @@ export class AiSupportAgent {
 
         case "check_delivery_logs": {
           const hours = (params.hours as number) ?? 24;
+          const recipient = params.recipient as string | undefined;
           const result = await this.platform.delivery.getLogs(
             params.account_id as string,
             {
               limit: (params.limit as number) ?? 50,
               since: new Date(Date.now() - hours * 3_600_000),
-              recipient: params.recipient as string | undefined,
+              ...(recipient !== undefined ? { recipient } : {}),
             },
           );
           if (!result.ok) throw result.error;

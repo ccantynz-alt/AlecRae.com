@@ -1,10 +1,10 @@
-import { forwardRef, type ComponentPropsWithoutRef, type ElementType, type ReactNode } from "react";
+import { createElement, forwardRef, type ComponentPropsWithoutRef, type ElementType, type ReactNode } from "react";
 
-type BoxOwnProps<T extends ElementType = "div"> = {
+interface BoxOwnProps<T extends ElementType = "div"> {
   as?: T;
   children?: ReactNode;
   className?: string;
-};
+}
 
 type BoxProps<T extends ElementType = "div"> = BoxOwnProps<T> &
   Omit<ComponentPropsWithoutRef<T>, keyof BoxOwnProps<T>>;
@@ -17,11 +17,11 @@ export const Box: BoxComponent = forwardRef(function Box<T extends ElementType =
   { as, className, children, ...props }: BoxProps<T>,
   ref: React.Ref<Element>
 ) {
-  const Component = as || "div";
-  return (
-    <Component ref={ref} className={className} {...props}>
-      {children}
-    </Component>
+  const Component = (as || "div") as ElementType;
+  return createElement(
+    Component,
+    { ref, className, ...props } as Record<string, unknown>,
+    children,
   );
 }) as BoxComponent;
 

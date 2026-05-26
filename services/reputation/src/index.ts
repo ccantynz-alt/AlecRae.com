@@ -33,6 +33,23 @@ export {
   type ComplaintRateResult,
 } from "./feedback-loops/complaint-rate.js";
 
+// Compliance Engine
+export {
+  ComplianceEngine,
+  type ComplianceEngineConfig,
+  type SuppressionListEntry,
+} from "./compliance/engine.js";
+
+// Blocklist Monitor
+export {
+  BlocklistMonitor,
+} from "./blocklist/monitor.js";
+
+// Reputation Scoring
+export {
+  ReputationEngine,
+} from "./scoring/engine.js";
+
 // Types
 export type {
   IspProvider,

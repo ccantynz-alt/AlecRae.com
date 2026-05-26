@@ -36,8 +36,8 @@ interface PageSnapshot {
   url: string;
   title: string;
   visibleText: string;
-  clickables: Array<{ index: number; tag: string; text: string; selector: string }>;
-  inputs: Array<{ index: number; type: string; name: string; placeholder: string; selector: string }>;
+  clickables: { index: number; tag: string; text: string; selector: string }[];
+  inputs: { index: number; type: string; name: string; placeholder: string; selector: string }[];
 }
 
 type AgentAction =
@@ -370,7 +370,13 @@ export async function runUnsubscribeFlow(
     screenshots.push((await page.screenshot({ fullPage: false, type: "png" })).toString("base64"));
 
     await context.close();
-    return { success, finalUrl, screenshots, steps, confirmationText };
+    return {
+      success,
+      finalUrl,
+      screenshots,
+      steps,
+      ...(confirmationText !== undefined ? { confirmationText } : {}),
+    };
   } catch (err) {
     return {
       success: false,

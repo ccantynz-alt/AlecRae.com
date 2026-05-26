@@ -147,14 +147,11 @@ function buildGrid(
       const iso = cellDate.toISOString().slice(0, 10);
       const existing = dataMap.get(iso);
       const isFuture = cellDate > today;
-      week.push({
-        date: iso,
-        data: existing ?? { date: iso, sent: 0, received: 0 },
-      });
       // Mark future days with -1 to skip rendering
-      if (isFuture) {
-        week[week.length - 1]!.data = { date: iso, sent: -1, received: -1 };
-      }
+      const data = isFuture
+        ? { date: iso, sent: -1, received: -1 }
+        : (existing ?? { date: iso, sent: 0, received: 0 });
+      week.push({ date: iso, data });
     }
     grid.push(week);
   }

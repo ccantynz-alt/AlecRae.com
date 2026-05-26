@@ -194,7 +194,7 @@ describe("Messages API", () => {
 
       expect(res.status).toBe(200);
       const body = await jsonBody<{
-        data: Array<{ status: string }>;
+        data: { status: string }[];
       }>(res);
 
       for (const msg of body.data) {
@@ -229,7 +229,7 @@ describe("Messages API", () => {
         query: { limit: "1" },
       });
       const listBody = await jsonBody<{
-        data: Array<{ id: string }>;
+        data: { id: string }[];
       }>(listRes);
 
       if (listBody.data.length === 0) {
@@ -301,13 +301,13 @@ describe("Messages API", () => {
 
       if (res.status === 200) {
         const body = await jsonBody<{
-          data: Array<{
+          data: {
             id: string;
             subject: string;
             from: { email: string };
             snippet: string;
             createdAt: string;
-          }>;
+          }[];
           totalHits: number;
           processingTimeMs: number;
           query: string;

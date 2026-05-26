@@ -116,13 +116,13 @@ export interface StoredEmail {
   snippet: string;
   textBody?: string | undefined;
   htmlBody?: string | undefined;
-  attachments?: Array<{
+  attachments?: {
     id: string;
     filename: string;
     contentType: string;
     size: number;
     contentId?: string | undefined;
-  }> | undefined;
+  }[] | undefined;
   hasAttachments?: boolean | undefined;
   size: number;
   flags: Set<string>;

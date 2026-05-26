@@ -21,7 +21,7 @@ export interface HealthMonitorConfig {
   /** Number of consecutive failures before alerting */
   failureThreshold: number;
   /** Custom resolvers to check against */
-  resolvers?: Array<{ address: string; name: string }>;
+  resolvers?: { address: string; name: string }[];
   /** Callback when a health check fails threshold */
   onAlert?: (alert: HealthAlert) => void;
 }
@@ -57,11 +57,11 @@ interface MonitoredRecord {
  */
 export class DnsHealthMonitor {
   private readonly config: HealthMonitorConfig;
-  private readonly resolvers: Array<{ address: string; name: string }>;
+  private readonly resolvers: { address: string; name: string }[];
   private monitoredRecords: MonitoredRecord[] = [];
   private checkInterval: ReturnType<typeof setInterval> | null = null;
-  private failureCounts: Map<string, number> = new Map();
-  private latencyHistory: Map<string, number[]> = new Map();
+  private failureCounts = new Map<string, number>();
+  private latencyHistory = new Map<string, number[]>();
   private results: HealthCheckResult[] = [];
   private readonly maxHistorySize = 1000;
 
@@ -139,9 +139,11 @@ export class DnsHealthMonitor {
     const sorted = [...history].sort((a, b) => a - b);
     const sum = sorted.reduce((acc, v) => acc + v, 0);
 
+    const min = sorted[0] ?? 0;
+    const max = sorted[sorted.length - 1] ?? 0;
     return {
-      min: sorted[0]!,
-      max: sorted[sorted.length - 1]!,
+      min,
+      max,
       avg: sum / sorted.length,
       p50: percentile(sorted, 50),
       p95: percentile(sorted, 95),
@@ -151,7 +153,7 @@ export class DnsHealthMonitor {
   }
 
   /** Get recent health check results */
-  getRecentResults(limit: number = 50): HealthCheckResult[] {
+  getRecentResults(limit = 50): HealthCheckResult[] {
     return this.results.slice(-limit);
   }
 
@@ -176,8 +178,9 @@ export class DnsHealthMonitor {
     );
 
     for (let i = 0; i < results.length; i++) {
-      const result = results[i]!;
-      const check = checks[i]!;
+      const result = results[i];
+      const check = checks[i];
+      if (!result || !check) continue;
       const key = `${check.record.domain}:${check.record.type}:${check.resolver.address}`;
 
       if (result.status === "fulfilled") {
@@ -379,7 +382,8 @@ function parseSimpleDnsResponse(msg: Buffer, expectedType: RecordType): string[]
 function skipName(buffer: Buffer, offset: number): number {
   let pos = offset;
   while (pos < buffer.length) {
-    const length = buffer[pos]!;
+    const length = buffer[pos];
+    if (length === undefined) throw new Error("Malformed DNS name");
     if ((length & 0xc0) === 0xc0) {
       return pos + 2; // Compression pointer: 2 bytes
     }
@@ -402,19 +406,21 @@ function rdataToString(
       if (rdata.length !== 4) return null;
       return `${rdata[0]}.${rdata[1]}.${rdata[2]}.${rdata[3]}`;
 
-    case RecordType.AAAA:
+    case RecordType.AAAA: {
       if (rdata.length !== 16) return null;
       const groups: string[] = [];
       for (let i = 0; i < 16; i += 2) {
         groups.push(rdata.readUInt16BE(i).toString(16));
       }
       return groups.join(":");
+    }
 
     case RecordType.TXT: {
       let result = "";
       let pos = 0;
       while (pos < rdata.length) {
-        const len = rdata[pos]!;
+        const len = rdata[pos];
+        if (len === undefined) break;
         pos++;
         result += rdata.subarray(pos, pos + len).toString("utf-8");
         pos += len;
@@ -436,5 +442,5 @@ function rdataToString(
 function percentile(sorted: number[], pct: number): number {
   if (sorted.length === 0) return 0;
   const idx = Math.ceil((pct / 100) * sorted.length) - 1;
-  return sorted[Math.max(0, idx)]!;
+  return sorted[Math.max(0, idx)] ?? 0;
 }

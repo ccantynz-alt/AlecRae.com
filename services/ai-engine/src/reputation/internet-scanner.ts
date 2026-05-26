@@ -11,7 +11,6 @@ import type {
   WebPresenceResult,
   SocialSignalResult,
   Result,
-  AIEngineError,
 } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -134,8 +133,8 @@ export class InternetScanner {
           identifier,
           scanTimestamp: Date.now(),
           blocklistResults,
-          whoisData,
-          domainAge,
+          ...(whoisData !== undefined ? { whoisData } : {}),
+          ...(domainAge !== undefined ? { domainAge } : {}),
           webPresence,
           socialSignals,
           overallRisk,
@@ -182,7 +181,6 @@ export class InternetScanner {
               listName: bl.name,
               listed: true,
               reason: `Listed with response: ${records.join(', ')}`,
-              listedSince: undefined,
             };
           }
           return { listName: bl.name, listed: false };
@@ -227,13 +225,14 @@ export class InternetScanner {
 
       const data = await response.json() as Record<string, unknown>;
 
+      const country = data['country'] as string | undefined;
       return {
         registrar: (data['registrar'] as string) ?? 'Unknown',
         registrationDate: new Date((data['registrationDate'] as string) ?? 0),
         expirationDate: new Date((data['expirationDate'] as string) ?? 0),
         nameservers: (data['nameservers'] as string[]) ?? [],
         privacyProtected: (data['privacyProtected'] as boolean) ?? false,
-        country: data['country'] as string | undefined,
+        ...(country !== undefined ? { country } : {}),
       };
     } catch {
       return undefined;
@@ -259,7 +258,7 @@ export class InternetScanner {
       hasWebsite: websiteResult,
       hasMxRecords: mxResult,
       hasSslCertificate: sslResult !== undefined,
-      sslGrade: sslResult,
+      ...(sslResult !== undefined ? { sslGrade: sslResult } : {}),
     };
   }
 

@@ -201,7 +201,10 @@ const server = Bun.serve<ClientContext>({
     // WebSocket upgrade for `/collab/:draftId`
     const wsMatch = url.pathname.match(/^\/collab\/([A-Za-z0-9_-]+)$/);
     if (wsMatch) {
-      const draftId = wsMatch[1]!;
+      const draftId = wsMatch[1];
+      if (!draftId) {
+        return new Response("invalid draft id", { status: 400 });
+      }
       const token = extractToken(req);
       if (!token) {
         return new Response("missing token", { status: 401 });

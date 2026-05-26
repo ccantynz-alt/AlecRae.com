@@ -28,7 +28,7 @@ export const StatCard = forwardRef<HTMLDivElement, StatCardProps>(function StatC
   {
     label,
     value,
-    previousValue,
+    previousValue: _previousValue,
     changePercent,
     trend = "neutral",
     icon,

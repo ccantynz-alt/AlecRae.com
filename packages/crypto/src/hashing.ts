@@ -8,15 +8,35 @@ import {
   timingSafeEqual,
   randomBytes,
   scrypt,
+  type ScryptOptions,
 } from "node:crypto";
-import { promisify } from "node:util";
 
 import { ok, err } from "@alecrae/shared";
 import type { Result } from "@alecrae/shared";
 
 import type { HashAlgorithm, HmacAlgorithm, Argon2Params, HashedPassword } from "./types.js";
 
-const scryptAsync = promisify(scrypt);
+/**
+ * Promise wrapper for Node's `scrypt` that supports the options parameter.
+ * `util.promisify(scrypt)` only surfaces the no-options overload, so we
+ * hand-roll this to keep full parameter typing.
+ */
+function scryptAsync(
+  password: string | Buffer,
+  salt: string | Buffer,
+  keylen: number,
+  options: ScryptOptions,
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, options, (error, derivedKey) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(derivedKey);
+    });
+  });
+}
 
 /** Default Argon2 parameters (used as scrypt stand-in; see note below). */
 const DEFAULT_ARGON2_PARAMS: Argon2Params = {
@@ -132,7 +152,7 @@ export async function hashPassword(
 
   try {
     const salt = randomBytes(16);
-    const derivedKey = (await scryptAsync(
+    const derivedKey = await scryptAsync(
       password,
       salt,
       fullParams.hashLength,
@@ -142,7 +162,7 @@ export async function hashPassword(
         p: fullParams.parallelism,
         maxmem: fullParams.memoryCost * 1024 * 2,
       },
-    )) as Buffer;
+    );
 
     const hashString = [
       fullParams.variant,
@@ -181,7 +201,7 @@ export async function verifyPassword(
   const expected = Buffer.from(expectedB64, "base64");
 
   try {
-    const derivedKey = (await scryptAsync(
+    const derivedKey = await scryptAsync(
       password,
       salt,
       hashed.params.hashLength,
@@ -191,7 +211,7 @@ export async function verifyPassword(
         p: hashed.params.parallelism,
         maxmem: hashed.params.memoryCost * 1024 * 2,
       },
-    )) as Buffer;
+    );
 
     return ok(constantTimeEqual(derivedKey, expected));
   } catch (error) {
@@ -209,6 +229,6 @@ export async function verifyPassword(
  * @param bytes  Number of random bytes (default 32 = 256 bits)
  * @returns Hex-encoded random token
  */
-export function generateToken(bytes: number = 32): string {
+export function generateToken(bytes = 32): string {
   return randomBytes(bytes).toString("hex");
 }

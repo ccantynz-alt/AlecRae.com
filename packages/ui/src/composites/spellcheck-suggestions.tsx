@@ -191,19 +191,19 @@ export function SpellCheckSuggestions({
               <Box className="flex items-center justify-between">
                 <Box className="flex items-center gap-3">
                   <Text
-                    variant="body"
+                    variant="body-md"
                     className="text-red-400 line-through text-sm font-mono"
                   >
                     {issue.word}
                   </Text>
                   {issue.suggestions.length > 0 ? (
-                    <Text variant="body" className="text-blue-100/40 text-sm">
+                    <Text variant="body-md" className="text-blue-100/40 text-sm">
                       →
                     </Text>
                   ) : null}
                   {issue.suggestions.length > 0 ? (
                     <Text
-                      variant="body"
+                      variant="body-md"
                       className="text-emerald-300 text-sm font-mono"
                     >
                       {issue.suggestions[0]}

@@ -2,8 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
-    "types": ["bun-types"]
+    "types": ["bun-types"],
+    "lib": ["ES2024", "DOM"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

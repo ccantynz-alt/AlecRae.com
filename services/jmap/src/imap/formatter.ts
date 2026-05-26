@@ -12,12 +12,14 @@
 // Low-level string encoding
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line no-control-regex
 const NEEDS_QUOTING = /[\x00-\x1f\x7f"\\(){\s]/;
+// eslint-disable-next-line no-control-regex
 const NEEDS_LITERAL = /[\r\n\x00]/;
 
 /** Encode a value as an IMAP string (atom, quoted, or literal). */
 export function imapString(value: string | null | undefined): string {
-  if (value == null) return "NIL";
+  if (value === null || value === undefined) return "NIL";
   if (value.length === 0) return '""';
 
   // If the value contains CR/LF/NUL we must use a literal
@@ -39,14 +41,14 @@ export function imapString(value: string | null | undefined): string {
 
 /** Encode a value as a quoted string (always quoted, never literal). */
 export function imapQuoted(value: string | null | undefined): string {
-  if (value == null) return "NIL";
+  if (value === null || value === undefined) return "NIL";
   const escaped = value.replace(/["\\]/g, "\\$&").replace(/[\r\n]/g, "");
   return `"${escaped}"`;
 }
 
 /** Format an IMAP number or NIL. */
 export function imapNumber(n: number | null | undefined): string {
-  if (n == null) return "NIL";
+  if (n === null || n === undefined) return "NIL";
   return String(Math.floor(n));
 }
 
@@ -86,7 +88,7 @@ export function taggedBad(tag: string, text: string): string {
 }
 
 /** Continuation request: `+ <text>\r\n` */
-export function continuation(text: string = ""): string {
+export function continuation(text = ""): string {
   return `+ ${text}\r\n`;
 }
 
@@ -185,7 +187,7 @@ export function formatBodyStructure(part: BodyPart): string {
   ];
 
   // text/* parts include line count
-  if (part.type.toLowerCase() === "text" && part.lines != null) {
+  if (part.type.toLowerCase() === "text" && part.lines !== null && part.lines !== undefined) {
     items.push(imapNumber(part.lines));
   }
 

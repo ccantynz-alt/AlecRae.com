@@ -47,6 +47,13 @@ export {
   dnsRecordsRelations,
 } from "./schema/domains.js";
 
+// Schema - Connected Accounts (Gmail, Outlook, IMAP)
+export {
+  connectedAccounts,
+  emailProviderEnum,
+  connectedAccountsRelations,
+} from "./schema/connected-accounts.js";
+
 // Schema - Events & Webhooks
 export {
   events,
@@ -261,6 +268,9 @@ export {
   meetingProviderEnum,
   meetingLinkStatusEnum,
   meetingLinksRelations,
+  meetingProviderConnections,
+  transcriptProviderEnum,
+  meetingProviderConnectionsRelations,
 } from "./schema/meeting-links.js";
 
 // Schema - Saved Queries & Query History (B2 — email-as-database)
@@ -638,7 +648,7 @@ export {
   availabilityPatternsRelations,
 } from "./schema/scheduling-intelligence.js";
 export type {
-  ProposedTime,
+  ProposedTimeSlot,
   MeetingPreferences,
   BusyBlock,
 } from "./schema/scheduling-intelligence.js";
@@ -663,7 +673,7 @@ export {
   productivityInsights,
   emailBehaviorPatterns,
   emailActivityTypeEnum,
-  productivityInsightTypeEnum,
+  insightTypeEnum,
   insightSeverityEnum,
   emailTimeTrackingRelations,
   productivityInsightsRelations,
@@ -730,12 +740,6 @@ import type {
   recipientEngagement,
   engagementEvents,
 } from "./schema/recipient-engagement.js";
-import type {
-  collaborationSessions,
-  collaborationInvites,
-  collaborationParticipants,
-  collaborationHistory,
-} from "./schema/collaboration.js";
 import type { tasks, taskProviderConfigs } from "./schema/tasks.js";
 import type {
   agentRuns,
@@ -747,7 +751,10 @@ import type {
   userAchievements,
   dailyStats,
 } from "./schema/gamification.js";
-import type { meetingLinks } from "./schema/meeting-links.js";
+import type {
+  meetingLinks,
+  meetingProviderConnections,
+} from "./schema/meeting-links.js";
 import type { savedQueries, queryHistory } from "./schema/saved-queries.js";
 import type { emailScripts, scriptRuns } from "./schema/email-scripts.js";
 import type { changelogEntries } from "./schema/changelog.js";
@@ -870,6 +877,8 @@ export type TaskProviderConfig = InferSelectModel<typeof taskProviderConfigs>;
 export type NewTaskProviderConfig = InferInsertModel<typeof taskProviderConfigs>;
 export type MeetingLink = InferSelectModel<typeof meetingLinks>;
 export type NewMeetingLink = InferInsertModel<typeof meetingLinks>;
+export type MeetingProviderConnection = InferSelectModel<typeof meetingProviderConnections>;
+export type NewMeetingProviderConnection = InferInsertModel<typeof meetingProviderConnections>;
 export type SavedQuery = InferSelectModel<typeof savedQueries>;
 export type NewSavedQuery = InferInsertModel<typeof savedQueries>;
 export type QueryHistoryRecord = InferSelectModel<typeof queryHistory>;

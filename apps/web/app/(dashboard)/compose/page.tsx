@@ -1,39 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageLayout, ComposeEditor, type ComposeData, type AISuggestion } from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
-import { messagesApi, authApi, calendarApi } from "../../../lib/api";
+import { messagesApi, authApi, calendarApi, grammarApi } from "../../../lib/api";
 import { SendTimePanel } from "../../../components/SendTimePanel";
 import { AnimatedCompose } from "../../../components/AnimatedCompose";
+import { OfflineComposeBanner } from "../../../components/OfflineComposeBanner";
 import {
   composeEnter,
   fadeInUp,
   useAlecRaeReducedMotion,
   withReducedMotion,
 } from "../../../lib/animations";
-
-const sampleSuggestions: AISuggestion[] = [
-  {
-    id: "s1",
-    type: "tone",
-    label: "More professional",
-    preview: "Consider a more formal tone for this client communication...",
-  },
-  {
-    id: "s2",
-    type: "autocomplete",
-    label: "Complete paragraph",
-    preview: "...and we look forward to discussing the partnership details in our upcoming meeting.",
-  },
-  {
-    id: "s3",
-    type: "grammar",
-    label: "Fix punctuation",
-    preview: 'Add a comma after "However" in the second paragraph.',
-  },
-];
 
 import { Suspense } from "react";
 
@@ -55,6 +35,34 @@ function ComposePage(): React.ReactNode {
   const [userEmail, setUserEmail] = useState("");
   const [recipientForPrediction, setRecipientForPrediction] = useState("");
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  const grammarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCheckedRef = useRef("");
+
+  const checkGrammar = useCallback((text: string) => {
+    const plainText = text.replace(/<[^>]*>/g, "").trim();
+    if (!plainText || plainText.length < 20 || plainText === lastCheckedRef.current) return;
+
+    if (grammarTimerRef.current) clearTimeout(grammarTimerRef.current);
+
+    grammarTimerRef.current = setTimeout(async () => {
+      lastCheckedRef.current = plainText;
+      try {
+        const res = await grammarApi.check({ text: plainText });
+        const newSuggestions: AISuggestion[] = res.data.issues.slice(0, 5).map((issue, i) => ({
+          id: `g${i}`,
+          type: "grammar" as const,
+          label: issue.message,
+          preview: issue.replacements.length > 0
+            ? `Suggestion: ${issue.replacements[0]}`
+            : issue.message,
+        }));
+        setSuggestions(newSuggestions);
+      } catch {
+        // Grammar API unavailable — no suggestions
+      }
+    }, 1500);
+  }, []);
 
   // Get compose mode from URL params (reply, forward, or new)
   const mode = searchParams.get("mode") as "reply" | "replyAll" | "forward" | null;
@@ -66,7 +74,7 @@ function ComposePage(): React.ReactNode {
   useEffect(() => {
     authApi.me().then((res) => {
       setUserEmail(res.data.email);
-    }).catch(() => {});
+    }).catch(() => { /* not authenticated */ });
   }, []);
 
   const initialSubject = mode === "forward"
@@ -106,7 +114,7 @@ function ComposePage(): React.ReactNode {
     async (text: string, recipientEmail: string) => {
       const res = await calendarApi.suggestSlots({
         text,
-        recipientEmail: recipientEmail || undefined,
+        ...(recipientEmail ? { recipientEmail } : {}),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       return res.data;
@@ -159,6 +167,7 @@ function ComposePage(): React.ReactNode {
 
   return (
     <PageLayout title="Compose" fullWidth>
+      <OfflineComposeBanner />
       <AnimatedCompose show={true}>
         <AnimatePresence>
           {status && (
@@ -223,8 +232,8 @@ function ComposePage(): React.ReactNode {
             cc={mode === "replyAll" ? replyCc : ""}
             subject={initialSubject}
             body={initialBody}
-            suggestions={sampleSuggestions}
-            showAIPanel={true}
+            suggestions={suggestions}
+            showAIPanel={suggestions.length > 0}
             onSend={handleSend}
             onSaveDraft={() => {
               setStatus("Draft saved locally");
@@ -233,8 +242,9 @@ function ComposePage(): React.ReactNode {
               setStatus(null);
               window.history.back();
             }}
-            onApplySuggestion={() => {}}
+            onApplySuggestion={() => { /* no-op */ }}
             onRequestCalendarSlots={handleRequestCalendarSlots}
+            onChange={checkGrammar}
             className="flex-1"
           />
         </motion.div>

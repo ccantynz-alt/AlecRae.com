@@ -134,7 +134,7 @@ export interface PasskeyRegisterChallengeResponse {
     challenge: string;
     rp: { name: string; id: string };
     user: { id: string; name: string; displayName: string };
-    pubKeyCredParams: Array<{ alg: number; type: "public-key" }>;
+    pubKeyCredParams: { alg: number; type: "public-key" }[];
     timeout: number;
     authenticatorSelection: {
       authenticatorAttachment: "platform";
@@ -157,11 +157,11 @@ export interface PasskeyLoginChallengeResponse {
     rpId: string;
     timeout: number;
     userVerification: "preferred";
-    allowCredentials?: Array<{
+    allowCredentials?: {
       type: "public-key";
       id: string;
       transports?: string[];
-    }>;
+    }[];
   };
 }
 
@@ -255,6 +255,26 @@ export const authApi = {
 
   async me(): Promise<{ data: AuthResponse["user"] }> {
     return apiFetch<{ data: AuthResponse["user"] }>("/v1/auth/me");
+  },
+
+  async updateProfile(payload: {
+    name?: string;
+    email?: string;
+  }): Promise<{ data: AuthResponse["user"] }> {
+    return apiFetch<{ data: AuthResponse["user"] }>("/v1/auth/me", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async deleteAccount(): Promise<{
+    data: {
+      status: "scheduled_for_deletion";
+      scheduledDeletionAt: string;
+      message: string;
+    };
+  }> {
+    return apiFetch("/v1/auth/me", { method: "DELETE" });
   },
 
   /** Request a WebAuthn registration challenge from the server. */
@@ -417,6 +437,28 @@ export const messagesApi = {
     );
   },
 
+  archive(id: string) {
+    return apiFetch<{ data: { id: string; updated: boolean } }>(
+      `/v1/messages/${id}`,
+      { method: "PATCH", body: JSON.stringify({ status: "dropped", tags: ["archived"] }) },
+    );
+  },
+
+  delete(id: string) {
+    return apiFetch<{ data: { id: string; deleted: boolean } }>(
+      `/v1/messages/${id}`,
+      { method: "DELETE" },
+    );
+  },
+
+  star(id: string, starred: boolean) {
+    const tags = starred ? ["starred"] : [];
+    return apiFetch<{ data: { id: string; updated: boolean } }>(
+      `/v1/messages/${id}`,
+      { method: "PATCH", body: JSON.stringify({ tags }) },
+    );
+  },
+
   search(params: { q: string; mailbox?: string; limit?: number; offset?: number }) {
     const qs = new URLSearchParams();
     qs.set("q", params.q);
@@ -424,13 +466,13 @@ export const messagesApi = {
     if (params.limit) qs.set("limit", String(params.limit));
     if (params.offset) qs.set("offset", String(params.offset));
     return apiFetch<{
-      data: Array<{
+      data: {
         id: string;
         subject: string;
         from: EmailAddress;
         snippet: string;
         createdAt: string;
-      }>;
+      }[];
       totalHits: number;
       processingTimeMs: number;
       query: string;
@@ -608,14 +650,57 @@ export const apiKeysApi = {
 
 // ─── Account ───────────────────────────────────────────────────────────────
 
+export interface PasskeyInfo {
+  id: string;
+  credentialId: string;
+  deviceName: string;
+  createdAt: string | null;
+  lastUsedAt: string | null;
+}
+
+export interface NotificationPrefs {
+  emailNotifications: boolean;
+  aiDigest: boolean;
+  deliverabilityAlerts: boolean;
+}
+
 export const accountApi = {
   get() {
     return apiFetch<{ data: Account }>("/v1/account");
   },
-  update(input: { name?: string; accountName?: string; billingEmail?: string }) {
-    return apiFetch<{ data: { success: boolean } }>("/v1/account", {
-      method: "PATCH",
-      body: JSON.stringify(input),
+
+  updateProfile(payload: { name?: string; email?: string }) {
+    return apiFetch<{ data: { id: string; name: string; email: string; role: string } }>(
+      "/v1/account/profile",
+      { method: "PATCH", body: JSON.stringify(payload) },
+    );
+  },
+
+  deleteAccount() {
+    return apiFetch<{ data: { deleted: boolean } }>("/v1/account", {
+      method: "DELETE",
+    });
+  },
+
+  listPasskeys() {
+    return apiFetch<{ data: PasskeyInfo[] }>("/v1/account/passkeys");
+  },
+
+  deletePasskey(id: string) {
+    return apiFetch<{ data: { deleted: boolean; id: string } }>(
+      `/v1/account/passkeys/${id}`,
+      { method: "DELETE" },
+    );
+  },
+
+  getNotificationPrefs() {
+    return apiFetch<{ data: NotificationPrefs }>("/v1/account/notifications");
+  },
+
+  updateNotificationPrefs(payload: Partial<NotificationPrefs>) {
+    return apiFetch<{ data: NotificationPrefs }>("/v1/account/notifications", {
+      method: "PUT",
+      body: JSON.stringify(payload),
     });
   },
 };
@@ -639,7 +724,7 @@ export interface CalendarMeetingIntent {
   confidence: number;
   durationHint: number | null;
   locationHint: string | null;
-  extractedTimes: Array<{ raw: string; parsed: string | null }>;
+  extractedTimes: { raw: string; parsed: string | null }[];
 }
 
 export interface SuggestSlotsResponse {
@@ -726,10 +811,10 @@ export interface RecipientPatternResponse {
 }
 
 export interface OptimalSendTimeResponse {
-  recipients: Array<{
+  recipients: {
     recipientEmail: string;
     recommendation: SendTimeRecommendation;
-  }>;
+  }[];
   consensusOptimalTime: string | null;
   recipientCount: number;
 }
@@ -902,6 +987,62 @@ export const emailExplainerApi = {
   },
 };
 
+// ─── Grammar & AI Compose Suggestions ────────────────────────────────────
+
+export interface GrammarIssue {
+  type: string;
+  message: string;
+  offset: number;
+  length: number;
+  replacements: string[];
+}
+
+export interface GrammarCheckResponse {
+  issues: GrammarIssue[];
+  score: number;
+  correctedText?: string;
+}
+
+export const grammarApi = {
+  check(payload: { text: string; language?: string }) {
+    return apiFetch<{ data: GrammarCheckResponse }>("/v1/grammar/check", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  correct(payload: { text: string; language?: string }) {
+    return apiFetch<{ data: { correctedText: string; changes: number } }>(
+      "/v1/grammar/correct",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+};
+
+// ─── Snooze ───────────────────────────────────────────────────────────────
+
+export const snoozeApi = {
+  snooze(emailId: string, until: string) {
+    return apiFetch<{ data: { id: string; emailId: string; snoozedUntil: string } }>(
+      `/v1/snooze/${emailId}`,
+      { method: "POST", body: JSON.stringify({ until }) },
+    );
+  },
+
+  unsnooze(emailId: string) {
+    return apiFetch<{ data: { deleted: boolean } }>(
+      `/v1/snooze/${emailId}`,
+      { method: "DELETE" },
+    );
+  },
+
+  list() {
+    return apiFetch<{ data: Array<{ id: string; emailId: string; snoozedUntil: string; subject: string }> }>(
+      "/v1/snooze",
+    );
+  },
+};
+
 // ─── Suppressions ──────────────────────────────────────────────────────────
 
 export const suppressionsApi = {
@@ -973,7 +1114,7 @@ export interface BatchCreateResult {
   total: number;
   succeeded: number;
   failed: number;
-  results: Array<{
+  results: {
     index: number;
     taskId: string;
     title: string;
@@ -981,7 +1122,7 @@ export interface BatchCreateResult {
     externalTaskId: string | null;
     externalTaskUrl: string | null;
     error: string | null;
-  }>;
+  }[];
 }
 
 export interface TaskListItem {
@@ -1325,7 +1466,7 @@ export const meetingsApi = {
   detect(payload: {
     threadId: string;
     thread: {
-      messages: Array<{
+      messages: {
         id?: string;
         from?: string;
         to?: string[];
@@ -1333,7 +1474,7 @@ export const meetingsApi = {
         textBody?: string;
         htmlBody?: string;
         receivedAt?: string;
-      }>;
+      }[];
     };
   }): Promise<{ data: MeetingDetectResponse }> {
     return apiFetch<{ data: MeetingDetectResponse }>("/v1/meetings/detect", {
@@ -1463,7 +1604,7 @@ export const voiceCloneApi = {
     profileId: string;
     prompt: string;
     recipient?: string;
-    threadHistory?: Array<{ from: string; body: string }>;
+    threadHistory?: { from: string; body: string }[];
     replyTo?: { from: string; subject: string; body: string };
   }): Promise<{ data: VoiceCloneComposeResult }> {
     return apiFetch<{ data: VoiceCloneComposeResult }>(
@@ -1576,6 +1717,100 @@ export const emailQueryApi = {
     return apiFetch<{ data: { deleted: boolean; id: string } }>(
       `/v1/query/saved/${encodeURIComponent(id)}`,
       { method: "DELETE" },
+    );
+  },
+};
+
+// ─── Templates ────────────────────────────────────────────────────────────
+
+export interface Template {
+  id: string;
+  name: string;
+  subject: string;
+  htmlBody: string | null;
+  textBody: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TemplateRenderResult {
+  subject: string;
+  htmlBody: string | null;
+  textBody: string | null;
+}
+
+export const templatesApi = {
+  /** List templates with optional pagination and name filter. */
+  list(params?: {
+    limit?: number;
+    cursor?: string;
+    name?: string;
+  }): Promise<PaginatedResponse<Template>> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.name) qs.set("name", params.name);
+    const query = qs.toString();
+    return apiFetch<PaginatedResponse<Template>>(
+      `/v1/templates${query ? `?${query}` : ""}`,
+    );
+  },
+
+  /** Get a single template by ID. */
+  get(id: string): Promise<{ data: Template }> {
+    return apiFetch<{ data: Template }>(
+      `/v1/templates/${encodeURIComponent(id)}`,
+    );
+  },
+
+  /** Create a new template. */
+  create(payload: {
+    name: string;
+    subject: string;
+    htmlBody?: string;
+    textBody?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ data: Template }> {
+    return apiFetch<{ data: Template }>("/v1/templates", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Update an existing template. */
+  update(
+    id: string,
+    payload: {
+      name?: string;
+      subject?: string;
+      htmlBody?: string;
+      textBody?: string;
+      metadata?: Record<string, unknown>;
+    },
+  ): Promise<{ data: Template }> {
+    return apiFetch<{ data: Template }>(
+      `/v1/templates/${encodeURIComponent(id)}`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** Delete a template. */
+  delete(id: string): Promise<{ data: { deleted: boolean; id: string } }> {
+    return apiFetch<{ data: { deleted: boolean; id: string } }>(
+      `/v1/templates/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  /** Render a template with variable substitution. */
+  render(
+    id: string,
+    variables: Record<string, unknown>,
+  ): Promise<{ data: TemplateRenderResult }> {
+    return apiFetch<{ data: TemplateRenderResult }>(
+      `/v1/templates/${encodeURIComponent(id)}/render`,
+      { method: "POST", body: JSON.stringify({ variables }) },
     );
   },
 };

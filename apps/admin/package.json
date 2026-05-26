@@ -7,7 +7,7 @@
     "dev": "next dev --turbopack --port 3001",
     "build": "next build",
     "start": "next start",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf .next"

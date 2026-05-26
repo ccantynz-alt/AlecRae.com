@@ -148,7 +148,6 @@ export const ParsedEmailQuerySchema = z.object({
 
 const HAIKU_MODEL = "claude-haiku-4-5";
 const MAX_QUERY_LIMIT = 1000;
-const DEFAULT_LIMIT = 50;
 
 // ─── Singleton Anthropic client ────────────────────────────────────────────
 

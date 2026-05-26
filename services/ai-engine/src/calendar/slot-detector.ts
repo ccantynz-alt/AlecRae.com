@@ -43,7 +43,7 @@ function getClient(): Anthropic | null {
 
 // ─── Heuristic fallback ──────────────────────────────────────────────────────
 
-const INTENT_PATTERNS: ReadonlyArray<{ re: RegExp; type: MeetingIntentType }> = [
+const INTENT_PATTERNS: readonly { re: RegExp; type: MeetingIntentType }[] = [
   { re: /\b(let'?s|shall we|want to|wanna|can we)\s+(meet|chat|sync|catch up|talk|call|hop on)/i, type: "request_meeting" },
   { re: /\b(are you free|do you have time|is .* good for you|works for you|how about)\b/i, type: "propose_time" },
   { re: /\b(confirm(ed|ing)?|that works|sounds good|see you (then|at))\b/i, type: "confirm_time" },

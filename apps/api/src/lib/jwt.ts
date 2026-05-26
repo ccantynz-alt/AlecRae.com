@@ -13,8 +13,8 @@ import { getDatabase, refreshTokens, users, accounts } from "@alecrae/db";
 
 // ─── Key management ──────────────────────────────────────────────────────────
 
-let privateKey: jose.KeyLike | Uint8Array | null = null;
-let publicKey: jose.KeyLike | Uint8Array | null = null;
+let privateKey: CryptoKey | Uint8Array | null = null;
+let publicKey: CryptoKey | Uint8Array | null = null;
 let algorithm: "RS256" | "HS256" = "HS256";
 let keysInitialized = false;
 
@@ -291,7 +291,7 @@ export async function rotateRefreshToken(oldRefreshToken: string): Promise<Token
 export async function revokeAllUserTokens(userId: string): Promise<number> {
   const db = getDatabase();
 
-  const result = await db
+  await db
     .update(refreshTokens)
     .set({ revokedAt: new Date() })
     .where(

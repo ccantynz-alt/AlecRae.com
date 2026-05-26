@@ -327,7 +327,8 @@ export class MailboxRouter {
 
     const queue = [...recipients];
     while (queue.length > 0) {
-      const addr = queue.pop()!;
+      const addr = queue.pop();
+      if (addr === undefined) break;
       if (seen.has(addr)) continue;
       seen.add(addr);
 

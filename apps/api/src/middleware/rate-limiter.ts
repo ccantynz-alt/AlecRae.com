@@ -103,4 +103,5 @@ export const rateLimiter = createMiddleware(async (c, next) => {
   }
 
   await next();
+  return;
 });

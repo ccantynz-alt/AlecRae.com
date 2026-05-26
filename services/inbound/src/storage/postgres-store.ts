@@ -325,8 +325,8 @@ export class PostgresEmailStore implements EmailStore {
       messageId: row.messageId,
       threadId: row.id,
       from: { address: row.fromAddress, name: row.fromName ?? undefined },
-      to: (row.toAddresses as Array<{ address: string; name?: string }>) ?? [],
-      cc: (row.ccAddresses as Array<{ address: string; name?: string }>) ?? [],
+      to: (row.toAddresses as { address: string; name?: string }[]) ?? [],
+      cc: (row.ccAddresses as { address: string; name?: string }[]) ?? [],
       bcc: [],
       subject: row.subject,
       snippet: (row.textBody ?? row.htmlBody ?? "").slice(0, 200),
@@ -345,7 +345,7 @@ export class PostgresEmailStore implements EmailStore {
 
   async delete(accountId: string, emailId: string): Promise<boolean> {
     const db = getDatabase();
-    const result = await db
+    await db
       .delete(emails)
       .where(and(eq(emails.id, emailId), eq(emails.accountId, accountId)));
 

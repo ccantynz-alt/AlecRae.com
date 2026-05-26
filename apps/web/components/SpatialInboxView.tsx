@@ -283,8 +283,8 @@ export function SpatialInboxPage({
           <Suspense fallback={<SpatialLoadingPlaceholder />}>
             <LazySpatialInboxView
               threads={threads}
-              onSelectThread={onSelectThread}
-              selectedThreadId={selectedThreadId}
+              {...(onSelectThread !== undefined ? { onSelectThread } : {})}
+              {...(selectedThreadId !== undefined ? { selectedThreadId } : {})}
               xAxis={xAxis}
               yAxis={yAxis}
               zAxis={zAxis}

@@ -180,13 +180,13 @@ describe("Suppressions API", () => {
       expect(res.status).toBe(200);
 
       const body = await jsonBody<{
-        data: Array<{
+        data: {
           id: string;
           email: string;
           domain: string;
           reason: string;
           createdAt: string;
-        }>;
+        }[];
         cursor: string | null;
         hasMore: boolean;
       }>(res);
@@ -215,7 +215,7 @@ describe("Suppressions API", () => {
 
       expect(res.status).toBe(200);
       const body = await jsonBody<{
-        data: Array<{ reason: string }>;
+        data: { reason: string }[];
       }>(res);
 
       for (const entry of body.data) {
@@ -233,7 +233,7 @@ describe("Suppressions API", () => {
 
       expect(res.status).toBe(200);
       const body = await jsonBody<{
-        data: Array<{ domain: string }>;
+        data: { domain: string }[];
       }>(res);
 
       for (const entry of body.data) {

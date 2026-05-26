@@ -12,7 +12,6 @@ import type {
   DiagnosticReport,
   DiagnosticRunnerConfig,
   DiagnosticStatus,
-  DnsStatusSummary,
   ReputationSummary,
   DeliveryStatsSummary,
   ErrorLogEntry,
@@ -570,8 +569,8 @@ export class DiagnosticsRunner {
       };
 
       const checksToRun = this.config.checksToRun
-        .filter((type) => checkMap[type] !== undefined)
-        .map((type) => checkMap[type]!);
+        .map((type) => checkMap[type])
+        .filter((fn): fn is () => Promise<DiagnosticCheck> => fn !== undefined);
 
       let checks: DiagnosticCheck[];
 
@@ -585,9 +584,10 @@ export class DiagnosticsRunner {
           if (result.status === "fulfilled") {
             return result.value;
           }
+          const checkType = this.config.checksToRun[i] ?? "unknown" as DiagnosticCheckType;
           return {
-            type: this.config.checksToRun[i]!,
-            name: this.config.checksToRun[i]!,
+            type: checkType,
+            name: checkType,
             status: "error" as DiagnosticStatus,
             message: `Check failed: ${result.reason}`,
             details: { error: String(result.reason) },

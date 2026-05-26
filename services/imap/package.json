@@ -9,14 +9,15 @@
     "dev": "bun run --hot src/index.ts",
     "build": "echo 'Service builds independently \u2014 not part of Vercel web deployment'",
     "start": "bun run dist/index.js",
-    "test": "vitest run",
+    "test": "bun test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "clean": "rm -rf dist"
   },
   "dependencies": {
     "@alecrae/shared": "workspace:*",
-    "@alecrae/db": "workspace:*"
+    "@alecrae/db": "workspace:*",
+    "drizzle-orm": "^0.36.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.0",

@@ -170,36 +170,36 @@ function parseComposeIntent(text: string): ComposeIntent {
 
   // Extract CC
   const ccMatch = EMAIL_COMMAND_PATTERNS.cc.exec(remaining);
-  if (ccMatch) {
-    email.cc = ccMatch[1]!.split(/[,\s]+and\s+|\s*,\s*/).map((s) => s.trim()).filter(Boolean);
+  if (ccMatch && ccMatch[1]) {
+    email.cc = ccMatch[1].split(/[,\s]+and\s+|\s*,\s*/).map((s) => s.trim()).filter(Boolean);
     remaining = remaining.replace(ccMatch[0], "").trim();
   }
 
   // Extract BCC
   const bccMatch = EMAIL_COMMAND_PATTERNS.bcc.exec(remaining);
-  if (bccMatch) {
-    email.bcc = bccMatch[1]!.split(/[,\s]+and\s+|\s*,\s*/).map((s) => s.trim()).filter(Boolean);
+  if (bccMatch && bccMatch[1]) {
+    email.bcc = bccMatch[1].split(/[,\s]+and\s+|\s*,\s*/).map((s) => s.trim()).filter(Boolean);
     remaining = remaining.replace(bccMatch[0], "").trim();
   }
 
   // Extract subject
   const subjectMatch = EMAIL_COMMAND_PATTERNS.subject.exec(remaining);
-  if (subjectMatch) {
-    email.subject = subjectMatch[1]!.trim();
+  if (subjectMatch && subjectMatch[1]) {
+    email.subject = subjectMatch[1].trim();
     remaining = remaining.replace(subjectMatch[0], "").trim();
   }
 
   // Extract tone
   const toneMatch = EMAIL_COMMAND_PATTERNS.tone.exec(remaining);
-  if (toneMatch) {
-    email.tone = toneMatch[1]!.toLowerCase();
+  if (toneMatch && toneMatch[1]) {
+    email.tone = toneMatch[1].toLowerCase();
     remaining = remaining.replace(toneMatch[0], "").trim();
   }
 
   // Extract attachment hints
   const attachMatch = EMAIL_COMMAND_PATTERNS.attach.exec(remaining);
-  if (attachMatch) {
-    email.attachmentHints = [attachMatch[1]!.trim()];
+  if (attachMatch && attachMatch[1]) {
+    email.attachmentHints = [attachMatch[1].trim()];
     remaining = remaining.replace(attachMatch[0], "").trim();
   }
 
@@ -231,8 +231,8 @@ function parseReplyIntent(text: string): ReplyIntent {
   // Extract tone
   let tone: string | undefined;
   const toneMatch = EMAIL_COMMAND_PATTERNS.tone.exec(remaining);
-  if (toneMatch) {
-    tone = toneMatch[1]!.toLowerCase();
+  if (toneMatch && toneMatch[1]) {
+    tone = toneMatch[1].toLowerCase();
     remaining = remaining.replace(toneMatch[0], "").trim();
   }
 
@@ -240,7 +240,7 @@ function parseReplyIntent(text: string): ReplyIntent {
     type: "reply",
     email: {
       body: remaining.replace(/^[,.\s]+/, "").trim(),
-      tone,
+      ...(tone !== undefined ? { tone } : {}),
     },
     confidence: 0.85,
   };
@@ -285,10 +285,13 @@ function parseTriageIntent(text: string): TriageIntent {
       });
     } else if (trimmed.startsWith("label") || trimmed.startsWith("move")) {
       const labelMatch = trimmed.match(/(?:label|move)\s+(?:as|to)\s+(\w+)/);
+      const labelValue = labelMatch?.[1];
       actions.push({
         action: trimmed.startsWith("label") ? "label" : "move",
         target: "this",
-        params: { label: labelMatch?.[1], folder: labelMatch?.[1] },
+        params: {
+          ...(labelValue !== undefined ? { label: labelValue, folder: labelValue } : {}),
+        },
       });
     }
   }
@@ -353,7 +356,7 @@ async function polishDictatedEmail(
     if (!response.ok) return rawBody;
 
     const data = (await response.json()) as {
-      content: Array<{ type: string; text?: string }>;
+      content: { type: string; text?: string }[];
     };
 
     const polished = data.content

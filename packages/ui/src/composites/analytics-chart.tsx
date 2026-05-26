@@ -107,7 +107,7 @@ function BarChart({ data, maxValue, color = "bg-brand-500", formatValue, showLab
 
 BarChart.displayName = "BarChart";
 
-function LineChart({ data, maxValue, height = 200 }: InnerChartProps) {
+function LineChart({ data, maxValue }: InnerChartProps) {
   const points = data.map((d, i) => ({
     x: (i / Math.max(data.length - 1, 1)) * 100,
     y: 100 - (d.value / maxValue) * 100,
@@ -131,7 +131,7 @@ function LineChart({ data, maxValue, height = 200 }: InnerChartProps) {
 
 LineChart.displayName = "LineChart";
 
-function AreaChart({ data, maxValue, height = 200 }: InnerChartProps) {
+function AreaChart({ data, maxValue }: InnerChartProps) {
   const points = data.map((d, i) => ({
     x: (i / Math.max(data.length - 1, 1)) * 100,
     y: 100 - (d.value / maxValue) * 100,

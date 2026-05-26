@@ -143,6 +143,5 @@ jobs:
         run: npx gatetest@latest --suite quick
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    # GateTest is advisory for now — reports findings but does not block merge.
-    # Flip continue-on-error to false once GateTest is correctly configured and stable.
-    continue-on-error: true
+    # GateTest blocks merge — failures are now hard errors.
+    continue-on-error: false

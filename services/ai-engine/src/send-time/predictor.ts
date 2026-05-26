@@ -157,7 +157,7 @@ function calculateConfidenceScore(
  */
 export async function analyzeRecipientPatterns(
   recipientEmail: string,
-  historicalEmails: ReadonlyArray<HistoricalEmail>,
+  historicalEmails: readonly HistoricalEmail[],
 ): Promise<RecipientPattern> {
   void recipientEmail;
   if (historicalEmails.length === 0) {

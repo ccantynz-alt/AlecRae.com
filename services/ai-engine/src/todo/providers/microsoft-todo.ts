@@ -16,7 +16,7 @@ interface GraphTaskResponse {
 }
 
 interface GraphListsResponse {
-  value: Array<{ id: string; displayName: string }>;
+  value: { id: string; displayName: string }[];
 }
 
 export class MicrosoftTodoProvider implements TodoProvider {

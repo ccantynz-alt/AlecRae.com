@@ -151,7 +151,7 @@ export class ReputationEngine {
   private readonly alertThresholds: typeof DEFAULT_ALERT_THRESHOLDS;
 
   /** Score history keyed by "ip::address" or "domain::name" */
-  private readonly history: Map<string, ScoreHistoryEntry[]> = new Map();
+  private readonly history = new Map<string, ScoreHistoryEntry[]>();
 
   /** Pending alerts */
   private readonly alerts: ReputationAlert[] = [];

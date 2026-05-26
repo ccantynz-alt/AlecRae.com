@@ -210,7 +210,9 @@ export async function incrementQuota(accountId: string): Promise<void> {
  */
 export async function closeQuotaRedis(): Promise<void> {
   if (redisClient) {
-    await redisClient.quit().catch(() => {});
+    await redisClient.quit().catch(() => {
+      /* intentional no-op: best-effort shutdown */
+    });
     redisClient = null;
   }
 }

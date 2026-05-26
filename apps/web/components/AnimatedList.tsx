@@ -99,7 +99,8 @@ function getKey(child: unknown, fallback: number): string | number {
     typeof child === "object" &&
     child !== null &&
     "key" in child &&
-    (child as { key: unknown }).key != null
+    (child as { key: unknown }).key !== null &&
+    (child as { key: unknown }).key !== undefined
   ) {
     return (child as { key: string | number }).key;
   }

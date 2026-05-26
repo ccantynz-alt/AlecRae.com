@@ -39,7 +39,6 @@ import {
   type TodoProviderName,
   type TodoTaskInput,
   type ThreadForExtraction,
-  type ExtractedTask,
 } from "@alecrae/ai-engine/todo";
 import {
   getDatabase,

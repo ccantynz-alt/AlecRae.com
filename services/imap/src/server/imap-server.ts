@@ -15,7 +15,6 @@ import type {
   ImapServerConfig,
   ImapSession,
   ImapCommand,
-  ImapState,
   ImapServerEvents,
 } from "../types.js";
 import { DEFAULT_CAPABILITIES } from "../types.js";
@@ -131,10 +130,11 @@ export class ImapServer extends EventEmitter<ImapServerEvents> {
 
     const closePromises: Promise<void>[] = [];
 
-    if (this.plaintextServer) {
+    const plaintext = this.plaintextServer;
+    if (plaintext) {
       closePromises.push(
         new Promise<void>((resolve) => {
-          this.plaintextServer!.close(() => {
+          plaintext.close(() => {
             this.plaintextServer = null;
             resolve();
           });
@@ -142,10 +142,11 @@ export class ImapServer extends EventEmitter<ImapServerEvents> {
       );
     }
 
-    if (this.tlsServer) {
+    const tlsServer = this.tlsServer;
+    if (tlsServer) {
       closePromises.push(
         new Promise<void>((resolve) => {
-          this.tlsServer!.close(() => {
+          tlsServer.close(() => {
             this.tlsServer = null;
             resolve();
           });
@@ -194,13 +195,14 @@ export class ImapServer extends EventEmitter<ImapServerEvents> {
       return Promise.resolve();
     }
 
+    const tlsConfig = this.config.tls;
     return new Promise((resolve, reject) => {
       const tlsOptions: tls.TlsOptions = {
-        key: this.config.tls!.key,
-        cert: this.config.tls!.cert,
-        ca: this.config.tls!.ca,
-        minVersion: this.config.tls!.minVersion,
-        ciphers: this.config.tls!.ciphers,
+        key: tlsConfig.key,
+        cert: tlsConfig.cert,
+        ca: tlsConfig.ca,
+        minVersion: tlsConfig.minVersion,
+        ciphers: tlsConfig.ciphers,
       };
 
       this.tlsServer = tls.createServer(tlsOptions, (socket) => {
@@ -366,7 +368,10 @@ export class ImapServer extends EventEmitter<ImapServerEvents> {
         // Process any remaining buffer as literal data
         if (buffer.length > 0) {
           const bufferAsBytes = Buffer.from(buffer, "utf-8");
-          this.handleLiteralData(sessionId, bufferAsBytes, this.literalState.get(sessionId)!);
+          const currentLiteral = this.literalState.get(sessionId);
+          if (currentLiteral) {
+            this.handleLiteralData(sessionId, bufferAsBytes, currentLiteral);
+          }
           buffer = "";
         }
         continue;

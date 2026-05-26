@@ -141,11 +141,11 @@ export default function AcceptableUsePage() {
       <Section number="8" title="Network Security">
         <Text>You must not use the Service to conduct or facilitate any of the following:</Text>
         <Sub label="(a)">Port scanning, network enumeration, or network reconnaissance of AlecRae infrastructure or any third-party systems.</Sub>
-        <Sub label="(b)">Vulnerability testing, penetration testing, or security testing of the Service without prior written authorization from AlecRae. Report vulnerabilities responsibly to security@alecrae.dev.</Sub>
+        <Sub label="(b)">Vulnerability testing, penetration testing, or security testing of the Service without prior written authorization from AlecRae. Report vulnerabilities responsibly to security@alecrae.com.</Sub>
         <Sub label="(c)">Distributed denial of service (DDoS) attacks, traffic flooding, or any activity intended to disrupt the availability of the Service or any third-party service.</Sub>
         <Sub label="(d)">IP address spoofing, ARP spoofing, or DNS spoofing.</Sub>
         <Sub label="(e)">Unauthorized interception, monitoring, or collection of network traffic.</Sub>
-        <Sub label="(f)">Exploitation of any vulnerability in the Service. If you discover a vulnerability, you must report it immediately to security@alecrae.dev and must not exploit or disclose it.</Sub>
+        <Sub label="(f)">Exploitation of any vulnerability in the Service. If you discover a vulnerability, you must report it immediately to security@alecrae.com and must not exploit or disclose it.</Sub>
       </Section>
 
       <Section number="9" title="AI System Integrity">
@@ -213,7 +213,7 @@ export default function AcceptableUsePage() {
       <Section number="12" title="Reporting Abuse">
         <Text>To report violations of this AUP or any abuse originating from the AlecRae platform:</Text>
         <Box className="ml-6 mt-2 space-y-1">
-          <Text>Email: abuse@alecrae.dev</Text>
+          <Text>Email: abuse@alecrae.com</Text>
           <Text>Include: full email headers, message content, timestamps, and any other relevant evidence.</Text>
         </Box>
         <Text className="mt-3">AlecRae will investigate all reports within 24 hours of receipt. Reporter identity is kept confidential. AlecRae participates in feedback loops (FBLs) with all major ISPs and processes complaints automatically.</Text>
@@ -246,7 +246,7 @@ export default function AcceptableUsePage() {
 
       <Box className="mt-12 pt-6 border-t border-border">
         <Text className="text-content-tertiary text-sm">
-          Questions about this Acceptable Use Policy should be directed to abuse@alecrae.dev or legal@alecrae.dev. This policy is reviewed and updated regularly to address evolving threats and regulatory requirements.
+          Questions about this Acceptable Use Policy should be directed to abuse@alecrae.com or legal@alecrae.com. This policy is reviewed and updated regularly to address evolving threats and regulatory requirements.
         </Text>
       </Box>
     </Box>

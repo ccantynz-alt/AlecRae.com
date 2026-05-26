@@ -112,14 +112,14 @@ describe("Templates API", () => {
       expect(res.status).toBe(200);
 
       const body = await jsonBody<{
-        data: Array<{
+        data: {
           id: string;
           name: string;
           subject: string;
           variables: string[];
           createdAt: string;
           updatedAt: string;
-        }>;
+        }[];
         cursor: string | null;
         hasMore: boolean;
       }>(res);
@@ -149,7 +149,7 @@ describe("Templates API", () => {
 
       expect(res.status).toBe(200);
       const body = await jsonBody<{
-        data: Array<{ name: string }>;
+        data: { name: string }[];
       }>(res);
 
       for (const tmpl of body.data) {

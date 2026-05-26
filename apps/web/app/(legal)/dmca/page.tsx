@@ -66,7 +66,7 @@ export default function DMCAPage() {
                 Attn: Copyright Agent / Legal Department
               </Text>
               <Text variant="body-md" className="text-content-secondary">
-                Email: dmca@alecrae.dev
+                Email: dmca@alecrae.com
               </Text>
               <Text variant="body-md" className="text-content-secondary">
                 Mailing Address: 548 Market Street, Suite 45000, San Francisco, CA 94104
@@ -277,8 +277,8 @@ export default function DMCAPage() {
 
       <Box className="border-t border-border pt-6">
         <Text variant="body-sm" muted>
-          To report copyright infringement, contact our DMCA agent at dmca@alecrae.dev.
-          For general legal inquiries, contact legal@alecrae.dev.
+          To report copyright infringement, contact our DMCA agent at dmca@alecrae.com.
+          For general legal inquiries, contact legal@alecrae.com.
         </Text>
       </Box>
     </Box>

@@ -333,7 +333,7 @@ export async function runSnippet(
     // Create the sandboxed function using Function constructor.
     // This is NOT eval — it creates a new function scope with explicitly
     // named parameters that shadow all dangerous globals.
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+     
     const sandboxedFn = new Function(...paramNames, wrappedCode);
 
     // Execute with timeout

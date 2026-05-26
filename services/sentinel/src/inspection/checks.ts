@@ -106,7 +106,7 @@ function createContentSafetyCheck(): CheckDefinition {
 
       // Obfuscation patterns (common in spam/phishing)
       const obfuscation = [
-        /[\u200b\u200c\u200d\ufeff]/, // Zero-width characters
+        /\u200b|\u200c|\u200d|\ufeff/, // Zero-width characters
         /&#\d{2,4};/,                  // HTML entities in body
         /=\?.*\?[BQ]\?/i,             // Excessive encoded words
       ];
@@ -191,6 +191,7 @@ function createLinkAnalysisCheck(): CheckDefinition {
           }
 
           // Homograph attack detection (mixed scripts in domain)
+          // eslint-disable-next-line no-control-regex
           if (/[^\x00-\x7F]/.test(parsed.hostname)) {
             score -= 30;
             details.push(`Non-ASCII domain (possible homograph): ${parsed.hostname}`);
@@ -239,7 +240,7 @@ function createAttachmentRiskCheck(): CheckDefinition {
     execute: async (item: ValidationItem): Promise<CheckResult> => {
       const start = performance.now();
       const payload = item.payload as Record<string, unknown>;
-      const attachments = (payload['attachments'] as Array<Record<string, unknown>>) ?? [];
+      const attachments = (payload['attachments'] as Record<string, unknown>[]) ?? [];
 
       if (attachments.length === 0) {
         return {

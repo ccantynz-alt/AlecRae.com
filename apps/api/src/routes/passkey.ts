@@ -46,8 +46,8 @@ function generateChallenge(): string {
 
 function bufferToBase64Url(buffer: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < buffer.length; i++) {
-    binary += String.fromCharCode(buffer[i]!);
+  for (const byte of buffer) {
+    binary += String.fromCharCode(byte);
   }
   return btoa(binary)
     .replace(/\+/g, "-")
@@ -80,7 +80,7 @@ function parseAuthenticatorData(authDataB64: string): {
 } {
   const authData = base64UrlToBuffer(authDataB64);
   const rpIdHash = authData.slice(0, 32);
-  const flags = authData[32]!;
+  const flags = authData[32] ?? 0;
   const signCountView = new DataView(authData.buffer, authData.byteOffset + 33, 4);
   const signCount = signCountView.getUint32(0, false);
   return { rpIdHash, flags, signCount };
@@ -551,7 +551,7 @@ passkeyRouter.post(
     const challengeId = generateId();
 
     // If email provided, look up allowed credentials for that user
-    let allowCredentials: Array<{ type: "public-key"; id: string; transports?: string[] }> = [];
+    let allowCredentials: { type: "public-key"; id: string; transports?: string[] }[] = [];
 
     if (input.email) {
       const [user] = await db
@@ -569,13 +569,16 @@ passkeyRouter.post(
           .from(passkeys)
           .where(eq(passkeys.userId, user.id));
 
-        allowCredentials = userPasskeys.map((pk) => ({
-          type: "public-key" as const,
-          id: pk.credentialId,
-          transports: pk.transports
+        allowCredentials = userPasskeys.map((pk) => {
+          const transports = pk.transports
             ? (JSON.parse(pk.transports) as string[])
-            : undefined,
-        }));
+            : undefined;
+          return {
+            type: "public-key" as const,
+            id: pk.credentialId,
+            ...(transports !== undefined ? { transports } : {}),
+          };
+        });
       }
     }
 

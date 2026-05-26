@@ -34,13 +34,13 @@ export function extractVariables(template: string): string[] {
   const varRegex = /\{\{\{?([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)\}?\}\}/g;
   let match: RegExpExecArray | null;
   while ((match = varRegex.exec(template)) !== null) {
-    vars.add(match[1]!);
+    if (match[1]) vars.add(match[1]);
   }
 
   // {{#if variable}} and {{#each variable}}
   const blockRegex = /\{\{#(?:if|each)\s+([a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*)\}\}/g;
   while ((match = blockRegex.exec(template)) !== null) {
-    vars.add(match[1]!);
+    if (match[1]) vars.add(match[1]);
   }
 
   return [...vars].sort();
@@ -53,7 +53,7 @@ function resolve(path: string, data: Record<string, unknown>): unknown {
   let current: unknown = data;
 
   for (const part of parts) {
-    if (current == null || typeof current !== "object") return undefined;
+    if (current === null || current === undefined || typeof current !== "object") return undefined;
     current = (current as Record<string, unknown>)[part];
   }
 

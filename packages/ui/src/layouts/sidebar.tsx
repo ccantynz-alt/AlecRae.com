@@ -52,7 +52,7 @@ export const Sidebar = forwardRef<HTMLElement, SidebarProps>(function Sidebar(
             key={sectionIndex}
             section={section}
             collapsed={collapsed}
-            onNavigate={onNavigate}
+            {...(onNavigate ? { onNavigate } : {})}
           />
         ))}
       </Box>
@@ -83,7 +83,12 @@ function SidebarSectionGroup({ section, collapsed, onNavigate }: SidebarSectionG
       )}
       <Box as="ul" role="list" className="space-y-0.5">
         {section.items.map((item) => (
-          <SidebarNavItemRow key={item.id} item={item} collapsed={collapsed} onNavigate={onNavigate} />
+          <SidebarNavItemRow
+            key={item.id}
+            item={item}
+            collapsed={collapsed}
+            {...(onNavigate ? { onNavigate } : {})}
+          />
         ))}
       </Box>
     </Box>

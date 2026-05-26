@@ -6,7 +6,6 @@
 
 import type {
   ImapSession,
-  ImapMailbox,
   ImapMessage,
   ImapFetchItem,
   ImapSearchCriteria,
@@ -462,7 +461,7 @@ export class IdleManager {
    * Clean up all watchers (server shutdown).
    */
   shutdown(): void {
-    for (const [id, watcher] of this.watchers) {
+    for (const watcher of this.watchers.values()) {
       clearTimeout(watcher.timeout);
       watcher.controller.active = false;
     }
@@ -497,7 +496,7 @@ export type IdleNotification =
  * Supports individual numbers, ranges (n:m), and wildcard (*).
  * Example: "1:3,5,7:*" with max=10 => [1,2,3,5,7,8,9,10]
  */
-export function parseSequenceSet(set: string, max: number = 999999): number[] {
+export function parseSequenceSet(set: string, max = 999999): number[] {
   const result: number[] = [];
   const parts = set.split(",");
 
@@ -507,8 +506,9 @@ export function parseSequenceSet(set: string, max: number = 999999): number[] {
 
     if (trimmed.includes(":")) {
       const [startStr, endStr] = trimmed.split(":");
-      const start = startStr === "*" ? max : parseInt(startStr!, 10);
-      const end = endStr === "*" ? max : parseInt(endStr!, 10);
+      if (startStr === undefined || endStr === undefined) continue;
+      const start = startStr === "*" ? max : parseInt(startStr, 10);
+      const end = endStr === "*" ? max : parseInt(endStr, 10);
 
       if (Number.isNaN(start) || Number.isNaN(end)) continue;
 

@@ -612,21 +612,37 @@ After writing the code:
 ## 🗓️ NEXT ACTIONS — IN ORDER
 
 1. ~~Build "Coming Soon" landing page~~ DONE
-2. ~~Verify monorepo build end-to-end~~ DONE 2026-04-09 — 26/26 tasks pass
-3. ~~Fix any build errors~~ DONE 2026-04-09
+2. ~~Verify monorepo build end-to-end~~ DONE 2026-04-24 — 29/29 static pages, zero errors
+3. ~~Fix any build errors~~ DONE 2026-04-24 — landing page merge conflict fixed
 4. ~~Wire passkey login handler~~ DONE 2026-04-09
-5. ~~Build Electron desktop app~~ DONE 2026-04-09 — builds clean, native menus, tray, IPC
-6. ~~Build React Native mobile app~~ DONE 2026-04-09 — all screens, auth, API client
-7. ~~Wire in-memory stores to DB~~ DONE 2026-04-09 — Drizzle schemas for contacts, recall, screener
-8. ~~Complete Admin SSO~~ DONE 2026-04-09 — SAML 2.0 SP, admin login page
-9. ~~Fix Vercel deployment~~ DONE 2026-04-09 — Root Directory = apps/web
-10. ~~**Rebrand Vienna/48co/@emailed → AlecRae/alecrae.com/@alecrae**~~ DONE 2026-04-12 — full codebase rebrand
-11. **Verify Vercel deployment succeeds** (Craig — check Vercel dashboard)
-12. **Set up Neon database** + run setup SQL (Craig action)
-13. **Set up Upstash Redis** (Craig action)
-14. **Configure DNS** for alecrae.com (Craig action)
-15. **Set up Stripe account** + configure webhook URLs (Craig action)
-16. **Add API keys** (Anthropic, OpenAI, Google, Microsoft) to production env (Craig action)
+5. ~~Build Electron desktop app~~ DONE 2026-04-09
+6. ~~Build React Native mobile app~~ DONE 2026-04-09
+7. ~~Wire in-memory stores to DB~~ DONE 2026-04-09
+8. ~~Complete Admin SSO~~ DONE 2026-04-09
+9. ~~Fix Vercel deployment~~ DONE 2026-04-09
+10. ~~Rebrand Vienna/48co/@emailed → AlecRae~~ DONE 2026-04-12
+11. **Provision Neon Postgres** + run `bun run db:migrate` (Craig)
+12. **Provision Upstash Redis** (Craig)
+13. **Configure DNS** for alecrae.com — MX, SPF, DKIM, DMARC, CNAMEs (Craig)
+14. **Set up Stripe** live keys + webhook URL → api.alecrae.com/billing/webhook (Craig)
+15. **Add API keys** — Anthropic, OpenAI, Google OAuth, Microsoft OAuth (Craig)
+16. **Deploy to Crontec** — connect repo, set env vars, point domain (Craig + Claude)
+17. **Stand up sending for Craig** — see `docs/infra/email-sending-runbook.md` (DNS + SES relay + warmup, no Neon dependency)
+
+---
+
+## 🌀 FLYWHEEL BACKLOG — Make the moat visible (added 2026-05-08)
+
+The platform's moat is the AI flywheel — every user action makes every AI feature better, and the data that compounds cannot be cloned by Gmail or Outlook. The signals + learning cycles are wired in `.ai-flywheel/config.json`. What's missing is **visibility, virality, and instrumentation**. These are the highest-leverage next builds AFTER the email-sending stack is operational:
+
+| # | Item | Why | Effort |
+|---|---|---|---|
+| F1 | **"Your AlecRae" page** — voice-profile confidence over time, drafts accepted, time saved, words AI has learned | Without it, users can't see the wheel turning, which kills retention narrative + marketing screenshots | ~2 days |
+| F2 | **Voice-primed referral loop** — "Invite a contact → they get 3 months free, you get 1 month free, AND their voice profile is primed from the emails you've already exchanged" | Ties acquisition to the moat; Gmail/Superhuman literally cannot ship the parenthetical | ~1 week |
+| F3 | **AlecRae↔AlecRae network features** — real-time read/draft state, "Sarah is replying", presence in compose, calendar slot proposals that auto-resolve when both ends are on AlecRae | Turns AlecRae from "a client" into "a platform" — each new user makes existing users' product better | ~2 weeks |
+| F4 | **Flywheel instrumentation** — wire `.ai-flywheel/config.json` signals to ClickHouse + surface weekly RPM in `/admin` | Right now the wheel turns but we can't measure it. Need weekly compose-acceptance, triage-accuracy, voice-edit-distance trend lines | ~3 days |
+
+**Build order:** F4 → F1 → F2 → F3. Instrument first so we know the wheel is real, then make it visible, then tie it to virality, then to network effects. None of these block launch — but all four together are what turns AlecRae into a $2.5M MRR exit instead of a $10M lifestyle business.
 
 ---
 

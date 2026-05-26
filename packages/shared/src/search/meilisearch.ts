@@ -109,7 +109,7 @@ export async function initSearchIndex(): Promise<void> {
     sortableAttributes: ["createdAt", "subject"],
   });
 
-  console.log("[search] Meilisearch index initialized:", INDEX_NAME);
+  console.warn("[search] Meilisearch index initialized:", INDEX_NAME);
 }
 
 // ─── Indexing ─────────────────────────────────────────────────────────────
@@ -127,7 +127,7 @@ export async function indexEmail(email: {
   textBody?: string | null;
   fromAddress: string;
   fromName?: string | null;
-  toAddresses: string | Array<{ address: string; name?: string }>;
+  toAddresses: string | { address: string; name?: string }[];
   snippet: string;
   hasAttachments: boolean;
   status: string;

@@ -10,6 +10,18 @@ import { relations } from "drizzle-orm";
 import { accounts } from "./users.js";
 
 // ---------------------------------------------------------------------------
+// Transcript provider enum — used by the provider connections table
+// ---------------------------------------------------------------------------
+
+export const transcriptProviderEnum = pgEnum("transcript_provider", [
+  "zoom",
+  "otter",
+  "fathom",
+  "granola",
+  "read.ai",
+]);
+
+// ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
 
@@ -98,6 +110,45 @@ export const meetingLinks = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Meeting Provider Connections — persisted OAuth tokens for Zoom/Otter/etc.
+// ---------------------------------------------------------------------------
+
+export const meetingProviderConnections = pgTable(
+  "meeting_provider_connections",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+
+    /** Which transcript provider this token belongs to. */
+    provider: transcriptProviderEnum("provider").notNull(),
+
+    /**
+     * Encrypted access token.
+     * Store encrypted at rest — callers must decrypt before use.
+     * Use AES-256-GCM via the Web Crypto API.
+     */
+    accessTokenEncrypted: text("access_token_encrypted").notNull(),
+
+    connectedAt: timestamp("connected_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("meeting_provider_connections_account_idx").on(table.accountId),
+    index("meeting_provider_connections_account_provider_idx").on(
+      table.accountId,
+      table.provider,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
 
@@ -107,3 +158,13 @@ export const meetingLinksRelations = relations(meetingLinks, ({ one }) => ({
     references: [accounts.id],
   }),
 }));
+
+export const meetingProviderConnectionsRelations = relations(
+  meetingProviderConnections,
+  ({ one }) => ({
+    account: one(accounts, {
+      fields: [meetingProviderConnections.accountId],
+      references: [accounts.id],
+    }),
+  }),
+);

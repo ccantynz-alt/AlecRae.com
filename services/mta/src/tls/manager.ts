@@ -5,9 +5,9 @@
 
 import * as tls from "node:tls";
 import * as fs from "node:fs";
-import * as path from "node:path";
 import * as crypto from "node:crypto";
-import type { TlsConfig, TlsCertificate, TlsManagerConfig, Result } from "../types.js";
+import type * as netTypes from "node:net";
+import type { TlsCertificate, TlsManagerConfig, Result } from "../types.js";
 import { ok, err } from "../types.js";
 
 export class TlsManager {
@@ -38,7 +38,7 @@ export class TlsManager {
         domain,
         keyPath,
         certPath,
-        caPath,
+        ...(caPath !== undefined ? { caPath } : {}),
         expiresAt: certInfo.value.expiresAt,
         issuedAt: certInfo.value.issuedAt,
         issuer: certInfo.value.issuer,
@@ -114,7 +114,7 @@ export class TlsManager {
    * Create a TLS server socket by upgrading an existing plain socket.
    */
   upgradeToTls(
-    socket: import("node:net").Socket,
+    socket: netTypes.Socket,
     domain?: string,
   ): Promise<tls.TLSSocket> {
     return new Promise((resolve, reject) => {
@@ -173,7 +173,7 @@ export class TlsManager {
    * Upgrade an existing client socket to TLS (STARTTLS for outbound).
    */
   upgradeClientToTls(
-    socket: import("node:net").Socket,
+    socket: netTypes.Socket,
     host: string,
     options?: { rejectUnauthorized?: boolean },
   ): Promise<tls.TLSSocket> {
@@ -226,7 +226,7 @@ export class TlsManager {
   /**
    * Generate a self-signed certificate for development/testing.
    */
-  static generateSelfSigned(domain: string): { key: string; cert: string } {
+  static generateSelfSigned(_domain: string): { key: string; cert: string } {
     // Use Node's crypto to generate a self-signed cert
     const { privateKey, publicKey } = crypto.generateKeyPairSync("rsa", {
       modulusLength: 2048,

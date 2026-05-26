@@ -404,7 +404,7 @@ export default function SLAPage() {
             <Text variant="body-md" className="text-brand-600 font-bold">a.</Text>
             <Text variant="body-md" className="text-content-secondary leading-relaxed">
               <Text as="span" className="font-semibold text-content">Real-Time Status Page.</Text>{" "}
-              A publicly accessible status page at status.alecrae.dev displaying
+              A publicly accessible status page at status.alecrae.com displaying
               current operational status of all services, updated in real time.
             </Text>
           </Box>
@@ -466,7 +466,7 @@ export default function SLAPage() {
           </Box>
         </Box>
         <Text variant="body-md" className="text-content-secondary leading-relaxed">
-          Requests may be submitted by emailing sla@alecrae.dev or through the support
+          Requests may be submitted by emailing sla@alecrae.com or through the support
           portal. AlecRae will review and respond to credit requests within 10 business
           days. If we confirm the SLA failure, credits will be applied to your next
           billing cycle.
@@ -506,7 +506,7 @@ export default function SLAPage() {
 
       <Box className="border-t border-border pt-6">
         <Text variant="body-sm" muted>
-          Questions about this SLA? Contact us at legal@alecrae.dev or visit our
+          Questions about this SLA? Contact us at legal@alecrae.com or visit our
           support portal.
         </Text>
       </Box>

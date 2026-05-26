@@ -65,7 +65,7 @@ const InsertSlotsSchema = z.object({
 // ─── Formatters ──────────────────────────────────────────────────────────────
 
 function formatSlotsAsMarkdown(
-  slots: ReadonlyArray<SlotSuggestion>,
+  slots: readonly SlotSuggestion[],
   intro: string,
 ): string {
   const lines: string[] = [intro, ""];
@@ -76,7 +76,7 @@ function formatSlotsAsMarkdown(
 }
 
 function formatSlotsAsText(
-  slots: ReadonlyArray<SlotSuggestion>,
+  slots: readonly SlotSuggestion[],
   intro: string,
 ): string {
   const lines: string[] = [intro, ""];
@@ -87,7 +87,7 @@ function formatSlotsAsText(
 }
 
 function formatSlotsAsHtml(
-  slots: ReadonlyArray<SlotSuggestion>,
+  slots: readonly SlotSuggestion[],
   intro: string,
 ): string {
   const items = slots

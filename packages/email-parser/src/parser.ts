@@ -68,24 +68,28 @@ export function parseEmail(raw: string): ParsedEmail {
     ? extractMessageIds(referencesStr)
     : [];
 
-  return {
+  const replyToAddr = replyTo[0];
+  const inReplyToId = extractMessageId(getHeader(headers, "in-reply-to") ?? "");
+
+  const parsed: ParsedEmail = {
     messageId: extractMessageId(getHeader(headers, "message-id") ?? ""),
     from: from[0] ?? { address: "" },
     to,
     cc,
     bcc,
-    replyTo: replyTo[0],
     subject: decodeEncodedWords(getHeader(headers, "subject") ?? ""),
-    date,
-    inReplyTo: extractMessageId(getHeader(headers, "in-reply-to") ?? "") || undefined,
     references,
-    textBody,
-    htmlBody,
     attachments,
     headers,
     rawHeaders,
     rawBody,
+    ...(replyToAddr ? { replyTo: replyToAddr } : {}),
+    ...(date ? { date } : {}),
+    ...(inReplyToId ? { inReplyTo: inReplyToId } : {}),
+    ...(textBody !== undefined ? { textBody } : {}),
+    ...(htmlBody !== undefined ? { htmlBody } : {}),
   };
+  return parsed;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +188,8 @@ function parseContentType(header: string): {
   let charset: string | undefined;
 
   for (let i = 1; i < parts.length; i++) {
-    const param = parts[i]!;
+    const param = parts[i];
+    if (param === undefined) continue;
     const eqIdx = param.indexOf("=");
     if (eqIdx === -1) continue;
     const key = param.slice(0, eqIdx).trim().toLowerCase();
@@ -197,19 +202,23 @@ function parseContentType(header: string): {
     if (key === "charset") charset = val;
   }
 
-  return { mediaType, boundary, charset };
+  return {
+    mediaType,
+    ...(boundary !== undefined ? { boundary } : {}),
+    ...(charset !== undefined ? { charset } : {}),
+  };
 }
 
 function parseMultipart(body: string, boundary: string): MimePart[] {
   const delimiter = `--${boundary}`;
-  const closeDelimiter = `--${boundary}--`;
   const parts: MimePart[] = [];
 
   // Split on boundary
   const sections = body.split(delimiter);
 
   for (let i = 1; i < sections.length; i++) {
-    const section = sections[i]!;
+    const section = sections[i];
+    if (section === undefined) continue;
     // Skip the closing delimiter
     if (section.trimStart().startsWith("--")) continue;
 
@@ -230,12 +239,10 @@ function parseMultipart(body: string, boundary: string): MimePart[] {
     const part: MimePart = {
       headers: partHeaders,
       contentType: mediaType,
-      charset,
       encoding,
       body: partBody,
-      parts: subBoundary
-        ? parseMultipart(partBody, subBoundary)
-        : undefined,
+      ...(charset !== undefined ? { charset } : {}),
+      ...(subBoundary ? { parts: parseMultipart(partBody, subBoundary) } : {}),
     };
 
     parts.push(part);
@@ -270,7 +277,7 @@ interface ExtractedParts {
   attachments: ParsedAttachment[];
 }
 
-function extractParts(parts: MimePart[]): ExtractedParts {
+function extractParts(parts: readonly MimePart[]): ExtractedParts {
   let textBody: string | undefined;
   let htmlBody: string | undefined;
   const attachments: ParsedAttachment[] = [];
@@ -298,14 +305,15 @@ function extractParts(parts: MimePart[]): ExtractedParts {
         .get("content-id")
         ?.replace(/^<|>$/g, "");
 
-      attachments.push({
+      const attachment: ParsedAttachment = {
         filename,
         contentType: part.contentType,
         content: decoded,
         size: decoded.byteLength,
-        contentId,
         disposition: disposition.startsWith("inline") ? "inline" : "attachment",
-      });
+        ...(contentId !== undefined ? { contentId } : {}),
+      };
+      attachments.push(attachment);
     } else if (part.contentType === "text/plain" && !textBody) {
       textBody = decodeBody(
         part.body,
@@ -321,7 +329,11 @@ function extractParts(parts: MimePart[]): ExtractedParts {
     }
   }
 
-  return { textBody, htmlBody, attachments };
+  return {
+    attachments,
+    ...(textBody !== undefined ? { textBody } : {}),
+    ...(htmlBody !== undefined ? { htmlBody } : {}),
+  };
 }
 
 function extractFilename(disposition: string): string | undefined {

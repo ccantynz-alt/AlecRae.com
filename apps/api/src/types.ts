@@ -25,16 +25,23 @@ export const SendMessageSchema = z.object({
   cc: z.array(EmailAddressSchema).max(50).optional(),
   bcc: z.array(EmailAddressSchema).max(50).optional(),
   replyTo: EmailAddressSchema.optional(),
-  subject: z.string().max(998),
+  subject: z.string().max(998).optional(),
   text: z.string().optional(),
   html: z.string().optional(),
+  template_id: z.string().max(255).optional(),
+  variables: z.record(z.unknown()).optional(),
+  message_id: z.string().max(255).optional(),
+  tenant: z.string().max(128).optional(),
   attachments: z.array(AttachmentSchema).max(25).optional(),
   headers: z.record(z.string()).optional(),
   tags: z.array(z.string().max(64)).max(10).optional(),
   scheduledAt: z.string().datetime().optional(),
 }).refine(
-  (data) => data.text !== undefined || data.html !== undefined,
-  { message: "Either text or html body is required" },
+  (data) => data.template_id !== undefined || data.text !== undefined || data.html !== undefined,
+  { message: "Provide template_id, text, or html body" },
+).refine(
+  (data) => data.template_id !== undefined || data.subject !== undefined,
+  { message: "Subject is required when not using a template" },
 );
 
 export type SendMessageInput = z.infer<typeof SendMessageSchema>;

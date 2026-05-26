@@ -10,9 +10,8 @@
  * Provides increment/decrement on upload/delete and a weekly reconciliation job.
  */
 
-import { eq, sql, sum } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getDatabase, accounts, attachments, emails } from "@alecrae/db";
-import type { PlanId } from "./billing.js";
 
 // ─── Storage limits per plan (in bytes) ──────────────────────────────────────
 
@@ -24,8 +23,10 @@ export const STORAGE_LIMITS: Record<string, number> = {
   enterprise: 100 * 1024 * 1024 * 1024,  // 100 GB
 };
 
+const FREE_STORAGE_LIMIT = STORAGE_LIMITS["free"] ?? 100 * 1024 * 1024;
+
 function getStorageLimit(planTier: string): number {
-  return STORAGE_LIMITS[planTier] ?? STORAGE_LIMITS["free"]!;
+  return STORAGE_LIMITS[planTier] ?? FREE_STORAGE_LIMIT;
 }
 
 // ─── Quota check result ──────────────────────────────────────────────────────
@@ -59,9 +60,9 @@ export async function checkStorageQuota(
   if (!account) {
     // If no account found (dev mode), allow with free limits
     return {
-      allowed: newFileSize <= STORAGE_LIMITS["free"]!,
+      allowed: newFileSize <= FREE_STORAGE_LIMIT,
       currentUsageBytes: 0,
-      limitBytes: STORAGE_LIMITS["free"]!,
+      limitBytes: FREE_STORAGE_LIMIT,
       planTier: "free",
     };
   }

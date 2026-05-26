@@ -1,0 +1,10 @@
+AlecRae Security Team PGP Key
+-----------------------------
+
+Our active PGP key is published at https://alecrae.com/security.
+Until a long-lived key is registered, please use encrypted transport
+(TLS 1.3) and send reports to security@alecrae.com. We will respond
+with a session-specific public key if you require encrypted reply.
+
+Fingerprint: (provisional — see https://alecrae.com/security for the
+current published fingerprint before sending sensitive material).

@@ -146,7 +146,7 @@ export async function runProgram(
 
   const ctx = runtime.newContext();
   // Pending host promises spawned by `runAI` we must drain before disposal.
-  const pending: Array<Promise<void>> = [];
+  const pending: Promise<void>[] = [];
 
   try {
     installSandboxGlobals(ctx, { email, actions, logs, options, pending });
@@ -256,7 +256,7 @@ interface SandboxState {
   readonly actions: ProgramAction[];
   readonly logs: string[];
   readonly options: RunProgramOptions;
-  readonly pending: Array<Promise<void>>;
+  readonly pending: Promise<void>[];
 }
 
 function installSandboxGlobals(ctx: QuickJSContext, state: SandboxState): void {
@@ -320,7 +320,7 @@ function installSandboxGlobals(ctx: QuickJSContext, state: SandboxState): void {
   ctx.setProp(actionsObj, "removeLabel", removeLabelFn);
   removeLabelFn.dispose();
 
-  const replyFn = ctx.newFunction("reply", (textH) => {
+  const replyFn = ctx.newFunction("reply", (textH: QuickJSHandle) => {
     const text = ctx.getString(textH);
     textH.dispose();
     state.actions.push({ type: "reply", text });
@@ -329,7 +329,7 @@ function installSandboxGlobals(ctx: QuickJSContext, state: SandboxState): void {
   ctx.setProp(actionsObj, "reply", replyFn);
   replyFn.dispose();
 
-  const forwardFn = ctx.newFunction("forward", (toH, noteH) => {
+  const forwardFn = ctx.newFunction("forward", (toH: QuickJSHandle, noteH: QuickJSHandle) => {
     const to = ctx.getString(toH);
     toH.dispose();
     let note: string | undefined;
@@ -343,7 +343,7 @@ function installSandboxGlobals(ctx: QuickJSContext, state: SandboxState): void {
   ctx.setProp(actionsObj, "forward", forwardFn);
   forwardFn.dispose();
 
-  const snoozeFn = ctx.newFunction("snooze", (untilH) => {
+  const snoozeFn = ctx.newFunction("snooze", (untilH: QuickJSHandle) => {
     const until = ctx.getString(untilH);
     untilH.dispose();
     state.actions.push({ type: "snooze", until });
@@ -353,7 +353,7 @@ function installSandboxGlobals(ctx: QuickJSContext, state: SandboxState): void {
   snoozeFn.dispose();
 
   // runAI returns a Promise inside the VM, resolved from a host async hook.
-  const runAIFn = ctx.newFunction("runAI", (promptH) => {
+  const runAIFn = ctx.newFunction("runAI", (promptH: QuickJSHandle) => {
     const prompt = ctx.getString(promptH);
     promptH.dispose();
 

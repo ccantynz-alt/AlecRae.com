@@ -32,7 +32,7 @@ export function parseCommand(line: string): SmtpParsedCommand {
     return { command: "UNKNOWN", argument: "", rawLine: trimmed };
   }
 
-  const rawCmd = match[1]!.toUpperCase();
+  const rawCmd = (match[1] ?? "").toUpperCase();
   const argument = match[2]?.trim() ?? "";
 
   // Validate this is a known command

@@ -233,7 +233,7 @@ export const QuickReplySheet = forwardRef<HTMLDivElement, QuickReplySheetProps>(
                 Close
               </button>
             </Box>
-            <Text variant="body-xs" muted className="truncate">
+            <Text variant="body-sm" muted className="truncate">
               Re: {threadSubject}
             </Text>
           </Box>
@@ -241,16 +241,16 @@ export const QuickReplySheet = forwardRef<HTMLDivElement, QuickReplySheetProps>(
           {/* Thread context preview */}
           {threadContext.length > 0 ? (
             <Box className="px-5 py-3 border-b border-border">
-              <Text variant="body-xs" muted className="font-semibold uppercase tracking-wide mb-2">
+              <Text variant="body-sm" muted className="font-semibold uppercase tracking-wide mb-2">
                 Thread Context
               </Text>
               <Box className="space-y-2 max-h-32 overflow-y-auto">
                 {threadContext.slice(-3).map((msg) => (
                   <Box key={msg.id} className="flex gap-2">
-                    <Text variant="body-xs" className="font-semibold text-content-secondary shrink-0">
+                    <Text variant="body-sm" className="font-semibold text-content-secondary shrink-0">
                       {msg.from}:
                     </Text>
-                    <Text variant="body-xs" muted className="truncate">
+                    <Text variant="body-sm" muted className="truncate">
                       {msg.preview}
                     </Text>
                   </Box>
@@ -261,7 +261,7 @@ export const QuickReplySheet = forwardRef<HTMLDivElement, QuickReplySheetProps>(
 
           {/* AI Suggestions */}
           <Box className="px-5 py-4">
-            <Text variant="body-xs" muted className="font-semibold uppercase tracking-wide mb-3">
+            <Text variant="body-sm" muted className="font-semibold uppercase tracking-wide mb-3">
               AI Suggestions
             </Text>
 
@@ -274,7 +274,7 @@ export const QuickReplySheet = forwardRef<HTMLDivElement, QuickReplySheetProps>(
               </Box>
             ) : suggestionsError ? (
               <Box className="py-3 px-4 rounded-lg bg-status-error/10 border border-status-error/20 mb-3">
-                <Text variant="body-xs" className="text-status-error">
+                <Text variant="body-sm" className="text-status-error">
                   {suggestionsError}
                 </Text>
                 {onRequestSuggestions ? (
@@ -300,11 +300,11 @@ export const QuickReplySheet = forwardRef<HTMLDivElement, QuickReplySheetProps>(
                   >
                     <Box className="flex items-center gap-2 mb-1.5">
                       <span className="text-xs">{LENGTH_ICONS[suggestion.length]}</span>
-                      <Text variant="body-xs" className="font-semibold text-content-secondary">
+                      <Text variant="body-sm" className="font-semibold text-content-secondary">
                         {LENGTH_LABELS[suggestion.length]}
                       </Text>
                       {suggestion.confidence >= 0.8 ? (
-                        <Text variant="body-xs" className="text-status-success text-[10px]">
+                        <Text variant="body-sm" className="text-status-success text-[10px]">
                           High confidence
                         </Text>
                       ) : null}
@@ -347,7 +347,7 @@ export const QuickReplySheet = forwardRef<HTMLDivElement, QuickReplySheetProps>(
 
             {/* Custom reply input */}
             <Box className="border-t border-border pt-4">
-              <Text variant="body-xs" muted className="font-semibold uppercase tracking-wide mb-2">
+              <Text variant="body-sm" muted className="font-semibold uppercase tracking-wide mb-2">
                 Custom Reply
               </Text>
               <form onSubmit={handleSendCustom}>

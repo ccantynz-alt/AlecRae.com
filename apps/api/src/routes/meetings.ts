@@ -101,7 +101,7 @@ async function generateAiSummary(transcriptText: string): Promise<string> {
     }
 
     const body = (await res.json()) as {
-      content?: Array<{ type: string; text?: string }>;
+      content?: { type: string; text?: string }[];
     };
     const text = body.content?.find((b) => b.type === "text")?.text;
     return text ?? extractiveSummary(transcriptText);

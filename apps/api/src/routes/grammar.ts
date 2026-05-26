@@ -37,10 +37,10 @@ grammar.post(
 
     const result = await checkGrammar({
       text: input.text,
-      language: input.language,
       level: input.level,
-      recipientContext: input.recipientContext,
-      threadContext: input.threadContext,
+      ...(input.language !== undefined ? { language: input.language } : {}),
+      ...(input.recipientContext !== undefined ? { recipientContext: input.recipientContext } : {}),
+      ...(input.threadContext !== undefined ? { threadContext: input.threadContext } : {}),
     });
 
     return c.json({ data: result });
@@ -57,9 +57,9 @@ grammar.post(
 
     const result = await checkGrammar({
       text: input.text,
-      language: input.language,
       level: input.level,
-      recipientContext: input.recipientContext,
+      ...(input.language !== undefined ? { language: input.language } : {}),
+      ...(input.recipientContext !== undefined ? { recipientContext: input.recipientContext } : {}),
     });
 
     return c.json({

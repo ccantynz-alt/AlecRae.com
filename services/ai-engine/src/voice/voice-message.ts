@@ -5,7 +5,7 @@
 // accessible transcript output, multi-language auto-detection.
 // =============================================================================
 
-import type { Result, AIEngineError } from "../types.js";
+import type { Result } from "../types.js";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -287,10 +287,14 @@ export async function processVoiceMessage(
   }
 
   // Transcribe
+  const apiKey = options?.openaiApiKey;
   const transcription = await transcribeAudio(
     input.audioData,
     input.mimeType,
-    { language: input.language, apiKey: options?.openaiApiKey },
+    {
+      ...(input.language !== undefined ? { language: input.language } : {}),
+      ...(apiKey !== undefined ? { apiKey } : {}),
+    },
   );
 
   if (!transcription.ok) {

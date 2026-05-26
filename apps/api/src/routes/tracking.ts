@@ -91,7 +91,7 @@ tracking.get("/:emailId/open.gif", async (c) => {
   recordEvent(emailId, "email.opened", {
     userAgent,
     ipAddress: ip,
-  }).catch(() => {});
+  }).catch(() => { /* fire-and-forget */ });
 
   return new Response(TRACKING_PIXEL, {
     headers: {
@@ -134,7 +134,7 @@ tracking.get("/:emailId/click", async (c) => {
     url: targetUrl,
     userAgent,
     ipAddress: ip,
-  }).catch(() => {});
+  }).catch(() => { /* fire-and-forget */ });
 
   return c.redirect(targetUrl, 302);
 });
@@ -166,7 +166,7 @@ tracking.post("/:emailId/unsubscribe", async (c) => {
       c.req.header("X-Forwarded-For")?.split(",")[0]?.trim() ??
       c.req.header("X-Real-IP") ??
       "",
-  }).catch(() => {});
+  }).catch(() => { /* fire-and-forget */ });
 
   return c.text("Unsubscribed", 200);
 });

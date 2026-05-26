@@ -241,6 +241,19 @@ domains.post(
       .where(eq(domainsTable.id, id))
       .limit(1);
 
+    if (!updated) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Domain ${id} not found after verification`,
+            code: "domain_not_found",
+          },
+        },
+        404,
+      );
+    }
+
     const dnsRows = await db
       .select()
       .from(dnsRecordsTable)
@@ -250,16 +263,16 @@ domains.post(
 
     return c.json({
       data: {
-        id: updated!.id,
-        domain: updated!.domain,
-        status: updated!.verificationStatus,
-        spfVerified: updated!.spfVerified,
-        dkimVerified: updated!.dkimVerified,
-        dmarcVerified: updated!.dmarcVerified,
-        returnPathVerified: updated!.returnPathVerified,
-        isActive: updated!.isActive,
-        verifiedAt: updated!.verifiedAt?.toISOString() ?? null,
-        verificationAttempts: updated!.verificationAttempts,
+        id: updated.id,
+        domain: updated.domain,
+        status: updated.verificationStatus,
+        spfVerified: updated.spfVerified,
+        dkimVerified: updated.dkimVerified,
+        dmarcVerified: updated.dmarcVerified,
+        returnPathVerified: updated.returnPathVerified,
+        isActive: updated.isActive,
+        verifiedAt: updated.verifiedAt?.toISOString() ?? null,
+        verificationAttempts: updated.verificationAttempts,
         verification: {
           overall: status.overall,
           spf: status.spf,

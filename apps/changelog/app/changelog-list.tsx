@@ -25,7 +25,7 @@ const TYPE_STYLES: Readonly<Record<ReleaseType, string>> = {
   breaking: "bg-purple-500/15 text-purple-300 border-purple-400/30",
 };
 
-const FILTERS: ReadonlyArray<{ readonly id: ReleaseType | "all"; readonly label: string }> = [
+const FILTERS: readonly { readonly id: ReleaseType | "all"; readonly label: string }[] = [
   { id: "all", label: "All" },
   { id: "feature", label: "Features" },
   { id: "improvement", label: "Improvements" },
@@ -166,13 +166,15 @@ export function ChangelogList({ releases }: { readonly releases: readonly Releas
 
   const newCount = useMemo(() => {
     if (!lastVisitedAt) return 0;
-    return releases.filter((r) => r.date > lastVisitedAt.split("T")[0]!).length;
+    const datePart = lastVisitedAt.split("T")[0] ?? lastVisitedAt;
+    return releases.filter((r) => r.date > datePart).length;
   }, [releases, lastVisitedAt]);
 
   const isNew = useCallback(
     (release: Release): boolean => {
       if (!lastVisitedAt) return false;
-      return release.date > lastVisitedAt.split("T")[0]!;
+      const datePart = lastVisitedAt.split("T")[0] ?? lastVisitedAt;
+      return release.date > datePart;
     },
     [lastVisitedAt],
   );

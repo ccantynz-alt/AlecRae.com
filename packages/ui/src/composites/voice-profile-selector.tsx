@@ -357,7 +357,7 @@ export const VoiceProfileSelector = forwardRef<
       <Box className="flex items-center justify-between">
         <Box className="flex items-center gap-2">
           <VoiceIcon />
-          <Text variant="body" className="font-semibold">
+          <Text variant="body-md" className="font-semibold">
             Voice Profiles
           </Text>
         </Box>

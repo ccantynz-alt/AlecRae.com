@@ -93,7 +93,7 @@ recall.post(
     const token = generateSecureToken();
     const id = generateId();
 
-    const [record] = await db
+    await db
       .insert(recallRecords)
       .values({
         id,
@@ -102,8 +102,7 @@ recall.post(
         token,
         revoked: false,
         viewCount: 0,
-      })
-      .returning();
+      });
 
     const baseUrl = process.env["API_URL"] ?? "https://api.alecrae.com";
 

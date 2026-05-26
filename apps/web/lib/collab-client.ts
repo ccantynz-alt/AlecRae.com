@@ -102,9 +102,7 @@ export class CollabDraft {
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private intentionallyClosed = false;
-  private collaboratorListeners: Array<
-    (collaborators: RemoteCollaborator[]) => void
-  > = [];
+  private collaboratorListeners: ((collaborators: RemoteCollaborator[]) => void)[] = [];
 
   private readonly endpoint: string;
   private readonly baseDelay: number;

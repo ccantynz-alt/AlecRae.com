@@ -25,8 +25,8 @@ interface CacheConfig {
 }
 
 export class DecisionCache {
-  private cache: Map<string, CacheEntry> = new Map();
-  private accessOrder: Map<string, number> = new Map();
+  private cache = new Map<string, CacheEntry>();
+  private accessOrder = new Map<string, number>();
   private stats = {
     hits: 0,
     misses: 0,
@@ -64,7 +64,7 @@ export class DecisionCache {
     // Update access tracking
     entry.hitCount++;
     entry.lastSeen = now;
-    this.accessOrder.set(fingerprint, now);
+    this.accessOrder.set(fingerprint, ++this.accessCounter);
     this.stats.hits++;
 
     return entry;
@@ -107,7 +107,7 @@ export class DecisionCache {
     };
 
     this.cache.set(fingerprint, entry);
-    this.accessOrder.set(fingerprint, now);
+    this.accessOrder.set(fingerprint, ++this.accessCounter);
   }
 
   /**

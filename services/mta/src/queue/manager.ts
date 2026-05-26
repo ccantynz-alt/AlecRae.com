@@ -9,7 +9,8 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { Queue, Worker, QueueEvents, Job, type JobsOptions } from "bullmq";
+import type { Job} from "bullmq";
+import { Queue, Worker, QueueEvents, type JobsOptions } from "bullmq";
 import {
   type QueuedEmail,
   type QueueConfig,
@@ -159,7 +160,11 @@ export class EmailQueueManager {
       const id = email.id || randomUUID();
       const emailWithId: QueuedEmail = { ...email, id };
 
-      const jobOpts: JobsOptions = {
+      // BullMQ Pro supports `group` for rate-limit grouping by domain — if
+      // the runtime lib is the Pro build this is honored; otherwise it's a
+      // harmless extra field. TS JobsOptions (non-Pro) doesn't declare it,
+      // so we widen the type via intersection.
+      const jobOpts: JobsOptions & { group?: { id: string } } = {
         priority: toBullPriority(emailWithId.priority),
         attempts: emailWithId.maxAttempts || this.config.maxRetries,
         backoff: {
@@ -170,7 +175,7 @@ export class EmailQueueManager {
         removeOnFail: false,
         group: {
           id: emailWithId.domain || domainOf(emailWithId.to[0] ?? ""),
-        } as Record<string, unknown>,
+        },
       };
 
       if (delay !== undefined && delay > 0) {

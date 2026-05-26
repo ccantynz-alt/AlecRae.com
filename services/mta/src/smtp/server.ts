@@ -12,7 +12,6 @@ import type {
   SmtpSession,
   SmtpEnvelope,
   SmtpParsedCommand,
-  SmtpState,
 } from "../types.js";
 import {
   parseCommand,
@@ -22,7 +21,7 @@ import {
   SmtpResponses,
   isCommandValidForState,
 } from "./commands.js";
-import { TlsManager } from "../tls/manager.js";
+import type { TlsManager } from "../tls/manager.js";
 
 const DEFAULT_CONFIG: SmtpServerConfig = {
   host: "0.0.0.0",
@@ -81,9 +80,10 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
         reject(error);
       });
 
-      this.server.listen(this.config.port, this.config.host, () => {
+      const srv = this.server;
+      srv.listen(this.config.port, this.config.host, () => {
         this.startedAt = new Date();
-        const addr = this.server!.address() as net.AddressInfo;
+        const addr = srv.address() as net.AddressInfo;
         this.emit("listening", addr);
         resolve(addr);
       });
@@ -396,11 +396,9 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
     const endMarkerLF = "\n.\n"; // tolerate bare LF
 
     let endIndex = buffer.indexOf(endMarkerCRLF);
-    let markerLen = endMarkerCRLF.length;
 
     if (endIndex === -1) {
       endIndex = buffer.indexOf(endMarkerLF);
-      markerLen = endMarkerLF.length;
     }
 
     if (endIndex === -1) {

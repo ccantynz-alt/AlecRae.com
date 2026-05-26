@@ -192,7 +192,7 @@ const LANG_SIGNALS: ReadonlyMap<string, readonly string[]> = new Map([
 function detectLanguage(text: string): string {
   const lower = text.toLowerCase();
   const words = lower.split(/\s+/);
-  const scores: Map<string, number> = new Map();
+  const scores = new Map<string, number>();
 
   for (const [lang, signals] of LANG_SIGNALS) {
     const count = words.filter((w) => signals.includes(w)).length;
@@ -220,22 +220,27 @@ function levenshtein(a: string, b: string): number {
   for (let i = 0; i <= b.length; i++) {
     matrix[i] = [i];
   }
+  const firstRow = matrix[0];
+  if (!firstRow) return 0;
   for (let j = 0; j <= a.length; j++) {
-    matrix[0]![j] = j;
+    firstRow[j] = j;
   }
 
   for (let i = 1; i <= b.length; i++) {
+    const row = matrix[i];
+    const prevRow = matrix[i - 1];
+    if (!row || !prevRow) continue;
     for (let j = 1; j <= a.length; j++) {
       const cost = b.charAt(i - 1) === a.charAt(j - 1) ? 0 : 1;
-      matrix[i]![j] = Math.min(
-        matrix[i - 1]![j]! + 1,
-        matrix[i]![j - 1]! + 1,
-        matrix[i - 1]![j - 1]! + cost,
+      row[j] = Math.min(
+        (prevRow[j] ?? 0) + 1,
+        (row[j - 1] ?? 0) + 1,
+        (prevRow[j - 1] ?? 0) + cost,
       );
     }
   }
 
-  return matrix[b.length]![a.length]!;
+  return matrix[b.length]?.[a.length] ?? 0;
 }
 
 // ─── Word Tokenizer ─────────────────────────────────────────────────────────
@@ -324,7 +329,7 @@ Rules:
     if (!response.ok) return [];
 
     const data = (await response.json()) as {
-      content: Array<{ type: string; text?: string }>;
+      content: { type: string; text?: string }[];
     };
 
     const responseText = data.content
@@ -451,11 +456,11 @@ function mergeSpellIssues(
 export function suggestCorrections(
   word: string,
   language: string,
-  maxSuggestions: number = 3,
+  maxSuggestions = 3,
 ): string[] {
   const dictionary = LANGUAGE_DICTIONARIES.get(language) ?? EN_MISSPELLINGS;
   const lower = word.toLowerCase();
-  const candidates: Array<{ word: string; distance: number }> = [];
+  const candidates: { word: string; distance: number }[] = [];
 
   // Get all correct words from the dictionary values
   for (const corrections of dictionary.values()) {

@@ -213,11 +213,11 @@ export class BlocklistMonitor {
   private readonly blocklists: Blocklist[];
 
   /** IPs and domains being monitored */
-  private readonly monitoredIps: Set<string> = new Set();
-  private readonly monitoredDomains: Set<string> = new Set();
+  private readonly monitoredIps = new Set<string>();
+  private readonly monitoredDomains = new Set<string>();
 
   /** Active alerts keyed by "blocklistId::listedValue" */
-  private readonly activeAlerts: Map<string, BlocklistAlert> = new Map();
+  private readonly activeAlerts = new Map<string, BlocklistAlert>();
 
   /** Full check result history */
   private readonly checkHistory: BlocklistCheckResult[] = [];
@@ -479,7 +479,7 @@ export class BlocklistMonitor {
         blocklist,
         listed: true,
         listedValue: value,
-        returnCode,
+        ...(returnCode !== undefined ? { returnCode } : {}),
         reason,
         checkedAt: new Date(),
       };

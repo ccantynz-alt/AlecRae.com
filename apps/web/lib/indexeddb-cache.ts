@@ -34,8 +34,8 @@ export interface CachedEmail {
   accountId: string;
   threadId: string;
   from: { name: string | null; email: string };
-  to: Array<{ name: string | null; email: string }>;
-  cc: Array<{ name: string | null; email: string }>;
+  to: { name: string | null; email: string }[];
+  cc: { name: string | null; email: string }[];
   subject: string;
   snippet: string;
   textBody: string | null;
@@ -50,7 +50,7 @@ export interface CachedEmail {
   folders: string[];
   labels: string[];
   hasAttachments: boolean;
-  attachments: Array<{ id: string; filename: string; contentType: string; size: number }>;
+  attachments: { id: string; filename: string; contentType: string; size: number }[];
   aiCategory?: string;
   aiPriority?: number;
   snoozedUntil?: number;
@@ -64,7 +64,7 @@ export interface CachedThread {
   lastMessageDate: number;
   messageCount: number;
   unreadCount: number;
-  participants: Array<{ name: string | null; email: string }>;
+  participants: { name: string | null; email: string }[];
   snippet: string;
   isStarred: boolean;
   labels: string[];
@@ -277,8 +277,9 @@ export const emailCache = {
     );
 
     // Apply filters
-    if (options?.folder) {
-      emails = emails.filter((e) => e.folders.includes(options.folder!));
+    const folder = options?.folder;
+    if (folder) {
+      emails = emails.filter((e) => e.folders.includes(folder));
     }
     if (options?.unreadOnly) {
       emails = emails.filter((e) => !e.isRead);
@@ -393,7 +394,7 @@ export const emailCache = {
   },
 
   /** Search cached emails locally */
-  async search(query: string, accountId?: string, limit: number = 50): Promise<CachedEmail[]> {
+  async search(query: string, accountId?: string, limit = 50): Promise<CachedEmail[]> {
     const terms = query.toLowerCase().split(/\s+/).filter((t) => t.length >= 2);
     if (terms.length === 0) return [];
 
@@ -408,7 +409,7 @@ export const emailCache = {
 
       await new Promise<void>((resolve) => {
         request.onsuccess = () => {
-          for (const result of request.result as Array<{ emailId: string }>) {
+          for (const result of request.result as { emailId: string }[]) {
             matchingIds.add(result.emailId);
           }
           resolve();

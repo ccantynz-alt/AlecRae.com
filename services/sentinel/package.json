@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "build": "echo 'Service builds independently \u2014 not part of Vercel web deployment'",
-    "test": "vitest run",
+    "test": "bun test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "clean": "rm -rf dist"

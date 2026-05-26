@@ -10,6 +10,7 @@
  *   <VoiceCloneManager />
  */
 
+import * as React from "react";
 import { useState, useEffect, useCallback } from "react";
 import {
   VoiceProfileSelector,
@@ -67,7 +68,7 @@ const INITIAL_CREATE_FORM: CreateFormState = {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function VoiceCloneManager(): JSX.Element {
+export function VoiceCloneManager(): React.ReactElement {
   const [state, setState] = useState<ManagerState>(INITIAL_STATE);
   const [createForm, setCreateForm] = useState<CreateFormState>(INITIAL_CREATE_FORM);
   const [trainingResult, setTrainingResult] = useState<TrainingResult | null>(null);
@@ -194,7 +195,7 @@ export function VoiceCloneManager(): JSX.Element {
     <Box className="max-w-2xl mx-auto space-y-6">
       {/* Header */}
       <Box className="space-y-1">
-        <Text variant="heading" as="h2">
+        <Text variant="heading-md" as="h2">
           Voice Clone
         </Text>
         <Text variant="body-sm" className="text-content-secondary">
@@ -234,7 +235,7 @@ export function VoiceCloneManager(): JSX.Element {
       {createForm.visible && (
         <Card>
           <CardHeader>
-            <Text variant="body" className="font-semibold">
+            <Text variant="body-md" className="font-semibold">
               Create New Voice Profile
             </Text>
           </CardHeader>
@@ -306,7 +307,7 @@ export function VoiceCloneManager(): JSX.Element {
       {trainingResult && (
         <Card>
           <CardHeader>
-            <Text variant="body" className="font-semibold text-emerald-700 dark:text-emerald-400">
+            <Text variant="body-md" className="font-semibold text-emerald-700 dark:text-emerald-400">
               Training Complete
             </Text>
           </CardHeader>

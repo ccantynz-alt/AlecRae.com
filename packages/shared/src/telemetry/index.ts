@@ -35,7 +35,7 @@ import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
-import { ConsoleSpanExporter, BatchSpanProcessor, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
+import { ConsoleSpanExporter, SimpleSpanProcessor } from "@opentelemetry/sdk-trace-node";
 
 // ─── State ──────────────────────────────────────────────────────────────────
 
@@ -68,7 +68,7 @@ export async function initTelemetry(name: string): Promise<void> {
   serviceName = process.env["OTEL_SERVICE_NAME"] ?? name;
 
   if (!isEnabled()) {
-    console.log(`[telemetry] OpenTelemetry disabled for ${serviceName} (set OTEL_ENABLED=true to enable)`);
+    console.warn(`[telemetry] OpenTelemetry disabled for ${serviceName} (set OTEL_ENABLED=true to enable)`);
     return;
   }
 
@@ -78,7 +78,7 @@ export async function initTelemetry(name: string): Promise<void> {
   }
 
   const endpoint = getEndpoint();
-  console.log(`[telemetry] Initializing OpenTelemetry for ${serviceName} -> ${endpoint}`);
+  console.warn(`[telemetry] Initializing OpenTelemetry for ${serviceName} -> ${endpoint}`);
 
   const resource = new Resource({
     [ATTR_SERVICE_NAME]: serviceName,
@@ -116,7 +116,7 @@ export async function initTelemetry(name: string): Promise<void> {
   // Eagerly create all standard metrics so they are registered
   createStandardMetrics();
 
-  console.log(`[telemetry] OpenTelemetry initialized for ${serviceName}`);
+  console.warn(`[telemetry] OpenTelemetry initialized for ${serviceName}`);
 }
 
 /**
@@ -126,7 +126,7 @@ export async function shutdownTelemetry(): Promise<void> {
   if (!sdk) return;
   try {
     await sdk.shutdown();
-    console.log("[telemetry] OpenTelemetry shut down");
+    console.warn("[telemetry] OpenTelemetry shut down");
   } catch (error) {
     console.error("[telemetry] Error during shutdown:", error);
   }

@@ -50,7 +50,7 @@ export interface SnoozeCalendarProps {
 
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 
-const TIME_SLOTS: ReadonlyArray<{ slot: SnoozeTimeSlot; label: string; hour: number; minute: number }> = [
+const TIME_SLOTS: readonly { slot: SnoozeTimeSlot; label: string; hour: number; minute: number }[] = [
   { slot: "morning", label: "Morning (8:00 AM)", hour: 8, minute: 0 },
   { slot: "noon", label: "Noon (12:00 PM)", hour: 12, minute: 0 },
   { slot: "afternoon", label: "Afternoon (3:00 PM)", hour: 15, minute: 0 },

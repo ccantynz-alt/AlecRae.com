@@ -3,19 +3,33 @@
 import type { JSX } from "react";
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Box, Text, type SidebarSection } from "@alecrae/ui";
+import { Box, Text } from "@alecrae/ui";
 import { AnimatedSidebar, type AnimatedSidebarSection } from "../../components/AnimatedSidebar";
 import { AnimatedPage } from "../../components/AnimatedPage";
 import { FocusModeOverlay, type FocusModeOverlayEmail } from "../../components/FocusModeOverlay";
 import { FocusModeToggle } from "../../components/FocusModeToggle";
 import { useFocusMode } from "../../lib/focus-mode";
 import { authApi } from "../../lib/api";
+import { KeyboardShortcutHelp } from "../../components/KeyboardShortcutHelp";
+import { CommandPalette } from "../../components/CommandPalette";
+import { OfflineBadge } from "../../components/SyncStatusBar";
+import { InstallPrompt } from "../../components/InstallPrompt";
 
 const navigationSections: AnimatedSidebarSection[] = [
   {
     items: [
       { id: "inbox", label: "Inbox", href: "/inbox" },
       { id: "compose", label: "Compose", href: "/compose" },
+      { id: "sent", label: "Sent", href: "/sent" },
+      { id: "drafts", label: "Drafts", href: "/drafts" },
+      { id: "snoozed", label: "Snoozed", href: "/snoozed" },
+    ],
+  },
+  {
+    title: "Tools",
+    items: [
+      { id: "templates", label: "Templates", href: "/templates" },
+      { id: "contacts", label: "Contacts", href: "/contacts" },
     ],
   },
   {
@@ -44,12 +58,10 @@ export default function DashboardLayout({
   const hydrate = useFocusMode((s) => s.hydrate);
   const toggleFocusMode = useFocusMode((s) => s.toggleFocusMode);
 
-  // Hydrate focus mode state from IndexedDB on mount
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
-  // Register Cmd+Shift+F keyboard shortcut for focus mode
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "f") {
@@ -144,9 +156,6 @@ export default function DashboardLayout({
     </Box>
   );
 
-  // Placeholder email list for focus mode overlay.
-  // In production this comes from the inbox store / IndexedDB cache.
-  // The overlay filters them by the active focus criteria.
   const focusModeEmails: FocusModeOverlayEmail[] = [];
 
   return (
@@ -158,17 +167,25 @@ export default function DashboardLayout({
         collapsed={collapsed}
       />
       <Box as="main" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {/* Toolbar bar with focus mode toggle */}
         <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">
+          <OfflineBadge />
+          <Box className="flex-1" />
           <FocusModeToggle />
         </Box>
         <AnimatedPage pageKey={pathname ?? "dashboard"} mode="slide" className="flex flex-col flex-1 min-h-0">
           {children}
         </AnimatedPage>
       </Box>
-
-      {/* Focus Mode Overlay — covers entire screen when active */}
       <FocusModeOverlay emails={focusModeEmails} />
+
+      {/* Keyboard shortcut help — toggle with ? */}
+      <KeyboardShortcutHelp />
+
+      {/* Command palette — Cmd+K */}
+      <CommandPalette />
+
+      {/* PWA install prompt */}
+      <InstallPrompt />
     </Box>
   );
 }

@@ -326,7 +326,7 @@ async function processWebhookJob(job: Job<WebhookJobData>): Promise<void> {
       const text = await response.text();
       responseBody = text.slice(0, 4096);
     } catch {
-      responseBody = null;
+      // leave responseBody as null
     }
 
     // Consider 2xx as success
@@ -342,7 +342,7 @@ async function processWebhookJob(job: Job<WebhookJobData>): Promise<void> {
     id: deliveryId,
     webhookId,
     eventId,
-    statusCode: statusCode != null ? String(statusCode) : null,
+    statusCode: statusCode !== null ? String(statusCode) : null,
     responseBody,
     attemptCount: attemptNumber + 1,
     success,

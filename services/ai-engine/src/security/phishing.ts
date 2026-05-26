@@ -209,7 +209,7 @@ function detectUrlMismatch(input: PhishingInput): PhishingIndicator[] {
     const actualHost = parsed.hostname.toLowerCase();
     const text = (link.text ?? "").trim().toLowerCase();
     if (!text) continue;
-    if (!/^(https?:\/\/)?[a-z0-9.\-]+\.[a-z]{2,}/i.test(text)) continue;
+    if (!/^(https?:\/\/)?[a-z0-9.-]+\.[a-z]{2,}/i.test(text)) continue;
     let textHost: string;
     try {
       textHost = new URL(text.startsWith("http") ? text : `https://${text}`)

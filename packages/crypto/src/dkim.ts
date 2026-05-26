@@ -128,7 +128,7 @@ export function createRotationPlan(
   currentSelector: string,
   domain: string,
   algorithm: DkimAlgorithm = "rsa-sha256",
-  overlapSeconds: number = 86400,
+  overlapSeconds = 86400,
 ): DkimRotationPlan {
   const timestamp = Math.floor(Date.now() / 1000);
   const nextSelector = `${domain.replace(/\./g, "")}-${timestamp}`;

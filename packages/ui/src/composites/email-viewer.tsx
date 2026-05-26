@@ -64,11 +64,11 @@ export const EmailViewer = forwardRef<HTMLDivElement, EmailViewerProps>(function
     <Box ref={ref} className={`flex flex-col h-full ${className}`} {...props}>
       <EmailViewerHeader email={email} />
       <EmailViewerActions
-        onReply={onReply}
-        onReplyAll={onReplyAll}
-        onForward={onForward}
-        onArchive={onArchive}
-        onDelete={onDelete}
+        {...(onReply ? { onReply } : {})}
+        {...(onReplyAll ? { onReplyAll } : {})}
+        {...(onForward ? { onForward } : {})}
+        {...(onArchive ? { onArchive } : {})}
+        {...(onDelete ? { onDelete } : {})}
       />
       <EmailViewerBody parts={email.bodyParts} />
       {email.attachments && email.attachments.length > 0 && (

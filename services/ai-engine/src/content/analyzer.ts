@@ -16,7 +16,6 @@ import type {
   ReadabilityResult,
   NamedEntity,
   Result,
-  AIEngineError,
 } from '../types.js';
 
 // ---------------------------------------------------------------------------
@@ -59,7 +58,7 @@ function detectLanguage(text: string): LanguageDetection {
 
   scores.sort((a, b) => b.score - a.score);
 
-  const primary = scores[0]!;
+  const primary = scores[0] ?? { language: 'en', score: 0 };
   const maxPossibleScore = 1.0;
   const confidence = Math.min(1, primary.score / (maxPossibleScore * 0.3));
 
@@ -208,7 +207,7 @@ function classifyTopics(text: string): TopicClassification[] {
   return topicScores.slice(0, 3).map((ts) => ({
     topic: ts.topic.name,
     confidence: Math.min(1, ts.score / Math.max(maxScore, 1)),
-    subtopics: ts.topic.subtopics,
+    ...(ts.topic.subtopics !== undefined ? { subtopics: ts.topic.subtopics } : {}),
   }));
 }
 
@@ -253,8 +252,8 @@ function analyzeSentiment(text: string): SentimentResult {
   let isNegated = false;
   let intensifier = 1;
 
-  for (let i = 0; i < words.length; i++) {
-    const word = words[i]!;
+  for (const [i, word] of words.entries()) {
+    if (!word) continue;
 
     if (NEGATION_WORDS.has(word)) {
       isNegated = true;
@@ -501,7 +500,7 @@ function countSyllables(word: string): number {
   // Adjust for silent 'e'
   if (clean.endsWith('e') && count > 1) count--;
   // Adjust for '-le' ending
-  if (clean.endsWith('le') && clean.length > 2 && !vowels.includes(clean[clean.length - 3]!)) count++;
+  if (clean.endsWith('le') && clean.length > 2 && !vowels.includes(clean[clean.length - 3] ?? '')) count++;
 
   return Math.max(1, count);
 }

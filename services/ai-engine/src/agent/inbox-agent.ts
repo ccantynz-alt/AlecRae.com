@@ -368,7 +368,7 @@ export class InboxAgent {
   async draftReplies(
     emails: AgentEmail[],
     voiceProfile?: UserVoiceProfile,
-    morningHour: number = 8,
+    morningHour = 8,
   ): Promise<DraftedReply[]> {
     const drafts: DraftedReply[] = [];
     for (const email of emails) {

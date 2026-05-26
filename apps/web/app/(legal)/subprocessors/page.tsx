@@ -232,7 +232,7 @@ export default function SubprocessorsPage() {
               <Text as="span" className="font-semibold text-content">Objection Window.</Text>{" "}
               You must submit your objection in writing within 30 calendar days of
               receiving the change notification. Objections must be sent to
-              dpa@alecrae.dev and must include a detailed explanation of the specific,
+              dpa@alecrae.com and must include a detailed explanation of the specific,
               reasonable grounds for the objection based on data protection concerns.
             </Text>
           </Box>
@@ -329,7 +329,7 @@ export default function SubprocessorsPage() {
         </Text>
         <Text variant="body-sm" muted>
           For questions about our Subprocessors or data processing practices,
-          contact our Data Protection Officer at dpo@alecrae.dev.
+          contact our Data Protection Officer at dpo@alecrae.com.
         </Text>
       </Box>
     </Box>

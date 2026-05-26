@@ -3,7 +3,6 @@ import {
   text,
   timestamp,
   pgEnum,
-  integer,
   jsonb,
   index,
   boolean,

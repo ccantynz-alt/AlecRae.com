@@ -34,12 +34,12 @@ export interface EmbedResult {
 }
 
 interface VoyageResponse {
-  data: Array<{ embedding: number[]; index: number }>;
+  data: { embedding: number[]; index: number }[];
   model: string;
 }
 
 interface OpenAIResponse {
-  data: Array<{ embedding: number[]; index: number }>;
+  data: { embedding: number[]; index: number }[];
   model: string;
 }
 

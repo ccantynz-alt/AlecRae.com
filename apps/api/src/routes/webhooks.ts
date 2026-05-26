@@ -193,16 +193,29 @@ webhooks.patch(
       .where(eq(webhooksTable.id, id))
       .limit(1);
 
+    if (!updated) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Webhook ${id} not found after update`,
+            code: "webhook_not_found",
+          },
+        },
+        404,
+      );
+    }
+
     return c.json({
       data: {
-        id: updated!.id,
-        url: updated!.url,
-        events: updated!.eventTypes,
+        id: updated.id,
+        url: updated.url,
+        events: updated.eventTypes,
         secret: "whsec_••••••••",
-        description: updated!.description,
-        active: updated!.isActive,
-        createdAt: updated!.createdAt.toISOString(),
-        updatedAt: updated!.updatedAt.toISOString(),
+        description: updated.description,
+        active: updated.isActive,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
       },
     });
   },
@@ -354,7 +367,7 @@ webhooks.get(
     const data = rows.map((r) => ({
       id: r.id,
       eventId: r.eventId,
-      statusCode: r.statusCode != null ? parseInt(r.statusCode, 10) : null,
+      statusCode: r.statusCode !== null && r.statusCode !== undefined ? parseInt(r.statusCode, 10) : null,
       responseBody: r.responseBody,
       attemptCount: r.attemptCount,
       success: r.success,

@@ -1,4 +1,4 @@
-import { forwardRef, type ComponentPropsWithoutRef, type ElementType, type ReactNode } from "react";
+import { createElement, forwardRef, type ComponentPropsWithoutRef, type ElementType, type ReactNode } from "react";
 
 const variantStyles = {
   "display-lg": "text-display-lg font-bold tracking-tight",
@@ -30,13 +30,13 @@ const variantElements: Record<TextVariant, ElementType> = {
 
 export type TextVariant = keyof typeof variantStyles;
 
-type TextOwnProps<T extends ElementType = "p"> = {
+interface TextOwnProps<T extends ElementType = "p"> {
   as?: T;
   variant?: TextVariant;
   children?: ReactNode;
   className?: string;
   muted?: boolean;
-};
+}
 
 type TextProps<T extends ElementType = "p"> = TextOwnProps<T> &
   Omit<ComponentPropsWithoutRef<T>, keyof TextOwnProps<T>>;
@@ -49,18 +49,17 @@ export const Text: TextComponent = forwardRef(function Text<T extends ElementTyp
   { as, variant = "body-md", className = "", muted, children, ...props }: TextProps<T>,
   ref: React.Ref<Element>
 ) {
-  const Component = as || variantElements[variant] || "p";
+  const Component = (as || variantElements[variant] || "p") as ElementType;
   const baseStyles = variantStyles[variant];
   const mutedStyle = muted ? "text-content-secondary" : "";
-
-  return (
-    <Component
-      ref={ref}
-      className={`${baseStyles} ${mutedStyle} ${className}`.trim()}
-      {...props}
-    >
-      {children}
-    </Component>
+  return createElement(
+    Component,
+    {
+      ref,
+      className: `${baseStyles} ${mutedStyle} ${className}`.trim(),
+      ...props,
+    } as Record<string, unknown>,
+    children,
   );
 }) as TextComponent;
 

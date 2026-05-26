@@ -68,13 +68,14 @@ export function encryptContent(
     const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
     const authTag = cipher.getAuthTag();
 
-    return ok({
-      algorithm: "aes-256-gcm" as const,
+    const payload: EncryptedPayload = {
+      algorithm: "aes-256-gcm",
       iv: iv.toString("base64"),
       authTag: authTag.toString("base64"),
       ciphertext: encrypted.toString("base64"),
-      aadId: aad ? aad.toString("utf8") : undefined,
-    });
+      ...(aad ? { aadId: aad.toString("utf8") } : {}),
+    };
+    return ok(payload);
   } catch (error) {
     return err(
       error instanceof Error

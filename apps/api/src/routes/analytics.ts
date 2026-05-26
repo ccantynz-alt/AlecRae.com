@@ -32,7 +32,7 @@ function generateBuckets(from: Date, to: Date, granularity: string): Date[] {
     month: () => current.setMonth(current.getMonth() + 1),
   };
 
-  const increment = incrementMap[granularity] ?? incrementMap["day"]!;
+  const increment = incrementMap[granularity] ?? incrementMap["day"] ?? (() => current.setDate(current.getDate() + 1));
 
   while (current <= to) {
     buckets.push(new Date(current));

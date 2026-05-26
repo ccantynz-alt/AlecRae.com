@@ -39,11 +39,11 @@ dictation.post(
 
     const result = await processDictation({
       transcription: input.transcription,
-      sourceLanguage: input.sourceLanguage,
-      targetLanguage: input.targetLanguage,
       accountId: auth.accountId,
       mode: input.mode,
-      replyContext: input.replyContext,
+      ...(input.sourceLanguage !== undefined ? { sourceLanguage: input.sourceLanguage } : {}),
+      ...(input.targetLanguage !== undefined ? { targetLanguage: input.targetLanguage } : {}),
+      ...(input.replyContext !== undefined ? { replyContext: input.replyContext } : {}),
     });
 
     return c.json({ data: result });
@@ -102,7 +102,6 @@ dictation.post(
       });
 
       if (!response.ok) {
-        const errText = await response.text();
         return c.json(
           {
             error: {
@@ -117,7 +116,7 @@ dictation.post(
 
       const result = (await response.json()) as { text: string };
       return c.json({ data: { text: result.text } });
-    } catch (err) {
+    } catch {
       return c.json(
         {
           error: {

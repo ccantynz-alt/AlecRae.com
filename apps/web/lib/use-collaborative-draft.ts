@@ -139,7 +139,6 @@ export function useCollaborativeDraft(
       clientRef.current = null;
     };
     // We intentionally only create once on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-connect when all params are available.
@@ -161,7 +160,6 @@ export function useCollaborativeDraft(
       client.disconnect();
     };
     // Re-connect if draftId or token changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConnect, draftId, token, sessionId]);
 
   const connect = useCallback(() => {
