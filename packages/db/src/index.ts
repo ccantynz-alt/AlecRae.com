@@ -691,6 +691,20 @@ export {
   knowledgeExtractionsRelations,
 } from "./schema/knowledge-graph.js";
 
+// Schema - SSO Config (SAML config, audit logs, team invitations, organizations)
+export {
+  ssoConfigs,
+  auditLogs,
+  teamInvitations,
+  organizations,
+  invitationStatusEnum,
+  ssoConfigsRelations,
+  auditLogsRelations,
+  teamInvitationsRelations,
+  organizationsRelations,
+} from "./schema/sso-config.js";
+export type { OrganizationSettings } from "./schema/sso-config.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -1050,3 +1064,15 @@ export type KnowledgeRelationship = InferSelectModel<typeof knowledgeRelationshi
 export type NewKnowledgeRelationship = InferInsertModel<typeof knowledgeRelationships>;
 export type KnowledgeExtraction = InferSelectModel<typeof knowledgeExtractions>;
 export type NewKnowledgeExtraction = InferInsertModel<typeof knowledgeExtractions>;
+
+// SSO Config types
+import type { ssoConfigs, auditLogs, teamInvitations, organizations } from "./schema/sso-config.js";
+
+export type SsoConfig = InferSelectModel<typeof ssoConfigs>;
+export type NewSsoConfig = InferInsertModel<typeof ssoConfigs>;
+export type AuditLog = InferSelectModel<typeof auditLogs>;
+export type NewAuditLog = InferInsertModel<typeof auditLogs>;
+export type TeamInvitation = InferSelectModel<typeof teamInvitations>;
+export type NewTeamInvitation = InferInsertModel<typeof teamInvitations>;
+export type Organization = InferSelectModel<typeof organizations>;
+export type NewOrganization = InferInsertModel<typeof organizations>;
