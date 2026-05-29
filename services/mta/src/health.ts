@@ -42,7 +42,7 @@ export interface HealthReport {
   readonly status: "ok" | "degraded" | "fail";
   readonly version: string;
   readonly uptimeSeconds: number;
-  readonly checks: Array<{ name: string } & HealthResult>;
+  readonly checks: ({ name: string } & HealthResult)[];
   readonly timestamp: string;
 }
 
@@ -102,7 +102,7 @@ async function runCheck(
  *   - ok       = every check passed
  */
 function aggregateStatus(
-  results: ReadonlyArray<{ name: string } & HealthResult>,
+  results: readonly ({ name: string } & HealthResult)[],
   checks: readonly HealthCheck[],
 ): "ok" | "degraded" | "fail" {
   const byName = new Map(checks.map((c) => [c.name, c]));

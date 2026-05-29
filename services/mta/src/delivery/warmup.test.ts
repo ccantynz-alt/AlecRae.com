@@ -166,7 +166,7 @@ describe("shouldAllowSend", () => {
   test("total-daily cap blocks even when a per-ISP bucket still has room", () => {
     // Day 1 total cap = 175. Fill everything except gmail to just hit total.
     // outlook=50, yahoo=25, apple=25, other=25 = 125; plus gmail=50 = 175.
-    const state = makeState({
+    const _state = makeState({
       sentTodayByIsp: { gmail: 50, outlook: 50, yahoo: 25, apple: 25, other: 25 },
     });
     // Gmail is already at cap — try a different bucket to hit total-first logic.

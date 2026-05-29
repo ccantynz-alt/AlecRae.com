@@ -65,10 +65,10 @@ export interface Meter {
  */
 
 const NOOP_SPAN: Span = Object.freeze({
-  setAttribute(_key: string, _value: string | number | boolean): void {},
-  setStatus(_status: "ok" | "error", _message?: string): void {},
-  recordException(_err: Error): void {},
-  end(): void {},
+  setAttribute(_key: string, _value: string | number | boolean): void { /* no-op */ },
+  setStatus(_status: "ok" | "error", _message?: string): void { /* no-op */ },
+  recordException(_err: Error): void { /* no-op */ },
+  end(): void { /* no-op */ },
 });
 
 const noopTracer: Tracer = {
@@ -81,15 +81,15 @@ const noopTracer: Tracer = {
 };
 
 const NOOP_COUNTER: Counter = Object.freeze({
-  add(_value: number, _attrs?: Record<string, string>): void {},
+  add(_value: number, _attrs?: Record<string, string>): void { /* no-op */ },
 });
 
 const NOOP_HISTOGRAM: Histogram = Object.freeze({
-  record(_value: number, _attrs?: Record<string, string>): void {},
+  record(_value: number, _attrs?: Record<string, string>): void { /* no-op */ },
 });
 
 const NOOP_GAUGE: Gauge = Object.freeze({
-  record(_value: number, _attrs?: Record<string, string>): void {},
+  record(_value: number, _attrs?: Record<string, string>): void { /* no-op */ },
 });
 
 const noopMeter: Meter = {
