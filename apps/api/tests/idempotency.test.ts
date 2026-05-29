@@ -9,7 +9,7 @@
  *  - Redis down  (graceful degradation — request proceeds without caching)
  */
 
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach } from "vitest";
 import { Hono } from "hono";
 
 // ─── In-memory Redis mock ──────────────────────────────────────────────────

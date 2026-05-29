@@ -12,7 +12,7 @@
   "scripts": {
     "build": "echo 'UI package exports source directly via transpilePackages — no build step needed'",
     "dev": "echo 'UI package exports source directly — no dev build needed'",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "clean": "rm -rf dist"

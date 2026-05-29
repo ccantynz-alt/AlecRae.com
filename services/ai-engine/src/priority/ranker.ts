@@ -344,11 +344,12 @@ export class PriorityRanker {
       }
     }
 
-    // Direct email (vs CC/BCC) gets a small boost
+    // Direct email (vs CC/BCC) gets a small boost — not for mass emails
+    const isMassEmail = email.headers.to.length > 5;
     const isDirectRecipient = email.headers.to.some(
       (addr) => addr.address.toLowerCase() !== senderAddress,
     );
-    if (isDirectRecipient && !email.headers.cc?.length) {
+    if (isDirectRecipient && !email.headers.cc?.length && !isMassEmail) {
       score += 0.05;
       reasons.push('Direct recipient (no CC)');
     }
