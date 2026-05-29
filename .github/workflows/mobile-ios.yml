@@ -1,0 +1,90 @@
+name: Mobile — iOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-ios.yml'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+      submit:
+        description: 'Submit to TestFlight after build?'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: mobile-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: EAS Build — iOS (${{ inputs.profile || 'preview' }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: npm install
+
+      - name: EAS Build (iOS)
+        working-directory: apps/mobile
+        run: |
+          eas build \
+            --platform ios \
+            --profile ${{ inputs.profile || 'preview' }} \
+            --non-interactive \
+            --output ../../../build-ios.ipa
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  submit:
+    name: Submit — TestFlight
+    needs: build
+    # Auto-submit on main push with production profile, or when manually requested
+    if: |
+      (github.ref == 'refs/heads/main' && inputs.profile == 'production') ||
+      inputs.submit == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Submit to TestFlight
+        working-directory: apps/mobile
+        run: eas submit --platform ios --latest --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          # Apple credentials — set these in GitHub → Settings → Secrets and variables → Actions
+          # EXPO_APPLE_ID:                  your Apple ID email
+          # EXPO_APPLE_APP_SPECIFIC_PASSWORD: app-specific password from appleid.apple.com
+          EXPO_APPLE_ID: ${{ secrets.APPLE_ID }}
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}

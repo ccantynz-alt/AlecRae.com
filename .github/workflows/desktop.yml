@@ -1,0 +1,163 @@
+name: Desktop — Electron (Mac + Windows + Linux)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish release to GitHub?'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-mac:
+    name: Build — macOS (arm64 + x64)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package.json
+
+      - name: Install dependencies
+        working-directory: apps/desktop
+        run: npm install
+
+      - name: Build (macOS)
+        working-directory: apps/desktop
+        run: npm run dist:mac
+        env:
+          # Code signing + notarization — set in GitHub Secrets
+          # APPLE_ID:                   your Apple ID email
+          # APPLE_APP_SPECIFIC_PASSWORD: app-specific password from appleid.apple.com
+          # APPLE_TEAM_ID:              10-char team ID from developer.apple.com
+          # CSC_LINK:                   base64-encoded .p12 signing cert
+          # CSC_KEY_PASSWORD:           .p12 cert password
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.MAC_SIGNING_CERT }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_SIGNING_CERT_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mac
+          path: |
+            apps/desktop/out/*.dmg
+            apps/desktop/out/*.zip
+          retention-days: 7
+
+  build-windows:
+    name: Build — Windows (x64 + arm64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package.json
+
+      - name: Install dependencies
+        working-directory: apps/desktop
+        run: npm install
+
+      - name: Build (Windows)
+        working-directory: apps/desktop
+        run: npm run dist:win
+        env:
+          # Code signing — set in GitHub Secrets
+          # WIN_CSC_LINK:         base64-encoded .pfx signing cert
+          # WIN_CSC_KEY_PASSWORD: .pfx cert password
+          WIN_CSC_LINK: ${{ secrets.WIN_SIGNING_CERT }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_SIGNING_CERT_PASSWORD }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          path: |
+            apps/desktop/out/*.exe
+            apps/desktop/out/*.msi
+          retention-days: 7
+
+  build-linux:
+    name: Build — Linux (x64 + arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package.json
+
+      - name: Install dependencies
+        working-directory: apps/desktop
+        run: npm install
+
+      - name: Install Linux build dependencies
+        run: sudo apt-get install -y rpm
+
+      - name: Build (Linux)
+        working-directory: apps/desktop
+        run: npm run dist:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: |
+            apps/desktop/out/*.AppImage
+            apps/desktop/out/*.deb
+            apps/desktop/out/*.rpm
+          retention-days: 7
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-mac, build-windows, build-linux]
+    if: github.ref == 'refs/heads/main' && inputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ github.run_number }}
+          name: AlecRae Desktop v${{ github.run_number }}
+          draft: true
+          files: dist/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
