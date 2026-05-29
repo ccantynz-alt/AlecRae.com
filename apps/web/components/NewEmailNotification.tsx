@@ -50,9 +50,9 @@ export function useNewEmailNotifications({
         body: `${email.subject}\n${email.preview.slice(0, 100)}`,
         icon: "/icon-192.png",
         tag: `email-${email.id}`,
-        renotify: true,
         silent: false,
-      });
+        ...({ renotify: true } as Record<string, unknown>),
+      } as NotificationOptions);
 
       notification.onclick = (): void => {
         window.focus();

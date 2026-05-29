@@ -244,7 +244,6 @@ function ComposePage(): React.ReactNode {
             }}
             onApplySuggestion={() => { /* no-op */ }}
             onRequestCalendarSlots={handleRequestCalendarSlots}
-            onChange={checkGrammar}
             className="flex-1"
           />
         </motion.div>

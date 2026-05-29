@@ -2,7 +2,6 @@ import {
   pgTable,
   text,
   timestamp,
-  boolean,
   pgEnum,
   index,
 } from "drizzle-orm/pg-core";

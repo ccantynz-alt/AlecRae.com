@@ -181,16 +181,16 @@ WarningPill.displayName = "WarningPill";
 
 // ─── Client-side warning detection ──────────────────────────────────────────
 
-const ATTACHMENT_PATTERNS: RegExp =
+const ATTACHMENT_PATTERNS =
   /\b(attach(ed|ment|ing|ments)?|enclos(ed|ing|ure)|find attached|see attached|attached (is|are|file|document|here))\b/i;
 
-const GREETING_PATTERNS: RegExp =
+const GREETING_PATTERNS =
   /^(hi|hello|hey|dear|good\s+(morning|afternoon|evening)|greetings|to whom)\b/im;
 
-const SIGNOFF_PATTERNS: RegExp =
+const SIGNOFF_PATTERNS =
   /(regards|sincerely|cheers|thanks|thank you|best|kind regards|warm regards|yours|respectfully|take care)\s*[,.]?\s*$/im;
 
-const SENSITIVE_PATTERNS: RegExp =
+const SENSITIVE_PATTERNS =
   /\b(ssn|social security|credit card|password|bank account|routing number|account number|passport|confidential)\b/i;
 
 export function detectEmailWarnings(params: {
