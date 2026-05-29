@@ -160,7 +160,7 @@ export default function InboxPage(): React.ReactNode {
   // S7: Email explainer panel
   const [explainerOpen, setExplainerOpen] = useState(false);
   // Whether to show full email content (toggled from newsletter summary)
-  const [showFullEmail, setShowFullEmail] = useState(true);
+  const [_showFullEmail, _setShowFullEmail] = useState(true);
   const [quickReplyOpen, setQuickReplyOpen] = useState(false);
   const [userEmail, setUserEmail] = useState("");
   const [undoActions, setUndoActions] = useState<UndoAction[]>([]);
@@ -212,7 +212,7 @@ export default function InboxPage(): React.ReactNode {
         return [...prev, item].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       });
     });
-    messagesApi.archive(id).catch(() => {});
+    messagesApi.archive(id).catch(() => { /* no-op */ });
   }, [emailItems, selectedEmailId, addUndoAction]);
 
   const deleteWithUndo = useCallback((id: string) => {
@@ -231,7 +231,7 @@ export default function InboxPage(): React.ReactNode {
         return [...prev, item].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       });
     });
-    messagesApi.delete(id).catch(() => {});
+    messagesApi.delete(id).catch(() => { /* no-op */ });
   }, [emailItems, selectedEmailId, addUndoAction]);
 
   const snoozeWithUndo = useCallback((id: string, until: Date) => {
@@ -249,12 +249,12 @@ export default function InboxPage(): React.ReactNode {
         if (prev.some((e) => e.id === item.id)) return prev;
         return [...prev, item].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       });
-      snoozeApi.unsnooze(id).catch(() => {});
+      snoozeApi.unsnooze(id).catch(() => { /* no-op */ });
     });
-    snoozeApi.snooze(id, until.toISOString()).catch(() => {});
+    snoozeApi.snooze(id, until.toISOString()).catch(() => { /* no-op */ });
   }, [emailItems, selectedEmailId, addUndoAction]);
 
-  const toggleSelect = useCallback((id: string) => {
+  const _toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -280,7 +280,7 @@ export default function InboxPage(): React.ReactNode {
         return [...prev, ...restored].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       });
     });
-    for (const id of ids) messagesApi.archive(id).catch(() => {});
+    for (const id of ids) messagesApi.archive(id).catch(() => { /* no-op */ });
   }, [selectedIds, emailItems, selectedEmailId, addUndoAction]);
 
   const batchDelete = useCallback(() => {
@@ -300,7 +300,7 @@ export default function InboxPage(): React.ReactNode {
         return [...prev, ...restored].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       });
     });
-    for (const id of ids) messagesApi.delete(id).catch(() => {});
+    for (const id of ids) messagesApi.delete(id).catch(() => { /* no-op */ });
   }, [selectedIds, emailItems, selectedEmailId, addUndoAction]);
 
   const batchMarkRead = useCallback(() => {
@@ -317,7 +317,7 @@ export default function InboxPage(): React.ReactNode {
     const ids = Array.from(selectedIds);
     setEmailItems((prev) => prev.map((e) => selectedIds.has(e.id) ? { ...e, starred: true } : e));
     setSelectedIds(new Set());
-    for (const id of ids) messagesApi.star(id, true).catch(() => {});
+    for (const id of ids) messagesApi.star(id, true).catch(() => { /* no-op */ });
   }, [selectedIds]);
 
   const selectedIndexRef = useRef(0);
@@ -329,15 +329,15 @@ export default function InboxPage(): React.ReactNode {
 
   useEffect(() => {
     const shortcuts = createDefaultShortcuts({
-      openCommandPalette: () => {},
+      openCommandPalette: () => { /* no-op */ },
       compose: () => router.push("/compose"),
       search: () => {
         const input = document.querySelector<HTMLInputElement>('input[type="search"], input[placeholder*="Search"]');
         input?.focus();
       },
       goToInbox: () => router.push("/inbox"),
-      goToSent: () => {},
-      goToDrafts: () => {},
+      goToSent: () => { /* no-op */ },
+      goToDrafts: () => { /* no-op */ },
       goToSettings: () => router.push("/settings"),
       nextEmail: () => {
         const next = Math.min(selectedIndexRef.current + 1, filteredEmails.length - 1);
@@ -349,7 +349,7 @@ export default function InboxPage(): React.ReactNode {
         const item = filteredEmails[prev];
         if (item) { setSelectedEmailId(item.id); selectedIndexRef.current = prev; }
       },
-      openEmail: () => {},
+      openEmail: () => { /* no-op */ },
       archiveEmail: () => {
         if (selectedEmailId) {
           const next = filteredEmails[selectedIndexRef.current + 1] ?? filteredEmails[selectedIndexRef.current - 1];

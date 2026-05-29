@@ -39,7 +39,7 @@ function ComposePage(): React.ReactNode {
   const grammarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCheckedRef = useRef("");
 
-  const checkGrammar = useCallback((text: string) => {
+  const _checkGrammar = useCallback((text: string) => {
     const plainText = text.replace(/<[^>]*>/g, "").trim();
     if (!plainText || plainText.length < 20 || plainText === lastCheckedRef.current) return;
 
