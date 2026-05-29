@@ -16,7 +16,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, gte, lte, desc, lt } from "drizzle-orm";
+import { eq, and, gte, lte, lt } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -155,7 +155,7 @@ calendarEventsRouter.get(
         })),
         aiAgenda: todayEvents.length > 0
           ? `You have ${todayEvents.length} event${todayEvents.length > 1 ? "s" : ""} today. ` +
-            `Your first event "${todayEvents[0]!.title}" starts at ${todayEvents[0]!.startAt.toLocaleTimeString()}.`
+            `Your first event "${todayEvents[0]?.title ?? ""}" starts at ${todayEvents[0]?.startAt.toLocaleTimeString() ?? ""}.`
           : "No events scheduled for today. Great time for focused work!",
       },
     });
@@ -321,9 +321,9 @@ calendarEventsRouter.post(
       startAt: new Date(input.startAt),
       endAt: new Date(input.endAt),
       allDay: input.allDay ?? false,
-      recurrence: input.recurrence ?? null,
-      attendees: input.attendees ?? [],
-      reminders: input.reminders ?? [],
+      recurrence: (input.recurrence as unknown as null) ?? null,
+      attendees: (input.attendees as unknown as []) ?? [],
+      reminders: (input.reminders as unknown as []) ?? [],
       color: input.color ?? null,
       calendarId: input.calendarId ?? null,
       videoLink: input.videoLink ?? null,
@@ -379,7 +379,7 @@ calendarEventsRouter.get(
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor = hasMore && page.length > 0
-      ? page[page.length - 1]!.createdAt.toISOString()
+      ? page[page.length - 1]?.createdAt.toISOString()
       : null;
 
     return c.json({
@@ -526,7 +526,7 @@ calendarEventsRouter.get(
       return c.json({ error: { type: "not_found", message: "Event not found", code: "event_not_found" } }, 404);
     }
 
-    const attendees = (event.attendees ?? []) as Array<{ email: string; name?: string; status: string }>;
+    const attendees = (event.attendees ?? []) as { email: string; name?: string; status: string }[];
 
     return c.json({
       data: {

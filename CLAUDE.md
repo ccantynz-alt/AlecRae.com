@@ -579,9 +579,9 @@ After writing the code:
 - [x] Knowledge Graph (entity extraction, relationship mapping, graph visualization)
 
 ### Total: 36/36 original + 7 bonus + 20 expansion + 9 platform + 6 intelligence + 6 deep AI = 84 features ✅ ALL COMPLETE
-### API Routes: 90 route files, 290+ endpoints
-### DB Schemas: 61 schema files
-### Code: ~62K lines of TypeScript
+### API Routes: 91 route files, 310+ endpoints
+### DB Schemas: 62 schema files
+### Code: ~64K lines of TypeScript
 
 ---
 
@@ -603,20 +603,9 @@ After writing the code:
 | 12 | Full rebrand from Vienna/48co/@emailed to AlecRae/alecrae.com/@alecrae | HIGH | 2026-04-12 | DONE 2026-04-12 — all files updated |
 | 13 | No error boundaries in web app (error.tsx / not-found.tsx) | MEDIUM | 2026-04-12 | FIXED 2026-04-12 — root + dashboard error boundaries + 404 page |
 | 14 | No sitemap.xml or robots.txt for SEO | LOW | 2026-04-12 | FIXED 2026-04-12 — Next.js route-based sitemap.ts + robots.ts |
-| 15 | Craig couldn't actually see an admin page on iPad — admin sub-app not deployed | HIGH | 2026-04-16 | FIXED 2026-04-16 — added /admin preview route to apps/web (KPIs, recent activity, launch gates, section nav). Brand-correct (ivory + Italianno wordmark), robots-disallowed, builds clean (23/23 static pages). Standalone admin.alecrae.com still ships from apps/admin once DNS cuts over. |
-| 16 | Landing page (page.tsx) had two versions concatenated — merge conflict artifact | HIGH | 2026-04-24 | FIXED 2026-04-24 — rewrote as clean server component (nav + hero + features + pricing + CTA + footer). 29/29 static pages build clean. |
-| 17 | Admin /admin page used static illustrative data only | MEDIUM | 2026-04-24 | FIXED 2026-04-24 — rebuilt as full client component with API health polling, system services grid, launch gates progress bar, plans + competitive stack tabs. Fetches live from API when available, degrades gracefully when offline. |
-| 18 | next.config.ts used experimental.typedRoutes — deprecated in Next.js 15 | LOW | 2026-04-24 | FIXED 2026-04-24 — moved to top-level typedRoutes in both apps/web and apps/admin |
-| 19 | GateTest CI gate was advisory (continue-on-error: true) | MEDIUM | 2026-04-24 | FIXED 2026-04-24 — now a hard gate, failures block merges |
-| 20 | E2E test suite was a 2-test skeleton | LOW | 2026-04-24 | FIXED 2026-04-24 — expanded to 20 tests across 6 describe blocks (landing, login, auth guard, health, robots, sitemap) |
-| 21 | No cookie/consent banner — GDPR/ePrivacy/CCPA exposure | CRITICAL | 2026-04-16 | FIXED 2026-04-16 — typed consent lib + banner, GPC/DNT auto-respect, 11 tests |
-| 22 | No /.well-known/security.txt (RFC 9116) or responsible-disclosure policy | HIGH | 2026-04-16 | FIXED 2026-04-16 — security.txt + SECURITY.md + /security page with scope + safe harbour |
-| 23 | Register page had no affirmative age gate (GDPR Art 7, COPPA, UK Children's Code) | HIGH | 2026-04-16 | FIXED 2026-04-16 — ConsentGatedRegistration (13+/16+EEA, terms acceptance, optional marketing) |
-| 24 | No CCPA/CPRA "Do Not Sell or Share" page or GPC signal endpoint | HIGH | 2026-04-16 | FIXED 2026-04-16 — /do-not-sell, /california-notice, /.well-known/gpc.json |
-| 25 | No EU AI Act transparency disclosure (Art 52, model inventory) | HIGH | 2026-04-16 | FIXED 2026-04-16 — /ai-transparency with per-model inventory + Art 22 rights |
-| 26 | No WCAG / EAA / ADA accessibility statement | MEDIUM | 2026-04-16 | FIXED 2026-04-16 — /accessibility page (WCAG 2.2 AA target, EAA, ADA, Section 508) |
-| 27 | Missing Impressum, Children's Privacy, Refund, Corporate Compliance pages | HIGH | 2026-04-16 | FIXED 2026-04-16 — 4 new pages (TMG §5, COPPA, EU 14-day withdrawal, FCPA/Modern Slavery/OFAC) |
-| 28 | Domain inconsistency — 32x `alecrae.dev` emails in legal copy should be `alecrae.com` | MEDIUM | 2026-04-16 | FIXED 2026-04-16 — normalised across terms/privacy/aup/dmca/dpa/sla/cookies/subprocessors/domains |
+| 15 | SSO config stored in-memory Map (lost on restart) | HIGH | 2026-05-26 | FIXED 2026-05-26 — DB-backed via ssoConfigs table |
+| 16 | No org/team management (invites, roles, audit log) | HIGH | 2026-05-26 | FIXED 2026-05-26 — organizations route, 18 endpoints |
+| 17 | Admin pages call stub endpoints | MEDIUM | 2026-05-26 | FIXED 2026-05-26 — admin.ts fully wired to DB |
 
 ---
 
@@ -638,6 +627,22 @@ After writing the code:
 14. **Set up Stripe** live keys + webhook URL → api.alecrae.com/billing/webhook (Craig)
 15. **Add API keys** — Anthropic, OpenAI, Google OAuth, Microsoft OAuth (Craig)
 16. **Deploy to Crontec** — connect repo, set env vars, point domain (Craig + Claude)
+17. **Stand up sending for Craig** — see `docs/infra/email-sending-runbook.md` (DNS + SES relay + warmup, no Neon dependency)
+
+---
+
+## 🌀 FLYWHEEL BACKLOG — Make the moat visible (added 2026-05-08)
+
+The platform's moat is the AI flywheel — every user action makes every AI feature better, and the data that compounds cannot be cloned by Gmail or Outlook. The signals + learning cycles are wired in `.ai-flywheel/config.json`. What's missing is **visibility, virality, and instrumentation**. These are the highest-leverage next builds AFTER the email-sending stack is operational:
+
+| # | Item | Why | Effort |
+|---|---|---|---|
+| F1 | **"Your AlecRae" page** — voice-profile confidence over time, drafts accepted, time saved, words AI has learned | Without it, users can't see the wheel turning, which kills retention narrative + marketing screenshots | ~2 days |
+| F2 | **Voice-primed referral loop** — "Invite a contact → they get 3 months free, you get 1 month free, AND their voice profile is primed from the emails you've already exchanged" | Ties acquisition to the moat; Gmail/Superhuman literally cannot ship the parenthetical | ~1 week |
+| F3 | **AlecRae↔AlecRae network features** — real-time read/draft state, "Sarah is replying", presence in compose, calendar slot proposals that auto-resolve when both ends are on AlecRae | Turns AlecRae from "a client" into "a platform" — each new user makes existing users' product better | ~2 weeks |
+| F4 | **Flywheel instrumentation** — wire `.ai-flywheel/config.json` signals to ClickHouse + surface weekly RPM in `/admin` | Right now the wheel turns but we can't measure it. Need weekly compose-acceptance, triage-accuracy, voice-edit-distance trend lines | ~3 days |
+
+**Build order:** F4 → F1 → F2 → F3. Instrument first so we know the wheel is real, then make it visible, then tie it to virality, then to network effects. None of these block launch — but all four together are what turns AlecRae into a $2.5M MRR exit instead of a $10M lifestyle business.
 
 ---
 
@@ -714,11 +719,10 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Date last updated:** 2026-04-16
-**Current phase:** Phase 1 — Launch Imminent
-**Current focus:** Build 100% clean (29/29 static pages). Legal compliance merged (9 new legal pages, consent banner, GDPR/CCPA/EU AI Act coverage, RFC 9116 security.txt). Landing page rewritten, admin console live. CI hardened. All code complete — blocked only on Craig's infra (Neon, Upstash, Stripe, API keys, DNS, Crontec deploy).
-**Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8) = 84 features total + full legal compliance surface
-**Date last updated:** 2026-04-24
+**Date last updated:** 2026-05-26
+**Current phase:** Phase 1 — Ready for Beta Launch
+**Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Production deployment awaiting Craig's infra setup.
+**Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
 

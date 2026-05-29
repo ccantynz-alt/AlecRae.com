@@ -21,7 +21,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, lt, sql, count } from "drizzle-orm";
+import { eq, and, desc, lt, sql, count, inArray } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -29,7 +29,7 @@ import {
   getValidatedBody,
   getValidatedQuery,
 } from "../middleware/validator.js";
-import { getDatabase, writingProfiles, writingSuggestionsLog } from "@alecrae/db";
+import { getDatabase, writingProfiles, writingSuggestionsLog, emails } from "@alecrae/db";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -115,6 +115,56 @@ interface ProofreadIssue {
   confidence: number;
 }
 
+// ─── Claude API Helper ──────────────────────────────────────────────────────
+
+const ANTHROPIC_API_KEY = process.env["ANTHROPIC_API_KEY"] ?? process.env["CLAUDE_API_KEY"];
+
+interface ClaudeResponse {
+  content: { type: string; text?: string }[];
+}
+
+async function callClaude(
+  systemPrompt: string,
+  userMessage: string,
+  maxTokens = 2048,
+): Promise<string | null> {
+  if (!ANTHROPIC_API_KEY) return null;
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+    });
+    if (!response.ok) return null;
+    const data = (await response.json()) as ClaudeResponse;
+    return data.content
+      .filter((b) => b.type === "text")
+      .map((b) => b.text ?? "")
+      .join("");
+  } catch {
+    return null;
+  }
+}
+
+function parseJsonSafely<T>(text: string): T | null {
+  try {
+    const jsonMatch = text.match(/[[{][\s\S]*[\]}]/);
+    if (!jsonMatch) return null;
+    return JSON.parse(jsonMatch[0]) as T;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 const aiWritingRouter = new Hono();
@@ -130,7 +180,75 @@ aiWritingRouter.post(
     const tone = input.tone ?? "professional";
     const length = input.length ?? "medium";
 
-    // Placeholder — in production, Claude composes a full email from the topic
+    // If a profile is specified, fetch it for context
+    let profileContext = "";
+    if (input.profileId) {
+      const auth = c.get("auth");
+      const db = getDatabase();
+      const [profile] = await db
+        .select()
+        .from(writingProfiles)
+        .where(
+          and(
+            eq(writingProfiles.id, input.profileId),
+            eq(writingProfiles.accountId, auth.accountId),
+          ),
+        )
+        .limit(1);
+
+      if (profile) {
+        const vocab = profile.vocabulary ?? [];
+        const phrases = profile.commonPhrases ?? [];
+        const avoid = profile.avoidWords ?? [];
+        profileContext =
+          `\n\nWrite in the user's personal style:\n` +
+          (vocab.length > 0 ? `- Preferred vocabulary: ${vocab.join(", ")}\n` : "") +
+          (phrases.length > 0 ? `- Common phrases to use: ${phrases.join("; ")}\n` : "") +
+          (avoid.length > 0 ? `- Words to AVOID: ${avoid.join(", ")}\n` : "") +
+          (profile.formalityScore !== null
+            ? `- Formality level: ${profile.formalityScore} (0=very casual, 1=very formal)\n`
+            : "");
+      }
+    }
+
+    const lengthGuide: Record<string, string> = {
+      short: "Keep it under 100 words. Be concise.",
+      medium: "Aim for 150-250 words. Provide enough detail.",
+      long: "Write 300-500 words. Be thorough and detailed.",
+    };
+
+    const systemPrompt =
+      `You are an expert email writer. Compose a professional email.\n` +
+      `Tone: ${tone}\n` +
+      `Length: ${lengthGuide[length] ?? lengthGuide["medium"]}\n` +
+      `Return your response in the following format EXACTLY:\n` +
+      `SUBJECT: <the subject line>\n` +
+      `BODY:\n<the email body>` +
+      profileContext;
+
+    const result = await callClaude(systemPrompt, `Write an email about: ${input.topic}`);
+
+    if (result) {
+      const subjectMatch = result.match(/SUBJECT:\s*(.+?)(?:\n|$)/);
+      const bodyMatch = result.match(/BODY:\s*\n?([\s\S]+)/);
+
+      const subject = subjectMatch ? (subjectMatch[1] ?? "").trim() : `Re: ${input.topic.slice(0, 60)}`;
+      const body = bodyMatch ? (bodyMatch[1] ?? "").trim() : result.trim();
+
+      return c.json({
+        data: {
+          subject,
+          body,
+          tone,
+          length,
+          confidence: 0.92,
+          wordCount: body.split(/\s+/).length,
+          profileUsed: input.profileId ?? null,
+        },
+      });
+    }
+
+    // Fallback when API is unavailable
     const subject = `Re: ${input.topic.slice(0, 60)}`;
     const body =
       `Hi,\n\n` +
@@ -162,7 +280,30 @@ aiWritingRouter.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof RewriteSchema>>(c);
 
-    // Placeholder — in production, Claude rewrites the text
+    const systemPrompt =
+      `Rewrite the following email text in ${input.style} style. ` +
+      `Return only the rewritten text, nothing else.`;
+
+    const result = await callClaude(systemPrompt, input.text);
+
+    if (result) {
+      return c.json({
+        data: {
+          original: input.text,
+          rewritten: result.trim(),
+          style: input.style,
+          confidence: 0.89,
+          changes: [
+            {
+              type: "style" as const,
+              description: `Rewritten in ${input.style} style`,
+            },
+          ],
+        },
+      });
+    }
+
+    // Fallback when API is unavailable
     const styleTransforms: Record<string, string> = {
       formal: "I would like to inform you that ",
       casual: "Hey, just wanted to let you know that ",
@@ -202,7 +343,34 @@ aiWritingRouter.post(
 
     const targetLength = input.targetLength ?? "medium";
 
-    // Placeholder — in production, Claude expands the brief text
+    const lengthGuide: Record<string, string> = {
+      short: "Expand to about 100-150 words.",
+      medium: "Expand to about 200-300 words.",
+      long: "Expand to about 400-600 words.",
+    };
+
+    const systemPrompt =
+      `Expand the following brief text into a full email. ` +
+      `${lengthGuide[targetLength] ?? lengthGuide["medium"]} ` +
+      `Maintain the original meaning and intent. Add appropriate greeting and sign-off. ` +
+      `Return only the expanded text, nothing else.`;
+
+    const result = await callClaude(systemPrompt, input.text);
+
+    if (result) {
+      const expanded = result.trim();
+      return c.json({
+        data: {
+          original: input.text,
+          expanded,
+          targetLength,
+          confidence: 0.88,
+          wordCount: expanded.split(/\s+/).length,
+        },
+      });
+    }
+
+    // Fallback when API is unavailable
     const expanded =
       `Dear recipient,\n\n` +
       `I hope this message finds you well. I am writing to discuss the following: ` +
@@ -235,6 +403,30 @@ aiWritingRouter.post(
 
     const maxLength = input.maxLength ?? 150;
     const words = input.text.split(/\s+/);
+
+    const systemPrompt =
+      `Summarize the following email text concisely. ` +
+      `Maximum ${maxLength} words. ` +
+      `Return only the summary, nothing else.`;
+
+    const result = await callClaude(systemPrompt, input.text, 1024);
+
+    if (result) {
+      const summary = result.trim();
+      const summaryWordCount = summary.split(/\s+/).length;
+      return c.json({
+        data: {
+          original: input.text,
+          summary,
+          originalWordCount: words.length,
+          summaryWordCount,
+          compressionRatio: Math.round((1 - summaryWordCount / words.length) * 100),
+          confidence: 0.91,
+        },
+      });
+    }
+
+    // Fallback: simple truncation
     const summaryWords = Math.min(maxLength, Math.ceil(words.length * 0.2));
     const summary = words.slice(0, summaryWords).join(" ") + "...";
 
@@ -259,7 +451,34 @@ aiWritingRouter.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof TranslateSchema>>(c);
 
-    // Placeholder — in production, Claude translates with context awareness
+    const systemPrompt =
+      `Translate the following text to ${input.targetLanguage}. ` +
+      `Maintain email tone and formality. ` +
+      `Return your response in the following format EXACTLY:\n` +
+      `SOURCE_LANGUAGE: <detected ISO language code>\n` +
+      `TRANSLATION:\n<the translated text>`;
+
+    const result = await callClaude(systemPrompt, input.text);
+
+    if (result) {
+      const langMatch = result.match(/SOURCE_LANGUAGE:\s*(\S+)/);
+      const translationMatch = result.match(/TRANSLATION:\s*\n?([\s\S]+)/);
+
+      const detectedSourceLanguage = langMatch ? (langMatch[1] ?? "en").trim().toLowerCase() : "en";
+      const translated = translationMatch ? (translationMatch[1] ?? "").trim() : result.trim();
+
+      return c.json({
+        data: {
+          original: input.text,
+          translated,
+          targetLanguage: input.targetLanguage,
+          detectedSourceLanguage,
+          confidence: 0.93,
+        },
+      });
+    }
+
+    // Fallback when API is unavailable
     const translated = `[Translation to ${input.targetLanguage}]: ${input.text}`;
 
     return c.json({
@@ -285,7 +504,43 @@ aiWritingRouter.post(
     const requestedCount = input.count ?? 5;
     const bodyPreview = input.body.slice(0, 200);
 
-    // Placeholder subject lines — Claude generates real ones in production
+    const systemPrompt =
+      `Generate ${requestedCount} email subject line options for the given email body. ` +
+      `Return ONLY a JSON array of objects, each with:\n` +
+      `- "subject": the subject line text\n` +
+      `- "style": one of "direct", "question", "action-oriented", "conversational", "formal"\n` +
+      `- "confidence": a number between 0 and 1\n` +
+      `Return the JSON array and nothing else.`;
+
+    const result = await callClaude(systemPrompt, input.body, 1024);
+
+    if (result) {
+      interface SubjectOption {
+        subject: string;
+        style: string;
+        confidence: number;
+      }
+      const parsed = parseJsonSafely<SubjectOption[]>(result);
+      if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+        const validStyles = new Set(["direct", "question", "action-oriented", "conversational", "formal"]);
+        const subjects = parsed.slice(0, requestedCount).map((item) => ({
+          subject: String(item.subject ?? ""),
+          style: validStyles.has(String(item.style)) ? String(item.style) : "direct",
+          confidence: typeof item.confidence === "number"
+            ? Math.max(0, Math.min(1, item.confidence))
+            : 0.8,
+        }));
+
+        return c.json({
+          data: {
+            subjects,
+            bodyPreview: bodyPreview.slice(0, 100),
+          },
+        });
+      }
+    }
+
+    // Fallback subject lines
     const styleOptions = ["direct", "question", "action-oriented", "conversational", "formal"] as const;
     const subjects = Array.from({ length: requestedCount }, (_, i) => ({
       subject: `Option ${i + 1}: Re: ${bodyPreview.slice(0, 50).trim()}...`,
@@ -312,25 +567,99 @@ aiWritingRouter.post(
     const auth = c.get("auth");
     const db = getDatabase();
 
-    // Placeholder proofread results — Claude provides real analysis in production
-    const issues: ProofreadIssue[] = [];
     const words = input.text.split(/\s+/);
-
-    // Simple heuristic: flag very long sentences
     const sentences = input.text.split(/[.!?]+/).filter((s) => s.trim().length > 0);
-    for (const sentence of sentences) {
-      const sentenceWords = sentence.trim().split(/\s+/);
-      if (sentenceWords.length > 30) {
-        const start = input.text.indexOf(sentence.trim());
-        issues.push({
-          type: "clarity",
-          original: sentence.trim(),
-          suggestion: "Consider breaking this into shorter sentences for better readability.",
-          explanation: `This sentence has ${sentenceWords.length} words, which may be difficult to follow.`,
-          position: { start, end: start + sentence.trim().length },
-          confidence: 0.78,
-        });
+
+    const systemPrompt =
+      `Deep proofread this email. Return ONLY a JSON object with:\n` +
+      `- "issues": array of objects, each with:\n` +
+      `  - "type": one of "grammar", "style", "tone", "clarity", "conciseness"\n` +
+      `  - "original": the problematic text\n` +
+      `  - "suggestion": the suggested fix\n` +
+      `  - "explanation": brief explanation of the issue\n` +
+      `  - "position": {"start": number, "end": number} (character positions in original text)\n` +
+      `  - "confidence": number 0-1\n` +
+      `- "scores": object with grammar, style, clarity, tone, conciseness (each 0-1)\n` +
+      `Return the JSON object and nothing else.`;
+
+    interface ProofreadResponse {
+      issues: ProofreadIssue[];
+      scores: {
+        grammar: number;
+        style: number;
+        clarity: number;
+        tone: number;
+        conciseness: number;
+      };
+    }
+
+    const result = await callClaude(systemPrompt, input.text);
+
+    let issues: ProofreadIssue[] = [];
+    let scores = {
+      grammar: 1.0,
+      style: 1.0,
+      clarity: 1.0,
+      tone: 0.9,
+      conciseness: words.length > 500 ? 0.6 : 0.9,
+    };
+
+    if (result) {
+      const parsed = parseJsonSafely<ProofreadResponse>(result);
+      if (parsed) {
+        const validTypes = new Set(["grammar", "style", "tone", "clarity", "conciseness"]);
+        if (Array.isArray(parsed.issues)) {
+          issues = parsed.issues
+            .filter((i) => validTypes.has(i.type))
+            .map((i) => ({
+              type: i.type,
+              original: String(i.original ?? ""),
+              suggestion: String(i.suggestion ?? ""),
+              explanation: String(i.explanation ?? ""),
+              position: {
+                start: typeof i.position?.start === "number" ? i.position.start : 0,
+                end: typeof i.position?.end === "number" ? i.position.end : 0,
+              },
+              confidence: typeof i.confidence === "number"
+                ? Math.max(0, Math.min(1, i.confidence))
+                : 0.8,
+            }));
+        }
+        if (parsed.scores && typeof parsed.scores === "object") {
+          const clamp = (v: unknown): number =>
+            typeof v === "number" ? Math.max(0, Math.min(1, v)) : 0.8;
+          scores = {
+            grammar: clamp(parsed.scores.grammar),
+            style: clamp(parsed.scores.style),
+            clarity: clamp(parsed.scores.clarity),
+            tone: clamp(parsed.scores.tone),
+            conciseness: clamp(parsed.scores.conciseness),
+          };
+        }
       }
+    } else {
+      // Fallback: simple heuristic checks when API is unavailable
+      for (const sentence of sentences) {
+        const sentenceWords = sentence.trim().split(/\s+/);
+        if (sentenceWords.length > 30) {
+          const start = input.text.indexOf(sentence.trim());
+          issues.push({
+            type: "clarity",
+            original: sentence.trim(),
+            suggestion: "Consider breaking this into shorter sentences for better readability.",
+            explanation: `This sentence has ${sentenceWords.length} words, which may be difficult to follow.`,
+            position: { start, end: start + sentence.trim().length },
+            confidence: 0.78,
+          });
+        }
+      }
+      scores = {
+        grammar: issues.filter((i) => i.type === "grammar").length === 0 ? 1.0 : 0.7,
+        style: issues.filter((i) => i.type === "style").length === 0 ? 1.0 : 0.75,
+        clarity: issues.filter((i) => i.type === "clarity").length === 0 ? 1.0 : 0.65,
+        tone: 0.9,
+        conciseness: words.length > 500 ? 0.6 : 0.9,
+      };
     }
 
     // Log suggestions for stats tracking
@@ -348,11 +677,10 @@ aiWritingRouter.post(
       });
     }
 
-    // Calculate overall scores
-    const grammarScore = issues.filter((i) => i.type === "grammar").length === 0 ? 1.0 : 0.7;
-    const styleScore = issues.filter((i) => i.type === "style").length === 0 ? 1.0 : 0.75;
-    const clarityScore = issues.filter((i) => i.type === "clarity").length === 0 ? 1.0 : 0.65;
-    const overallScore = Math.round(((grammarScore + styleScore + clarityScore) / 3) * 100) / 100;
+    // Calculate overall score
+    const overallScore = Math.round(
+      ((scores.grammar + scores.style + scores.clarity + scores.tone + scores.conciseness) / 5) * 100,
+    ) / 100;
 
     return c.json({
       data: {
@@ -361,11 +689,11 @@ aiWritingRouter.post(
         issueCount: issues.length,
         scores: {
           overall: overallScore,
-          grammar: grammarScore,
-          style: styleScore,
-          clarity: clarityScore,
-          tone: 0.9,
-          conciseness: words.length > 500 ? 0.6 : 0.9,
+          grammar: scores.grammar,
+          style: scores.style,
+          clarity: scores.clarity,
+          tone: scores.tone,
+          conciseness: scores.conciseness,
         },
         wordCount: words.length,
         sentenceCount: sentences.length,
@@ -387,7 +715,46 @@ aiWritingRouter.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof AutocompleteSchema>>(c);
 
-    // Placeholder — in production, Claude provides real predictions
+    const contextClause = input.context
+      ? `\n\nAdditional context about the email:\n${input.context}`
+      : "";
+
+    const systemPrompt =
+      `Complete this partial email text naturally. ` +
+      `Return ONLY a JSON array of 3 completion options, each with:\n` +
+      `- "text": the completion text (continue from where the user left off)\n` +
+      `- "confidence": a number between 0 and 1\n` +
+      `Return the JSON array and nothing else.` +
+      contextClause;
+
+    interface CompletionOption {
+      text: string;
+      confidence: number;
+    }
+
+    const result = await callClaude(systemPrompt, input.partialText, 512);
+
+    if (result) {
+      const parsed = parseJsonSafely<CompletionOption[]>(result);
+      if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+        const suggestions = parsed.slice(0, 3).map((item) => ({
+          text: String(item.text ?? ""),
+          confidence: typeof item.confidence === "number"
+            ? Math.max(0, Math.min(1, item.confidence))
+            : 0.7,
+        }));
+
+        return c.json({
+          data: {
+            suggestions,
+            partialText: input.partialText,
+            contextUsed: input.context ?? null,
+          },
+        });
+      }
+    }
+
+    // Fallback static suggestions
     const suggestions = [
       {
         text: " and I look forward to hearing from you.",
@@ -641,32 +1008,86 @@ aiWritingRouter.post(
       );
     }
 
-    // In production, this would:
-    // 1. Fetch the email bodies by emailIds
-    // 2. Run them through Claude for feature extraction
-    // 3. Update vocabulary, sentence patterns, formality score
-    // Placeholder: update sample count and training timestamp
+    // Fetch email bodies from the database
+    const emailRows = await db
+      .select({ body: emails.htmlBody })
+      .from(emails)
+      .where(
+        and(
+          eq(emails.accountId, auth.accountId),
+          inArray(emails.id, input.emailIds),
+        ),
+      );
+
+    const emailBodies = emailRows
+      .map((row) => row.body ?? "")
+      .filter((body) => body.length > 0);
 
     const now = new Date();
+
+    // Default extracted features (used as fallback)
+    let avgSentenceLength = 15.2;
+    let formalityScore = 0.65;
+    let topVocabulary = ["regarding", "please", "appreciate", "follow-up", "update"];
+    let commonPhrases = ["I hope this helps", "Please let me know", "Looking forward to"];
+    let toneDescription = "professional and courteous";
+
+    if (emailBodies.length > 0) {
+      const systemPrompt =
+        `Analyze these email samples and extract the writer's style profile. ` +
+        `Return ONLY a JSON object with:\n` +
+        `- "avgSentenceLength": number (average words per sentence)\n` +
+        `- "formalityScore": number 0-1 (0=very casual, 1=very formal)\n` +
+        `- "vocabulary": array of top 20 distinctive words this writer uses\n` +
+        `- "commonPhrases": array of top 10 recurring phrases\n` +
+        `- "toneDescription": string describing overall writing tone\n` +
+        `Return the JSON object and nothing else.`;
+
+      const sampleText = emailBodies
+        .slice(0, 50)
+        .map((body, i) => `--- Email ${i + 1} ---\n${body}`)
+        .join("\n\n");
+
+      interface StyleProfile {
+        avgSentenceLength: number;
+        formalityScore: number;
+        vocabulary: string[];
+        commonPhrases: string[];
+        toneDescription: string;
+      }
+
+      const result = await callClaude(systemPrompt, sampleText, 2048);
+
+      if (result) {
+        const parsed = parseJsonSafely<StyleProfile>(result);
+        if (parsed) {
+          avgSentenceLength = typeof parsed.avgSentenceLength === "number"
+            ? parsed.avgSentenceLength
+            : avgSentenceLength;
+          formalityScore = typeof parsed.formalityScore === "number"
+            ? Math.max(0, Math.min(1, parsed.formalityScore))
+            : formalityScore;
+          topVocabulary = Array.isArray(parsed.vocabulary)
+            ? parsed.vocabulary.filter((w): w is string => typeof w === "string").slice(0, 20)
+            : topVocabulary;
+          commonPhrases = Array.isArray(parsed.commonPhrases)
+            ? parsed.commonPhrases.filter((p): p is string => typeof p === "string").slice(0, 10)
+            : commonPhrases;
+          toneDescription = typeof parsed.toneDescription === "string"
+            ? parsed.toneDescription
+            : toneDescription;
+        }
+      }
+    }
 
     await db
       .update(writingProfiles)
       .set({
         sampleCount: sql`${writingProfiles.sampleCount} + ${input.emailIds.length}`,
-        avgSentenceLength: 15.2,
-        formalityScore: 0.65,
-        vocabulary: [
-          "regarding",
-          "please",
-          "appreciate",
-          "follow-up",
-          "update",
-        ],
-        commonPhrases: [
-          "I hope this helps",
-          "Please let me know",
-          "Looking forward to",
-        ],
+        avgSentenceLength,
+        formalityScore,
+        vocabulary: topVocabulary,
+        commonPhrases,
         lastTrainedAt: now,
         updatedAt: now,
       })
@@ -676,23 +1097,15 @@ aiWritingRouter.post(
       data: {
         profileId: id,
         emailsProcessed: input.emailIds.length,
+        emailsFound: emailBodies.length,
         features: {
-          avgSentenceLength: 15.2,
-          formalityScore: 0.65,
-          topVocabulary: [
-            "regarding",
-            "please",
-            "appreciate",
-            "follow-up",
-            "update",
-          ],
-          commonPhrases: [
-            "I hope this helps",
-            "Please let me know",
-            "Looking forward to",
-          ],
+          avgSentenceLength,
+          formalityScore,
+          topVocabulary,
+          commonPhrases,
+          toneDescription,
         },
-        confidence: Math.min(0.95, 0.4 + input.emailIds.length * 0.01),
+        confidence: Math.min(0.95, 0.4 + emailBodies.length * 0.01),
         trainedAt: now.toISOString(),
       },
     });
@@ -730,7 +1143,7 @@ aiWritingRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({

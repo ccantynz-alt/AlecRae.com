@@ -292,7 +292,9 @@ function getAgent(): InboxAgent {
       subject: row.subject,
       body: row.textBody ?? "",
       receivedAt: row.createdAt,
-      headers: row.customHeaders ?? undefined,
+      ...(row.customHeaders !== null && row.customHeaders !== undefined
+        ? { headers: row.customHeaders as Record<string, string> }
+        : {}),
     }));
   };
 

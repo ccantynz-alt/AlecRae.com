@@ -91,6 +91,11 @@ vi.mock("@alecrae/reputation", () => ({
     recordSend: vi.fn().mockResolvedValue(undefined),
   }),
   WARMUP_LIMIT_EXCEEDED: "WARMUP_LIMIT_EXCEEDED",
+  ComplianceEngine: class {
+    checkAll() {
+      return { ok: true, value: [] };
+    }
+  },
 }));
 
 // Mock MTA header validation

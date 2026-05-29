@@ -198,7 +198,7 @@ connect.post(
   "/imap",
   requireScope("accounts:write"),
   validateBody(ImapConnectSchema),
-  (c) => {
+  async (c) => {
     const input = getValidatedBody<z.infer<typeof ImapConnectSchema>>(c);
     const auth = c.get("auth");
 
@@ -338,9 +338,9 @@ connect.post(
       provider: row.provider,
       email: row.email,
       displayName: row.displayName ?? row.email,
-      accessToken: row.accessToken ?? undefined,
-      refreshToken: row.refreshToken ?? undefined,
-      tokenExpiresAt: row.tokenExpiresAt ?? undefined,
+      ...(row.accessToken !== null && row.accessToken !== undefined ? { accessToken: row.accessToken } : {}),
+      ...(row.refreshToken !== null && row.refreshToken !== undefined ? { refreshToken: row.refreshToken } : {}),
+      ...(row.tokenExpiresAt !== null && row.tokenExpiresAt !== undefined ? { tokenExpiresAt: row.tokenExpiresAt } : {}),
       status: row.status as "active" | "error",
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

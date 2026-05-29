@@ -122,6 +122,7 @@ import { schedulingIntelligenceRouter } from "./routes/scheduling-intelligence.j
 import { contextIntelligenceRouter } from "./routes/context-intelligence.js";
 import { productivityAnalyticsRouter } from "./routes/productivity-analytics.js";
 import { knowledgeGraphRouter } from "./routes/knowledge-graph.js";
+import { organizationsRouter } from "./routes/organizations.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue } from "./lib/queue.js";
@@ -714,6 +715,18 @@ app.route("/v1/productivity", productivityAnalyticsRouter);
 // Knowledge Graph — entity extraction, relationships, graph visualization
 app.route("/v1/knowledge", knowledgeGraphRouter);
 
+// Organizations + Team Management: write-level for mutations, read-level for queries
+app.use("/v1/organizations/invitations/*/accept", writeRateLimit);
+app.use("/v1/organizations/audit-log", authMiddleware, readRateLimit);
+app.use("/v1/organizations/members/*/role", authMiddleware, writeRateLimit);
+app.use("/v1/organizations/members/*", authMiddleware, writeRateLimit);
+app.use("/v1/organizations/members", authMiddleware, readRateLimit);
+app.use("/v1/organizations/sso", authMiddleware, writeRateLimit);
+app.use("/v1/organizations/*", authMiddleware, writeRateLimit);
+app.use("/v1/organizations", authMiddleware, writeRateLimit);
+// Organizations + Team Management + Audit Log
+app.route("/v1/organizations", organizationsRouter);
+
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);
 app.route("/v1/admin", admin);
@@ -785,10 +798,16 @@ startAutoIndexer();
 
 // Start blocklist monitoring (checks every 15 min for IP/domain listings)
 import("@alecrae/reputation").then(({ BlocklistMonitor }) => {
-  const monitor = new BlocklistMonitor();
-  monitor.startMonitoring().catch((err: unknown) => {
+  try {
+    const dnsResolver = {
+      resolve4: (hostname: string): Promise<string[]> =>
+        import("node:dns/promises").then((dns) => dns.resolve4(hostname)),
+    };
+    const monitor = new BlocklistMonitor({ resolver: dnsResolver });
+    monitor.startMonitoring();
+  } catch (err: unknown) {
     console.warn("[api] Blocklist monitor start failed:", err);
-  });
+  }
 }).catch(() => {
   console.warn("[api] Blocklist monitor unavailable");
 });

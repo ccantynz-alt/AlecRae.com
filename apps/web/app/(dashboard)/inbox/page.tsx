@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { createDefaultShortcuts, registerShortcuts } from "../../../lib/keyboard-shortcuts";
 import {
   Box,
   Text,
@@ -14,11 +15,18 @@ import {
   type EmailMessage,
 } from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
-import { messagesApi, type Message, type MessageDetail } from "../../../lib/api";
+import { messagesApi, snoozeApi, authApi, type Message, type MessageDetail } from "../../../lib/api";
 import { NewsletterSummaryPreview } from "../../../components/NewsletterSummaryPreview";
 import { EmailExplainerPanel } from "../../../components/EmailExplainerPanel";
+import { QuickReply } from "../../../components/QuickReply";
+import { UndoToastManager, type UndoAction } from "../../../components/UndoToast";
+import { BatchActionBar } from "../../../components/BatchActionBar";
+import { SnoozePicker } from "../../../components/SnoozePicker";
+import { SyncStatusBar } from "../../../components/SyncStatusBar";
 import { EmailListSkeleton } from "../../../components/AnimatedSkeleton";
 import { PressableScale } from "../../../components/PressableScale";
+import { useSyncEngine } from "../../../lib/sync-engine";
+import { getCachedEmails, cacheEmails, type CachedEmail } from "../../../lib/offline-store";
 import {
   fadeInUp,
   threadExpand,
@@ -151,13 +159,303 @@ export default function InboxPage(): React.ReactNode {
   const [newsletterMap, setNewsletterMap] = useState<Map<string, boolean>>(new Map());
   // S7: Email explainer panel
   const [explainerOpen, setExplainerOpen] = useState(false);
+  // Whether to show full email content (toggled from newsletter summary)
+  const [_showFullEmail, _setShowFullEmail] = useState(true);
+  const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
+  const [undoActions, setUndoActions] = useState<UndoAction[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [snoozePickerOpen, setSnoozePickerOpen] = useState(false);
+  const snoozeTargetRef = useRef<string | null>(null);
+
+  const sync = useSyncEngine();
+
+  const filteredEmails = useMemo(() => emailItems.filter((e) => {
+    if (filter === "unread") return !e.read;
+    if (filter === "starred") return e.starred;
+    return true;
+  }), [emailItems, filter]);
+
+  const handleStar = useCallback((email: EmailListItem) => {
+    const newStarred = !email.starred;
+    setEmailItems((prev) =>
+      prev.map((e) => (e.id === email.id ? { ...e, starred: newStarred } : e)),
+    );
+    messagesApi.star(email.id, newStarred).catch(() => {
+      setEmailItems((prev) =>
+        prev.map((e) => (e.id === email.id ? { ...e, starred: !newStarred } : e)),
+      );
+    });
+  }, []);
+
+  const addUndoAction = useCallback((id: string, label: string, onUndo: () => void) => {
+    setUndoActions((prev) => [...prev, { id, label, onUndo, duration: 5000 }]);
+  }, []);
+
+  const removeUndoAction = useCallback((id: string) => {
+    setUndoActions((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  const archiveWithUndo = useCallback((id: string) => {
+    const item = emailItems.find((e) => e.id === id);
+    if (!item) return;
+    setEmailItems((prev) => prev.filter((e) => e.id !== id));
+    if (selectedEmailId === id) {
+      setSelectedEmailId(undefined);
+      setSelectedEmail(null);
+    }
+    setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    const undoId = `archive-${id}-${Date.now()}`;
+    addUndoAction(undoId, "Conversation archived", () => {
+      setEmailItems((prev) => {
+        if (prev.some((e) => e.id === item.id)) return prev;
+        return [...prev, item].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      });
+    });
+    messagesApi.archive(id).catch(() => { /* no-op */ });
+  }, [emailItems, selectedEmailId, addUndoAction]);
+
+  const deleteWithUndo = useCallback((id: string) => {
+    const item = emailItems.find((e) => e.id === id);
+    if (!item) return;
+    setEmailItems((prev) => prev.filter((e) => e.id !== id));
+    if (selectedEmailId === id) {
+      setSelectedEmailId(undefined);
+      setSelectedEmail(null);
+    }
+    setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    const undoId = `delete-${id}-${Date.now()}`;
+    addUndoAction(undoId, "Conversation deleted", () => {
+      setEmailItems((prev) => {
+        if (prev.some((e) => e.id === item.id)) return prev;
+        return [...prev, item].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      });
+    });
+    messagesApi.delete(id).catch(() => { /* no-op */ });
+  }, [emailItems, selectedEmailId, addUndoAction]);
+
+  const snoozeWithUndo = useCallback((id: string, until: Date) => {
+    const item = emailItems.find((e) => e.id === id);
+    if (!item) return;
+    setEmailItems((prev) => prev.filter((e) => e.id !== id));
+    if (selectedEmailId === id) {
+      setSelectedEmailId(undefined);
+      setSelectedEmail(null);
+    }
+    const formatted = until.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const undoId = `snooze-${id}-${Date.now()}`;
+    addUndoAction(undoId, `Snoozed until ${formatted}`, () => {
+      setEmailItems((prev) => {
+        if (prev.some((e) => e.id === item.id)) return prev;
+        return [...prev, item].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      });
+      snoozeApi.unsnooze(id).catch(() => { /* no-op */ });
+    });
+    snoozeApi.snooze(id, until.toISOString()).catch(() => { /* no-op */ });
+  }, [emailItems, selectedEmailId, addUndoAction]);
+
+  const _toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const batchArchive = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    const items = emailItems.filter((e) => selectedIds.has(e.id));
+    setEmailItems((prev) => prev.filter((e) => !selectedIds.has(e.id)));
+    if (selectedEmailId && selectedIds.has(selectedEmailId)) {
+      setSelectedEmailId(undefined);
+      setSelectedEmail(null);
+    }
+    setSelectedIds(new Set());
+    const undoId = `batch-archive-${Date.now()}`;
+    addUndoAction(undoId, `${ids.length} conversations archived`, () => {
+      setEmailItems((prev) => {
+        const existing = new Set(prev.map((e) => e.id));
+        const restored = items.filter((i) => !existing.has(i.id));
+        return [...prev, ...restored].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      });
+    });
+    for (const id of ids) messagesApi.archive(id).catch(() => { /* no-op */ });
+  }, [selectedIds, emailItems, selectedEmailId, addUndoAction]);
+
+  const batchDelete = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    const items = emailItems.filter((e) => selectedIds.has(e.id));
+    setEmailItems((prev) => prev.filter((e) => !selectedIds.has(e.id)));
+    if (selectedEmailId && selectedIds.has(selectedEmailId)) {
+      setSelectedEmailId(undefined);
+      setSelectedEmail(null);
+    }
+    setSelectedIds(new Set());
+    const undoId = `batch-delete-${Date.now()}`;
+    addUndoAction(undoId, `${ids.length} conversations deleted`, () => {
+      setEmailItems((prev) => {
+        const existing = new Set(prev.map((e) => e.id));
+        const restored = items.filter((i) => !existing.has(i.id));
+        return [...prev, ...restored].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+      });
+    });
+    for (const id of ids) messagesApi.delete(id).catch(() => { /* no-op */ });
+  }, [selectedIds, emailItems, selectedEmailId, addUndoAction]);
+
+  const batchMarkRead = useCallback(() => {
+    setEmailItems((prev) => prev.map((e) => selectedIds.has(e.id) ? { ...e, read: true } : e));
+    setSelectedIds(new Set());
+  }, [selectedIds]);
+
+  const batchMarkUnread = useCallback(() => {
+    setEmailItems((prev) => prev.map((e) => selectedIds.has(e.id) ? { ...e, read: false } : e));
+    setSelectedIds(new Set());
+  }, [selectedIds]);
+
+  const batchStar = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    setEmailItems((prev) => prev.map((e) => selectedIds.has(e.id) ? { ...e, starred: true } : e));
+    setSelectedIds(new Set());
+    for (const id of ids) messagesApi.star(id, true).catch(() => { /* no-op */ });
+  }, [selectedIds]);
+
+  const selectedIndexRef = useRef(0);
+
+  useEffect(() => {
+    const idx = filteredEmails.findIndex((e) => e.id === selectedEmailId);
+    if (idx >= 0) selectedIndexRef.current = idx;
+  }, [selectedEmailId, filteredEmails]);
+
+  useEffect(() => {
+    const shortcuts = createDefaultShortcuts({
+      openCommandPalette: () => { /* no-op */ },
+      compose: () => router.push("/compose"),
+      search: () => {
+        const input = document.querySelector<HTMLInputElement>('input[type="search"], input[placeholder*="Search"]');
+        input?.focus();
+      },
+      goToInbox: () => router.push("/inbox"),
+      goToSent: () => { /* no-op */ },
+      goToDrafts: () => { /* no-op */ },
+      goToSettings: () => router.push("/settings"),
+      nextEmail: () => {
+        const next = Math.min(selectedIndexRef.current + 1, filteredEmails.length - 1);
+        const item = filteredEmails[next];
+        if (item) { setSelectedEmailId(item.id); selectedIndexRef.current = next; }
+      },
+      prevEmail: () => {
+        const prev = Math.max(selectedIndexRef.current - 1, 0);
+        const item = filteredEmails[prev];
+        if (item) { setSelectedEmailId(item.id); selectedIndexRef.current = prev; }
+      },
+      openEmail: () => { /* no-op */ },
+      archiveEmail: () => {
+        if (selectedEmailId) {
+          const next = filteredEmails[selectedIndexRef.current + 1] ?? filteredEmails[selectedIndexRef.current - 1];
+          archiveWithUndo(selectedEmailId);
+          setSelectedEmailId(next?.id);
+        }
+      },
+      deleteEmail: () => {
+        if (selectedEmailId) {
+          const next = filteredEmails[selectedIndexRef.current + 1] ?? filteredEmails[selectedIndexRef.current - 1];
+          deleteWithUndo(selectedEmailId);
+          setSelectedEmailId(next?.id);
+        }
+      },
+      starEmail: () => {
+        if (selectedEmailId) {
+          const item = emailItems.find((e) => e.id === selectedEmailId);
+          if (item) handleStar(item);
+        }
+      },
+      markRead: () => {
+        if (selectedEmailId) {
+          setEmailItems((prev) => prev.map((e) => e.id === selectedEmailId ? { ...e, read: true } : e));
+        }
+      },
+      markUnread: () => {
+        if (selectedEmailId) {
+          setEmailItems((prev) => prev.map((e) => e.id === selectedEmailId ? { ...e, read: false } : e));
+        }
+      },
+      replyEmail: () => {
+        if (selectedEmail) {
+          const params = new URLSearchParams({ mode: "reply", to: selectedEmail.sender.email, subject: selectedEmail.subject, body: selectedEmail.bodyParts.map((p) => "content" in p ? p.content : "").join("\n\n") });
+          router.push(`/compose?${params.toString()}`);
+        }
+      },
+      replyAllEmail: () => {
+        if (selectedEmail) {
+          const params = new URLSearchParams({ mode: "replyAll", to: selectedEmail.sender.email, cc: (selectedEmail.recipients ?? []).map((r) => r.email).join(","), subject: selectedEmail.subject, body: selectedEmail.bodyParts.map((p) => "content" in p ? p.content : "").join("\n\n") });
+          router.push(`/compose?${params.toString()}`);
+        }
+      },
+      forwardEmail: () => {
+        if (selectedEmail) {
+          const params = new URLSearchParams({ mode: "forward", subject: selectedEmail.subject, body: selectedEmail.bodyParts.map((p) => "content" in p ? p.content : "").join("\n\n") });
+          router.push(`/compose?${params.toString()}`);
+        }
+      },
+      snoozeEmail: () => {
+        if (selectedEmailId) {
+          snoozeTargetRef.current = selectedEmailId;
+          setSnoozePickerOpen(true);
+        }
+      },
+      undoAction: () => {
+        const last = undoActions[undoActions.length - 1];
+        if (last) {
+          last.onUndo();
+          removeUndoAction(last.id);
+        }
+      },
+      aiCompose: () => router.push("/compose"),
+      aiReply: () => { /* no-op: AI reply not yet wired */ },
+      aiSummarize: () => { /* no-op: AI summarize not yet wired */ },
+      toggleDarkMode: () => { /* no-op: handled by theme provider */ },
+      toggleFocusMode: () => { /* no-op: handled by focus provider */ },
+    });
+
+    return registerShortcuts(shortcuts, () =>
+      selectedEmail ? "thread" : "inbox",
+    );
+  }, [router, selectedEmailId, selectedEmail, emailItems, filteredEmails, handleStar, archiveWithUndo, deleteWithUndo, undoActions, removeUndoAction]);
+
   const fetchEmails = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+
+      // Cache-first: try IndexedDB for instant load
+      try {
+        const cached = await getCachedEmails({ limit: 50, filter: "all" });
+        if (cached.length > 0) {
+          const cachedItems: EmailListItem[] = cached.map((c) => ({
+            id: c.id,
+            sender: { name: c.from.name ?? c.from.email, email: c.from.email },
+            subject: c.subject || "(no subject)",
+            preview: c.preview || "",
+            timestamp: formatTimestamp(c.createdAt),
+            read: c.read,
+            starred: c.starred,
+            priority: "normal" as const,
+            hasAttachments: c.hasAttachments,
+          }));
+          setEmailItems(cachedItems);
+          if (cachedItems.length > 0 && !selectedEmailId) {
+            setSelectedEmailId(cachedItems[0]?.id ?? "");
+          }
+          setLoading(false);
+        }
+      } catch {
+        // Cache miss — proceed to network
+      }
+
+      // Network: fetch fresh data and update cache
       const res = await messagesApi.list({ limit: 50 });
       const items = res.data.map(toEmailListItem);
-      // S6: Build newsletter classification map
       const nlMap = new Map<string, boolean>();
       for (const msg of res.data) {
         nlMap.set(msg.id, isLikelyNewsletter(msg));
@@ -168,6 +466,27 @@ export default function InboxPage(): React.ReactNode {
       if (first && !selectedEmailId) {
         setSelectedEmailId(first.id);
       }
+
+      // Update cache in background
+      const toCache: CachedEmail[] = res.data.map((msg) => ({
+        id: msg.id,
+        messageId: msg.id,
+        from: msg.from,
+        to: msg.to,
+        cc: msg.cc ?? [],
+        subject: msg.subject,
+        preview: msg.preview,
+        status: msg.status,
+        tags: msg.tags,
+        hasAttachments: msg.hasAttachments,
+        starred: msg.tags.includes("starred"),
+        read: msg.status === "delivered" || msg.status === "sent",
+        createdAt: msg.createdAt,
+        updatedAt: msg.updatedAt ?? msg.createdAt,
+        sentAt: msg.sentAt ?? null,
+        cachedAt: Date.now(),
+      }));
+      cacheEmails(toCache).catch(() => { /* background cache — non-fatal */ });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load emails");
     } finally {
@@ -189,11 +508,13 @@ export default function InboxPage(): React.ReactNode {
 
   useEffect(() => {
     fetchEmails();
+    authApi.me().then((res) => setUserEmail(res.data.email)).catch(() => { /* non-fatal */ });
   }, [fetchEmails]);
 
   useEffect(() => {
     if (selectedEmailId) {
       fetchDetail(selectedEmailId);
+      setQuickReplyOpen(false);
     }
   }, [selectedEmailId, fetchDetail]);
 
@@ -203,18 +524,6 @@ export default function InboxPage(): React.ReactNode {
       prev.map((e) => (e.id === email.id ? { ...e, read: true } : e)),
     );
   };
-
-  const handleStar = (email: EmailListItem) => {
-    setEmailItems((prev) =>
-      prev.map((e) => (e.id === email.id ? { ...e, starred: !e.starred } : e)),
-    );
-  };
-
-  const filteredEmails = emailItems.filter((e) => {
-    if (filter === "unread") return !e.read;
-    if (filter === "starred") return e.starred;
-    return true;
-  });
 
   const handleSearch = useCallback(
     (query: string) => {
@@ -328,9 +637,45 @@ export default function InboxPage(): React.ReactNode {
 
   return (
     <PageLayout header={searchHeader} fullWidth>
+      <SyncStatusBar
+        isOnline={sync.isOnline}
+        isSyncing={sync.isSyncing}
+        pendingOutbox={sync.pendingOutbox}
+        lastSyncAt={sync.lastSyncAt}
+        error={sync.error}
+        onSyncNow={() => void sync.syncNow()}
+      />
       <Box className="flex flex-1 h-full">
         <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
-          <Box className="px-4 py-2 border-b border-border bg-surface-secondary">
+          <AnimatePresence>
+            {selectedIds.size > 0 && (
+              <BatchActionBar
+                selectedCount={selectedIds.size}
+                totalCount={filteredEmails.length}
+                onSelectAll={() => setSelectedIds(new Set(filteredEmails.map((e) => e.id)))}
+                onDeselectAll={() => setSelectedIds(new Set())}
+                onArchive={batchArchive}
+                onDelete={batchDelete}
+                onMarkRead={batchMarkRead}
+                onMarkUnread={batchMarkUnread}
+                onStar={batchStar}
+              />
+            )}
+          </AnimatePresence>
+          <Box className="px-4 py-2 border-b border-border bg-surface-secondary flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={selectedIds.size > 0 && selectedIds.size === filteredEmails.length}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setSelectedIds(new Set(filteredEmails.map((em) => em.id)));
+                } else {
+                  setSelectedIds(new Set());
+                }
+              }}
+              className="w-3.5 h-3.5 rounded border-border text-brand-600 focus:ring-brand-500"
+              aria-label="Select all emails"
+            />
             <Text variant="body-sm" muted>
               {searching
                 ? "Searching..."
@@ -457,21 +802,42 @@ export default function InboxPage(): React.ReactNode {
                 router.push(`/compose?${params.toString()}`);
               }}
               onArchive={() => {
-                if (selectedEmailId) {
-                  setEmailItems((prev) => prev.filter((e) => e.id !== selectedEmailId));
-                  setSelectedEmailId(undefined);
-                  setSelectedEmail(null);
-                }
+                if (selectedEmailId) archiveWithUndo(selectedEmailId);
               }}
               onDelete={() => {
-                if (selectedEmailId) {
-                  setEmailItems((prev) => prev.filter((e) => e.id !== selectedEmailId));
-                  setSelectedEmailId(undefined);
-                  setSelectedEmail(null);
-                }
+                if (selectedEmailId) deleteWithUndo(selectedEmailId);
               }}
             />
                 </Box>
+
+                {/* Quick Reply */}
+                {selectedEmail && !quickReplyOpen && (
+                  <Box className="border-t border-border p-3 bg-surface-secondary">
+                    <button
+                      type="button"
+                      onClick={() => setQuickReplyOpen(true)}
+                      className="w-full text-left px-4 py-2.5 rounded-lg border border-border bg-surface text-content-tertiary text-body-sm hover:border-border-strong hover:text-content-secondary transition-all"
+                    >
+                      Reply to {selectedEmail.sender.name || selectedEmail.sender.email}...
+                    </button>
+                  </Box>
+                )}
+
+                <AnimatePresence>
+                  {quickReplyOpen && selectedEmail && userEmail && (
+                    <QuickReply
+                      emailId={selectedEmailId ?? ""}
+                      toEmail={selectedEmail.sender.email}
+                      toName={selectedEmail.sender.name}
+                      subject={selectedEmail.subject}
+                      userEmail={userEmail}
+                      onSent={() => {
+                        setQuickReplyOpen(false);
+                      }}
+                      onClose={() => setQuickReplyOpen(false)}
+                    />
+                  )}
+                </AnimatePresence>
               </motion.div>
             )}
           </AnimatePresence>
@@ -486,6 +852,29 @@ export default function InboxPage(): React.ReactNode {
           )}
         </Box>
       </Box>
+
+      {/* Undo toast manager */}
+      <UndoToastManager
+        actions={undoActions}
+        onExpire={removeUndoAction}
+        onDismiss={removeUndoAction}
+      />
+
+      {/* Snooze picker */}
+      <SnoozePicker
+        open={snoozePickerOpen}
+        onSnooze={(until) => {
+          if (snoozeTargetRef.current) {
+            snoozeWithUndo(snoozeTargetRef.current, until);
+          }
+          setSnoozePickerOpen(false);
+          snoozeTargetRef.current = null;
+        }}
+        onClose={() => {
+          setSnoozePickerOpen(false);
+          snoozeTargetRef.current = null;
+        }}
+      />
     </PageLayout>
   );
 }

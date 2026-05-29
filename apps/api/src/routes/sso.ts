@@ -16,7 +16,7 @@ import { z } from "zod";
 import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, users } from "@alecrae/db";
+import { getDatabase, users, accounts as _accounts, ssoConfigs as ssoConfigsTable } from "@alecrae/db";
 
 const sso = new Hono();
 
@@ -35,11 +35,22 @@ interface SamlAttribute {
   value: string;
 }
 
-// ─── In-memory SSO config store (will migrate to DB) ──────���───────────────────
+// ─── DB-backed SSO config lookup ─────────────────────────────────────────────
 
-const ssoConfigs = new Map<string, SsoConfig>();
+async function getSsoConfig(accountId: string): Promise<SsoConfig | null> {
+  const db = getDatabase();
+  const [row] = await db.select().from(ssoConfigsTable).where(eq(ssoConfigsTable.accountId, accountId)).limit(1);
+  if (!row) return null;
+  return {
+    entityId: row.entityId,
+    ssoUrl: row.ssoUrl,
+    sloUrl: row.sloUrl,
+    certificate: row.certificate,
+    enabled: row.enabled,
+  };
+}
 
-// ─── Environment ──────────���──────────────────────────���────────────────────────
+// ─── Environment ──────────────────────────────────────────────────────────────
 
 function getBaseUrl(): string {
   return process.env["API_BASE_URL"] ?? "https://api.alecrae.com";
@@ -148,10 +159,7 @@ function decodeSamlResponse(samlResponseB64: string): {
 /**
  * Build a SAML AuthnRequest XML for SP-initiated SSO.
  */
-function buildAuthnRequest(requestId: string, accountId: string): string {
-  const config = ssoConfigs.get(accountId);
-  if (!config) return "";
-
+function buildAuthnRequest(requestId: string, config: SsoConfig): string {
   const baseUrl = getBaseUrl();
   const issueInstant = new Date().toISOString();
 
@@ -174,10 +182,7 @@ function buildAuthnRequest(requestId: string, accountId: string): string {
 /**
  * Build a SAML LogoutRequest XML.
  */
-function buildLogoutRequest(requestId: string, nameId: string, sessionIndex: string, accountId: string): string {
-  const config = ssoConfigs.get(accountId);
-  if (!config) return "";
-
+function buildLogoutRequest(requestId: string, nameId: string, sessionIndex: string, config: SsoConfig): string {
   const baseUrl = getBaseUrl();
   const issueInstant = new Date().toISOString();
 
@@ -264,7 +269,7 @@ sso.get("/metadata", (c) => {
 
 sso.post("/login", validateBody(SsoLoginSchema), async (c) => {
   const input = getValidatedBody<z.infer<typeof SsoLoginSchema>>(c);
-  const config = ssoConfigs.get(input.accountId);
+  const config = await getSsoConfig(input.accountId);
 
   if (!config || !config.enabled) {
     return c.json(
@@ -280,7 +285,7 @@ sso.post("/login", validateBody(SsoLoginSchema), async (c) => {
   }
 
   const requestId = generateId();
-  const authnRequest = buildAuthnRequest(requestId, input.accountId);
+  const authnRequest = buildAuthnRequest(requestId, config);
   const encodedRequest = btoa(authnRequest);
 
   const relayState = JSON.stringify({
@@ -351,7 +356,7 @@ sso.post("/acs", validateBody(SsoAcsSchema), async (c) => {
   }
 
   // Verify SSO is configured for this account
-  const config = ssoConfigs.get(accountId);
+  const config = await getSsoConfig(accountId);
   if (!config || !config.enabled) {
     return c.json(
       {
@@ -562,7 +567,7 @@ const SsoLogoutSchema = z.object({
 
 sso.post("/logout", validateBody(SsoLogoutSchema), async (c) => {
   const input = getValidatedBody<z.infer<typeof SsoLogoutSchema>>(c);
-  const config = ssoConfigs.get(input.accountId);
+  const config = await getSsoConfig(input.accountId);
 
   if (!config || !config.enabled || !config.sloUrl) {
     // No SLO configured — just acknowledge the logout
@@ -575,7 +580,7 @@ sso.post("/logout", validateBody(SsoLogoutSchema), async (c) => {
   }
 
   const requestId = generateId();
-  const logoutRequest = buildLogoutRequest(requestId, input.email, input.sessionIndex, input.accountId);
+  const logoutRequest = buildLogoutRequest(requestId, input.email, input.sessionIndex, config);
   const encodedRequest = btoa(logoutRequest);
 
   const redirectUrl = new URL(config.sloUrl);
@@ -622,7 +627,7 @@ sso.get("/config", async (c) => {
   }
 
   const accountId = payload["sub"] as string;
-  const config = ssoConfigs.get(accountId);
+  const config = await getSsoConfig(accountId);
 
   return c.json({
     data: config
@@ -687,13 +692,28 @@ sso.put("/config", validateBody(SsoConfigSchema), async (c) => {
   const accountId = payload["sub"] as string;
   const input = getValidatedBody<z.infer<typeof SsoConfigSchema>>(c);
 
-  ssoConfigs.set(accountId, {
-    entityId: input.entityId,
-    ssoUrl: input.ssoUrl,
-    sloUrl: input.sloUrl,
-    certificate: input.certificate,
-    enabled: input.enabled,
-  });
+  const db = getDatabase();
+  const existing = await getSsoConfig(accountId);
+  if (existing) {
+    await db.update(ssoConfigsTable).set({
+      entityId: input.entityId,
+      ssoUrl: input.ssoUrl,
+      sloUrl: input.sloUrl,
+      certificate: input.certificate,
+      enabled: input.enabled,
+      updatedAt: new Date(),
+    }).where(eq(ssoConfigsTable.accountId, accountId));
+  } else {
+    await db.insert(ssoConfigsTable).values({
+      id: generateId(),
+      accountId,
+      entityId: input.entityId,
+      ssoUrl: input.ssoUrl,
+      sloUrl: input.sloUrl,
+      certificate: input.certificate,
+      enabled: input.enabled,
+    });
+  }
 
   return c.json({
     data: {

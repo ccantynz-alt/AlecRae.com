@@ -137,12 +137,12 @@ contactGroupsRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     // Fetch member counts for all groups in the page
     const groupIds = page.map((row) => row.id);
-    let memberCountMap: Record<string, number> = {};
+    const memberCountMap: Record<string, number> = {};
 
     if (groupIds.length > 0) {
       const members = await db
@@ -442,7 +442,7 @@ contactGroupsRouter.post(
     );
 
     const now = new Date();
-    const added: Array<{ id: string; contactId: string; addedAt: string }> = [];
+    const added: { id: string; contactId: string; addedAt: string }[] = [];
 
     if (newContactIds.length > 0) {
       const rows = newContactIds.map((contactId) => ({

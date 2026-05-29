@@ -128,8 +128,11 @@ filesRouter.get(
       if (!categories[category]) {
         categories[category] = { count: 0, size: 0 };
       }
-      categories[category].count += row.fileCount;
-      categories[category].size += Number(row.totalSize);
+      const cat = categories[category];
+      if (cat) {
+        cat.count += row.fileCount;
+        cat.size += Number(row.totalSize);
+      }
     }
 
     return c.json({
@@ -181,7 +184,7 @@ filesRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.uploadedAt.toISOString()
+        ? page[page.length - 1]?.uploadedAt.toISOString()
         : null;
 
     return c.json({

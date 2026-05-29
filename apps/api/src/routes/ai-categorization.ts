@@ -111,9 +111,9 @@ function placeholderCategorize(emailId: string): {
     .split("")
     .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   const idx = hash % PRIMARY_CATEGORIES.length;
-  const primary = PRIMARY_CATEGORIES[idx];
-  const secondary =
-    PRIMARY_CATEGORIES[(idx + 3) % PRIMARY_CATEGORIES.length];
+  const primary = PRIMARY_CATEGORIES[idx] ?? "important";
+  const secondaryIdx = (idx + 3) % PRIMARY_CATEGORIES.length;
+  const secondary = PRIMARY_CATEGORIES[secondaryIdx] ?? "updates";
 
   return {
     primaryCategory: primary,
@@ -427,8 +427,8 @@ aiCategorizationRouter.post(
       accountId: auth.accountId,
       labelId: input.labelId,
       ruleName: input.ruleName,
-      conditions: input.conditions,
-      aiAssisted: input.aiAssisted ?? true,
+      conditions: input.conditions as Record<string, unknown>,
+      aiAssisted: input.aiAssisted !== undefined ? input.aiAssisted : true,
       accuracy: 0.5,
       totalApplied: 0,
       totalCorrected: 0,
@@ -495,19 +495,17 @@ aiCategorizationRouter.put(
 
     const now = new Date();
 
+    const ruleSetClause = {
+      updatedAt: now,
+      ...(input.ruleName !== undefined ? { ruleName: input.ruleName } : {}),
+      ...(input.conditions !== undefined ? { conditions: input.conditions } : {}),
+      ...(input.aiAssisted !== undefined ? { aiAssisted: input.aiAssisted } : {}),
+      ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+    };
+
     await db
       .update(smartLabelRules)
-      .set({
-        ...(input.ruleName !== undefined ? { ruleName: input.ruleName } : {}),
-        ...(input.conditions !== undefined
-          ? { conditions: input.conditions }
-          : {}),
-        ...(input.aiAssisted !== undefined
-          ? { aiAssisted: input.aiAssisted }
-          : {}),
-        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-        updatedAt: now,
-      })
+      .set(ruleSetClause as { updatedAt: Date })
       .where(
         and(
           eq(smartLabelRules.id, id),

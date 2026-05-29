@@ -8,7 +8,7 @@ import {
   type ChartDataPoint,
 } from "@alecrae/ui";
 import { motion } from "motion/react";
-import { analyticsApi, type OverviewStats } from "../../../lib/api";
+import { analyticsApi, heatmapApi, type OverviewStats } from "../../../lib/api";
 import {
   staggerGrid,
   fadeInUp,
@@ -16,42 +16,83 @@ import {
   withReducedMotion,
 } from "../../../lib/animations";
 
-// Fallback data for when API is not connected
-const fallbackDeliverability: ChartDataPoint[] = [
-  { label: "Mon", value: 0 },
-  { label: "Tue", value: 0 },
-  { label: "Wed", value: 0 },
-  { label: "Thu", value: 0 },
-  { label: "Fri", value: 0 },
-  { label: "Sat", value: 0 },
-  { label: "Sun", value: 0 },
-];
+const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function getLast7DaysLabels(): string[] {
+  const labels: string[] = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    labels.push(DAY_LABELS[d.getDay() === 0 ? 6 : d.getDay() - 1] ?? "");
+  }
+  return labels;
+}
 
 export default function AnalyticsPage(): React.ReactNode {
   const reduced = useAlecRaeReducedMotion();
   const [stats, setStats] = useState<OverviewStats | null>(null);
+  const [delivChart, setDelivChart] = useState<ChartDataPoint[]>([]);
+  const [hourlyChart, setHourlyChart] = useState<ChartDataPoint[]>([]);
+  const [volumeChart, setVolumeChart] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    analyticsApi
-      .overview()
-      .then((res) => setStats(res.data))
-      .catch(() => {
-        // API not available — show zeroes
+    const dayLabels = getLast7DaysLabels();
+
+    Promise.all([
+      analyticsApi.overview().catch(() => null),
+      analyticsApi.deliverability({ granularity: "day" }).catch(() => null),
+      heatmapApi.hourly({ period: "7d" }).catch(() => null),
+      heatmapApi.heatmap({ period: "7d" }).catch(() => null),
+    ]).then(([overviewRes, delivRes, hourlyRes, heatmapRes]) => {
+      if (overviewRes) {
+        setStats(overviewRes.data);
+      } else {
         setStats({
-          sent: 0,
-          delivered: 0,
-          bounced: 0,
-          complained: 0,
-          opened: 0,
-          clicked: 0,
-          deliveryRate: 0,
-          bounceRate: 0,
-          openRate: 0,
-          clickRate: 0,
+          sent: 0, delivered: 0, bounced: 0, complained: 0,
+          opened: 0, clicked: 0, deliveryRate: 0, bounceRate: 0,
+          openRate: 0, clickRate: 0,
         });
-      })
-      .finally(() => setLoading(false));
+      }
+
+      if (delivRes && Array.isArray(delivRes.data) && delivRes.data.length > 0) {
+        setDelivChart(
+          (delivRes.data as Record<string, unknown>[]).slice(-7).map((d, i: number) => ({
+            label: dayLabels[i] ?? "",
+            value: typeof d["deliveryRate"] === "number" ? Math.round(d["deliveryRate"] as number * 100) : 0,
+          })),
+        );
+      } else {
+        setDelivChart(dayLabels.map((l) => ({ label: l, value: 0 })));
+      }
+
+      if (hourlyRes && Array.isArray(hourlyRes.data) && hourlyRes.data.length > 0) {
+        setHourlyChart(
+          hourlyRes.data.map((h) => ({
+            label: `${h.hour}:00`,
+            value: h.sent + h.received,
+          })),
+        );
+      } else {
+        setHourlyChart(
+          Array.from({ length: 24 }, (_, i) => ({ label: `${i}:00`, value: 0 })),
+        );
+      }
+
+      if (heatmapRes && Array.isArray(heatmapRes.data) && heatmapRes.data.length > 0) {
+        setVolumeChart(
+          heatmapRes.data.slice(-7).map((d, i: number) => ({
+            label: dayLabels[i] ?? "",
+            value: d.sent + d.received,
+          })),
+        );
+      } else {
+        setVolumeChart(dayLabels.map((l) => ({ label: l, value: 0 })));
+      }
+
+      setLoading(false);
+    });
   }, []);
 
   const deliveryRate = stats ? (stats.deliveryRate * 100).toFixed(1) : "0";
@@ -119,7 +160,7 @@ export default function AnalyticsPage(): React.ReactNode {
           <AnalyticsChart
             title="Deliverability Rate"
             description="Percentage of emails successfully delivered over the past week"
-            data={fallbackDeliverability}
+            data={delivChart.length > 0 ? delivChart : [{ label: "—", value: 0 }]}
             chartType="area"
             height={220}
             formatValue={(v) => `${v}%`}
@@ -127,19 +168,19 @@ export default function AnalyticsPage(): React.ReactNode {
         </motion.div>
         <motion.div variants={itemVariants}>
           <AnalyticsChart
-            title="Engagement Rate"
-            description="Open and click-through rates by week"
-            data={fallbackDeliverability}
+            title="Hourly Activity"
+            description="Email activity by hour of day"
+            data={hourlyChart.length > 0 ? hourlyChart : [{ label: "—", value: 0 }]}
             chartType="bar"
             height={220}
-            formatValue={(v) => `${v}%`}
+            formatValue={(v) => v.toLocaleString()}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
           <AnalyticsChart
             title="Send Volume"
-            description="Total emails sent per period"
-            data={fallbackDeliverability}
+            description="Total emails sent and received per day"
+            data={volumeChart.length > 0 ? volumeChart : [{ label: "—", value: 0 }]}
             chartType="bar"
             height={220}
             formatValue={(v) => v.toLocaleString()}
@@ -149,7 +190,7 @@ export default function AnalyticsPage(): React.ReactNode {
           <AnalyticsChart
             title="Bounce Rate"
             description="Hard and soft bounces over the past week"
-            data={fallbackDeliverability}
+            data={delivChart.length > 0 ? delivChart.map((d) => ({ label: d.label, value: Math.max(0, 100 - d.value) })) : [{ label: "—", value: 0 }]}
             chartType="line"
             height={220}
             formatValue={(v) => `${v}%`}

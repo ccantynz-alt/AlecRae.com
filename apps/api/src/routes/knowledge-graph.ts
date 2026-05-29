@@ -7,14 +7,63 @@ import {
   knowledgeRelationships,
   knowledgeExtractions,
 } from "@alecrae/db";
-import { generateId } from "../lib/id.js";
+import { generateId } from "../lib/jwt.js";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
   validateQuery,
   getValidatedBody,
   getValidatedQuery,
-} from "../middleware/validation.js";
+} from "../middleware/validator.js";
+
+// ─── Schemas ─────────────────────────────────────────────────────────────────
+
+const ExtractBodySchema = z.object({
+  emailId: z.string().min(1),
+  content: z.string().min(1),
+  senderEmail: z.string().optional(),
+});
+
+const ListEntitiesQuerySchema = z.object({
+  type: z.enum(["person", "company", "project", "topic", "product", "event", "location"]).optional(),
+  search: z.string().optional(),
+  sortBy: z.enum(["mentions", "recent"]).optional().default("mentions"),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  cursor: z.string().optional(),
+});
+
+const UpdateEntityBodySchema = z.object({
+  description: z.string().optional(),
+  attributes: z.record(z.unknown()).optional(),
+});
+
+const ListRelationshipsQuerySchema = z.object({
+  type: z.string().optional(),
+  minStrength: z.coerce.number().min(0).max(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  cursor: z.string().optional(),
+});
+
+const SearchQuerySchema = z.object({ q: z.string().min(1) });
+
+const GraphQuerySchema = z.object({
+  centerEntityId: z.string().optional(),
+  depth: z.coerce.number().int().min(1).max(3).optional().default(2),
+  maxNodes: z.coerce.number().int().min(1).max(200).optional().default(50),
+});
+
+const BatchExtractBodySchema = z.object({
+  emails: z
+    .array(
+      z.object({
+        emailId: z.string().min(1),
+        content: z.string().min(1),
+        senderEmail: z.string().optional(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
 
 const knowledgeGraphRouter = new Hono();
 
@@ -25,20 +74,14 @@ const knowledgeGraphRouter = new Hono();
 knowledgeGraphRouter.post(
   "/extract",
   requireScope("messages:write"),
-  validateBody(
-    z.object({
-      emailId: z.string().min(1),
-      content: z.string().min(1),
-      senderEmail: z.string().optional(),
-    }),
-  ),
+  validateBody(ExtractBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof ExtractBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
     const startTime = Date.now();
 
-    const entityTypes = ["person", "company", "project", "topic", "product", "event", "location"] as const;
+    const _entityTypes = ["person", "company", "project", "topic", "product", "event", "location"] as const;
     const contentLower = body.content.toLowerCase();
 
     const emailPattern = /[\w.-]+@[\w.-]+\.\w+/g;
@@ -46,7 +89,7 @@ knowledgeGraphRouter.post(
     const companyPattern = /(?:at |@|from |with )([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)*)/g;
     const projectPattern = /(?:project|initiative|program)\s+["']?([A-Za-z][\w\s-]{2,30})["']?/gi;
 
-    const extractedEntities: Array<{ name: string; type: (typeof entityTypes)[number]; normalized: string }> = [];
+    const extractedEntities: { name: string; type: (typeof _entityTypes)[number]; normalized: string }[] = [];
 
     if (body.senderEmail) {
       const name = body.senderEmail.split("@")[0]?.replace(/[._-]/g, " ") ?? body.senderEmail;
@@ -64,7 +107,7 @@ knowledgeGraphRouter.post(
 
     let compMatch;
     while ((compMatch = companyPattern.exec(body.content)) !== null) {
-      const name = compMatch[1]!;
+      const name = compMatch[1] ?? "";
       if (name.length > 2 && name.length < 40) {
         extractedEntities.push({ name, type: "company", normalized: name.toLowerCase() });
       }
@@ -72,7 +115,7 @@ knowledgeGraphRouter.post(
 
     let projMatch;
     while ((projMatch = projectPattern.exec(body.content)) !== null) {
-      const name = projMatch[1]!.trim();
+      const name = (projMatch[1] ?? "").trim();
       if (name.length > 2) {
         extractedEntities.push({ name, type: "project", normalized: name.toLowerCase() });
       }
@@ -108,7 +151,8 @@ knowledgeGraphRouter.post(
         .limit(1);
 
       if (existing.length > 0) {
-        const record = existing[0]!;
+        const record = existing[0];
+        if (!record) continue;
         await db
           .update(knowledgeEntities)
           .set({
@@ -134,8 +178,8 @@ knowledgeGraphRouter.post(
     let relationshipsCreated = 0;
     for (let i = 0; i < entityIds.length && i < 10; i++) {
       for (let j = i + 1; j < entityIds.length && j < 10; j++) {
-        const sourceId = entityIds[i]!;
-        const targetId = entityIds[j]!;
+        const sourceId = entityIds[i] ?? "";
+        const targetId = entityIds[j] ?? "";
 
         const existingRel = await db
           .select()
@@ -150,7 +194,8 @@ knowledgeGraphRouter.post(
           .limit(1);
 
         if (existingRel.length > 0) {
-          const rel = existingRel[0]!;
+          const rel = existingRel[0];
+          if (!rel) continue;
           const currentEvidence = (rel.evidence ?? []) as string[];
           const newStrength = Math.min(1, rel.strength + 0.1);
           await db
@@ -205,17 +250,9 @@ knowledgeGraphRouter.post(
 knowledgeGraphRouter.get(
   "/entities",
   requireScope("messages:read"),
-  validateQuery(
-    z.object({
-      type: z.enum(["person", "company", "project", "topic", "product", "event", "location"]).optional(),
-      search: z.string().optional(),
-      sortBy: z.enum(["mentions", "recent"]).optional().default("mentions"),
-      limit: z.coerce.number().int().min(1).max(100).optional().default(50),
-      cursor: z.string().optional(),
-    }),
-  ),
+  validateQuery(ListEntitiesQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof ListEntitiesQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -289,21 +326,20 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.put(
   "/entities/:id",
   requireScope("messages:write"),
-  validateBody(
-    z.object({
-      description: z.string().optional(),
-      attributes: z.record(z.unknown()).optional(),
-    }),
-  ),
+  validateBody(UpdateEntityBodySchema),
   async (c) => {
     const id = c.req.param("id");
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof UpdateEntityBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
     const [updated] = await db
       .update(knowledgeEntities)
-      .set({ ...body, updatedAt: new Date() })
+      .set({
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.attributes !== undefined ? { attributes: body.attributes } : {}),
+        updatedAt: new Date(),
+      } as { updatedAt: Date })
       .where(and(eq(knowledgeEntities.id, id), eq(knowledgeEntities.accountId, accountId)))
       .returning();
 
@@ -372,16 +408,9 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.get(
   "/relationships",
   requireScope("messages:read"),
-  validateQuery(
-    z.object({
-      type: z.string().optional(),
-      minStrength: z.coerce.number().min(0).max(1).optional(),
-      limit: z.coerce.number().int().min(1).max(100).optional().default(50),
-      cursor: z.string().optional(),
-    }),
-  ),
+  validateQuery(ListRelationshipsQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof ListRelationshipsQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -414,9 +443,9 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.get(
   "/search",
   requireScope("messages:read"),
-  validateQuery(z.object({ q: z.string().min(1) })),
+  validateQuery(SearchQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof SearchQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -446,15 +475,9 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.get(
   "/graph",
   requireScope("messages:read"),
-  validateQuery(
-    z.object({
-      centerEntityId: z.string().optional(),
-      depth: z.coerce.number().int().min(1).max(3).optional().default(2),
-      maxNodes: z.coerce.number().int().min(1).max(200).optional().default(50),
-    }),
-  ),
+  validateQuery(GraphQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof GraphQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -527,26 +550,13 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.post(
   "/batch-extract",
   requireScope("messages:write"),
-  validateBody(
-    z.object({
-      emails: z
-        .array(
-          z.object({
-            emailId: z.string().min(1),
-            content: z.string().min(1),
-            senderEmail: z.string().optional(),
-          }),
-        )
-        .min(1)
-        .max(50),
-    }),
-  ),
+  validateBody(BatchExtractBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof BatchExtractBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
-    const results: Array<{ emailId: string; entitiesExtracted: number }> = [];
+    const results: { emailId: string; entitiesExtracted: number }[] = [];
 
     for (const email of body.emails) {
       const topicKeywords = ["budget", "deadline", "launch", "design", "marketing", "sales", "hiring"];
@@ -570,8 +580,8 @@ knowledgeGraphRouter.post(
         if (existing.length > 0) {
           await db
             .update(knowledgeEntities)
-            .set({ mentionCount: existing[0]!.mentionCount + 1, lastSeenAt: new Date(), updatedAt: new Date() })
-            .where(eq(knowledgeEntities.id, existing[0]!.id));
+            .set({ mentionCount: (existing[0]?.mentionCount ?? 0) + 1, lastSeenAt: new Date(), updatedAt: new Date() })
+            .where(eq(knowledgeEntities.id, existing[0]?.id ?? ""));
         } else {
           await db.insert(knowledgeEntities).values({
             id: generateId(),
@@ -658,12 +668,13 @@ knowledgeGraphRouter.get(
       .orderBy(desc(knowledgeEntities.mentionCount))
       .limit(10);
 
-    const suggestions: Array<{ type: string; message: string; entities: string[] }> = [];
+    const suggestions: { type: string; message: string; entities: string[] }[] = [];
 
     for (let i = 0; i < highMention.length; i++) {
       for (let j = i + 1; j < highMention.length; j++) {
-        const a = highMention[i]!;
-        const b = highMention[j]!;
+        const a = highMention[i];
+        const b = highMention[j];
+        if (!a || !b) continue;
 
         const existingRel = await db
           .select()

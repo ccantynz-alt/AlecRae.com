@@ -138,7 +138,7 @@ contactsExtendedRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.occurredAt.toISOString()
+        ? page[page.length - 1]?.occurredAt.toISOString()
         : null;
 
     return c.json({
@@ -254,7 +254,7 @@ contactsExtendedRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.reminderAt.toISOString()
+        ? page[page.length - 1]?.reminderAt.toISOString()
         : null;
 
     return c.json({

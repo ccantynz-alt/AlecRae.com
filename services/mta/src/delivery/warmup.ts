@@ -119,7 +119,7 @@ export function classifyRecipientIsp(email: string): IspBucket {
  * Index 0 = week 1, index 5 = week 6. After week 6 the caller handles
  * the "2x previous day real volume" policy.
  */
-const WEEKLY_LIMITS: ReadonlyArray<Readonly<Record<IspBucket, number>>> = [
+const WEEKLY_LIMITS: readonly Readonly<Record<IspBucket, number>>[] = [
   { gmail: 50, outlook: 50, yahoo: 25, apple: 25, other: 25 },     // Week 1
   { gmail: 100, outlook: 100, yahoo: 50, apple: 50, other: 50 },    // Week 2
   { gmail: 250, outlook: 250, yahoo: 100, apple: 100, other: 100 }, // Week 3

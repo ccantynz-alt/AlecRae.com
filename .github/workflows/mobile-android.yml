@@ -1,0 +1,89 @@
+name: Mobile — Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-android.yml'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - development
+          - preview
+          - production
+      submit:
+        description: 'Submit to Play Store after build?'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: mobile-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: EAS Build — Android (${{ inputs.profile || 'preview' }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Install dependencies
+        working-directory: apps/mobile
+        run: npm install
+
+      - name: EAS Build (Android)
+        working-directory: apps/mobile
+        run: |
+          eas build \
+            --platform android \
+            --profile ${{ inputs.profile || 'preview' }} \
+            --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  submit:
+    name: Submit — Google Play (Internal Track)
+    needs: build
+    if: |
+      (github.ref == 'refs/heads/main' && inputs.profile == 'production') ||
+      inputs.submit == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Write Google service account key
+        working-directory: apps/mobile
+        run: echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}' > google-service-account.json
+
+      - name: Submit to Play Store
+        working-directory: apps/mobile
+        run: eas submit --platform android --latest --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          # Google credentials — set in GitHub → Settings → Secrets and variables → Actions
+          # GOOGLE_SERVICE_ACCOUNT_KEY: JSON content of your Google Play service account key

@@ -568,7 +568,9 @@ export class SentimentAnalyzer {
   private detectEscalation(
     scores: readonly number[],
   ): { hasEscalation: boolean; escalationPoint?: number } {
-    // Escalation = 3+ consecutive declining scores
+    // Escalation = 3+ consecutive declining scores, OR a cliff-drop (drop >0.7 in one step)
+    // followed by sustained negativity (handles score-floor saturation)
+    let maxConsecutiveDeclines = 0;
     let consecutiveDeclines = 0;
     let escalationPoint: number | undefined;
 
@@ -577,18 +579,36 @@ export class SentimentAnalyzer {
       const curr = scores[i];
       if (prev !== undefined && curr !== undefined && curr < prev - 0.05) {
         consecutiveDeclines++;
+        if (consecutiveDeclines > maxConsecutiveDeclines) {
+          maxConsecutiveDeclines = consecutiveDeclines;
+        }
         if (consecutiveDeclines >= 2 && escalationPoint === undefined) {
-          escalationPoint = i - 1; // point where decline started
+          escalationPoint = i - consecutiveDeclines;
         }
       } else {
         consecutiveDeclines = 0;
       }
     }
 
-    return {
-      hasEscalation: consecutiveDeclines >= 2,
-      ...(escalationPoint !== undefined ? { escalationPoint } : {}),
-    };
+    if (maxConsecutiveDeclines >= 2) {
+      return { hasEscalation: true, ...(escalationPoint !== undefined ? { escalationPoint } : {}) };
+    }
+
+    // Cliff-drop: single large drop (>0.7) followed by all-negative remaining messages
+    if (scores.length >= 3) {
+      for (let i = 1; i < scores.length; i++) {
+        const prev = scores[i - 1];
+        const curr = scores[i];
+        if (prev !== undefined && curr !== undefined && prev - curr > 0.7) {
+          const remaining = scores.slice(i);
+          if (remaining.length >= 1 && remaining.every((s) => s !== undefined && s < 0)) {
+            return { hasEscalation: true, escalationPoint: i - 1 };
+          }
+        }
+      }
+    }
+
+    return { hasEscalation: false };
   }
 
   private extractText(email: EmailMessage): string {

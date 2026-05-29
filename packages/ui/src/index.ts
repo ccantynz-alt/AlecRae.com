@@ -18,6 +18,7 @@ export { SendTimeSuggestion, type SendTimeSuggestionProps, type SendTimeSlot, ty
 export { UnsubscribeButton, type UnsubscribeButtonProps, type UnsubscribeStatus, type UnsubscribeOption, type UnsubscribeResult } from "./composites/unsubscribe-button";
 export { TranslationBadge, type TranslationBadgeProps, type TranslationBadgeData, type TranslationContent, type TranslationRecord, type TranslationViewMode } from "./composites/translation-badge";
 export { SpellCheckSuggestions, type SpellCheckSuggestionsProps, type SpellCheckIssue, type SpellCheckResult, type SpellCheckRequestFn, type AddToDictionaryFn } from "./composites/spellcheck-suggestions";
+export { GrammarPanel, type GrammarPanelProps, type GrammarIssue, type EmailWarning, type GrammarCheckResult, type GrammarCheckRequestFn } from "./composites/grammar-panel";
 export { InboxZeroCelebration, type InboxZeroCelebrationProps, type NewAchievement } from "./composites/inbox-zero-celebration";
 export { StreakCounter, type StreakCounterProps } from "./composites/streak-counter";
 export { AchievementBadge, type AchievementBadgeProps, type AchievementBadgeData } from "./composites/achievement-badge";
@@ -63,6 +64,8 @@ export { ScriptEditor, type ScriptEditorProps, type ScriptData, type ScriptTempl
 export { QueryConsole, type QueryConsoleProps, type QueryMode, type QueryState, type ConsolePanelView, type QueryResultData, type QueryExplanationData, type QueryHistoryEntry, type SavedQueryEntry, type QueryResultColumn } from "./composites/query-console";
 export { SwipeableEmailRow as SwipeableEmailRowUI, type SwipeableEmailRowProps as SwipeableEmailRowUIProps, type SwipeableEmailRowData, type SwipeActionKind, type SwipeAction, type SwipeConfig } from "./composites/swipeable-email-row";
 export { QuickReplySheet as QuickReplySheetUI, type QuickReplySheetProps as QuickReplySheetUIProps, type QuickReplySuggestion, type ThreadContextMessage, type ReplyLength } from "./composites/quick-reply-sheet";
+export { EmailWarningsBar, detectEmailWarnings, type EmailWarningsBarProps, type EmailWarning as ComposeEmailWarning } from "./composites/email-warnings-bar";
+export { WritingAssistantPanel, type WritingAssistantPanelProps, type WritingProfile, type RewriteOption, type AutocompleteOption, type SubjectLineOption } from "./composites/writing-assistant-panel";
 
 // Layouts
 export { Sidebar, type SidebarProps, type SidebarNavItem, type SidebarSection } from "./layouts/sidebar";

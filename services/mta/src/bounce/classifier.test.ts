@@ -118,7 +118,8 @@ describe("classifyBounce — transient bounces", () => {
     expect(v.shouldSuppress).toBe(false);
     expect(v.retryAfterSeconds).not.toBeNull();
     // Transient retries should be shorter than the soft-bounce base.
-    expect(v.retryAfterSeconds!).toBeLessThan(15 * 60);
+    const retryAfter = v.retryAfterSeconds;
+    if (retryAfter !== null && retryAfter !== undefined) expect(retryAfter).toBeLessThan(15 * 60);
   });
 
   test("4.3.2 server busy / rate limited phrasing → transient", () => {

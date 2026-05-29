@@ -10,12 +10,26 @@ import { FocusModeOverlay, type FocusModeOverlayEmail } from "../../components/F
 import { FocusModeToggle } from "../../components/FocusModeToggle";
 import { useFocusMode } from "../../lib/focus-mode";
 import { authApi } from "../../lib/api";
+import { KeyboardShortcutHelp } from "../../components/KeyboardShortcutHelp";
+import { CommandPalette } from "../../components/CommandPalette";
+import { OfflineBadge } from "../../components/SyncStatusBar";
+import { InstallPrompt } from "../../components/InstallPrompt";
 
 const navigationSections: AnimatedSidebarSection[] = [
   {
     items: [
       { id: "inbox", label: "Inbox", href: "/inbox" },
       { id: "compose", label: "Compose", href: "/compose" },
+      { id: "sent", label: "Sent", href: "/sent" },
+      { id: "drafts", label: "Drafts", href: "/drafts" },
+      { id: "snoozed", label: "Snoozed", href: "/snoozed" },
+    ],
+  },
+  {
+    title: "Tools",
+    items: [
+      { id: "templates", label: "Templates", href: "/templates" },
+      { id: "contacts", label: "Contacts", href: "/contacts" },
     ],
   },
   {
@@ -154,6 +168,8 @@ export default function DashboardLayout({
       />
       <Box as="main" className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">
+          <OfflineBadge />
+          <Box className="flex-1" />
           <FocusModeToggle />
         </Box>
         <AnimatedPage pageKey={pathname ?? "dashboard"} mode="slide" className="flex flex-col flex-1 min-h-0">
@@ -161,6 +177,15 @@ export default function DashboardLayout({
         </AnimatedPage>
       </Box>
       <FocusModeOverlay emails={focusModeEmails} />
+
+      {/* Keyboard shortcut help — toggle with ? */}
+      <KeyboardShortcutHelp />
+
+      {/* Command palette — Cmd+K */}
+      <CommandPalette />
+
+      {/* PWA install prompt */}
+      <InstallPrompt />
     </Box>
   );
 }

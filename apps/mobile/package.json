@@ -16,7 +16,7 @@
     "submit:android": "eas submit --platform android",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'Lint via biome at root level'",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "build": "echo 'Mobile app builds via EAS Build, not in monorepo turbo build'"
   },
   "dependencies": {

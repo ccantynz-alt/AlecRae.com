@@ -35,9 +35,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "YOUR_APPLE_ID",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_ID",
-        "appleTeamId": "YOUR_TEAM_ID"
+        "appleId": "FILL_IN: your Apple ID email (e.g. craig@alecrae.com)",
+        "ascAppId": "FILL_IN: App Store Connect App ID (numbers only, from appstoreconnect.apple.com)",
+        "appleTeamId": "FILL_IN: 10-char Team ID from developer.apple.com/account"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",

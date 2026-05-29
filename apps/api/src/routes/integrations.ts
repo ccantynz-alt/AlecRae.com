@@ -93,7 +93,10 @@ integrationsRouter.post(
       name: input.name,
       webhookUrl: input.webhookUrl,
       secret,
-      triggerConfig: { events: input.events, filters: input.filters },
+      triggerConfig: {
+        events: input.events,
+        ...(input.filters !== undefined ? { filters: input.filters } : {}),
+      } as { events: string[] },
       createdAt: now,
       updatedAt: now,
     });

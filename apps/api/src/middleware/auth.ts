@@ -206,6 +206,7 @@ async function validateBearerToken(
     const { verifyAccessToken } = await import("../lib/jwt.js");
     const payload = await verifyAccessToken(token);
 
+    const userId = payload.userId as string | undefined;
     return {
       accountId: payload.sub as string,
       keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
@@ -215,7 +216,7 @@ async function validateBearerToken(
         "messages:read",
         "account:manage",
       ],
-      userId: payload.userId as string | undefined,
+      ...(userId !== undefined ? { userId } : {}),
     };
   } catch {
     // Fallback: try raw decode for legacy tokens (unsigned / HS256 dev tokens)
@@ -231,6 +232,7 @@ async function validateBearerToken(
       if (payload.exp && payload.exp < now) return null;
       if (!payload.sub) return null;
 
+      const userId2 = payload.userId as string | undefined;
       return {
         accountId: payload.sub as string,
         keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
@@ -240,7 +242,7 @@ async function validateBearerToken(
           "messages:read",
           "account:manage",
         ],
-        userId: payload.userId as string | undefined,
+        ...(userId2 !== undefined ? { userId: userId2 } : {}),
       };
     } catch {
       return null;

@@ -17,20 +17,21 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, lt, gte, sql } from "drizzle-orm";
+import { eq, and, desc, lt, gte, sql as _sql } from "drizzle-orm";
 import {
   getDatabase,
   meetingProposals,
   availabilityPatterns,
 } from "@alecrae/db";
-import { generateId } from "../lib/id.js";
+import type { MeetingPreferences } from "@alecrae/db";
+import { generateId } from "../lib/jwt.js";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
   validateQuery,
   getValidatedBody,
   getValidatedQuery,
-} from "../middleware/validation.js";
+} from "../middleware/validator.js";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -170,8 +171,8 @@ function generateTimeSlots(
   duration: number,
   startHour: number,
   endHour: number,
-): Array<{ start: string; end: string; confidence: number }> {
-  const slots: Array<{ start: string; end: string; confidence: number }> = [];
+): { start: string; end: string; confidence: number }[] {
+  const slots: { start: string; end: string; confidence: number }[] = [];
   const now = new Date();
   const startDate = new Date(now);
   startDate.setDate(startDate.getDate() + 1);
@@ -219,7 +220,7 @@ schedulingIntelligenceRouter.post(
   requireScope("messages:write"),
   validateBody(DetectBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof DetectBodySchema>>(c);
     const result = detectSchedulingIntent(body.content);
 
     return c.json({
@@ -242,7 +243,7 @@ schedulingIntelligenceRouter.post(
   requireScope("messages:write"),
   validateBody(ProposeBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof ProposeBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -251,12 +252,12 @@ schedulingIntelligenceRouter.post(
       .from(availabilityPatterns)
       .where(eq(availabilityPatterns.accountId, accountId));
 
-    const startHour = patterns.length > 0 ? patterns[0]!.preferredStartHour : 9;
-    const endHour = patterns.length > 0 ? patterns[0]!.preferredEndHour : 17;
+    const startHour = patterns.length > 0 ? (patterns[0]?.preferredStartHour ?? 9) : 9;
+    const endHour = patterns.length > 0 ? (patterns[0]?.preferredEndHour ?? 17) : 17;
 
     const proposedTimes = generateTimeSlots(body.duration, startHour, endHour);
 
-    const intent = detectSchedulingIntent("");
+    const _intent = detectSchedulingIntent("");
     const meetingType =
       body.preferences?.preferMorning !== undefined ? "one_on_one" : "one_on_one";
 
@@ -318,7 +319,7 @@ schedulingIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({
@@ -370,7 +371,7 @@ schedulingIntelligenceRouter.put(
   requireScope("messages:write"),
   validateBody(UpdateProposalBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof UpdateProposalBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
     const id = c.req.param("id");
@@ -434,7 +435,7 @@ schedulingIntelligenceRouter.put(
   requireScope("messages:write"),
   validateBody(UpdatePatternsBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof UpdatePatternsBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -455,7 +456,7 @@ schedulingIntelligenceRouter.put(
         .set({
           preferredStartHour: body.preferredStartHour,
           preferredEndHour: body.preferredEndHour,
-          meetingPreferences: body.meetingPreferences ?? existing.meetingPreferences,
+          meetingPreferences: (body.meetingPreferences ?? existing.meetingPreferences) as unknown as MeetingPreferences,
           updatedAt: new Date(),
         })
         .where(eq(availabilityPatterns.id, existing.id))
@@ -473,7 +474,7 @@ schedulingIntelligenceRouter.put(
         dayOfWeek: body.dayOfWeek,
         preferredStartHour: body.preferredStartHour,
         preferredEndHour: body.preferredEndHour,
-        meetingPreferences: body.meetingPreferences ?? {},
+        meetingPreferences: (body.meetingPreferences ?? {}) as unknown as MeetingPreferences,
       })
       .returning();
 
@@ -490,20 +491,20 @@ schedulingIntelligenceRouter.post(
   requireScope("messages:write"),
   validateBody(LearnPatternsBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof LearnPatternsBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
-    const dayBuckets: Map<number, Array<{ start: string; end: string; recurring: boolean }>> =
-      new Map();
+    const dayBuckets =
+      new Map<number, { start: string; end: string; recurring: boolean }[]>();
 
     for (const event of body.calendarEvents) {
       const day = new Date(event.start).getDay();
       if (!dayBuckets.has(day)) dayBuckets.set(day, []);
-      dayBuckets.get(day)!.push(event);
+      dayBuckets.get(day)?.push(event);
     }
 
-    const results: Array<Record<string, unknown>> = [];
+    const results: Record<string, unknown>[] = [];
 
     for (const [day, events] of dayBuckets) {
       const hours = events.map((e) => new Date(e.start).getHours());
@@ -590,8 +591,8 @@ schedulingIntelligenceRouter.get(
       .where(eq(availabilityPatterns.accountId, accountId))
       .orderBy(availabilityPatterns.dayOfWeek);
 
-    const startHour = patterns.length > 0 ? patterns[0]!.preferredStartHour : 9;
-    const endHour = patterns.length > 0 ? patterns[0]!.preferredEndHour : 17;
+    const startHour = patterns.length > 0 ? (patterns[0]?.preferredStartHour ?? 9) : 9;
+    const endHour = patterns.length > 0 ? (patterns[0]?.preferredEndHour ?? 17) : 17;
 
     const participantList = query.participants.split(",").map((p) => p.trim());
     const slots = generateTimeSlots(query.duration, startHour, endHour);
@@ -638,17 +639,18 @@ schedulingIntelligenceRouter.get(
       )
       .orderBy(meetingProposals.createdAt);
 
-    const conflicts: Array<{
+    const conflicts: {
       proposalA: string;
       proposalB: string;
       overlapStart: string;
       overlapEnd: string;
-    }> = [];
+    }[] = [];
 
     for (let i = 0; i < proposals.length; i++) {
       for (let j = i + 1; j < proposals.length; j++) {
-        const a = proposals[i]!;
-        const b = proposals[j]!;
+        const a = proposals[i];
+        const b = proposals[j];
+        if (!a || !b) continue;
 
         if (a.selectedTime && b.selectedTime) {
           const aStart = new Date(a.selectedTime).getTime();
@@ -745,7 +747,7 @@ schedulingIntelligenceRouter.post(
   requireScope("messages:write"),
   validateBody(AutoRespondBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof AutoRespondBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -764,8 +766,8 @@ schedulingIntelligenceRouter.post(
       return c.json({ success: false, error: "Proposal not found" }, 404);
     }
 
-    let responseText: string;
-    let newStatus: "accepted" | "declined" | "proposed";
+    let responseText = "Action processed.";
+    let newStatus: "accepted" | "declined" | "proposed" = "proposed";
 
     switch (body.action) {
       case "accept": {
@@ -800,8 +802,8 @@ schedulingIntelligenceRouter.post(
           .where(eq(availabilityPatterns.accountId, accountId))
           .limit(1);
 
-        const startHour = patterns.length > 0 ? patterns[0]!.preferredStartHour : 9;
-        const endHour = patterns.length > 0 ? patterns[0]!.preferredEndHour : 17;
+        const startHour = patterns.length > 0 ? (patterns[0]?.preferredStartHour ?? 9) : 9;
+        const endHour = patterns.length > 0 ? (patterns[0]?.preferredEndHour ?? 17) : 17;
         const alternatives = generateTimeSlots(proposal.duration, startHour, endHour);
 
         const altText = alternatives

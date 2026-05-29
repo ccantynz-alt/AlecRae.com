@@ -78,7 +78,7 @@ describe('CommunicationGraph - contacts', () => {
     graph.ingestEmail(email1, USER, 'inbound');
     graph.ingestEmail(email2, USER, 'inbound');
     const contact = graph.getContact('alice@example.com');
-    expect(contact!.totalInteractions).toBe(3); // +1 for user node too, but alice is updated twice
+    expect(contact!.totalInteractions).toBe(2); // ingestEmail called twice for alice → 2 interactions
   });
 
   it('should list all contacts', () => {

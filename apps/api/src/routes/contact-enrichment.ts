@@ -70,15 +70,15 @@ function enrichFromEmail(email: string): {
   const isFreeProvider = freeProviders.has(domain.toLowerCase());
 
   const data: EnrichmentData = {
-    fullName: derivedName,
-    companyDomain: isFreeProvider ? undefined : domain,
-    company: isFreeProvider
-      ? undefined
-      : domain
-          .replace(/\.(com|io|co|org|net|dev)$/, "")
-          .split(".")
-          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-          .join(" "),
+    ...(derivedName !== undefined ? { fullName: derivedName } : {}),
+    ...(isFreeProvider ? {} : {
+      companyDomain: domain,
+      company: domain
+        .replace(/\.(com|io|co|org|net|dev)$/, "")
+        .split(".")
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join(" "),
+    }),
   };
 
   return {
@@ -311,12 +311,12 @@ contactEnrichmentRouter.post(
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const results: Array<{
+    const results: {
       contactId: string;
       email: string;
       data: EnrichmentData;
       confidence: number;
-    }> = [];
+    }[] = [];
 
     for (const contact of contactRows) {
       const enrichment = enrichFromEmail(contact.email);

@@ -1,0 +1,70 @@
+{
+  "version": "1.0.0",
+  "product": "alecrae",
+  "description": "AI flywheel for the AlecRae email client — learns from every user action to improve every AI feature",
+
+  "signal_collection": {
+    "compose": [
+      "suggestion_shown", "suggestion_accepted", "suggestion_edited", "suggestion_discarded",
+      "words_changed_after_accept_pct", "final_email_length", "time_to_send_after_compose_ms"
+    ],
+    "triage": [
+      "email_id", "ai_priority_assigned", "user_action",
+      "time_to_action_ms", "action_matches_priority"
+    ],
+    "smart_reply": [
+      "suggestions_shown", "suggestion_index_chosen", "edited_before_send",
+      "edit_distance_from_suggestion", "discarded"
+    ],
+    "voice_profile": [
+      "email_sent", "was_ai_drafted", "edit_distance_from_draft",
+      "formality_score", "avg_sentence_length", "vocabulary_match_pct"
+    ],
+    "phishing_detection": [
+      "email_id", "risk_score", "user_confirmed_phishing",
+      "user_marked_safe", "false_positive", "false_negative"
+    ],
+    "search": [
+      "query", "query_type", "results_count",
+      "result_clicked_position", "found_what_needed"
+    ]
+  },
+
+  "learning_cycles": {
+    "on_email_sent": {
+      "action": "update_voice_profile_and_compose_model",
+      "model": "claude-haiku-4-5",
+      "latency_budget_ms": 300
+    },
+    "on_triage_action": {
+      "action": "score_triage_prediction_accuracy",
+      "model": "claude-haiku-4-5",
+      "latency_budget_ms": 100
+    },
+    "daily_voice_profile_update": {
+      "action": "retrain_voice_profile_from_last_30_days_sent_emails",
+      "model": "claude-sonnet-4-6",
+      "schedule": "0 2 * * *"
+    },
+    "weekly_model_eval": {
+      "action": "evaluate_all_feature_accuracy_metrics_and_flag_regressions",
+      "model": "claude-sonnet-4-6",
+      "schedule": "0 9 * * 1"
+    }
+  },
+
+  "improvement_targets": [
+    { "metric": "compose_acceptance_rate", "target": 0.65 },
+    { "metric": "triage_accuracy", "target": 0.92 },
+    { "metric": "smart_reply_acceptance_rate", "target": 0.55 },
+    { "metric": "voice_profile_edit_distance", "target": 0.10, "direction": "minimize" },
+    { "metric": "phishing_false_positive_rate", "target": 0.02, "direction": "minimize" }
+  ],
+
+  "data_retention": {
+    "hot_days": 30,
+    "cold_days": 365,
+    "pii_fields": ["email_id", "query"],
+    "pii_retention_days": 90
+  }
+}

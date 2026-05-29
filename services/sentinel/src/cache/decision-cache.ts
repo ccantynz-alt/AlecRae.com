@@ -27,6 +27,7 @@ interface CacheConfig {
 export class DecisionCache {
   private cache = new Map<string, CacheEntry>();
   private accessOrder = new Map<string, number>();
+  private accessCounter = 0;
   private stats = {
     hits: 0,
     misses: 0,
