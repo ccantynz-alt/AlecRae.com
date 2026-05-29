@@ -118,7 +118,7 @@ function ProfileSection({
     }
   }, [user]);
 
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [_saveError, _setSaveError] = useState<string | null>(null);
 
   const handleSave = async () => {
     setSaving(true);
@@ -435,20 +435,20 @@ NotificationSection.displayName = "NotificationSection";
 
 function DangerZone() {
   const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [_deleting, _setDeleting] = useState(false);
 
-  const handleDelete = async () => {
+  const _handleDelete = async () => {
     if (!confirming) {
       setConfirming(true);
       return;
     }
-    setDeleting(true);
+    _setDeleting(true);
     try {
       await accountApi.deleteAccount();
       authApi.logout();
       window.location.href = "/";
     } catch {
-      setDeleting(false);
+      _setDeleting(false);
       setConfirming(false);
     }
   };

@@ -16,7 +16,7 @@ function registerServiceWorker(
   onUpdate?: UpdateCallback,
 ): () => void {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
-    return () => {};
+    return () => { /* noop */ };
   }
 
   let cancelled = false;
@@ -79,7 +79,7 @@ async function requestNotificationPermission(): Promise<boolean> {
 // ─── usePWA Hook ────────────────────────────────────────────────────────────
 
 interface BeforeInstallPromptEvent extends Event {
-  readonly platforms: ReadonlyArray<string>;
+  readonly platforms: readonly string[];
   readonly userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
   prompt(): Promise<void>;
 }

@@ -104,7 +104,8 @@ export function RecipientAutocomplete({
     } else if (e.key === "Enter" || e.key === "Tab") {
       if (activeIndex >= 0 && activeIndex < suggestions.length) {
         e.preventDefault();
-        selectSuggestion(suggestions[activeIndex]!);
+        const selected = suggestions[activeIndex];
+        if (selected) selectSuggestion(selected);
       }
     } else if (e.key === "Escape") {
       setShowDropdown(false);

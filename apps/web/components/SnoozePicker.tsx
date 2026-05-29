@@ -10,7 +10,7 @@ export interface SnoozePickerProps {
   onClose: () => void;
 }
 
-function getPresets(): Array<{ label: string; time: Date }> {
+function getPresets(): { label: string; time: Date }[] {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 

@@ -82,7 +82,8 @@ export function SignatureManager({ onSelect, mode = "manage" }: SignatureManager
   const handleDelete = (id: string): void => {
     const updated = signatures.filter((s) => s.id !== id);
     if (updated.length > 0 && !updated.some((s) => s.isDefault)) {
-      updated[0]!.isDefault = true;
+      const first = updated[0];
+      if (first) first.isDefault = true;
     }
     persist(updated);
   };

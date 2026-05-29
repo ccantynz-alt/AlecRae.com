@@ -1037,7 +1037,7 @@ export const snoozeApi = {
   },
 
   list() {
-    return apiFetch<{ data: Array<{ id: string; emailId: string; snoozedUntil: string; subject: string }> }>(
+    return apiFetch<{ data: { id: string; emailId: string; snoozedUntil: string; subject: string }[] }>(
       "/v1/snooze",
     );
   },

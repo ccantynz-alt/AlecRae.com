@@ -129,11 +129,11 @@ function mapMessageToCachedEmail(message: Message): CachedEmail {
 export class SyncEngine {
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private intervalMs: number = DEFAULT_SYNC_INTERVAL_MS;
-  private syncing: boolean = false;
-  private online: boolean = true;
+  private syncing = false;
+  private online = true;
   private lastSyncAt: Date | null = null;
   private lastError: string | null = null;
-  private listeners: Map<SyncEventType, Set<SyncEventCallback>> = new Map();
+  private listeners = new Map<SyncEventType, Set<SyncEventCallback>>();
   private boundOnline: (() => void) | null = null;
   private boundOffline: (() => void) | null = null;
 
@@ -252,8 +252,8 @@ export class SyncEngine {
       timestamp: Date.now(),
     });
 
-    let newEmailCount = 0;
-    let syncedActions = 0;
+    let newEmailCount: number;
+    let syncedActions: number;
 
     try {
       // 1. Apply queued offline actions to the server
@@ -269,7 +269,7 @@ export class SyncEngine {
         const listParams: Parameters<typeof messagesApi.list>[0] = {
           limit: SYNC_PAGE_LIMIT,
         };
-        if (currentCursor != null) listParams.cursor = currentCursor;
+        if (currentCursor !== null && currentCursor !== undefined) listParams.cursor = currentCursor;
         const response = await messagesApi.list(listParams);
 
         const emails = response.data;

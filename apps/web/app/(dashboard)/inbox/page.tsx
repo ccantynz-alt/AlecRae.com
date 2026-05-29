@@ -412,10 +412,10 @@ export default function InboxPage(): React.ReactNode {
         }
       },
       aiCompose: () => router.push("/compose"),
-      aiReply: () => {},
-      aiSummarize: () => {},
-      toggleDarkMode: () => {},
-      toggleFocusMode: () => {},
+      aiReply: () => { /* no-op: AI reply not yet wired */ },
+      aiSummarize: () => { /* no-op: AI summarize not yet wired */ },
+      toggleDarkMode: () => { /* no-op: handled by theme provider */ },
+      toggleFocusMode: () => { /* no-op: handled by focus provider */ },
     });
 
     return registerShortcuts(shortcuts, () =>
@@ -445,7 +445,7 @@ export default function InboxPage(): React.ReactNode {
           }));
           setEmailItems(cachedItems);
           if (cachedItems.length > 0 && !selectedEmailId) {
-            setSelectedEmailId(cachedItems[0]!.id);
+            setSelectedEmailId(cachedItems[0]?.id ?? "");
           }
           setLoading(false);
         }
@@ -492,7 +492,7 @@ export default function InboxPage(): React.ReactNode {
         attachments: [],
         syncedAt: Date.now(),
       }));
-      cacheEmails(toCache).catch(() => {});
+      cacheEmails(toCache).catch(() => { /* background cache — non-fatal */ });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load emails");
     } finally {
@@ -514,7 +514,7 @@ export default function InboxPage(): React.ReactNode {
 
   useEffect(() => {
     fetchEmails();
-    authApi.me().then((res) => setUserEmail(res.data.email)).catch(() => {});
+    authApi.me().then((res) => setUserEmail(res.data.email)).catch(() => { /* non-fatal */ });
   }, [fetchEmails]);
 
   useEffect(() => {

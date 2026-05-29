@@ -499,7 +499,7 @@ TemplateCard.displayName = "TemplateCard";
 
 function TemplateEditSection({
   template,
-  variables,
+  variables: _variables,
   onUpdated,
   onPreview,
   deleteConfirm,

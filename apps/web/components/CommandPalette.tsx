@@ -66,7 +66,7 @@ export function CommandPalette(): React.ReactNode {
     const groups: Record<string, CommandItem[]> = {};
     for (const item of filtered) {
       if (!groups[item.category]) groups[item.category] = [];
-      groups[item.category]!.push(item);
+      groups[item.category]?.push(item);
     }
     return groups;
   }, [filtered]);
@@ -74,7 +74,8 @@ export function CommandPalette(): React.ReactNode {
   const flatItems = useMemo(() => {
     const items: CommandItem[] = [];
     for (const category of Object.keys(grouped)) {
-      items.push(...grouped[category]!);
+      const categoryItems = grouped[category];
+      if (categoryItems) items.push(...categoryItems);
     }
     return items;
   }, [grouped]);

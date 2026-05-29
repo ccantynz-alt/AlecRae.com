@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { AnimatePresence, motion } from "motion/react";
+import { motion } from "motion/react";
 import { messagesApi } from "../lib/api";
 
 interface QuickReplyProps {
@@ -14,7 +14,7 @@ interface QuickReplyProps {
   onClose: () => void;
 }
 
-export function QuickReply({ emailId, toEmail, toName, subject, userEmail, onSent, onClose }: QuickReplyProps) {
+export function QuickReply({ emailId: _emailId, toEmail, toName, subject, userEmail, onSent, onClose }: QuickReplyProps) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
