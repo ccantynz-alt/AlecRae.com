@@ -83,9 +83,9 @@ sentimentTimelineRouter.post(
     else if (net === -1) sentimentIdx = 3;
     else if (net <= -2) sentimentIdx = 4;
 
-    const sentiment = sentimentLevels[sentimentIdx] ?? sentimentLevels[2]!;
+    const sentiment = sentimentLevels[sentimentIdx] ?? "neutral";
     const score = Math.max(0, Math.min(1, 0.5 + net * 0.15));
-    const emotionalTone = tones[Math.abs(net) % tones.length] ?? tones[0]!;
+    const emotionalTone = tones[Math.abs(net) % tones.length] ?? "professional";
     const topics = topicKeywords.filter((t) => contentLower.includes(t));
 
     const id = generateId();
@@ -380,7 +380,7 @@ sentimentTimelineRouter.post(
       else if (net === -1) idx = 3;
       else if (net <= -2) idx = 4;
       const score = Math.max(0, Math.min(1, 0.5 + net * 0.15));
-      const batchSentiment = sentimentLevels[idx] ?? sentimentLevels[2]!;
+      const batchSentiment = sentimentLevels[idx] ?? "neutral";
 
       await db.insert(sentimentTimeline).values({
         id: generateId(),

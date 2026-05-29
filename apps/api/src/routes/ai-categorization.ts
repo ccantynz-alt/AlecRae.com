@@ -111,9 +111,9 @@ function placeholderCategorize(emailId: string): {
     .split("")
     .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   const idx = hash % PRIMARY_CATEGORIES.length;
-  const primary = PRIMARY_CATEGORIES[idx] ?? PRIMARY_CATEGORIES[0]!;
+  const primary = PRIMARY_CATEGORIES[idx] ?? "important";
   const secondaryIdx = (idx + 3) % PRIMARY_CATEGORIES.length;
-  const secondary = PRIMARY_CATEGORIES[secondaryIdx] ?? PRIMARY_CATEGORIES[1]!;
+  const secondary = PRIMARY_CATEGORIES[secondaryIdx] ?? "updates";
 
   return {
     primaryCategory: primary,

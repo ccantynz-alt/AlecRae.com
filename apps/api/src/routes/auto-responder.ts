@@ -131,7 +131,7 @@ autoResponderRouter.put(
 
     if (existing) {
       // Update existing
-      const updateSchedule = input.schedule != null ? {
+      const updateSchedule = input.schedule !== null && input.schedule !== undefined ? {
         startDate: input.schedule.startDate,
         timezone: input.schedule.timezone,
         ...(input.schedule.endDate !== undefined ? { endDate: input.schedule.endDate } : {}),
@@ -169,7 +169,7 @@ autoResponderRouter.put(
       maxResponsesPerSender: 1,
       aiSmartReply: false,
     };
-    const scheduleValue = input.schedule != null ? {
+    const scheduleValue = input.schedule !== null && input.schedule !== undefined ? {
       startDate: input.schedule.startDate,
       timezone: input.schedule.timezone,
       ...(input.schedule.endDate !== undefined ? { endDate: input.schedule.endDate } : {}),

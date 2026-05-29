@@ -23,6 +23,7 @@ import {
   meetingProposals,
   availabilityPatterns,
 } from "@alecrae/db";
+import type { MeetingPreferences } from "@alecrae/db";
 import { generateId } from "../lib/jwt.js";
 import { requireScope } from "../middleware/auth.js";
 import {
@@ -455,7 +456,7 @@ schedulingIntelligenceRouter.put(
         .set({
           preferredStartHour: body.preferredStartHour,
           preferredEndHour: body.preferredEndHour,
-          meetingPreferences: (body.meetingPreferences ?? existing.meetingPreferences) as unknown as import("@alecrae/db").MeetingPreferences,
+          meetingPreferences: (body.meetingPreferences ?? existing.meetingPreferences) as unknown as MeetingPreferences,
           updatedAt: new Date(),
         })
         .where(eq(availabilityPatterns.id, existing.id))
@@ -473,7 +474,7 @@ schedulingIntelligenceRouter.put(
         dayOfWeek: body.dayOfWeek,
         preferredStartHour: body.preferredStartHour,
         preferredEndHour: body.preferredEndHour,
-        meetingPreferences: (body.meetingPreferences ?? {}) as unknown as import("@alecrae/db").MeetingPreferences,
+        meetingPreferences: (body.meetingPreferences ?? {}) as unknown as MeetingPreferences,
       })
       .returning();
 
@@ -765,7 +766,7 @@ schedulingIntelligenceRouter.post(
       return c.json({ success: false, error: "Proposal not found" }, 404);
     }
 
-    let responseText: string = "Action processed.";
+    let responseText = "Action processed.";
     let newStatus: "accepted" | "declined" | "proposed" = "proposed";
 
     switch (body.action) {
