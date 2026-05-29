@@ -30,7 +30,7 @@ import {
   emailActionItems,
   emailDeadlines,
   emailPromises,
-} from "@alecrae/db/src/schema/context-intelligence.js";
+} from "@alecrae/db";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 

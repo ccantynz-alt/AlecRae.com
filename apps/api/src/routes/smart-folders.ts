@@ -193,11 +193,11 @@ smartFoldersRouter.post(
       icon: input.icon ?? null,
       color: input.color ?? null,
       type: input.type ?? "smart",
-      filters: input.filters,
+      filters: (input.filters ?? {}) as Record<string, unknown>,
       sortOrder: input.sortOrder ?? 0,
       createdAt: now,
       updatedAt: now,
-    });
+    } as { id: string; accountId: string; name: string; icon: string | null; color: string | null; type: "smart" | "saved_search"; filters: Record<string, unknown>; sortOrder: number; createdAt: Date; updatedAt: Date });
 
     return c.json(
       {
@@ -356,17 +356,18 @@ smartFoldersRouter.put(
 
     const now = new Date();
 
+    const folderUpdateClause = {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.icon !== undefined ? { icon: input.icon } : {}),
+      ...(input.color !== undefined ? { color: input.color } : {}),
+      ...(input.type !== undefined ? { type: input.type } : {}),
+      ...(input.filters !== undefined ? { filters: input.filters as Record<string, unknown> } : {}),
+      ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+      updatedAt: now,
+    };
     await db
       .update(smartFolders)
-      .set({
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.icon !== undefined ? { icon: input.icon } : {}),
-        ...(input.color !== undefined ? { color: input.color } : {}),
-        ...(input.type !== undefined ? { type: input.type } : {}),
-        ...(input.filters !== undefined ? { filters: input.filters } : {}),
-        ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
-        updatedAt: now,
-      })
+      .set(folderUpdateClause as { updatedAt: Date })
       .where(and(eq(smartFolders.id, id), eq(smartFolders.accountId, auth.accountId)));
 
     return c.json({

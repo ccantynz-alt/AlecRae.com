@@ -70,15 +70,15 @@ function enrichFromEmail(email: string): {
   const isFreeProvider = freeProviders.has(domain.toLowerCase());
 
   const data: EnrichmentData = {
-    fullName: derivedName,
-    companyDomain: isFreeProvider ? undefined : domain,
-    company: isFreeProvider
-      ? undefined
-      : domain
-          .replace(/\.(com|io|co|org|net|dev)$/, "")
-          .split(".")
-          .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-          .join(" "),
+    ...(derivedName !== undefined ? { fullName: derivedName } : {}),
+    ...(isFreeProvider ? {} : {
+      companyDomain: domain,
+      company: domain
+        .replace(/\.(com|io|co|org|net|dev)$/, "")
+        .split(".")
+        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+        .join(" "),
+    }),
   };
 
   return {

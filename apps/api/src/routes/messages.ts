@@ -411,12 +411,18 @@ async function handleSend(c: Context) {
     (input.template_id ?? "").includes("verify") ||
     (input.template_id ?? "").includes("password-reset") ||
     (input.template_id ?? "").includes("magic-link");
+  const headersMap = new Map<string, string>(
+    Object.entries(input.headers ?? {}).map(([k, v]) => [k, String(v)]),
+  );
   const complianceMeta: EmailMetadata = {
     from: input.from.email,
-    to: allRecipientAddresses,
+    to: allRecipientAddresses[0] ?? input.from.email,
     subject: resolvedSubject,
-    headers: input.headers ?? {},
-    isTransactional,
+    headers: headersMap,
+    hasUnsubscribeHeader: headersMap.has("list-unsubscribe"),
+    hasUnsubscribeLink: false,
+    hasPhysicalAddress: false,
+    contentType: isTransactional ? "transactional" : "marketing",
     senderDomain: domainOf(input.from.email),
   };
   const complianceResult = complianceEngine.checkAll(complianceMeta);
@@ -440,7 +446,7 @@ async function handleSend(c: Context) {
       {
         error: {
           type: "compliance_error",
-          message: `Email blocked: ${violations.map((v) => v.message ?? v.rule).join("; ")}`,
+          message: `Email blocked: ${violations.map((v) => v.description ?? v.rule).join("; ")}`,
           code: "compliance_violation",
           violations,
         },
@@ -1015,4 +1021,8 @@ messages.delete(
   },
 );
 
-export { messages };
+// Standalone /v1/send router — mounts the same send handler at root
+const unifiedSend = new Hono();
+unifiedSend.post("/", ...sendMiddleware, handleSend);
+
+export { messages, unifiedSend };

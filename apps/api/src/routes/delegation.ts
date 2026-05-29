@@ -27,7 +27,7 @@ import {
   getValidatedQuery,
 } from "../middleware/validator.js";
 import { getDatabase, emailDelegations, sharedDrafts } from "@alecrae/db";
-import type { DelegationPermissions, SharedDraftComment } from "@alecrae/db/src/schema/delegation.js";
+import type { DelegationPermissions, SharedDraftComment } from "@alecrae/db";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -243,9 +243,15 @@ delegationRouter.put(
     }
 
     const now = new Date();
+    const existingPerms = existing.permissions as DelegationPermissions;
     const mergedPermissions: DelegationPermissions = input.permissions
-      ? { ...(existing.permissions as DelegationPermissions), ...input.permissions }
-      : (existing.permissions as DelegationPermissions);
+      ? {
+          canReply: input.permissions.canReply !== undefined ? input.permissions.canReply : existingPerms.canReply,
+          canArchive: input.permissions.canArchive !== undefined ? input.permissions.canArchive : existingPerms.canArchive,
+          canDelete: input.permissions.canDelete !== undefined ? input.permissions.canDelete : existingPerms.canDelete,
+          canForward: input.permissions.canForward !== undefined ? input.permissions.canForward : existingPerms.canForward,
+        }
+      : existingPerms;
 
     await db
       .update(emailDelegations)

@@ -99,10 +99,10 @@ signaturesRouter.post(
       textContent: input.textContent,
       isDefault: input.isDefault ?? false,
       sortOrder: input.sortOrder ?? 0,
-      context: input.context ?? {},
+      context: (input.context ?? {}) as Record<string, unknown>,
       createdAt: now,
       updatedAt: now,
-    });
+    } as { id: string; accountId: string; name: string; htmlContent: string; textContent: string; isDefault: boolean; sortOrder: number; context: Record<string, unknown>; createdAt: Date; updatedAt: Date });
 
     return c.json(
       {
@@ -274,25 +274,18 @@ signaturesRouter.put(
         );
     }
 
+    const sigUpdateClause = {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.htmlContent !== undefined ? { htmlContent: input.htmlContent } : {}),
+      ...(input.textContent !== undefined ? { textContent: input.textContent } : {}),
+      ...(input.isDefault !== undefined ? { isDefault: input.isDefault } : {}),
+      ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+      ...(input.context !== undefined ? { context: input.context as Record<string, unknown> } : {}),
+      updatedAt: now,
+    };
     await db
       .update(signatures)
-      .set({
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.htmlContent !== undefined
-          ? { htmlContent: input.htmlContent }
-          : {}),
-        ...(input.textContent !== undefined
-          ? { textContent: input.textContent }
-          : {}),
-        ...(input.isDefault !== undefined
-          ? { isDefault: input.isDefault }
-          : {}),
-        ...(input.sortOrder !== undefined
-          ? { sortOrder: input.sortOrder }
-          : {}),
-        ...(input.context !== undefined ? { context: input.context } : {}),
-        updatedAt: now,
-      })
+      .set(sigUpdateClause as { updatedAt: Date })
       .where(
         and(eq(signatures.id, id), eq(signatures.accountId, auth.accountId)),
       );

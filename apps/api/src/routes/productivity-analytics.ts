@@ -33,7 +33,7 @@ import {
   emailTimeTracking,
   productivityInsights,
   emailBehaviorPatterns,
-} from "@alecrae/db/src/schema/productivity-analytics.js";
+} from "@alecrae/db";
 
 // ─── Zod Schemas ─────────────────────────────────────────────────────────────
 

@@ -7,14 +7,63 @@ import {
   knowledgeRelationships,
   knowledgeExtractions,
 } from "@alecrae/db";
-import { generateId } from "../lib/id.js";
+import { generateId } from "../lib/jwt.js";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
   validateQuery,
   getValidatedBody,
   getValidatedQuery,
-} from "../middleware/validation.js";
+} from "../middleware/validator.js";
+
+// ─── Schemas ─────────────────────────────────────────────────────────────────
+
+const ExtractBodySchema = z.object({
+  emailId: z.string().min(1),
+  content: z.string().min(1),
+  senderEmail: z.string().optional(),
+});
+
+const ListEntitiesQuerySchema = z.object({
+  type: z.enum(["person", "company", "project", "topic", "product", "event", "location"]).optional(),
+  search: z.string().optional(),
+  sortBy: z.enum(["mentions", "recent"]).optional().default("mentions"),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  cursor: z.string().optional(),
+});
+
+const UpdateEntityBodySchema = z.object({
+  description: z.string().optional(),
+  attributes: z.record(z.unknown()).optional(),
+});
+
+const ListRelationshipsQuerySchema = z.object({
+  type: z.string().optional(),
+  minStrength: z.coerce.number().min(0).max(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  cursor: z.string().optional(),
+});
+
+const SearchQuerySchema = z.object({ q: z.string().min(1) });
+
+const GraphQuerySchema = z.object({
+  centerEntityId: z.string().optional(),
+  depth: z.coerce.number().int().min(1).max(3).optional().default(2),
+  maxNodes: z.coerce.number().int().min(1).max(200).optional().default(50),
+});
+
+const BatchExtractBodySchema = z.object({
+  emails: z
+    .array(
+      z.object({
+        emailId: z.string().min(1),
+        content: z.string().min(1),
+        senderEmail: z.string().optional(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
 
 const knowledgeGraphRouter = new Hono();
 
@@ -25,15 +74,9 @@ const knowledgeGraphRouter = new Hono();
 knowledgeGraphRouter.post(
   "/extract",
   requireScope("messages:write"),
-  validateBody(
-    z.object({
-      emailId: z.string().min(1),
-      content: z.string().min(1),
-      senderEmail: z.string().optional(),
-    }),
-  ),
+  validateBody(ExtractBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof ExtractBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
     const startTime = Date.now();
@@ -207,17 +250,9 @@ knowledgeGraphRouter.post(
 knowledgeGraphRouter.get(
   "/entities",
   requireScope("messages:read"),
-  validateQuery(
-    z.object({
-      type: z.enum(["person", "company", "project", "topic", "product", "event", "location"]).optional(),
-      search: z.string().optional(),
-      sortBy: z.enum(["mentions", "recent"]).optional().default("mentions"),
-      limit: z.coerce.number().int().min(1).max(100).optional().default(50),
-      cursor: z.string().optional(),
-    }),
-  ),
+  validateQuery(ListEntitiesQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof ListEntitiesQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -291,21 +326,20 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.put(
   "/entities/:id",
   requireScope("messages:write"),
-  validateBody(
-    z.object({
-      description: z.string().optional(),
-      attributes: z.record(z.unknown()).optional(),
-    }),
-  ),
+  validateBody(UpdateEntityBodySchema),
   async (c) => {
     const id = c.req.param("id");
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof UpdateEntityBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
     const [updated] = await db
       .update(knowledgeEntities)
-      .set({ ...body, updatedAt: new Date() })
+      .set({
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.attributes !== undefined ? { attributes: body.attributes } : {}),
+        updatedAt: new Date(),
+      } as { updatedAt: Date })
       .where(and(eq(knowledgeEntities.id, id), eq(knowledgeEntities.accountId, accountId)))
       .returning();
 
@@ -374,16 +408,9 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.get(
   "/relationships",
   requireScope("messages:read"),
-  validateQuery(
-    z.object({
-      type: z.string().optional(),
-      minStrength: z.coerce.number().min(0).max(1).optional(),
-      limit: z.coerce.number().int().min(1).max(100).optional().default(50),
-      cursor: z.string().optional(),
-    }),
-  ),
+  validateQuery(ListRelationshipsQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof ListRelationshipsQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -416,9 +443,9 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.get(
   "/search",
   requireScope("messages:read"),
-  validateQuery(z.object({ q: z.string().min(1) })),
+  validateQuery(SearchQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof SearchQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -448,15 +475,9 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.get(
   "/graph",
   requireScope("messages:read"),
-  validateQuery(
-    z.object({
-      centerEntityId: z.string().optional(),
-      depth: z.coerce.number().int().min(1).max(3).optional().default(2),
-      maxNodes: z.coerce.number().int().min(1).max(200).optional().default(50),
-    }),
-  ),
+  validateQuery(GraphQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof GraphQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -529,22 +550,9 @@ knowledgeGraphRouter.get(
 knowledgeGraphRouter.post(
   "/batch-extract",
   requireScope("messages:write"),
-  validateBody(
-    z.object({
-      emails: z
-        .array(
-          z.object({
-            emailId: z.string().min(1),
-            content: z.string().min(1),
-            senderEmail: z.string().optional(),
-          }),
-        )
-        .min(1)
-        .max(50),
-    }),
-  ),
+  validateBody(BatchExtractBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof BatchExtractBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 

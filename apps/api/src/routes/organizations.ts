@@ -62,10 +62,10 @@ async function logAudit(
     userId: string;
     action: string;
     resourceType: string;
-    resourceId?: string;
-    metadata?: Record<string, unknown>;
-    ipAddress?: string;
-    userAgent?: string;
+    resourceId?: string | undefined;
+    metadata?: Record<string, unknown> | undefined;
+    ipAddress?: string | undefined;
+    userAgent?: string | undefined;
   },
 ): Promise<void> {
   await db.insert(auditLogs).values({

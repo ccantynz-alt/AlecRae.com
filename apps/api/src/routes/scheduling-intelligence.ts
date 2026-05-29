@@ -23,14 +23,14 @@ import {
   meetingProposals,
   availabilityPatterns,
 } from "@alecrae/db";
-import { generateId } from "../lib/id.js";
+import { generateId } from "../lib/jwt.js";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
   validateQuery,
   getValidatedBody,
   getValidatedQuery,
-} from "../middleware/validation.js";
+} from "../middleware/validator.js";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -219,7 +219,7 @@ schedulingIntelligenceRouter.post(
   requireScope("messages:write"),
   validateBody(DetectBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof DetectBodySchema>>(c);
     const result = detectSchedulingIntent(body.content);
 
     return c.json({
@@ -242,7 +242,7 @@ schedulingIntelligenceRouter.post(
   requireScope("messages:write"),
   validateBody(ProposeBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof ProposeBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -370,7 +370,7 @@ schedulingIntelligenceRouter.put(
   requireScope("messages:write"),
   validateBody(UpdateProposalBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof UpdateProposalBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
     const id = c.req.param("id");
@@ -434,7 +434,7 @@ schedulingIntelligenceRouter.put(
   requireScope("messages:write"),
   validateBody(UpdatePatternsBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof UpdatePatternsBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -455,7 +455,7 @@ schedulingIntelligenceRouter.put(
         .set({
           preferredStartHour: body.preferredStartHour,
           preferredEndHour: body.preferredEndHour,
-          meetingPreferences: body.meetingPreferences ?? existing.meetingPreferences,
+          meetingPreferences: (body.meetingPreferences ?? existing.meetingPreferences) as unknown as import("@alecrae/db").MeetingPreferences,
           updatedAt: new Date(),
         })
         .where(eq(availabilityPatterns.id, existing.id))
@@ -473,7 +473,7 @@ schedulingIntelligenceRouter.put(
         dayOfWeek: body.dayOfWeek,
         preferredStartHour: body.preferredStartHour,
         preferredEndHour: body.preferredEndHour,
-        meetingPreferences: body.meetingPreferences ?? {},
+        meetingPreferences: (body.meetingPreferences ?? {}) as unknown as import("@alecrae/db").MeetingPreferences,
       })
       .returning();
 
@@ -490,7 +490,7 @@ schedulingIntelligenceRouter.post(
   requireScope("messages:write"),
   validateBody(LearnPatternsBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof LearnPatternsBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -746,7 +746,7 @@ schedulingIntelligenceRouter.post(
   requireScope("messages:write"),
   validateBody(AutoRespondBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof AutoRespondBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -765,8 +765,8 @@ schedulingIntelligenceRouter.post(
       return c.json({ success: false, error: "Proposal not found" }, 404);
     }
 
-    let responseText: string;
-    let newStatus: "accepted" | "declined" | "proposed";
+    let responseText: string = "Action processed.";
+    let newStatus: "accepted" | "declined" | "proposed" = "proposed";
 
     switch (body.action) {
       case "accept": {

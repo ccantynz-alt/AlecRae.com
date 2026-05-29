@@ -182,13 +182,13 @@ notificationsRouter.post(
       id,
       accountId: auth.accountId,
       name: input.name,
-      conditions: input.conditions,
+      conditions: input.conditions as Record<string, unknown>,
       action: input.action,
       isActive: input.isActive,
       priority: input.priority,
       createdAt: now,
       updatedAt: now,
-    });
+    } as { id: string; accountId: string; name: string; conditions: Record<string, unknown>; action: "notify_immediately" | "batch_hourly" | "batch_daily" | "suppress" | "summary_only"; isActive: boolean; priority: number; createdAt: Date; updatedAt: Date });
 
     return c.json(
       {
@@ -244,16 +244,17 @@ notificationsRouter.put(
 
     const now = new Date();
 
+    const notifUpdateClause = {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.conditions !== undefined ? { conditions: input.conditions as Record<string, unknown> } : {}),
+      ...(input.action !== undefined ? { action: input.action } : {}),
+      ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      ...(input.priority !== undefined ? { priority: input.priority } : {}),
+      updatedAt: now,
+    };
     await db
       .update(notificationRules)
-      .set({
-        ...(input.name !== undefined ? { name: input.name } : {}),
-        ...(input.conditions !== undefined ? { conditions: input.conditions } : {}),
-        ...(input.action !== undefined ? { action: input.action } : {}),
-        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-        ...(input.priority !== undefined ? { priority: input.priority } : {}),
-        updatedAt: now,
-      })
+      .set(notifUpdateClause as { updatedAt: Date })
       .where(
         and(
           eq(notificationRules.id, id),

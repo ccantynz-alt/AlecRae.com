@@ -20,6 +20,7 @@ import {
   getValidatedQuery,
 } from "../middleware/validator.js";
 import { getDatabase, autoResponders, autoResponderLog } from "@alecrae/db";
+import type { AutoResponderRules } from "@alecrae/db";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -130,6 +131,12 @@ autoResponderRouter.put(
 
     if (existing) {
       // Update existing
+      const updateSchedule = input.schedule != null ? {
+        startDate: input.schedule.startDate,
+        timezone: input.schedule.timezone,
+        ...(input.schedule.endDate !== undefined ? { endDate: input.schedule.endDate } : {}),
+      } : null;
+
       await db
         .update(autoResponders)
         .set({
@@ -137,10 +144,10 @@ autoResponderRouter.put(
           subject: input.subject,
           htmlBody: input.htmlBody ?? "",
           textBody: input.textBody ?? "",
-          schedule: input.schedule ?? null,
-          ...(input.rules !== undefined ? { rules: input.rules } : {}),
+          schedule: updateSchedule,
+          ...(input.rules !== undefined ? { rules: input.rules as Record<string, unknown> } : {}),
           updatedAt: now,
-        })
+        } as { updatedAt: Date })
         .where(eq(autoResponders.id, existing.id));
 
       return c.json({
@@ -156,6 +163,18 @@ autoResponderRouter.put(
     // Create new
     const id = generateId();
 
+    const defaultRules = {
+      respondToContacts: true,
+      respondToUnknown: false,
+      maxResponsesPerSender: 1,
+      aiSmartReply: false,
+    };
+    const scheduleValue = input.schedule != null ? {
+      startDate: input.schedule.startDate,
+      timezone: input.schedule.timezone,
+      ...(input.schedule.endDate !== undefined ? { endDate: input.schedule.endDate } : {}),
+    } : null;
+
     await db.insert(autoResponders).values({
       id,
       accountId: auth.accountId,
@@ -164,13 +183,8 @@ autoResponderRouter.put(
       htmlBody: input.htmlBody ?? "",
       textBody: input.textBody ?? "",
       isActive: false,
-      schedule: input.schedule ?? null,
-      rules: input.rules ?? {
-        respondToContacts: true,
-        respondToUnknown: false,
-        maxResponsesPerSender: 1,
-        aiSmartReply: false,
-      },
+      schedule: scheduleValue,
+      rules: (input.rules ?? defaultRules) as unknown as AutoResponderRules,
       createdAt: now,
       updatedAt: now,
     });

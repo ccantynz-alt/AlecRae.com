@@ -798,10 +798,16 @@ startAutoIndexer();
 
 // Start blocklist monitoring (checks every 15 min for IP/domain listings)
 import("@alecrae/reputation").then(({ BlocklistMonitor }) => {
-  const monitor = new BlocklistMonitor();
-  monitor.startMonitoring().catch((err: unknown) => {
+  try {
+    const dnsResolver = {
+      resolve4: (hostname: string): Promise<string[]> =>
+        import("node:dns/promises").then((dns) => dns.resolve4(hostname)),
+    };
+    const monitor = new BlocklistMonitor({ resolver: dnsResolver });
+    monitor.startMonitoring();
+  } catch (err: unknown) {
     console.warn("[api] Blocklist monitor start failed:", err);
-  });
+  }
 }).catch(() => {
   console.warn("[api] Blocklist monitor unavailable");
 });

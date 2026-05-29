@@ -95,9 +95,9 @@ abTestsRouter.post(
 
     const variants: ABTestVariant[] = input.variants.map((v) => ({
       id: generateId(),
-      subject: v.subject,
-      htmlBody: v.htmlBody,
-      textBody: v.textBody,
+      ...(v.subject !== undefined ? { subject: v.subject } : {}),
+      ...(v.htmlBody !== undefined ? { htmlBody: v.htmlBody } : {}),
+      ...(v.textBody !== undefined ? { textBody: v.textBody } : {}),
       percentage: v.percentage,
     }));
 
@@ -376,8 +376,8 @@ abTestsRouter.post(
         totalSent: 0,
         variants: {},
       },
-      winner: winnerId,
-      confidence: winnerId ? 0.95 : undefined,
+      ...(winnerId !== undefined ? { winner: winnerId } : {}),
+      ...(winnerId ? { confidence: 0.95 } : {}),
     };
 
     await db

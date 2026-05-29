@@ -1,10 +1,52 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, gt as _gt, lt, gte, sql as _sql2, count as _count } from "drizzle-orm";
+import { eq, and, desc, gt as _gt, lt, gte, sql, count as _count } from "drizzle-orm";
 import { getDatabase, sentimentTimeline, relationshipHealth } from "@alecrae/db";
-import { generateId } from "../lib/id.js";
+import { generateId } from "../lib/jwt.js";
 import { requireScope } from "../middleware/auth.js";
-import { validateBody, validateQuery, getValidatedBody, getValidatedQuery } from "../middleware/validation.js";
+import { validateBody, validateQuery, getValidatedBody, getValidatedQuery } from "../middleware/validator.js";
+
+// ─── Schemas ─────────────────────────────────────────────────────────────────
+
+const AnalyzeBodySchema = z.object({
+  emailId: z.string().min(1),
+  content: z.string().min(1),
+  senderEmail: z.string().email(),
+  senderName: z.string().optional(),
+});
+
+const TimelineQuerySchema = z.object({
+  contactEmail: z.string().optional(),
+  days: z.coerce.number().int().min(1).max(365).optional().default(30),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  cursor: z.string().optional(),
+});
+
+const ContactsQuerySchema = z.object({
+  riskLevel: z.enum(["none", "low", "medium", "high"]).optional(),
+  sortBy: z.enum(["healthScore", "totalInteractions", "updatedAt"]).optional().default("updatedAt"),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  cursor: z.string().optional(),
+});
+
+const TrendsQuerySchema = z.object({
+  period: z.enum(["daily", "weekly", "monthly"]).optional().default("daily"),
+  days: z.coerce.number().int().min(1).max(365).optional().default(30),
+});
+
+const BatchAnalyzeBodySchema = z.object({
+  emails: z
+    .array(
+      z.object({
+        emailId: z.string().min(1),
+        content: z.string().min(1),
+        senderEmail: z.string().email(),
+        senderName: z.string().optional(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
 
 const sentimentTimelineRouter = new Hono();
 
@@ -15,16 +57,9 @@ const sentimentTimelineRouter = new Hono();
 sentimentTimelineRouter.post(
   "/analyze",
   requireScope("messages:write"),
-  validateBody(
-    z.object({
-      emailId: z.string().min(1),
-      content: z.string().min(1),
-      senderEmail: z.string().email(),
-      senderName: z.string().optional(),
-    }),
-  ),
+  validateBody(AnalyzeBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof AnalyzeBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -48,9 +83,9 @@ sentimentTimelineRouter.post(
     else if (net === -1) sentimentIdx = 3;
     else if (net <= -2) sentimentIdx = 4;
 
-    const sentiment = sentimentLevels[sentimentIdx];
+    const sentiment = sentimentLevels[sentimentIdx] ?? sentimentLevels[2]!;
     const score = Math.max(0, Math.min(1, 0.5 + net * 0.15));
-    const emotionalTone = tones[Math.abs(net) % tones.length];
+    const emotionalTone = tones[Math.abs(net) % tones.length] ?? tones[0]!;
     const topics = topicKeywords.filter((t) => contentLower.includes(t));
 
     const id = generateId();
@@ -128,16 +163,9 @@ sentimentTimelineRouter.post(
 sentimentTimelineRouter.get(
   "/timeline",
   requireScope("analytics:read"),
-  validateQuery(
-    z.object({
-      contactEmail: z.string().optional(),
-      days: z.coerce.number().int().min(1).max(365).optional().default(30),
-      limit: z.coerce.number().int().min(1).max(100).optional().default(50),
-      cursor: z.string().optional(),
-    }),
-  ),
+  validateQuery(TimelineQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof TimelineQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -199,16 +227,9 @@ sentimentTimelineRouter.get(
 sentimentTimelineRouter.get(
   "/contacts",
   requireScope("analytics:read"),
-  validateQuery(
-    z.object({
-      riskLevel: z.enum(["none", "low", "medium", "high"]).optional(),
-      sortBy: z.enum(["healthScore", "totalInteractions", "updatedAt"]).optional().default("updatedAt"),
-      limit: z.coerce.number().int().min(1).max(100).optional().default(50),
-      cursor: z.string().optional(),
-    }),
-  ),
+  validateQuery(ContactsQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof ContactsQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -272,14 +293,9 @@ sentimentTimelineRouter.get(
 sentimentTimelineRouter.get(
   "/trends",
   requireScope("analytics:read"),
-  validateQuery(
-    z.object({
-      period: z.enum(["daily", "weekly", "monthly"]).optional().default("daily"),
-      days: z.coerce.number().int().min(1).max(365).optional().default(30),
-    }),
-  ),
+  validateQuery(TrendsQuerySchema),
   async (c) => {
-    const query = getValidatedQuery(c);
+    const query = getValidatedQuery<z.infer<typeof TrendsQuerySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -340,23 +356,9 @@ sentimentTimelineRouter.get(
 sentimentTimelineRouter.post(
   "/batch-analyze",
   requireScope("messages:write"),
-  validateBody(
-    z.object({
-      emails: z
-        .array(
-          z.object({
-            emailId: z.string().min(1),
-            content: z.string().min(1),
-            senderEmail: z.string().email(),
-            senderName: z.string().optional(),
-          }),
-        )
-        .min(1)
-        .max(50),
-    }),
-  ),
+  validateBody(BatchAnalyzeBodySchema),
   async (c) => {
-    const body = getValidatedBody(c);
+    const body = getValidatedBody<z.infer<typeof BatchAnalyzeBodySchema>>(c);
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
@@ -378,18 +380,19 @@ sentimentTimelineRouter.post(
       else if (net === -1) idx = 3;
       else if (net <= -2) idx = 4;
       const score = Math.max(0, Math.min(1, 0.5 + net * 0.15));
+      const batchSentiment = sentimentLevels[idx] ?? sentimentLevels[2]!;
 
       await db.insert(sentimentTimeline).values({
         id: generateId(),
         accountId,
         contactEmail: email.senderEmail,
         emailId: email.emailId,
-        sentiment: sentimentLevels[idx],
+        sentiment: batchSentiment,
         score,
         topics: [],
       });
 
-      results.push({ emailId: email.emailId, sentiment: sentimentLevels[idx], score });
+      results.push({ emailId: email.emailId, sentiment: batchSentiment, score });
     }
 
     return c.json({ success: true, analyzed: results.length, data: results });
