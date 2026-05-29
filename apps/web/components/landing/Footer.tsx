@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 
 const links = {
   Product: [
@@ -45,7 +46,7 @@ export function Footer() {
               <ul className="space-y-2.5">
                 {items.map((item) => (
                   <li key={item.label}>
-                    <Link href={item.href} className="text-sm text-blue-100/40 hover:text-white transition-colors">
+                    <Link href={item.href as Route} className="text-sm text-blue-100/40 hover:text-white transition-colors">
                       {item.label}
                     </Link>
                   </li>
