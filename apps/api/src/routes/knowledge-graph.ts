@@ -38,7 +38,7 @@ knowledgeGraphRouter.post(
     const db = getDatabase();
     const startTime = Date.now();
 
-    const entityTypes = ["person", "company", "project", "topic", "product", "event", "location"] as const;
+    const _entityTypes = ["person", "company", "project", "topic", "product", "event", "location"] as const;
     const contentLower = body.content.toLowerCase();
 
     const emailPattern = /[\w.-]+@[\w.-]+\.\w+/g;
@@ -46,7 +46,7 @@ knowledgeGraphRouter.post(
     const companyPattern = /(?:at |@|from |with )([A-Z][a-zA-Z]+(?:\s[A-Z][a-zA-Z]+)*)/g;
     const projectPattern = /(?:project|initiative|program)\s+["']?([A-Za-z][\w\s-]{2,30})["']?/gi;
 
-    const extractedEntities: Array<{ name: string; type: (typeof entityTypes)[number]; normalized: string }> = [];
+    const extractedEntities: { name: string; type: (typeof _entityTypes)[number]; normalized: string }[] = [];
 
     if (body.senderEmail) {
       const name = body.senderEmail.split("@")[0]?.replace(/[._-]/g, " ") ?? body.senderEmail;
@@ -64,7 +64,7 @@ knowledgeGraphRouter.post(
 
     let compMatch;
     while ((compMatch = companyPattern.exec(body.content)) !== null) {
-      const name = compMatch[1]!;
+      const name = compMatch[1] ?? "";
       if (name.length > 2 && name.length < 40) {
         extractedEntities.push({ name, type: "company", normalized: name.toLowerCase() });
       }
@@ -72,7 +72,7 @@ knowledgeGraphRouter.post(
 
     let projMatch;
     while ((projMatch = projectPattern.exec(body.content)) !== null) {
-      const name = projMatch[1]!.trim();
+      const name = (projMatch[1] ?? "").trim();
       if (name.length > 2) {
         extractedEntities.push({ name, type: "project", normalized: name.toLowerCase() });
       }
@@ -108,7 +108,8 @@ knowledgeGraphRouter.post(
         .limit(1);
 
       if (existing.length > 0) {
-        const record = existing[0]!;
+        const record = existing[0];
+        if (!record) continue;
         await db
           .update(knowledgeEntities)
           .set({
@@ -134,8 +135,8 @@ knowledgeGraphRouter.post(
     let relationshipsCreated = 0;
     for (let i = 0; i < entityIds.length && i < 10; i++) {
       for (let j = i + 1; j < entityIds.length && j < 10; j++) {
-        const sourceId = entityIds[i]!;
-        const targetId = entityIds[j]!;
+        const sourceId = entityIds[i] ?? "";
+        const targetId = entityIds[j] ?? "";
 
         const existingRel = await db
           .select()
@@ -150,7 +151,8 @@ knowledgeGraphRouter.post(
           .limit(1);
 
         if (existingRel.length > 0) {
-          const rel = existingRel[0]!;
+          const rel = existingRel[0];
+          if (!rel) continue;
           const currentEvidence = (rel.evidence ?? []) as string[];
           const newStrength = Math.min(1, rel.strength + 0.1);
           await db
@@ -546,7 +548,7 @@ knowledgeGraphRouter.post(
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
-    const results: Array<{ emailId: string; entitiesExtracted: number }> = [];
+    const results: { emailId: string; entitiesExtracted: number }[] = [];
 
     for (const email of body.emails) {
       const topicKeywords = ["budget", "deadline", "launch", "design", "marketing", "sales", "hiring"];
@@ -570,8 +572,8 @@ knowledgeGraphRouter.post(
         if (existing.length > 0) {
           await db
             .update(knowledgeEntities)
-            .set({ mentionCount: existing[0]!.mentionCount + 1, lastSeenAt: new Date(), updatedAt: new Date() })
-            .where(eq(knowledgeEntities.id, existing[0]!.id));
+            .set({ mentionCount: (existing[0]?.mentionCount ?? 0) + 1, lastSeenAt: new Date(), updatedAt: new Date() })
+            .where(eq(knowledgeEntities.id, existing[0]?.id ?? ""));
         } else {
           await db.insert(knowledgeEntities).values({
             id: generateId(),
@@ -658,12 +660,13 @@ knowledgeGraphRouter.get(
       .orderBy(desc(knowledgeEntities.mentionCount))
       .limit(10);
 
-    const suggestions: Array<{ type: string; message: string; entities: string[] }> = [];
+    const suggestions: { type: string; message: string; entities: string[] }[] = [];
 
     for (let i = 0; i < highMention.length; i++) {
       for (let j = i + 1; j < highMention.length; j++) {
-        const a = highMention[i]!;
-        const b = highMention[j]!;
+        const a = highMention[i];
+        const b = highMention[j];
+        if (!a || !b) continue;
 
         const existingRel = await db
           .select()

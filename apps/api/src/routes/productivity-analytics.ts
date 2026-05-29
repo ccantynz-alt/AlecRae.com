@@ -207,7 +207,7 @@ productivityAnalyticsRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? (page[page.length - 1]?.createdAt.toISOString() ?? null)
         : null;
 
     return c.json({ data: page, hasMore, nextCursor });
@@ -306,7 +306,7 @@ productivityAnalyticsRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? (page[page.length - 1]?.createdAt.toISOString() ?? null)
         : null;
 
     return c.json({ data: page, hasMore, nextCursor });
@@ -410,7 +410,7 @@ productivityAnalyticsRouter.post(
       )
       .groupBy(emailTimeTracking.activityType);
 
-    const insights: Array<{
+    const insights: {
       id: string;
       insightType: string;
       title: string;
@@ -420,7 +420,7 @@ productivityAnalyticsRouter.post(
       currentValue: number;
       targetValue: number | null;
       recommendation: string;
-    }> = [];
+    }[] = [];
 
     const totalEmails = recentActivity.reduce(
       (sum, r) => sum + Number(r.count),
@@ -706,11 +706,11 @@ productivityAnalyticsRouter.get(
       totalEmails: number;
       totalSeconds: number;
       avgSeconds: number;
-      breakdown: Array<{
+      breakdown: {
         activityType: string;
         totalSeconds: number;
         count: number;
-      }>;
+      }[];
     }> {
       const rows = await db
         .select({

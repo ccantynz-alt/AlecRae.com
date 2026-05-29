@@ -103,12 +103,12 @@ function generateId(): string {
 }
 
 function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0]!;
+  return new Date().toISOString().split("T")[0] ?? "";
 }
 
 function getDefaultDateRange(period: "daily" | "weekly" | "monthly"): { start: string; end: string } {
   const now = new Date();
-  const end = now.toISOString().split("T")[0]!;
+  const end = now.toISOString().split("T")[0] ?? "";
   const startDate = new Date(now);
 
   switch (period) {
@@ -123,7 +123,7 @@ function getDefaultDateRange(period: "daily" | "weekly" | "monthly"): { start: s
       break;
   }
 
-  const start = startDate.toISOString().split("T")[0]!;
+  const start = startDate.toISOString().split("T")[0] ?? "";
   return { start, end };
 }
 
@@ -136,8 +136,8 @@ function getPreviousPeriodRange(start: string, end: string): { start: string; en
   const prevStart = new Date(prevEnd.getTime() - durationMs);
 
   return {
-    start: prevStart.toISOString().split("T")[0]!,
-    end: prevEnd.toISOString().split("T")[0]!,
+    start: prevStart.toISOString().split("T")[0] ?? "",
+    end: prevEnd.toISOString().split("T")[0] ?? "",
   };
 }
 
@@ -151,7 +151,7 @@ interface AggregatedMetrics {
   avgResponseTimeMinutes: number | null;
 }
 
-function aggregateSnapshots(rows: Array<{
+function aggregateSnapshots(rows: {
   emailsSent: number;
   emailsReceived: number;
   emailsOpened: number;
@@ -159,7 +159,7 @@ function aggregateSnapshots(rows: Array<{
   emailsBounced: number;
   emailsReplied: number;
   avgResponseTimeMinutes: number | null;
-}>): AggregatedMetrics {
+}[]): AggregatedMetrics {
   const totalSent = rows.reduce((sum, r) => sum + r.emailsSent, 0);
   const totalReceived = rows.reduce((sum, r) => sum + r.emailsReceived, 0);
   const totalOpened = rows.reduce((sum, r) => sum + r.emailsOpened, 0);

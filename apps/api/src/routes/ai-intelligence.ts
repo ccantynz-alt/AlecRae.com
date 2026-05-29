@@ -231,7 +231,7 @@ aiIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.updatedAt.toISOString()
+        ? page[page.length - 1]?.updatedAt.toISOString()
         : null;
 
     return c.json({

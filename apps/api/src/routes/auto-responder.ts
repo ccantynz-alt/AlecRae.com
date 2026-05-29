@@ -325,7 +325,7 @@ autoResponderRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.sentAt.toISOString()
+        ? page[page.length - 1]?.sentAt.toISOString()
         : null;
 
     return c.json({

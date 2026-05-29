@@ -160,7 +160,7 @@ signaturesRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? (page[page.length - 1]?.createdAt.toISOString() ?? null)
         : null;
 
     return c.json({

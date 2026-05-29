@@ -88,8 +88,8 @@ function getNextStep(completedSteps: string[]): OnboardingStep {
 
 interface ImportedSettings {
   labels: string[];
-  filters: Array<{ criteria: string; action: string }>;
-  signatures: Array<{ name: string; content: string }>;
+  filters: { criteria: string; action: string }[];
+  signatures: { name: string; content: string }[];
 }
 
 function buildImportedSettings(
@@ -103,7 +103,7 @@ function buildImportedSettings(
     outlook: ["Focused", "Other", "Sent Items", "Drafts", "Junk Email", "Deleted Items", "Archive"],
   };
 
-  const providerFilters: Record<"gmail" | "outlook", Array<{ criteria: string; action: string }>> = {
+  const providerFilters: Record<"gmail" | "outlook", { criteria: string; action: string }[]> = {
     gmail: [
       { criteria: "from:notifications@github.com", action: "label:GitHub" },
       { criteria: "from:noreply@medium.com", action: "label:Reading" },
@@ -114,7 +114,7 @@ function buildImportedSettings(
     ],
   };
 
-  const providerSignatures: Record<"gmail" | "outlook", Array<{ name: string; content: string }>> = {
+  const providerSignatures: Record<"gmail" | "outlook", { name: string; content: string }[]> = {
     gmail: [{ name: "Default Gmail Signature", content: "Sent from AlecRae" }],
     outlook: [{ name: "Default Outlook Signature", content: "Sent from AlecRae" }],
   };

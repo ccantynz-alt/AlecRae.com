@@ -137,7 +137,7 @@ searchIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? (page[page.length - 1]?.createdAt.toISOString() ?? null)
         : null;
 
     return c.json({
@@ -264,7 +264,7 @@ searchIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? (page[page.length - 1]?.createdAt.toISOString() ?? null)
         : null;
 
     return c.json({
@@ -523,7 +523,7 @@ searchIntelligenceRouter.post(
   "/suggestions/generate",
   requireScope("messages:write"),
   async (c) => {
-    const auth = c.get("auth");
+    const _auth = c.get("auth");
 
     // Placeholder: In production, this would:
     // 1. Fetch recent search history
@@ -596,11 +596,11 @@ searchIntelligenceRouter.get(
     // 1. Fetch the email's embedding vector
     // 2. Run a cosine similarity search against other embeddings
     // 3. Return the top-N most similar emails
-    const placeholderRelated: Array<{
+    const placeholderRelated: {
       emailId: string;
       similarity: number;
       reason: string;
-    }> = [];
+    }[] = [];
 
     return c.json({
       data: placeholderRelated,

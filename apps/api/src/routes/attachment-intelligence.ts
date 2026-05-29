@@ -257,7 +257,7 @@ attachmentIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({ data: page, cursor: nextCursor, hasMore });
@@ -370,12 +370,12 @@ attachmentIntelligenceRouter.post(
     const auth = c.get("auth");
     const db = getDatabase();
 
-    const results: Array<{
+    const results: {
       attachmentId: string;
       status: "scanned" | "not_found";
       virusScanStatus?: string;
       virusScanResult?: string;
-    }> = [];
+    }[] = [];
 
     for (const attachmentId of input.attachmentIds) {
       const [existing] = await db
@@ -460,7 +460,7 @@ attachmentIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({ data: page, cursor: nextCursor, hasMore });
@@ -500,7 +500,7 @@ attachmentIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({ data: page, cursor: nextCursor, hasMore });
@@ -789,7 +789,7 @@ attachmentIntelligenceRouter.get(
       : duplicateGroups;
     const nextCursor =
       hasMore && page.length > 0
-        ? `${page[page.length - 1]!.fileName}::${String(page[page.length - 1]!.fileSize)}`
+        ? `${page[page.length - 1]?.fileName ?? ""}::${String(page[page.length - 1]?.fileSize ?? "")}`
         : null;
 
     // For each duplicate group, fetch the individual attachment IDs

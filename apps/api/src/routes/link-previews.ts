@@ -86,23 +86,6 @@ function parseMetaTags(html: string): LinkPreviewData {
     return undefined;
   }
 
-  function getFavicon(baseUrl: string): string | undefined {
-    const iconRegex = /<link[^>]+rel=["'](?:icon|shortcut icon)["'][^>]+href=["']([^"']*)["']/i;
-    const match = iconRegex.exec(html);
-    if (!match?.[1]) return undefined;
-
-    const href = match[1];
-    // If it's a relative URL, resolve against base
-    if (href.startsWith("http://") || href.startsWith("https://")) {
-      return href;
-    }
-    try {
-      return new URL(href, baseUrl).href;
-    } catch {
-      return undefined;
-    }
-  }
-
   // OG tags take priority
   data.title = getMetaContent("og:title") ?? getTitle();
   data.description = getMetaContent("og:description") ?? getMetaContent("description");
@@ -198,7 +181,7 @@ async function fetchPreview(url: string): Promise<{
     }
 
     html = await response.text();
-  } catch (error) {
+  } catch {
     // On fetch failure, return a minimal preview
     const data: LinkPreviewData = { title: url };
     return storeAndReturn(db, cached?.id, url, urlHash, data, now);

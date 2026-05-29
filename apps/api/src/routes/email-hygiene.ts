@@ -74,7 +74,7 @@ function generateId(): string {
 
 function getDateRange(period: "week" | "month" | "quarter"): { start: string; end: string } {
   const now = new Date();
-  const end = now.toISOString().split("T")[0]!;
+  const end = now.toISOString().split("T")[0] ?? "";
   const startDate = new Date(now);
 
   switch (period) {
@@ -89,12 +89,12 @@ function getDateRange(period: "week" | "month" | "quarter"): { start: string; en
       break;
   }
 
-  const start = startDate.toISOString().split("T")[0]!;
+  const start = startDate.toISOString().split("T")[0] ?? "";
   return { start, end };
 }
 
 function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0]!;
+  return new Date().toISOString().split("T")[0] ?? "";
 }
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ hygieneRouter.get(
         overallScore: Math.min(overallScore, 100),
         breakdown: {
           responseTime: responseTimeScore !== null
-            ? { score: responseTimeScore, avgMinutes: Math.round(avgResponseTime!) }
+            ? { score: responseTimeScore, avgMinutes: Math.round(avgResponseTime ?? 0) }
             : null,
           inboxZeroRate: { score: Math.round(inboxZeroRate), days: inboxZeroDays, total: totalDays },
           archiveRate: { score: Math.round(Math.min(archiveRate, 100)), archived: totalArchived, received: totalReceived },
@@ -328,7 +328,7 @@ hygieneRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({
@@ -420,29 +420,29 @@ hygieneRouter.post(
       .orderBy(desc(subscriptionTracker.totalReceived));
 
     // Categorize subscriptions by engagement
-    const lowEngagement: Array<{
+    const lowEngagement: {
       id: string;
       senderEmail: string;
       senderName: string | null;
       openRate: number | null;
       totalReceived: number;
       suggestion: string;
-    }> = [];
-    const highVolume: Array<{
+    }[] = [];
+    const highVolume: {
       id: string;
       senderEmail: string;
       senderName: string | null;
       totalReceived: number;
       frequency: string | null;
       suggestion: string;
-    }> = [];
-    const neverOpened: Array<{
+    }[] = [];
+    const neverOpened: {
       id: string;
       senderEmail: string;
       senderName: string | null;
       totalReceived: number;
       suggestion: string;
-    }> = [];
+    }[] = [];
 
     for (const sub of allSubs) {
       const openRate = sub.openRate ?? 0;
@@ -524,7 +524,7 @@ hygieneRouter.get(
       .filter((h) => h.avgResponseTimeMinutes !== null)
       .map((h) => ({
         date: h.date,
-        avgResponseTimeMinutes: h.avgResponseTimeMinutes!,
+        avgResponseTimeMinutes: h.avgResponseTimeMinutes ?? 0,
       }));
 
     const allTimes = responseTimes.map((r) => r.avgResponseTimeMinutes);

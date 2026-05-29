@@ -26,7 +26,7 @@ export interface RealtimeEvent {
 
 class ConnectionManager {
   /** Map of accountId → Set of active WebSocket connections */
-  private connections: Map<string, Set<WSContext>> = new Map();
+  private connections = new Map<string, Set<WSContext>>();
 
   /**
    * Register a new WebSocket connection for an account.
@@ -118,7 +118,7 @@ class ConnectionManager {
    * Close all connections. Called during graceful shutdown.
    */
   closeAll(): void {
-    for (const [accountId, set] of this.connections) {
+    for (const [_accountId, set] of this.connections) {
       for (const ws of set) {
         try {
           ws.close(1001, "Server shutting down");

@@ -16,7 +16,7 @@ import { z } from "zod";
 import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, users, accounts, ssoConfigs as ssoConfigsTable } from "@alecrae/db";
+import { getDatabase, users, accounts as _accounts, ssoConfigs as ssoConfigsTable } from "@alecrae/db";
 
 const sso = new Hono();
 

@@ -182,14 +182,14 @@ notesRouter.get(
 
     // Filter by tag if specified
     const filtered = query.tag
-      ? rows.filter((row) => row.tags.includes(query.tag!))
+      ? rows.filter((row) => row.tags.includes(query.tag ?? ""))
       : rows;
 
     const hasMore = filtered.length > query.limit;
     const page = hasMore ? filtered.slice(0, query.limit) : filtered;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? (page[page.length - 1]?.createdAt.toISOString() ?? null)
         : null;
 
     return c.json({

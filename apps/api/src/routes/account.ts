@@ -127,7 +127,7 @@ account.get("/passkeys", requireScope("messages:read"), async (c) => {
 });
 
 account.delete("/passkeys/:id", requireScope("messages:read"), async (c) => {
-  const auth = c.get("auth");
+  const _auth = c.get("auth");
   const passkeyId = c.req.param("id");
   const db = getDatabase();
 

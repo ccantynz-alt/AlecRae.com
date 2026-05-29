@@ -247,7 +247,7 @@ chatRouter.get(
 
     const hasMore = rows.length > query.limit;
     const page = hasMore ? rows.slice(0, query.limit) : rows;
-    const nextCursor = hasMore && page.length > 0 ? page[page.length - 1]!.createdAt.toISOString() : null;
+    const nextCursor = hasMore && page.length > 0 ? page[page.length - 1]?.createdAt.toISOString() : null;
 
     return c.json({
       data: page.reverse().map((m) => ({

@@ -120,13 +120,13 @@ interface ProofreadIssue {
 const ANTHROPIC_API_KEY = process.env["ANTHROPIC_API_KEY"] ?? process.env["CLAUDE_API_KEY"];
 
 interface ClaudeResponse {
-  content: Array<{ type: string; text?: string }>;
+  content: { type: string; text?: string }[];
 }
 
 async function callClaude(
   systemPrompt: string,
   userMessage: string,
-  maxTokens: number = 2048,
+  maxTokens = 2048,
 ): Promise<string | null> {
   if (!ANTHROPIC_API_KEY) return null;
   try {
@@ -157,7 +157,7 @@ async function callClaude(
 
 function parseJsonSafely<T>(text: string): T | null {
   try {
-    const jsonMatch = text.match(/[\[{][\s\S]*[\]}]/);
+    const jsonMatch = text.match(/[[{][\s\S]*[\]}]/);
     if (!jsonMatch) return null;
     return JSON.parse(jsonMatch[0]) as T;
   } catch {
@@ -232,8 +232,8 @@ aiWritingRouter.post(
       const subjectMatch = result.match(/SUBJECT:\s*(.+?)(?:\n|$)/);
       const bodyMatch = result.match(/BODY:\s*\n?([\s\S]+)/);
 
-      const subject = subjectMatch ? subjectMatch[1]!.trim() : `Re: ${input.topic.slice(0, 60)}`;
-      const body = bodyMatch ? bodyMatch[1]!.trim() : result.trim();
+      const subject = subjectMatch ? (subjectMatch[1] ?? "").trim() : `Re: ${input.topic.slice(0, 60)}`;
+      const body = bodyMatch ? (bodyMatch[1] ?? "").trim() : result.trim();
 
       return c.json({
         data: {
@@ -464,8 +464,8 @@ aiWritingRouter.post(
       const langMatch = result.match(/SOURCE_LANGUAGE:\s*(\S+)/);
       const translationMatch = result.match(/TRANSLATION:\s*\n?([\s\S]+)/);
 
-      const detectedSourceLanguage = langMatch ? langMatch[1]!.trim().toLowerCase() : "en";
-      const translated = translationMatch ? translationMatch[1]!.trim() : result.trim();
+      const detectedSourceLanguage = langMatch ? (langMatch[1] ?? "en").trim().toLowerCase() : "en";
+      const translated = translationMatch ? (translationMatch[1] ?? "").trim() : result.trim();
 
       return c.json({
         data: {
@@ -1143,7 +1143,7 @@ aiWritingRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({

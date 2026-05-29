@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, gt, lt, gte, sql, count } from "drizzle-orm";
+import { eq, and, desc, gt as _gt, lt, gte, sql as _sql2, count as _count } from "drizzle-orm";
 import { getDatabase, sentimentTimeline, relationshipHealth } from "@alecrae/db";
 import { generateId } from "../lib/id.js";
 import { requireScope } from "../middleware/auth.js";
@@ -80,7 +80,8 @@ sentimentTimelineRouter.post(
       .limit(1);
 
     if (existing.length > 0) {
-      const record = existing[0]!;
+      const record = existing[0];
+      if (!record) return c.json({ error: "unexpected empty result" }, 500);
       const newTotal = record.totalInteractions + 1;
       const newAvg = (record.avgSentiment * record.totalInteractions + score) / newTotal;
       const trend = newAvg > record.avgSentiment + 0.05 ? "improving" : newAvg < record.avgSentiment - 0.05 ? "declining" : "stable";
@@ -359,7 +360,7 @@ sentimentTimelineRouter.post(
     const accountId = c.get("accountId" as never) as string;
     const db = getDatabase();
 
-    const results: Array<{ emailId: string; sentiment: string; score: number }> = [];
+    const results: { emailId: string; sentiment: string; score: number }[] = [];
     const positiveWords = ["thank", "great", "excellent", "appreciate", "wonderful", "happy", "pleased"];
     const negativeWords = ["issue", "problem", "urgent", "concern", "disappointed", "delay", "fail"];
     const sentimentLevels = ["very_positive", "positive", "neutral", "negative", "very_negative"] as const;

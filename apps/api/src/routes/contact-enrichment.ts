@@ -311,12 +311,12 @@ contactEnrichmentRouter.post(
 
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const results: Array<{
+    const results: {
       contactId: string;
       email: string;
       data: EnrichmentData;
       confidence: number;
-    }> = [];
+    }[] = [];
 
     for (const contact of contactRows) {
       const enrichment = enrichFromEmail(contact.email);

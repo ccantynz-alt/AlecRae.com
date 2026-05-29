@@ -100,26 +100,26 @@ function generateId(): string {
 }
 
 interface ExtractedContext {
-  actionItems: Array<{
+  actionItems: {
     actionText: string;
     assignedTo: string | null;
     dueDate: string | null;
     priority: "urgent" | "high" | "medium" | "low";
     confidence: number;
-  }>;
-  deadlines: Array<{
+  }[];
+  deadlines: {
     deadlineDate: string;
     description: string;
     isExplicit: boolean;
     confidence: number;
-  }>;
-  promises: Array<{
+  }[];
+  promises: {
     promiseText: string;
     promisor: string;
     promisee: string;
     dueDate: string | null;
     confidence: number;
-  }>;
+  }[];
 }
 
 /**
@@ -155,9 +155,9 @@ contextIntelligenceRouter.post(
 
     const extracted = extractContextFromContent(input.content, input.participants);
 
-    const insertedActionItems: Array<Record<string, unknown>> = [];
-    const insertedDeadlines: Array<Record<string, unknown>> = [];
-    const insertedPromises: Array<Record<string, unknown>> = [];
+    const insertedActionItems: Record<string, unknown>[] = [];
+    const insertedDeadlines: Record<string, unknown>[] = [];
+    const insertedPromises: Record<string, unknown>[] = [];
 
     // Insert action items
     for (const item of extracted.actionItems) {
@@ -290,7 +290,7 @@ contextIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({
@@ -336,11 +336,10 @@ contextIntelligenceRouter.get(
       )
       .limit(1);
 
-    if (rows.length === 0) {
+    const row = rows[0];
+    if (!row) {
       return c.json({ error: "Action item not found" }, 404);
     }
-
-    const row = rows[0]!;
     return c.json({
       data: {
         id: row.id,
@@ -457,7 +456,7 @@ contextIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({
@@ -634,7 +633,7 @@ contextIntelligenceRouter.get(
     const page = hasMore ? rows.slice(0, query.limit) : rows;
     const nextCursor =
       hasMore && page.length > 0
-        ? page[page.length - 1]!.createdAt.toISOString()
+        ? page[page.length - 1]?.createdAt.toISOString()
         : null;
 
     return c.json({
@@ -884,13 +883,13 @@ contextIntelligenceRouter.post(
     const db = getDatabase();
     const now = new Date();
 
-    const results: Array<{
+    const results: {
       emailId: string;
       threadId: string;
       actionItems: number;
       deadlines: number;
       promises: number;
-    }> = [];
+    }[] = [];
 
     for (const email of input.emails) {
       const threadId = email.threadId ?? email.emailId;

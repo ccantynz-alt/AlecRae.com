@@ -81,7 +81,8 @@ function buildLabelTree(flatLabels: LabelRow[]): LabelTreeNode[] {
 
   // Wire parent-child relationships
   for (const label of flatLabels) {
-    const node = nodeMap.get(label.id)!;
+    const node = nodeMap.get(label.id);
+    if (!node) continue;
     if (label.parentId !== null) {
       const parent = nodeMap.get(label.parentId);
       if (parent) {
