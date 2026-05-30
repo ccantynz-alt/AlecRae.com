@@ -34,7 +34,11 @@ import {
   emailSentiments,
   writingCoachResults,
   predictiveActions,
+  emails,
 } from "@alecrae/db";
+import { scoreEmailPriority } from "@alecrae/ai-engine/intelligence/priority-scorer";
+import { generateSmartReplies } from "@alecrae/ai-engine/intelligence/smart-replies";
+import { analyzeEmailSentiment } from "@alecrae/ai-engine/intelligence/sentiment-analyzer";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -85,6 +89,37 @@ function generateId(): string {
     .join("");
 }
 
+// Convert API errors thrown by ai-engine into JSON 5xx responses.
+function aiErrorResponse(
+  err: unknown,
+):
+  | { status: 503; body: { error: { type: string; message: string; code: string } } }
+  | { status: 500; body: { error: { type: string; message: string; code: string } } } {
+  const message = err instanceof Error ? err.message : "Unknown AI error";
+  if (message.includes("ANTHROPIC_API_KEY")) {
+    return {
+      status: 503,
+      body: {
+        error: {
+          type: "service_unavailable",
+          message: "AI service is not configured",
+          code: "ai_unavailable",
+        },
+      },
+    };
+  }
+  return {
+    status: 500,
+    body: {
+      error: {
+        type: "ai_error",
+        message,
+        code: "ai_error",
+      },
+    },
+  };
+}
+
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 const aiIntelligenceRouter = new Hono();
@@ -111,27 +146,48 @@ aiIntelligenceRouter.post(
       return c.json({ data: existing });
     }
 
-    // Placeholder AI scoring — in production this calls Claude Haiku
-    const score = Math.round(Math.random() * 100);
-    const urgencyLevel =
-      score >= 90
-        ? ("critical" as const)
-        : score >= 70
-          ? ("high" as const)
-          : score >= 40
-            ? ("medium" as const)
-            : score >= 20
-              ? ("low" as const)
-              : ("none" as const);
+    // Fetch the email record to pass real content to Claude
+    const [emailRecord] = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, input.emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!emailRecord) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Email ${input.emailId} not found`,
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    let priorityResult: Awaited<ReturnType<typeof scoreEmailPriority>>;
+    try {
+      priorityResult = await scoreEmailPriority({
+        subject: emailRecord.subject,
+        from: emailRecord.fromAddress,
+        body: emailRecord.textBody ?? emailRecord.htmlBody ?? "",
+      });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+
+    const { score, urgencyLevel, reasons, suggestedAction } = priorityResult;
 
     const contentSignals = {
-      hasDeadline: Math.random() > 0.7,
-      hasQuestion: Math.random() > 0.5,
-      hasMoneyConcern: Math.random() > 0.8,
-      hasActionRequired: Math.random() > 0.6,
-      mentionsAttachment: Math.random() > 0.7,
-      isReplyChain: Math.random() > 0.5,
-      threadLength: Math.floor(Math.random() * 10) + 1,
+      hasDeadline: reasons.some((r) => /deadline|due|by |before /i.test(r)),
+      hasQuestion: reasons.some((r) => /question|asked|request/i.test(r)),
+      hasMoneyConcern: reasons.some((r) => /money|payment|invoice|budget/i.test(r)),
+      hasActionRequired: suggestedAction === "reply_now" || suggestedAction === "reply_today",
+      mentionsAttachment: false,
+      isReplyChain: false,
+      threadLength: 1,
     };
 
     const id = generateId();
@@ -143,11 +199,15 @@ aiIntelligenceRouter.post(
       emailId: input.emailId,
       score,
       urgencyLevel,
-      reasoning: `AI-scored email with priority ${score}/100 based on content signals and sender importance.`,
-      senderImportance: Math.round(Math.random() * 100),
+      reasoning: reasons.join(" | "),
+      senderImportance: score,
       contentSignals,
-      predictedAction: score >= 70 ? "reply" : score >= 40 ? "read" : "archive",
-      confidence: Math.round(Math.random() * 50 + 50) / 100,
+      predictedAction: suggestedAction === "reply_now" || suggestedAction === "reply_today"
+        ? "reply"
+        : suggestedAction === "reply_when_free"
+          ? "read"
+          : "archive",
+      confidence: score / 100,
       scoredAt: now,
     });
 
@@ -291,24 +351,43 @@ aiIntelligenceRouter.post(
     const auth = c.get("auth");
     const db = getDatabase();
 
-    // Placeholder AI-generated replies — in production this calls Claude
-    const replies = [
-      {
-        text: "Thanks for reaching out! I'll review this and get back to you shortly.",
-        confidence: 0.92,
-        tone: "professional",
-      },
-      {
-        text: "Got it, thanks! Let me take a look.",
-        confidence: 0.85,
-        tone: "casual",
-      },
-      {
-        text: "Thank you for the update. I'll follow up with the team on this.",
-        confidence: 0.78,
-        tone: "formal",
-      },
-    ];
+    // Fetch the email record to pass real content to Claude
+    const [emailRecordForReplies] = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, input.emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!emailRecordForReplies) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Email ${input.emailId} not found`,
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    let generatedReplies: Awaited<ReturnType<typeof generateSmartReplies>>;
+    try {
+      generatedReplies = await generateSmartReplies({
+        subject: emailRecordForReplies.subject,
+        from: emailRecordForReplies.fromAddress,
+        body: emailRecordForReplies.textBody ?? emailRecordForReplies.htmlBody ?? "",
+      });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+
+    const replies = generatedReplies.map((r, i) => ({
+      text: r.text,
+      confidence: Math.round((0.95 - i * 0.07) * 100) / 100,
+      tone: r.tone,
+    }));
 
     const id = generateId();
     const now = new Date();
@@ -449,17 +528,55 @@ aiIntelligenceRouter.post(
       return c.json({ data: existing });
     }
 
-    // Placeholder AI sentiment analysis — in production this calls Claude
-    const sentiments = [
-      "positive",
-      "negative",
-      "neutral",
-      "urgent",
-      "angry",
-      "grateful",
-      "confused",
-    ] as const;
-    const sentiment = sentiments[Math.floor(Math.random() * sentiments.length)] ?? "neutral";
+    // Fetch the email record to pass real content to Claude
+    const [emailRecordForSentiment] = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, input.emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!emailRecordForSentiment) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Email ${input.emailId} not found`,
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    let sentimentResult: Awaited<ReturnType<typeof analyzeEmailSentiment>>;
+    try {
+      sentimentResult = await analyzeEmailSentiment({
+        subject: emailRecordForSentiment.subject,
+        body: emailRecordForSentiment.textBody ?? emailRecordForSentiment.htmlBody ?? "",
+      });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+
+    // Map ai-engine sentiment values to DB enum values
+    type DbSentiment = "positive" | "negative" | "neutral" | "urgent" | "angry" | "grateful" | "confused";
+    const sentimentMap: Record<string, DbSentiment> = {
+      very_positive: "positive",
+      positive: "positive",
+      neutral: "neutral",
+      negative: "negative",
+      very_negative: "angry",
+    };
+    const sentiment: DbSentiment = sentimentMap[sentimentResult.sentiment] ?? "neutral";
+
+    // Use requiresUrgentResponse to upgrade to "urgent" if flagged
+    const finalSentiment: DbSentiment = sentimentResult.requiresUrgentResponse && sentiment === "neutral"
+      ? "urgent"
+      : sentiment;
+
+    // Derive confidence from the absolute value of the sentiment score
+    const confidence = Math.min(1, Math.max(0.5, Math.abs(sentimentResult.score) + 0.5));
 
     const id = generateId();
     const now = new Date();
@@ -468,9 +585,9 @@ aiIntelligenceRouter.post(
       id,
       emailId: input.emailId,
       accountId: auth.accountId,
-      sentiment,
-      confidence: Math.round(Math.random() * 40 + 60) / 100,
-      keywords: ["placeholder", "analysis"],
+      sentiment: finalSentiment,
+      confidence: Math.round(confidence * 100) / 100,
+      keywords: sentimentResult.emotions,
       analyzedAt: now,
     });
 

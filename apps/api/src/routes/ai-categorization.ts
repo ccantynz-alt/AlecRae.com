@@ -28,7 +28,9 @@ import {
   emailCategories,
   smartLabelRules,
   categoryFeedback,
+  emails,
 } from "@alecrae/db";
+import { categorizeEmail } from "@alecrae/ai-engine/intelligence/categorizer";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -97,29 +99,60 @@ function generateId(): string {
     .join("");
 }
 
-/**
- * Placeholder AI categorization. In production this calls Claude Haiku
- * to analyse sender, subject, and body content.
- */
-function placeholderCategorize(emailId: string): {
-  primaryCategory: (typeof PRIMARY_CATEGORIES)[number];
-  secondaryCategories: string[];
-  confidence: number;
-} {
-  // Deterministic-ish placeholder based on emailId hash
-  const hash = emailId
-    .split("")
-    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  const idx = hash % PRIMARY_CATEGORIES.length;
-  const primary = PRIMARY_CATEGORIES[idx] ?? "important";
-  const secondaryIdx = (idx + 3) % PRIMARY_CATEGORIES.length;
-  const secondary = PRIMARY_CATEGORIES[secondaryIdx] ?? "updates";
-
+// Convert API errors thrown by ai-engine into JSON 5xx responses.
+function aiErrorResponse(
+  err: unknown,
+):
+  | { status: 503; body: { error: { type: string; message: string; code: string } } }
+  | { status: 500; body: { error: { type: string; message: string; code: string } } } {
+  const message = err instanceof Error ? err.message : "Unknown AI error";
+  if (message.includes("ANTHROPIC_API_KEY")) {
+    return {
+      status: 503,
+      body: {
+        error: {
+          type: "service_unavailable",
+          message: "AI service is not configured",
+          code: "ai_unavailable",
+        },
+      },
+    };
+  }
   return {
-    primaryCategory: primary,
-    secondaryCategories: primary !== secondary ? [secondary] : [],
-    confidence: 0.85 + (hash % 15) / 100,
+    status: 500,
+    body: {
+      error: {
+        type: "ai_error",
+        message,
+        code: "ai_error",
+      },
+    },
   };
+}
+
+/**
+ * Map a free-text primary category from Claude to one of our known DB categories.
+ * Falls back to "important" if the value isn't in the PRIMARY_CATEGORIES list.
+ */
+function mapToDbCategory(
+  primary: string,
+): (typeof PRIMARY_CATEGORIES)[number] {
+  const mapped: Record<string, (typeof PRIMARY_CATEGORIES)[number]> = {
+    newsletter: "newsletter",
+    transactional: "receipts",
+    personal: "personal",
+    work: "work",
+    promotion: "promotions",
+    social: "social",
+    update: "updates",
+    alert: "important",
+  };
+  const lower = primary.toLowerCase();
+  // Direct match in our PRIMARY_CATEGORIES
+  if (PRIMARY_CATEGORIES.includes(lower as (typeof PRIMARY_CATEGORIES)[number])) {
+    return lower as (typeof PRIMARY_CATEGORIES)[number];
+  }
+  return mapped[lower] ?? "important";
 }
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
@@ -136,7 +169,44 @@ aiCategorizationRouter.post(
     const auth = c.get("auth");
     const db = getDatabase();
 
-    const result = placeholderCategorize(input.emailId);
+    // Fetch the email record to pass real content to Claude
+    const [emailRecord] = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.id, input.emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!emailRecord) {
+      return c.json(
+        {
+          error: {
+            type: "not_found",
+            message: `Email ${input.emailId} not found`,
+            code: "email_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    let categoryResult: Awaited<ReturnType<typeof categorizeEmail>>;
+    try {
+      categoryResult = await categorizeEmail({
+        subject: emailRecord.subject,
+        from: emailRecord.fromAddress,
+        body: emailRecord.textBody ?? emailRecord.htmlBody ?? "",
+      });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+
+    const primaryCategory = mapToDbCategory(categoryResult.primary);
+    const secondaryCategories = categoryResult.secondary
+      .map((s) => mapToDbCategory(s) as string)
+      .filter((s) => s !== primaryCategory)
+      .slice(0, 3);
+
     const id = generateId();
     const now = new Date();
 
@@ -146,9 +216,9 @@ aiCategorizationRouter.post(
         id,
         accountId: auth.accountId,
         emailId: input.emailId,
-        primaryCategory: result.primaryCategory,
-        secondaryCategories: result.secondaryCategories,
-        confidence: result.confidence,
+        primaryCategory,
+        secondaryCategories,
+        confidence: categoryResult.confidence,
         aiModel: "haiku",
         categorizedAt: now,
       })
@@ -158,9 +228,9 @@ aiCategorizationRouter.post(
       data: {
         id,
         emailId: input.emailId,
-        primaryCategory: result.primaryCategory,
-        secondaryCategories: result.secondaryCategories,
-        confidence: result.confidence,
+        primaryCategory,
+        secondaryCategories,
+        confidence: categoryResult.confidence,
         aiModel: "haiku",
         categorizedAt: now.toISOString(),
       },
@@ -179,19 +249,73 @@ aiCategorizationRouter.post(
     const db = getDatabase();
 
     const now = new Date();
-    const results = input.emailIds.map((emailId) => {
-      const cat = placeholderCategorize(emailId);
-      return {
+
+    // Fetch all email records for the batch
+    const emailRecords = await db
+      .select()
+      .from(emails)
+      .where(and(eq(emails.accountId, auth.accountId)));
+
+    const emailMap = new Map(emailRecords.map((e) => [e.id, e]));
+
+    // Process each email — call Claude for those we have records for,
+    // fall back to a deterministic placeholder for unknown IDs
+    const results: {
+      id: string;
+      accountId: string;
+      emailId: string;
+      primaryCategory: (typeof PRIMARY_CATEGORIES)[number];
+      secondaryCategories: string[];
+      confidence: number;
+      aiModel: "haiku";
+      categorizedAt: Date;
+    }[] = [];
+
+    for (const emailId of input.emailIds) {
+      const emailRecord = emailMap.get(emailId);
+      let primaryCategory: (typeof PRIMARY_CATEGORIES)[number];
+      let secondaryCategories: string[];
+      let confidence: number;
+
+      if (emailRecord) {
+        try {
+          const categoryResult = await categorizeEmail({
+            subject: emailRecord.subject,
+            from: emailRecord.fromAddress,
+            body: emailRecord.textBody ?? emailRecord.htmlBody ?? "",
+          });
+          primaryCategory = mapToDbCategory(categoryResult.primary);
+          secondaryCategories = categoryResult.secondary
+            .map((s) => mapToDbCategory(s) as string)
+            .filter((s) => s !== primaryCategory)
+            .slice(0, 3);
+          confidence = categoryResult.confidence;
+        } catch {
+          // If Claude fails for one item in the batch, use fallback
+          primaryCategory = "important";
+          secondaryCategories = [];
+          confidence = 0.5;
+        }
+      } else {
+        // Deterministic fallback for unknown email IDs
+        const hash = emailId.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+        const idx = hash % PRIMARY_CATEGORIES.length;
+        primaryCategory = PRIMARY_CATEGORIES[idx] ?? "important";
+        secondaryCategories = [];
+        confidence = 0.5;
+      }
+
+      results.push({
         id: generateId(),
         accountId: auth.accountId,
         emailId,
-        primaryCategory: cat.primaryCategory,
-        secondaryCategories: cat.secondaryCategories,
-        confidence: cat.confidence,
-        aiModel: "haiku" as const,
+        primaryCategory,
+        secondaryCategories,
+        confidence,
+        aiModel: "haiku",
         categorizedAt: now,
-      };
-    });
+      });
+    }
 
     if (results.length > 0) {
       await db

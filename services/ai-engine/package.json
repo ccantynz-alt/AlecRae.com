@@ -186,6 +186,31 @@
       "bun": "./src/scripts/snippet-runner.ts",
       "types": "./src/scripts/snippet-runner.ts",
       "import": "./dist/scripts/snippet-runner.js"
+    },
+    "./intelligence/priority-scorer": {
+      "bun": "./src/intelligence/priority-scorer.ts",
+      "types": "./src/intelligence/priority-scorer.ts",
+      "import": "./dist/intelligence/priority-scorer.js"
+    },
+    "./intelligence/smart-replies": {
+      "bun": "./src/intelligence/smart-replies.ts",
+      "types": "./src/intelligence/smart-replies.ts",
+      "import": "./dist/intelligence/smart-replies.js"
+    },
+    "./intelligence/sentiment-analyzer": {
+      "bun": "./src/intelligence/sentiment-analyzer.ts",
+      "types": "./src/intelligence/sentiment-analyzer.ts",
+      "import": "./dist/intelligence/sentiment-analyzer.js"
+    },
+    "./intelligence/categorizer": {
+      "bun": "./src/intelligence/categorizer.ts",
+      "types": "./src/intelligence/categorizer.ts",
+      "import": "./dist/intelligence/categorizer.js"
+    },
+    "./intelligence/context-extractor": {
+      "bun": "./src/intelligence/context-extractor.ts",
+      "types": "./src/intelligence/context-extractor.ts",
+      "import": "./dist/intelligence/context-extractor.js"
     }
   },
   "scripts": {
