@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import type { Route } from "next";
 import {
   Box,
   Text,
@@ -252,7 +253,7 @@ function BillingLink({ account, loading }: { account: AccountData | null; loadin
               {planLabel}
             </Text>
           </Box>
-          <Link href="/billing">
+          <Link href={"/billing" as Route}>
             <Button variant="secondary" size="sm">
               Manage Billing
             </Button>

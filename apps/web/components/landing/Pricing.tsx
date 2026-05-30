@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import Link from "next/link";
+import type { Route } from "next";
 
 const fadeUp = { initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-100px" }, transition: { duration: 0.6 } };
 
@@ -100,7 +101,7 @@ export function Pricing() {
                 ))}
               </ul>
               <Link
-                href={plan.href}
+                href={plan.href as Route}
                 className={`text-center py-2.5 rounded-full text-sm font-medium transition-all ${
                   plan.highlighted
                     ? "bg-white text-slate-950 hover:bg-blue-100"

@@ -151,7 +151,7 @@ contextIntelligenceRouter.post(
     try {
       extracted = await extractEmailContext({
         content: input.content,
-        participants: input.participants,
+        ...(input.participants !== undefined ? { participants: input.participants } : {}),
       });
     } catch (err) {
       const { status, body } = aiErrorResponse(err);
@@ -905,7 +905,7 @@ contextIntelligenceRouter.post(
       try {
         extracted = await extractEmailContext({
           content: email.content,
-          participants: email.participants,
+          ...(email.participants !== undefined ? { participants: email.participants } : {}),
         });
       } catch {
         // If extraction fails for one email, skip it (don't abort the whole batch)

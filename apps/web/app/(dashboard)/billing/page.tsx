@@ -369,7 +369,7 @@ export default function BillingPage(): React.ReactNode {
 
   const handleUpgrade = (checkoutId: "starter" | "professional" | "enterprise"): void => {
     setUpgrading(true);
-    router.push(`/checkout?plan=${checkoutId}`);
+    router.push(`/checkout?plan=${checkoutId}` as never);
   };
 
   const activePlanId = plan?.planId ?? "free";
