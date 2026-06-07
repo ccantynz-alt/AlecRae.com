@@ -6,8 +6,9 @@
  */
 
 import Stripe from "stripe";
+import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import { getDatabase, accounts } from "@alecrae/db";
+import { getDatabase, accounts, dunningRecords } from "@alecrae/db";
 
 // ─── Stripe client ────────────────────────────────────────────────────────
 
@@ -78,6 +79,268 @@ function planFromPriceId(priceId: string): PlanId | null {
     if (def.priceId === priceId) return plan as PlanId;
   }
   return null;
+}
+
+// ─── Dunning (failed-payment recovery) ─────────────────────────────────────
+
+/**
+ * Grace window, in days, after the FIRST failed payment before we downgrade
+ * the account to free. Stripe Smart Retries drive the actual retry cadence
+ * within this window; this is the hard cutoff on our side.
+ */
+export const DUNNING_GRACE_DAYS = 14;
+
+/** Dunning state machine states. Mirrors `dunningStateEnum`. */
+export type DunningState = "active" | "past_due" | "downgraded";
+
+/**
+ * Minimal shape we need from a Stripe invoice. The `customer` field on a
+ * webhook payload may be a string ID or an expanded object, so it is parsed
+ * defensively at the boundary.
+ */
+const invoiceCustomerSchema = z.object({
+  id: z.string().optional(),
+  customer: z
+    .union([z.string(), z.object({ id: z.string() }), z.null()])
+    .optional(),
+});
+
+/**
+ * Extract the Stripe customer ID from an invoice payload regardless of
+ * whether the `customer` field is a string or an expanded object.
+ */
+function extractCustomerId(invoice: Stripe.Invoice): string | null {
+  const parsed = invoiceCustomerSchema.safeParse(invoice);
+  if (!parsed.success) return null;
+  const { customer } = parsed.data;
+  if (!customer) return null;
+  return typeof customer === "string" ? customer : customer.id;
+}
+
+interface DunningAccount {
+  id: string;
+  planTier: PlanId;
+}
+
+/**
+ * Resolve an account from a Stripe customer ID.
+ */
+async function findAccountByCustomerId(
+  customerId: string,
+): Promise<DunningAccount | null> {
+  const db = getDatabase();
+  const [account] = await db
+    .select({ id: accounts.id, planTier: accounts.planTier })
+    .from(accounts)
+    .where(eq(accounts.stripeCustomerId, customerId))
+    .limit(1);
+
+  if (!account) return null;
+  return { id: account.id, planTier: account.planTier as PlanId };
+}
+
+/**
+ * Read the current dunning record for an account, if any.
+ */
+async function getDunningRecord(
+  accountId: string,
+): Promise<{ state: DunningState; planAtRisk: PlanId | null } | null> {
+  const db = getDatabase();
+  const [record] = await db
+    .select({
+      state: dunningRecords.state,
+      planAtRisk: dunningRecords.planAtRisk,
+    })
+    .from(dunningRecords)
+    .where(eq(dunningRecords.accountId, accountId))
+    .limit(1);
+
+  if (!record) return null;
+  return {
+    state: record.state as DunningState,
+    planAtRisk: (record.planAtRisk as PlanId | null) ?? null,
+  };
+}
+
+/**
+ * Record a failed invoice payment and move the account into the `past_due`
+ * grace state. Increments the attempt count on repeat failures. The paid
+ * plan is RETAINED — we do not downgrade until the grace window expires
+ * (handled by `processExpiredGrace`) or the subscription is deleted.
+ *
+ * Returns the resulting state and attempt count, or `null` if the account
+ * cannot be resolved.
+ */
+export async function recordPaymentFailure(
+  customerId: string,
+  invoiceId: string | null,
+): Promise<{ state: DunningState; attempt: number } | null> {
+  const db = getDatabase();
+  const account = await findAccountByCustomerId(customerId);
+  if (!account) return null;
+
+  // Free accounts have no paid plan to protect — nothing to dun.
+  if (account.planTier === "free") {
+    return { state: "active", attempt: 0 };
+  }
+
+  const now = new Date();
+  const existing = await getDunningRecord(account.id);
+
+  if (existing && existing.state === "past_due") {
+    // Subsequent failure within the same cycle — bump the attempt count.
+    const [updated] = await db
+      .update(dunningRecords)
+      .set({
+        failedAttemptCount: sql`${dunningRecords.failedAttemptCount} + 1`,
+        lastFailedInvoiceId: invoiceId,
+        lastFailedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(dunningRecords.accountId, account.id))
+      .returning({ attempt: dunningRecords.failedAttemptCount });
+
+    return { state: "past_due", attempt: updated?.attempt ?? 1 };
+  }
+
+  // First failure of a new cycle — open the grace window and snapshot the
+  // plan so it can be restored on recovery.
+  const graceExpiresAt = new Date(
+    now.getTime() + DUNNING_GRACE_DAYS * 24 * 60 * 60 * 1000,
+  );
+
+  await db
+    .insert(dunningRecords)
+    .values({
+      id: crypto.randomUUID(),
+      accountId: account.id,
+      state: "past_due",
+      failedAttemptCount: 1,
+      planAtRisk: account.planTier,
+      lastFailedInvoiceId: invoiceId,
+      dunningStartedAt: now,
+      lastFailedAt: now,
+      graceExpiresAt,
+      recoveredAt: null,
+      downgradedAt: null,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: dunningRecords.accountId,
+      set: {
+        state: "past_due",
+        failedAttemptCount: 1,
+        planAtRisk: account.planTier,
+        lastFailedInvoiceId: invoiceId,
+        dunningStartedAt: now,
+        lastFailedAt: now,
+        graceExpiresAt,
+        recoveredAt: null,
+        downgradedAt: null,
+        updatedAt: now,
+      },
+    });
+
+  return { state: "past_due", attempt: 1 };
+}
+
+/**
+ * Clear the `past_due` state after a successful payment. If the account was
+ * downgraded while past due, the snapshotted plan is restored.
+ *
+ * Returns the action taken, or `null` if there was nothing to recover.
+ */
+export async function recordPaymentRecovery(
+  customerId: string,
+): Promise<{ state: DunningState; restoredPlan: PlanId | null } | null> {
+  const db = getDatabase();
+  const account = await findAccountByCustomerId(customerId);
+  if (!account) return null;
+
+  const existing = await getDunningRecord(account.id);
+  if (!existing || existing.state === "active") {
+    // Nothing outstanding — a normal successful renewal.
+    return null;
+  }
+
+  const now = new Date();
+  let restoredPlan: PlanId | null = null;
+
+  // If we had downgraded the account, restore the plan it held at risk.
+  if (
+    existing.state === "downgraded" &&
+    existing.planAtRisk &&
+    account.planTier === "free"
+  ) {
+    restoredPlan = existing.planAtRisk;
+    await db
+      .update(accounts)
+      .set({ planTier: restoredPlan, updatedAt: now })
+      .where(eq(accounts.id, account.id));
+  }
+
+  await db
+    .update(dunningRecords)
+    .set({
+      state: "active",
+      failedAttemptCount: 0,
+      planAtRisk: null,
+      graceExpiresAt: null,
+      recoveredAt: now,
+      updatedAt: now,
+    })
+    .where(eq(dunningRecords.accountId, account.id));
+
+  return { state: "active", restoredPlan };
+}
+
+/**
+ * Mark an account as definitively downgraded due to dunning failure and
+ * drop it to the free plan. Called when the grace window expires or the
+ * subscription is deleted while past due.
+ */
+async function applyDunningDowngrade(accountId: string): Promise<void> {
+  const db = getDatabase();
+  const now = new Date();
+
+  await db
+    .update(accounts)
+    .set({ planTier: "free", stripeSubscriptionId: null, updatedAt: now })
+    .where(eq(accounts.id, accountId));
+
+  await db
+    .update(dunningRecords)
+    .set({ state: "downgraded", downgradedAt: now, updatedAt: now })
+    .where(eq(dunningRecords.accountId, accountId));
+}
+
+/**
+ * Sweep for accounts whose grace window has expired while still `past_due`
+ * and downgrade them to free. Intended to be invoked by a scheduled job.
+ *
+ * Returns the list of downgraded account IDs.
+ */
+export async function processExpiredGrace(): Promise<string[]> {
+  const db = getDatabase();
+  const now = new Date();
+
+  const expired = await db
+    .select({
+      accountId: dunningRecords.accountId,
+      graceExpiresAt: dunningRecords.graceExpiresAt,
+    })
+    .from(dunningRecords)
+    .where(eq(dunningRecords.state, "past_due"));
+
+  const downgraded: string[] = [];
+  for (const record of expired) {
+    if (record.graceExpiresAt && record.graceExpiresAt.getTime() <= now.getTime()) {
+      await applyDunningDowngrade(record.accountId);
+      downgraded.push(record.accountId);
+    }
+  }
+
+  return downgraded;
 }
 
 // ─── Customer management ──────────────────────────────────────────────────
@@ -292,25 +555,69 @@ export async function handleWebhookEvent(
         })
         .where(eq(accounts.id, accountId));
 
+      // Close out any open dunning cycle — the subscription is gone, so the
+      // grace window no longer applies. Mark as downgraded if it was past_due.
+      const dunning = await getDunningRecord(accountId);
+      if (dunning && dunning.state === "past_due") {
+        const now = new Date();
+        await db
+          .update(dunningRecords)
+          .set({ state: "downgraded", downgradedAt: now, updatedAt: now })
+          .where(eq(dunningRecords.accountId, accountId));
+      }
+
       return { handled: true, action: "downgraded_to_free" };
     }
 
-    // ── Payment failed ──────────────────────────────────────────────
-    case "invoice.payment_failed": {
+    // ── Payment succeeded — clear any past_due / restore plan ───────
+    case "invoice.paid":
+    case "invoice.payment_succeeded": {
       const invoice = event.data.object as Stripe.Invoice;
-      const customerId =
-        typeof invoice.customer === "string"
-          ? invoice.customer
-          : (invoice.customer as Stripe.Customer | null)?.id;
+      const customerId = extractCustomerId(invoice);
 
       if (!customerId) return { handled: false };
 
-      // Log for now — in production this would trigger a dunning flow
-      console.warn(
-        `[billing] Payment failed for Stripe customer ${customerId}`,
-      );
+      const recovery = await recordPaymentRecovery(customerId);
+      if (!recovery) {
+        // No outstanding dunning — a normal successful renewal.
+        return { handled: true, action: "payment_succeeded" };
+      }
 
-      return { handled: true, action: "payment_failed_logged" };
+      return {
+        handled: true,
+        action: recovery.restoredPlan
+          ? `dunning_recovered_restored_${recovery.restoredPlan}`
+          : "dunning_recovered",
+      };
+    }
+
+    // ── Payment failed — enter dunning / grace state ────────────────
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId = extractCustomerId(invoice);
+
+      if (!customerId) return { handled: false };
+
+      const invoiceId = invoice.id ?? null;
+      const result = await recordPaymentFailure(customerId, invoiceId);
+
+      if (!result) {
+        // Account not found for this customer — log and acknowledge.
+        console.warn(
+          `[billing] Payment failed for unknown Stripe customer ${customerId}`,
+        );
+        return { handled: true, action: "payment_failed_unmatched" };
+      }
+
+      if (result.state === "active") {
+        // Free account or nothing to dun.
+        return { handled: true, action: "payment_failed_no_dunning" };
+      }
+
+      return {
+        handled: true,
+        action: `dunning_past_due_attempt_${result.attempt}`,
+      };
     }
 
     default:

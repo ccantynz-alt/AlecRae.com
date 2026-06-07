@@ -72,9 +72,11 @@ async function translateWithClaude(
   targetLang: string,
   sourceLang?: string,
   context?: "email_subject" | "email_body" | "general",
-): Promise<{ translated: string; detectedLanguage: string }> {
+): Promise<{ translated: string; detectedLanguage: string; available: boolean }> {
+  // Graceful degradation: if the AI provider is unavailable, return the
+  // original text untouched with available=false rather than throwing.
   if (!ANTHROPIC_API_KEY) {
-    throw new Error("Translation service requires ANTHROPIC_API_KEY");
+    return { translated: text, detectedLanguage: sourceLang ?? "unknown", available: false };
   }
 
   const targetName = languageName(targetLang);
@@ -111,8 +113,8 @@ Rules:
   });
 
   if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Translation API error ${response.status}: ${errText}`);
+    // Graceful degradation on API failure: return the original text untouched.
+    return { translated: text, detectedLanguage: sourceLang ?? "unknown", available: false };
   }
 
   const data = (await response.json()) as {
@@ -125,21 +127,27 @@ Rules:
     .join("")
     .trim();
 
+  if (!fullOutput) {
+    return { translated: text, detectedLanguage: sourceLang ?? "unknown", available: false };
+  }
+
   // Parse: first line = detected language, rest = translation
   const lines = fullOutput.split("\n");
   const detectedLanguage = lines[0]?.trim().toLowerCase().slice(0, 5) ?? sourceLang ?? "unknown";
   const translated = lines.slice(1).join("\n").trim() || fullOutput;
 
-  return { translated, detectedLanguage };
+  return { translated, detectedLanguage, available: true };
 }
 
 /**
  * Detect the language of a text snippet using Claude.
  * Returns a language code string.
  */
-async function detectLanguage(text: string): Promise<{ code: string; name: string }> {
+async function detectLanguage(text: string): Promise<{ code: string; name: string; available: boolean }> {
+  // Graceful degradation: if the AI provider is unavailable, report an
+  // unknown language with available=false rather than throwing.
   if (!ANTHROPIC_API_KEY) {
-    throw new Error("Language detection requires ANTHROPIC_API_KEY");
+    return { code: "unknown", name: languageName("unknown"), available: false };
   }
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -158,8 +166,8 @@ async function detectLanguage(text: string): Promise<{ code: string; name: strin
   });
 
   if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Language detection API error ${response.status}: ${errText}`);
+    // Graceful degradation on API failure.
+    return { code: "unknown", name: languageName("unknown"), available: false };
   }
 
   const data = (await response.json()) as {
@@ -174,9 +182,14 @@ async function detectLanguage(text: string): Promise<{ code: string; name: strin
     .toLowerCase()
     .slice(0, 5);
 
+  if (!code) {
+    return { code: "unknown", name: languageName("unknown"), available: false };
+  }
+
   return {
     code,
     name: languageName(code),
+    available: true,
   };
 }
 

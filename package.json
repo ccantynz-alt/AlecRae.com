@@ -17,6 +17,7 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "preflight": "bun run scripts/preflight.ts",
     "db:migrate": "bun run packages/db/src/migrate.ts",
     "db:seed": "bun run packages/db/src/seed.ts",
     "db:generate": "bun run --cwd packages/db db:generate",

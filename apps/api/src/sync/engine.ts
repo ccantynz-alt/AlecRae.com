@@ -117,6 +117,10 @@ export interface SyncResult {
   errors: string[];
   syncDurationMs: number;
   newSyncState?: string;
+  /** Set when an expired OAuth access token was refreshed mid-sync; callers should persist these. */
+  newAccessToken?: string;
+  newRefreshToken?: string;
+  newTokenExpiresAt?: Date;
 }
 
 export interface Folder {
@@ -509,6 +513,35 @@ export async function exchangeMicrosoftCode(code: string): Promise<{
   };
 }
 
+async function refreshMicrosoftToken(
+  refreshToken: string,
+): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
+  const res = await fetch(MS_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id: MS_CLIENT_ID,
+      client_secret: MS_CLIENT_SECRET,
+      grant_type: "refresh_token",
+      scope: "offline_access Mail.ReadWrite Mail.Send",
+    }),
+  });
+
+  if (!res.ok) throw new Error("Failed to refresh Microsoft token");
+  const data = (await res.json()) as {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+  };
+  // Azure may or may not rotate the refresh token; fall back to the existing one.
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token ?? refreshToken,
+    expiresIn: data.expires_in,
+  };
+}
+
 export async function syncOutlookMessages(
   account: EmailAccount,
   maxResults = 100,
@@ -516,7 +549,34 @@ export async function syncOutlookMessages(
   const start = performance.now();
   const result: SyncResult = { messagesAdded: 0, messagesUpdated: 0, messagesDeleted: 0, errors: [], syncDurationMs: 0 };
 
-  const headers = { Authorization: `Bearer ${account.accessToken}` };
+  if (!account.accessToken) {
+    result.errors.push("Missing access token for Outlook sync");
+    result.syncDurationMs = performance.now() - start;
+    return result;
+  }
+  let token = account.accessToken;
+
+  // Refresh token if expired
+  if (account.tokenExpiresAt && account.tokenExpiresAt <= new Date()) {
+    if (!account.refreshToken) {
+      result.errors.push("Missing refresh token for expired Outlook access token");
+      result.syncDurationMs = performance.now() - start;
+      return result;
+    }
+    try {
+      const refreshed = await refreshMicrosoftToken(account.refreshToken);
+      token = refreshed.accessToken;
+      result.newAccessToken = refreshed.accessToken;
+      result.newRefreshToken = refreshed.refreshToken;
+      result.newTokenExpiresAt = new Date(Date.now() + refreshed.expiresIn * 1000);
+    } catch (err) {
+      result.errors.push(`Token refresh failed: ${err instanceof Error ? err.message : String(err)}`);
+      result.syncDurationMs = performance.now() - start;
+      return result;
+    }
+  }
+
+  const headers = { Authorization: `Bearer ${token}` };
 
   try {
     // Use delta query for incremental sync
