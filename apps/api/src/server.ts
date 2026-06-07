@@ -123,6 +123,7 @@ import { contextIntelligenceRouter } from "./routes/context-intelligence.js";
 import { productivityAnalyticsRouter } from "./routes/productivity-analytics.js";
 import { knowledgeGraphRouter } from "./routes/knowledge-graph.js";
 import { organizationsRouter } from "./routes/organizations.js";
+import { dpaRouter } from "./routes/dpa.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue } from "./lib/queue.js";
@@ -726,6 +727,12 @@ app.use("/v1/organizations/*", authMiddleware, writeRateLimit);
 app.use("/v1/organizations", authMiddleware, writeRateLimit);
 // Organizations + Team Management + Audit Log
 app.route("/v1/organizations", organizationsRouter);
+
+// DPA self-serve signing: read-level for queries, write-level for signing
+app.use("/v1/dpa/current", authMiddleware, readRateLimit);
+app.use("/v1/dpa/sign", authMiddleware, writeRateLimit);
+app.use("/v1/dpa", authMiddleware, readRateLimit);
+app.route("/v1/dpa", dpaRouter);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);

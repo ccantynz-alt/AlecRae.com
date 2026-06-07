@@ -212,6 +212,18 @@ export default function DpaPage() {
       </Section>
 
       <Box className="mt-12 pt-6 border-t border-border">
+        <Card className="mb-6 border-brand-500/30 bg-brand-50">
+          <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <Text className="text-sm text-content-secondary">
+              Need a countersigned DPA for your records? Sign it yourself in under a minute — no email back-and-forth.
+            </Text>
+            <Box as="a" href="/dpa/sign" className="shrink-0">
+              <Text as="span" className="inline-block rounded-lg bg-brand-600 text-white px-4 py-2 text-sm font-medium hover:bg-brand-700 transition-colors">
+                Sign the DPA
+              </Text>
+            </Box>
+          </CardContent>
+        </Card>
         <Text className="text-content-tertiary text-sm mb-4">
           This Data Processing Agreement is effective as of the date the Controller begins using the Service. For questions about this DPA or to request a signed copy, contact legal@alecrae.com or dpo@alecrae.com.
         </Text>
