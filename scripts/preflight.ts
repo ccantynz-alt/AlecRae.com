@@ -29,14 +29,20 @@ interface CheckResult {
 
 // ─── ENV SHAPE — Zod schema (every required var from .env.production) ─────────
 
-/** A required non-empty string that must not still hold a template placeholder. */
+/**
+ * A required non-empty string that must not still hold a `.env.production`
+ * template placeholder. Returns a `ZodString` (not `ZodEffects`) so callers can
+ * keep chaining string-only checks like `.startsWith()` / `.url()` / `.min()`.
+ * The placeholder rejection uses `.regex()` with a negative lookahead, which
+ * preserves the `ZodString` type.
+ */
 const required = (label: string): z.ZodString =>
   z
     .string({ required_error: `${label} is not set` })
     .trim()
     .min(1, `${label} is empty`)
-    .refine(
-      (v) => !/^(YOUR_|GENERATE_|price_YOUR|sk_live_YOUR|whsec_YOUR)/i.test(v),
+    .regex(
+      /^(?!(?:YOUR_|GENERATE_|price_YOUR|sk_live_YOUR|whsec_YOUR))/i,
       `${label} still holds a template placeholder`,
     );
 
