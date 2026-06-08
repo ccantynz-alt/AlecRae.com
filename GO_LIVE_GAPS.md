@@ -74,6 +74,25 @@ The <100KB initial-JS budget is at risk. None block a beta, but they erode the s
 
 **WebLLM (`@mlc-ai/web-llm`) verdict:** SAFE — already a dynamic `import()` inside a function body; not in the initial bundle.
 
+## 🔐 Security review results + decisions needed (2026-06-08)
+
+Pre-launch review of the API public surface. **Fixed + merged-ready:**
+- ✅ **Critical auth bypass** — unsigned JWTs were accepted (atob-decode, no signature check) on the global Bearer middleware + `/auth/me` + `/logout`. Now verified via jose. (Forgeable tokens for any account — would have been catastrophic.)
+- ✅ Reflected XSS on the unsubscribe page (`tracking.ts`).
+
+**Decisions needed (auth-bypass / high severity — each needs a design call before public traffic):**
+
+| # | Item | Severity | Why deferred | Effort |
+|---|---|---|---|---|
+| S1 | SAML assertion signature never verified (`sso.ts`) | 🔴 SSO auth bypass | Needs XML-DSig library | ~1 day |
+| S2 | OAuth `state` unsigned (`connect.ts`) | 🔴 Account-linking CSRF | Changes auth flow; HMAC-sign or nonce | ~half day |
+| S3 | SSRF in link-preview fetch (`link-previews.ts`) | 🟠 | Needs DNS-resolution + private-range guard | ~half day |
+| S4 | Hardcoded fallback secrets, no prod guard (`sso.ts`, `collaborate.ts`) | 🟠 | Fail-closed guard could break unconfigured envs | ~1 hr |
+| S5 | E2E encryption key store is an in-memory Map (`encryption.ts:18`) | 🟠 | Undermines "zero-knowledge" claim; needs DB-backed store | ~half day |
+| P4 | Framer Motion in Hero → landing route is 141KB gz vs <100KB budget | 🟡 | Architectural: Hero/shell → Server Components | ~1 day |
+
+Lower severity (note only): JWT lacks iss/aud binding; ephemeral RS256 keypair on startup breaks multi-instance; unsatisfiable `accounts:*`/`recall:write` scopes.
+
 ---
 
 ## ⏳ Long pole — Enterprise / "Google Workspace for business" track
