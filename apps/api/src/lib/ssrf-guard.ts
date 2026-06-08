@@ -66,7 +66,11 @@ function parseIpv4Octets(ip: string): readonly [number, number, number, number] 
     if (n < 0 || n > 255) return null;
     octets.push(n);
   }
-  return [octets[0]!, octets[1]!, octets[2]!, octets[3]!];
+  const [a, b, c, d] = octets;
+  if (a === undefined || b === undefined || c === undefined || d === undefined) {
+    return null;
+  }
+  return [a, b, c, d];
 }
 
 /**
@@ -108,7 +112,7 @@ function isBlockedIpv4(ip: string): boolean {
   if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15
   if (a === 198 && b === 51 && octets[2] === 100) return true; // 198.51.100.0/24
   if (a === 203 && b === 0 && octets[2] === 113) return true; // 203.0.113.0/24
-  if (a! >= 224) return true; // 224.0.0.0/4 multicast + 240.0.0.0/4 reserved
+  if (a >= 224) return true; // 224.0.0.0/4 multicast + 240.0.0.0/4 reserved
 
   return false;
 }
@@ -212,10 +216,13 @@ function isBlockedIpv6(ip: string): boolean {
     groups[4] === 0 &&
     groups[5] === 0;
   if (isV4Mapped || isV4Translated) {
-    const v4a = (groups[6]! >> 8) & 0xff;
-    const v4b = groups[6]! & 0xff;
-    const v4c = (groups[7]! >> 8) & 0xff;
-    const v4d = groups[7]! & 0xff;
+    const g6 = groups[6];
+    const g7 = groups[7];
+    if (g6 === undefined || g7 === undefined) return true; // fail closed
+    const v4a = (g6 >> 8) & 0xff;
+    const v4b = g6 & 0xff;
+    const v4c = (g7 >> 8) & 0xff;
+    const v4d = g7 & 0xff;
     return isBlockedIpv4(`${v4a}.${v4b}.${v4c}.${v4d}`);
   }
 

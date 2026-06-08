@@ -12,12 +12,12 @@
  * (produced by `next build`) so it tracks exactly the chunks Next.js ships for
  * that route, including hashed filenames, with zero hardcoding.
  *
- * Pragmatic ratchet: the budget below is currently set ABOVE 100KB because the
- * Hero section still uses Framer Motion (~35KB gz), which is an intentional,
- * owner-gated architectural decision (P4 — not in scope here). The gate is set
- * to the current measured size + small headroom so it catches REGRESSIONS today
- * without blocking the build, and carries a TODO to ratchet down to <100KB once
- * the motion dependency is removed from the first-paint path.
+ * Ratchet history: Framer Motion (~35KB gz) has been fully removed from the
+ * landing first-paint path (P4 — owner-authorized). The Hero now animates with
+ * pure CSS keyframes (`.enter-up` in globals.css), so the landing route loads
+ * ZERO motion runtime. Measured First Load JS dropped from ≈141KB gz to
+ * ≈104.5KB gz. The remaining ~102KB is the irreducible Next.js App Router
+ * shared baseline (React framework + Next runtime), confirmed motion-free.
  */
 
 import { readFileSync, existsSync } from "node:fs";
@@ -30,11 +30,15 @@ const webRoot = join(__dirname, "..");
 const nextDir = join(webRoot, ".next");
 
 // ── Budget (gzipped, bytes) ──────────────────────────────────────────────────
-// TODO(perf): Ratchet to 100 * 1024 once Framer Motion is removed from the Hero
-// (P4 — needs owner sign-off). Current landing First Load JS ≈ 141 KB gz, of
-// which ~35 KB gz is the motion runtime pulled in by the Hero. Headroom kept
-// small (≈4 KB) so any new regression trips the gate immediately.
-const BUDGET_BYTES = 145 * 1024;
+// Current landing First Load JS ≈ 104.5 KB gz (measured), essentially the
+// Next.js App Router shared baseline (~102 KB) plus ~4.5 KB of page code. Motion
+// has been removed; the sub-100KB Bible target can't be reached without
+// shrinking the framework baseline itself (a separate, owner-gated change).
+// Headroom kept small (≈3.5 KB) so any new regression trips the gate immediately.
+// TODO(perf): Revisit if/when the Next.js shared baseline can be reduced (e.g.
+// trimming the Next runtime / React DOM shipped to the public landing route) so
+// the Bible's <100 KB initial-JS budget can be met.
+const BUDGET_BYTES = 108 * 1024;
 
 // Route whose initial JS we guard. "/" is the public landing page (the FCP path).
 const ROUTE_KEYS = ["/page", "/"];

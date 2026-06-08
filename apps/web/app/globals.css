@@ -57,3 +57,41 @@ html {
     transition: none;
   }
 }
+
+/*
+ * Entrance fade-up — CSS replacement for Framer Motion on-mount
+ * `initial { opacity: 0, y } -> animate { opacity: 1, y: 0 }` used by the Hero.
+ * Keeps the spring engine (`motion/react`) off the landing FCP path entirely.
+ *
+ * Per-element start offset (--enter-y), duration (--enter-duration) and stagger
+ * (--enter-delay) mirror the exact motion config for each Hero element. The
+ * animation runs once immediately on first paint (forwards fill holds the end
+ * state), so SSR markup that starts hidden ends fully visible.
+ */
+@keyframes enter-up {
+  from {
+    opacity: 0;
+    transform: translateY(var(--enter-y, 20px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.enter-up {
+  opacity: 0;
+  animation-name: enter-up;
+  animation-duration: var(--enter-duration, 0.6s);
+  animation-delay: var(--enter-delay, 0ms);
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter-up {
+    opacity: 1;
+    animation: none;
+    transform: none;
+  }
+}
