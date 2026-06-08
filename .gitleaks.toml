@@ -1,0 +1,15 @@
+# Gitleaks configuration for AlecRae.
+#
+# Extends the full default ruleset (real secret detection stays ON everywhere).
+# The only addition is a narrowly-scoped allowlist for the self-signed RSA
+# keypair that exists ONLY to sign SAML assertions inside the signature-
+# verification unit tests. It is throwaway test-fixture material — never used
+# in any environment, never grants access to anything.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Self-signed, test-only IdP keypair used to sign SAML assertions in apps/api/tests/sso.test.ts (not a real secret)"
+targetRules = ["private-key"]
+paths = ['''apps/api/tests/sso\.test\.ts$''']

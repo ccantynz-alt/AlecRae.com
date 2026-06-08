@@ -80,18 +80,18 @@ Pre-launch review of the API public surface. **Fixed + merged-ready:**
 - ✅ **Critical auth bypass** — unsigned JWTs were accepted (atob-decode, no signature check) on the global Bearer middleware + `/auth/me` + `/logout`. Now verified via jose. (Forgeable tokens for any account — would have been catastrophic.)
 - ✅ Reflected XSS on the unsubscribe page (`tracking.ts`).
 
-**Decisions needed (auth-bypass / high severity — each needs a design call before public traffic):**
+**ALL fixed (PR #47, owner-authorized 2026-06-08):**
 
-| # | Item | Severity | Why deferred | Effort |
-|---|---|---|---|---|
-| S1 | SAML assertion signature never verified (`sso.ts`) | 🔴 SSO auth bypass | Needs XML-DSig library | ~1 day |
-| S2 | OAuth `state` unsigned (`connect.ts`) | 🔴 Account-linking CSRF | Changes auth flow; HMAC-sign or nonce | ~half day |
-| S3 | SSRF in link-preview fetch (`link-previews.ts`) | 🟠 | Needs DNS-resolution + private-range guard | ~half day |
-| S4 | Hardcoded fallback secrets, no prod guard (`sso.ts`, `collaborate.ts`) | 🟠 | Fail-closed guard could break unconfigured envs | ~1 hr |
-| S5 | E2E encryption key store is an in-memory Map (`encryption.ts:18`) | 🟠 | Undermines "zero-knowledge" claim; needs DB-backed store | ~half day |
-| P4 | Framer Motion in Hero → landing route is 141KB gz vs <100KB budget | 🟡 | Architectural: Hero/shell → Server Components | ~1 day |
+| # | Item | Severity | Resolution |
+|---|---|---|---|
+| S1 | SAML assertion signature never verified (`sso.ts`) | 🔴 SSO auth bypass | ✅ xml-crypto signature verification pinned to configured IdP cert (ignores attacker KeyInfo), signature-wrapping defense, conditions/audience checks; 403 on failure. 8 tests. |
+| S2 | OAuth `state` unsigned (`connect.ts`) | 🔴 Account-linking CSRF | ✅ HMAC-SHA256 signed, 10-min expiring state + nonce, constant-time verify. 5 tests. |
+| S3 | SSRF in link-preview fetch (`link-previews.ts`) | 🟠 | ✅ DNS-resolve + block private/loopback/link-local/metadata IPv4+IPv6, redirects manual + re-validated per hop. 24 tests. |
+| S4 | Hardcoded fallback secrets, no prod guard (`sso.ts`, `collaborate.ts`) | 🟠 | ✅ Fail-closed in production (throws if secret unset/<32 chars); dev fallback only outside prod. |
+| S5 | E2E encryption key store in-memory Map (`encryption.ts:18`) | 🟠 | ✅ DB-backed `encryptionKeys` table; zero-knowledge preserved (only public + client-encrypted keys). 6 tests. |
+| P4 | Framer Motion in Hero → 141KB gz landing | 🟡 | ✅ Hero → Server Component + CSS keyframes; **141KB → 104.5KB gz**, zero Framer Motion on `/`. Gate ratcheted to 108KB. Floor is ~102KB Next.js/React baseline (can't go lower without a framework-level change). |
 
-Lower severity (note only): JWT lacks iss/aud binding; ephemeral RS256 keypair on startup breaks multi-instance; unsatisfiable `accounts:*`/`recall:write` scopes.
+Lower severity (still open, note only): JWT lacks iss/aud binding; ephemeral RS256 keypair on startup breaks multi-instance; unsatisfiable `accounts:*`/`recall:write` scopes.
 
 ---
 
