@@ -506,18 +506,44 @@ voiceClone.post(
 
     const fingerprint = profile.styleFingerprint as StyleFingerprintData;
 
-    const result = await composeInVoice(
-      auth.accountId,
-      fingerprint,
-      profile.sampleCount,
-      input.prompt,
-      {
-        recipient: input.recipient,
-        threadHistory: input.threadHistory,
-        replyTo: input.replyTo,
-      },
-      claudeClient,
-    );
+    // Graceful degradation: when the AI provider is unavailable (no key or a
+    // runtime failure), return a clearly-labelled lower-confidence fallback
+    // draft instead of throwing a 500.
+    const fallbackData = {
+      body:
+        `Hi,\n\n` +
+        `[AI voice-clone draft unavailable — Claude could not be reached. ` +
+        `Compose your message about: ${input.prompt.slice(0, 200)}]\n\n` +
+        `Best regards`,
+      profileId: profile.id,
+      profileName: profile.name,
+      confidenceScore: 0.3,
+      formalityLevel: fingerprint.formalityLevel,
+      sampleCount: profile.sampleCount,
+      aiUnavailable: true,
+    };
+
+    if (!ANTHROPIC_API_KEY) {
+      return c.json({ data: fallbackData });
+    }
+
+    let result: { body: string; confidenceScore: number };
+    try {
+      result = await composeInVoice(
+        auth.accountId,
+        fingerprint,
+        profile.sampleCount,
+        input.prompt,
+        {
+          recipient: input.recipient,
+          threadHistory: input.threadHistory,
+          replyTo: input.replyTo,
+        },
+        claudeClient,
+      );
+    } catch {
+      return c.json({ data: fallbackData });
+    }
 
     return c.json({
       data: {
@@ -527,6 +553,7 @@ voiceClone.post(
         confidenceScore: result.confidenceScore,
         formalityLevel: fingerprint.formalityLevel,
         sampleCount: profile.sampleCount,
+        aiUnavailable: false,
       },
     });
   },

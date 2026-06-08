@@ -250,6 +250,9 @@ translate.post(
         translated: result.translated,
         sourceLanguage: result.detectedLanguage,
         targetLanguage: input.targetLanguage,
+        // false when AI translation was unavailable — original text returned as-is.
+        wasTranslated: result.available,
+        translationUnavailable: !result.available,
       },
     });
   },
@@ -269,6 +272,8 @@ translate.post(
       translateWithClaude(input.body, input.targetLanguage, input.sourceLanguage, "email_body"),
     ]);
 
+    const wasTranslated = subjectResult.available && bodyResult.available;
+
     return c.json({
       data: {
         original: {
@@ -281,6 +286,8 @@ translate.post(
         },
         sourceLanguage: bodyResult.detectedLanguage,
         targetLanguage: input.targetLanguage,
+        wasTranslated,
+        translationUnavailable: !wasTranslated,
       },
     });
   },
@@ -300,6 +307,8 @@ translate.post(
       data: {
         detectedLanguage: detected.code,
         languageName: detected.name,
+        // false when AI detection was unavailable — code is "unknown".
+        detectionAvailable: detected.available,
       },
     });
   },
@@ -405,6 +414,38 @@ emailTranslate.post(
     const sourceCode = detected.code;
     const sourceName = detected.name;
 
+    // Graceful degradation: if the AI provider is unavailable we cannot detect
+    // or translate. Return the original content untouched with no badge, and do
+    // NOT cache a degraded result.
+    if (!detected.available) {
+      return c.json({
+        data: {
+          emailId,
+          sourceLanguage: sourceCode,
+          sourceLanguageName: sourceName,
+          targetLanguage: input.targetLanguage,
+          targetLanguageName: languageName(input.targetLanguage),
+          original: {
+            subject: originalSubject,
+            body: originalBody,
+          },
+          translated: {
+            subject: originalSubject,
+            body: originalBody,
+          },
+          autoTranslated: false,
+          translationUnavailable: true,
+          badge: {
+            visible: false,
+            label: null,
+            sourceLanguage: sourceCode,
+            sourceLanguageName: sourceName,
+          },
+          cached: false,
+        },
+      });
+    }
+
     // If the email is already in the target language, no translation needed.
     if (sourceCode === input.targetLanguage) {
       return c.json({
@@ -440,8 +481,40 @@ emailTranslate.post(
       translateWithClaude(originalBody, input.targetLanguage, sourceCode, "email_body"),
     ]);
 
-    const translationId = generateId();
     const targetName = languageName(input.targetLanguage);
+
+    // Graceful degradation: if translation failed mid-call, return the original
+    // content untouched and do NOT cache the degraded result.
+    if (!subjectResult.available || !bodyResult.available) {
+      return c.json({
+        data: {
+          emailId,
+          sourceLanguage: sourceCode,
+          sourceLanguageName: sourceName,
+          targetLanguage: input.targetLanguage,
+          targetLanguageName: targetName,
+          original: {
+            subject: originalSubject,
+            body: originalBody,
+          },
+          translated: {
+            subject: originalSubject,
+            body: originalBody,
+          },
+          autoTranslated: false,
+          translationUnavailable: true,
+          badge: {
+            visible: false,
+            label: null,
+            sourceLanguage: sourceCode,
+            sourceLanguageName: sourceName,
+          },
+          cached: false,
+        },
+      });
+    }
+
+    const translationId = generateId();
 
     // Persist to DB.
     await db.insert(emailTranslations).values({

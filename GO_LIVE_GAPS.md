@@ -47,15 +47,32 @@ Nothing runs until these exist. Agents/code cannot do these — they need accoun
 
 ## ⚠️ Code gaps worth closing before public traffic (agent-doable)
 
-| # | Gap | Severity | Notes |
+| # | Gap | Severity | Status |
 |---|---|---|---|
-| G1 | Build not verified in 6 weeks | HIGH | Re-run lint/typecheck/test/build against current HEAD |
-| G2 | Dunning flow only logs, doesn't retry | MED | Failed-payment retry = revenue leak |
-| G3 | DPA self-serve signing flow missing | MED | Page exists; signature workflow doesn't (enterprise gate) |
-| G4 | No preflight env/connectivity check | MED | One bad secret = silent prod failure; need a validator |
-| G5 | No load test — never run under traffic | HIGH | Harness should be ready to fire the moment infra is up |
-| G6 | Status page not wired to real uptime | LOW | Currently static |
-| G7 | Pre-launch security review of public surface | HIGH | Last external-facing audit predates recent features |
+| G1 | Build not verified in 6 weeks | HIGH | ✅ DONE — lint 0 errors, typecheck 37/37, test 61/61 |
+| G2 | Dunning flow only logs, doesn't retry | MED | ✅ DONE — state machine + tests (billing.ts, dunning.test.ts) |
+| G3 | DPA self-serve signing flow missing | MED | ✅ DONE — route + schema + web flow |
+| G4 | No preflight env/connectivity check | MED | ✅ DONE — scripts/preflight.ts |
+| G5 | No load test — never run under traffic | HIGH | ✅ DONE — k6 harness wired to budgets (load-tests/) |
+| G6 | Status page not wired to real uptime | LOW | OPEN — currently static |
+| G7 | Pre-launch security review of public surface | HIGH | IN PROGRESS — agent report pending |
+| G8 | AI features throw instead of degrading | MED | ✅ DONE — translate/voice/voice-clone fallbacks (Bible compliance) |
+| G9 | "GateTest" CI gate called a non-existent npm package | HIGH | ✅ DONE — repointed to real lint+typecheck+test+build |
+| G10 | CodeQL "default setup" conflicted with advanced workflow | MED | ✅ DONE — default setup disabled by Craig |
+
+## ⚡ Bundle / performance gaps (from static audit 2026-06-07)
+
+The <100KB initial-JS budget is at risk. None block a beta, but they erode the speed moat.
+
+| # | Risk | Severity | Fix |
+|---|---|---|---|
+| P1 | Framer Motion (`motion/react`) loads on the landing page FCP path — all 9 sections are `"use client"` + static import (~32KB gz) | HIGH | CSS keyframes + IntersectionObserver for below-fold scroll animations; keep `motion` only in the hero |
+| P2 | `three` / `@react-three/fiber` / `@react-three/drei` declared as regular deps (~180KB gz) — one import-resolution edge from leaking into the bundle | HIGH | Move to optionalDependencies; add webpackChunkName magic comment to the lazy import |
+| P3 | `yjs` / `lib0` / `y-protocols` statically imported in `collab-client.ts` (~50KB gz) — time-bomb the moment a dashboard page imports `CollaborativeDraftView` | HIGH | Wrap `CollaborativeDraftView` in `next/dynamic({ ssr: false })` at every call site |
+| P4 | Dashboard layout fully `"use client"` — pulls Framer Motion into every authenticated route | MED | Extract Server Component shell; push the client boundary down (architectural — needs Craig sign-off) |
+| P5 | No bundle-size gate in CI despite "CI FAILS IF VIOLATED" in the Bible | MED | Add `size-limit`/`bundlesize` job asserting initial chunk < 100KB |
+
+**WebLLM (`@mlc-ai/web-llm`) verdict:** SAFE — already a dynamic `import()` inside a function body; not in the initial bundle.
 
 ---
 
