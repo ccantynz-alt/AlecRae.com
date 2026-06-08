@@ -26,8 +26,26 @@ import {
   isGoogleSignInConfigured,
 } from "../lib/google-auth.js";
 import { signAuthState, verifyAuthState } from "../lib/oauth-state.js";
+import { sendTransactionalEmail } from "../lib/transactional-email.js";
 
 const auth = new Hono();
+
+/**
+ * Fire-and-forget welcome email for newly created accounts. Gated behind
+ * VAPRON_WELCOME_EMAIL=true so we never send outbound mail to real users until
+ * Craig explicitly turns it on. Failures are logged, never thrown — a welcome
+ * email must not be able to break signup.
+ */
+function maybeSendWelcomeEmail(to: string, name: string): void {
+  if (process.env["VAPRON_WELCOME_EMAIL"] !== "true") return;
+  void sendTransactionalEmail({
+    to,
+    subject: "Welcome to AlecRae",
+    html: `<p>Hi ${name},</p><p>Welcome to AlecRae — email, evolved. Your account is ready.</p>`,
+  }).catch((err: unknown) => {
+    console.error("[auth] Welcome email failed:", err);
+  });
+}
 
 const WEB_URL = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
 
@@ -227,6 +245,8 @@ auth.post("/register", validateBody(RegisterSchema), async (c) => {
     },
   });
 
+  maybeSendWelcomeEmail(input.email.toLowerCase(), input.name);
+
   const tokenPair = await issueTokenPair({
     sub: accountId,
     userId,
@@ -339,6 +359,8 @@ auth.get("/callback/google", async (c) => {
         permissions: { ...OWNER_PERMISSIONS },
         lastLoginAt: new Date(),
       });
+
+      maybeSendWelcomeEmail(profile.email, profile.name);
     }
 
     const tokenPair = await issueTokenPair({

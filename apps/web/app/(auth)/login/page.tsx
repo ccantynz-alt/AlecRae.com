@@ -57,10 +57,25 @@ export default function LoginPage(): React.ReactElement {
   );
 }
 
+/**
+ * Map the device to the biometric name the OS will actually prompt. Passkeys use
+ * the platform authenticator, so on Apple devices the user sees Face ID / Touch
+ * ID, on Windows it's Windows Hello, etc. Cosmetic only — falls back to "Passkey".
+ */
+function getBiometricLabel(): string {
+  if (typeof navigator === "undefined") return "Passkey";
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod|Macintosh|Mac OS X/.test(ua)) return "Face ID / Touch ID";
+  if (/Android/.test(ua)) return "fingerprint";
+  if (/Windows/.test(ua)) return "Windows Hello";
+  return "Passkey";
+}
+
 function PasskeyLogin(): React.ReactElement {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [supported, setSupported] = useState<boolean>(true);
+  const [bioLabel, setBioLabel] = useState<string>("Passkey");
 
   useEffect(() => {
     async function checkSupport(): Promise<void> {
@@ -71,6 +86,7 @@ function PasskeyLogin(): React.ReactElement {
       }
       const platformAvailable = await isPlatformAuthenticatorAvailable();
       setSupported(platformAvailable);
+      if (platformAvailable) setBioLabel(getBiometricLabel());
     }
     void checkSupport();
   }, []);
@@ -134,10 +150,10 @@ function PasskeyLogin(): React.ReactElement {
         loading={loading}
         disabled={loading}
       >
-        {loading ? "Authenticating..." : "Sign in with Passkey"}
+        {loading ? "Authenticating..." : `Sign in with ${bioLabel}`}
       </Button>
       <Text variant="caption" className="text-center">
-        Use your fingerprint, face, or security key for instant secure access.
+        Use your face, fingerprint, or security key for instant secure access.
       </Text>
     </Box>
   );

@@ -135,7 +135,10 @@ describe("Encryption key store (DB-persisted)", () => {
     expect(body.data.publicKey).toBe(row?.publicKey);
     expect(JSON.stringify(body)).not.toContain("encryptedPrivateKey");
     expect(JSON.stringify(body)).not.toContain("privateKey");
-  });
+    // Generous timeout: this is the first test to run, so it absorbs the cold
+    // cost of module transform + the first RSA-4096 keygen + ephemeral JWT key
+    // setup, which can exceed the 5s default on a loaded CI runner.
+  }, 30_000);
 
   it("ZERO-KNOWLEDGE: persists only wrapped (client-encrypted) private key, never plaintext", async () => {
     await generateKeys("another-secret");
