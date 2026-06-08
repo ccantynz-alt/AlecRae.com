@@ -17,6 +17,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { eq } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { getDatabase, users, accounts as _accounts, ssoConfigs as ssoConfigsTable } from "@alecrae/db";
+import { verifySamlSignature } from "../lib/saml-verify.js";
 
 const sso = new Hono();
 
@@ -57,7 +58,19 @@ function getBaseUrl(): string {
 }
 
 function getJwtSecret(): Uint8Array {
-  const secret = process.env["JWT_SECRET"] ?? "dev_secret_replace_in_production";
+  const secret = process.env["JWT_SECRET"];
+  if (!secret) {
+    if (process.env["NODE_ENV"] === "production") {
+      throw new Error(
+        "[sso] Refusing to operate in production without JWT_SECRET. " +
+          "Set JWT_SECRET before starting the API.",
+      );
+    }
+    return new TextEncoder().encode("dev_secret_replace_in_production");
+  }
+  if (secret.length < 32 && process.env["NODE_ENV"] === "production") {
+    throw new Error("[sso] JWT_SECRET must be at least 32 characters in production.");
+  }
   return new TextEncoder().encode(secret);
 }
 
@@ -111,15 +124,19 @@ async function verifyToken(token: string): Promise<Record<string, unknown> | nul
 }
 
 /**
- * Decode base64-encoded SAML response and extract assertions.
- * This is a lightweight XML parser for SAML responses. In production,
- * a full XML signature verification library should be used.
+ * Decode base64-encoded SAML response and extract assertion data.
+ *
+ * NOTE: this only PARSES the document — it does NOT establish trust. The caller
+ * MUST verify the XML signature (see `verifySamlSignature`) against the
+ * configured IdP certificate before acting on any field returned here. The raw
+ * decoded XML is returned so the caller can run that verification.
  */
 function decodeSamlResponse(samlResponseB64: string): {
   nameId: string;
   attributes: SamlAttribute[];
   issuer: string;
   sessionIndex: string;
+  xml: string;
 } | null {
   try {
     const xml = atob(samlResponseB64);
@@ -150,6 +167,7 @@ function decodeSamlResponse(samlResponseB64: string): {
       attributes,
       issuer: issuerMatch?.[1] ?? "unknown",
       sessionIndex: sessionIndexMatch?.[1] ?? generateId(),
+      xml,
     };
   } catch {
     return null;
@@ -364,6 +382,27 @@ sso.post("/acs", validateBody(SsoAcsSchema), async (c) => {
           type: "configuration_error",
           message: "SSO is not configured for the target account",
           code: "sso_not_configured",
+        },
+      },
+      403,
+    );
+  }
+
+  // SECURITY: verify the IdP's XML signature against the CONFIGURED certificate
+  // BEFORE trusting any assertion data. Without this, anyone could POST a forged
+  // SAML response and mint a session for any email. We also validate the
+  // assertion's time conditions and (if declared) its audience.
+  const verification = verifySamlSignature(assertion.xml, {
+    certificate: config.certificate,
+    expectedAudience: `${getBaseUrl()}/v1/sso/metadata`,
+  });
+  if (!verification.ok) {
+    return c.json(
+      {
+        error: {
+          type: "authentication_error",
+          message: `SAML signature verification failed: ${verification.message}`,
+          code: verification.code,
         },
       },
       403,
