@@ -196,3 +196,7 @@ DMARC and SPF are tightened in stages. Never publish the strict version on Day 1
 - You are now fully protected. Spoofers get rejected outright. Legitimate mail has been verified for 60 days.
 
 **If at any stage reports show a problem, pause the progression and fix the sender before tightening further.**
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

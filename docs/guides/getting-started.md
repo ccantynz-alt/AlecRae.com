@@ -175,3 +175,7 @@ alecrae/
 - Read the [Deployment Guide](./deployment.md) for production setup.
 - Read the [Contributing Guide](./contributing.md) for development workflow.
 - Review the architecture in `CLAUDE.md` at the repository root.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

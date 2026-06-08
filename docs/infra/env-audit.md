@@ -2,7 +2,7 @@
 
 > Source of truth for production env vars across web, api, mta, admin, and mobile.
 > Pairs with `.env.production.template` in this same directory.
-> Last updated: 2026-04-18.
+_Last updated: 2026-06-08 23:35 UTC_
 
 ---
 

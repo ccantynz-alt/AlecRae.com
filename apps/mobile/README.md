@@ -84,3 +84,7 @@ Before publishing:
 - **iOS:** Apple Developer account ($99/yr)
 - **Android:** Google Play Developer account ($25 one-time)
 - **Push notifications:** Apple APNs key + Firebase FCM server key
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

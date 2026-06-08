@@ -254,3 +254,7 @@ load-tests/
     ├── read-heavy.js          ← admin stats, admin messages, list emails, heatmap
     └── full-suite.js          ← combined mixed-traffic simulation
 ```
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

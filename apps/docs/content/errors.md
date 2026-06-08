@@ -45,3 +45,7 @@ Always include the `request_id` when contacting support.
 ## Retry guidance
 
 Retry on `429`, `500`, `502`, `503`, `504`. Use exponential backoff starting at 1 s, doubling each attempt, with full jitter, capped at 60 s. Include an `Idempotency-Key` header so retries don't double-send.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

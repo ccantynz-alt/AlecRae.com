@@ -143,3 +143,7 @@ MBOX format includes attachments inline. If an attachment exceeds 25MB, it will 
 - [Set up keyboard shortcuts](/quickstart) to navigate AlecRae efficiently
 - [Explore AI Compose](/messages) to draft emails faster
 - [Configure Smart Inbox](/webhooks) for automatic email categorization
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

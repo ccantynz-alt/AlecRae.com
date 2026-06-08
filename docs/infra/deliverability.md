@@ -166,3 +166,7 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 ---
 
 *This runbook is the source of truth for AlecRae deliverability operations. Updates require review against live Postmaster Tools and FBL data.*
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

@@ -2,7 +2,7 @@
 
 > **Owner:** Craig (ccantynz@gmail.com)
 > **Status:** Pre-audit groundwork — Type I target
-> **Last updated:** 2026-06-08
+_Last updated: 2026-06-08 23:35 UTC_
 
 ---
 

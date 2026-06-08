@@ -81,3 +81,7 @@ APPLE_TEAM_ID=XXXXXXXXXX
 CSC_LINK=path/to/cert.p12
 CSC_KEY_PASSWORD=cert_password
 ```
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

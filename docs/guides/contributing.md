@@ -219,3 +219,7 @@ See `CODE_OF_CONDUCT.md` in the repository root for the full policy.
 ## Questions?
 
 If you have questions about contributing, open a GitHub Discussion or reach out to the maintainers.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

@@ -51,3 +51,7 @@ grammar, triage          compose, translate            voice profile training
 - API p99: < 200ms
 - AI compose first token: < 500ms (Haiku edge)
 - Search results: < 50ms (Meilisearch local index)
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

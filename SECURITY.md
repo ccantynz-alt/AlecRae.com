@@ -107,4 +107,4 @@ See `CLAUDE.md` -> "Emergency Protocols" for our internal playbook.
 
 ---
 
-Last updated: 2026-04-16.
+_Last updated: 2026-06-08 23:35 UTC_

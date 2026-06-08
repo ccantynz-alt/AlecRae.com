@@ -118,3 +118,7 @@ Revoke AlecRae's access in [Google Account Permissions](https://myaccount.google
 - [Set up keyboard shortcuts](/quickstart) to navigate AlecRae like a power user
 - [Configure AI Compose](/messages) to draft emails in your writing style
 - [Explore Smart Inbox](/webhooks) to let AlecRae automatically categorize your email
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

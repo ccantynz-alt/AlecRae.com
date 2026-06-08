@@ -157,3 +157,7 @@ Permission failures return a `403 Forbidden` response:
   }
 }
 ```
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

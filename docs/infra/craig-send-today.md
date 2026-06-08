@@ -193,3 +193,7 @@ After 90 days: graduate to Fly.io self-hosted MTA. Until then: trust the trainin
 ---
 
 *Pinned 2026-05-08. Update this file after Day 90 graduation, or if SES region/identity changes.*
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

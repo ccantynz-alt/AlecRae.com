@@ -283,3 +283,7 @@ Before going live, verify:
 - [ ] Backup strategy is in place and tested
 - [ ] Rate limiting is configured on public endpoints
 - [ ] IP warm-up plan is prepared for new sending IPs
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

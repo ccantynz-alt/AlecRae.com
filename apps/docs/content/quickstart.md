@@ -42,3 +42,7 @@ Configure a [webhook](/webhooks) to receive delivery, open, click, bounce, and c
 - [Authentication](/authentication) — API keys, scopes, and bearer tokens
 - [Messages](/messages) — All the ways to send mail
 - [Errors](/errors) — Status codes and retry guidance
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

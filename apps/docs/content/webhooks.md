@@ -62,3 +62,7 @@ function verify(rawBody: string, signature: string, secret: string): boolean {
 ## Retries
 
 AlecRae retries failed deliveries with exponential backoff for up to 24 hours. Respond with a 2xx status to acknowledge.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_
