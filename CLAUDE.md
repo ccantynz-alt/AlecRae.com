@@ -638,6 +638,10 @@ After writing the code:
 15. **Add API keys** — Anthropic, OpenAI, Google OAuth, Microsoft OAuth (Craig)
 16. **Deploy to Crontec** — connect repo, set env vars, point domain (Craig + Claude)
 17. **Stand up sending for Craig** — see `docs/infra/email-sending-runbook.md` (DNS + SES relay + warmup, no Neon dependency)
+18. ~~Full CI suite green (lint, typecheck, test, build, security scan)~~ DONE 2026-05-29 — PR #44 merged
+19. ~~Wire full marketing landing page~~ DONE 2026-05-29 — dark component suite + ProductSuite section live
+20. **Disable GitHub Default Setup CodeQL** — Settings → Code security → Code scanning → Default setup → Disable (Craig)
+21. **Configure GateTest CLI** — add `GATETEST_API_KEY` to repo secrets, then set `continue-on-error: false` in ci.yml (Craig + Claude)
 
 ---
 

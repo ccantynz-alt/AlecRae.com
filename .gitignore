@@ -1,3 +1,6 @@
+# Claude Code internal
+.claude/worktrees/
+
 # Dependencies
 node_modules/
 .pnp

@@ -31,6 +31,7 @@ import {
   emailDeadlines,
   emailPromises,
 } from "@alecrae/db";
+import { extractEmailContext } from "@alecrae/ai-engine/intelligence/context-extractor";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -99,41 +100,34 @@ function generateId(): string {
     .join("");
 }
 
-interface ExtractedContext {
-  actionItems: {
-    actionText: string;
-    assignedTo: string | null;
-    dueDate: string | null;
-    priority: "urgent" | "high" | "medium" | "low";
-    confidence: number;
-  }[];
-  deadlines: {
-    deadlineDate: string;
-    description: string;
-    isExplicit: boolean;
-    confidence: number;
-  }[];
-  promises: {
-    promiseText: string;
-    promisor: string;
-    promisee: string;
-    dueDate: string | null;
-    confidence: number;
-  }[];
-}
-
-/**
- * Stub extractor — returns basic results from content analysis.
- * In production, this would call Claude AI for intelligent extraction.
- */
-function extractContextFromContent(
-  _content: string,
-  _participants?: string[],
-): ExtractedContext {
+// Convert API errors thrown by ai-engine into JSON 5xx responses.
+function aiErrorResponse(
+  err: unknown,
+):
+  | { status: 503; body: { error: { type: string; message: string; code: string } } }
+  | { status: 500; body: { error: { type: string; message: string; code: string } } } {
+  const message = err instanceof Error ? err.message : "Unknown AI error";
+  if (message.includes("ANTHROPIC_API_KEY")) {
+    return {
+      status: 503,
+      body: {
+        error: {
+          type: "service_unavailable",
+          message: "AI service is not configured",
+          code: "ai_unavailable",
+        },
+      },
+    };
+  }
   return {
-    actionItems: [],
-    deadlines: [],
-    promises: [],
+    status: 500,
+    body: {
+      error: {
+        type: "ai_error",
+        message,
+        code: "ai_error",
+      },
+    },
   };
 }
 
@@ -153,7 +147,16 @@ contextIntelligenceRouter.post(
     const now = new Date();
     const threadId = input.threadId ?? input.emailId;
 
-    const extracted = extractContextFromContent(input.content, input.participants);
+    let extracted: Awaited<ReturnType<typeof extractEmailContext>>;
+    try {
+      extracted = await extractEmailContext({
+        content: input.content,
+        ...(input.participants !== undefined ? { participants: input.participants } : {}),
+      });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
 
     const insertedActionItems: Record<string, unknown>[] = [];
     const insertedDeadlines: Record<string, unknown>[] = [];
@@ -167,23 +170,23 @@ contextIntelligenceRouter.post(
         accountId,
         emailId: input.emailId,
         threadId,
-        actionText: item.actionText,
-        assignedTo: item.assignedTo,
+        actionText: item.description,
+        assignedTo: item.assignedTo ?? null,
         dueDate: item.dueDate ? new Date(item.dueDate) : null,
         priority: item.priority,
         status: "pending",
-        confidence: item.confidence,
+        confidence: 0.85,
         source: "ai_detected",
         createdAt: now,
         updatedAt: now,
       });
       insertedActionItems.push({
         id,
-        actionText: item.actionText,
-        assignedTo: item.assignedTo,
-        dueDate: item.dueDate,
+        actionText: item.description,
+        assignedTo: item.assignedTo ?? null,
+        dueDate: item.dueDate ?? null,
         priority: item.priority,
-        confidence: item.confidence,
+        confidence: 0.85,
       });
     }
 
@@ -195,47 +198,51 @@ contextIntelligenceRouter.post(
         accountId,
         emailId: input.emailId,
         threadId,
-        deadlineDate: new Date(dl.deadlineDate),
+        deadlineDate: new Date(dl.dueDate),
         description: dl.description,
-        isExplicit: dl.isExplicit,
-        confidence: dl.confidence,
+        isExplicit: true,
+        confidence: dl.isUrgent ? 0.95 : 0.80,
         reminderSent: false,
         createdAt: now,
       });
       insertedDeadlines.push({
         id,
-        deadlineDate: dl.deadlineDate,
+        deadlineDate: dl.dueDate,
         description: dl.description,
-        isExplicit: dl.isExplicit,
-        confidence: dl.confidence,
+        isExplicit: true,
+        confidence: dl.isUrgent ? 0.95 : 0.80,
       });
     }
 
-    // Insert promises
+    // Insert promises — derive promisor/promisee from participants and direction
+    const firstParticipant = input.participants?.[0] ?? "unknown";
+    const secondParticipant = input.participants?.[1] ?? "unknown";
     for (const p of extracted.promises) {
       const id = generateId();
+      const promisor = p.direction === "made" ? firstParticipant : secondParticipant;
+      const promisee = p.direction === "made" ? secondParticipant : firstParticipant;
       await db.insert(emailPromises).values({
         id,
         accountId,
         emailId: input.emailId,
         threadId,
-        promiseText: p.promiseText,
-        promisor: p.promisor,
-        promisee: p.promisee,
+        promiseText: p.description,
+        promisor,
+        promisee,
         dueDate: p.dueDate ? new Date(p.dueDate) : null,
         status: "active",
-        confidence: p.confidence,
+        confidence: 0.80,
         followUpSent: false,
         createdAt: now,
         updatedAt: now,
       });
       insertedPromises.push({
         id,
-        promiseText: p.promiseText,
-        promisor: p.promisor,
-        promisee: p.promisee,
-        dueDate: p.dueDate,
-        confidence: p.confidence,
+        promiseText: p.description,
+        promisor,
+        promisee,
+        dueDate: p.dueDate ?? null,
+        confidence: 0.80,
       });
     }
 
@@ -893,7 +900,18 @@ contextIntelligenceRouter.post(
 
     for (const email of input.emails) {
       const threadId = email.threadId ?? email.emailId;
-      const extracted = extractContextFromContent(email.content, email.participants);
+
+      let extracted: Awaited<ReturnType<typeof extractEmailContext>>;
+      try {
+        extracted = await extractEmailContext({
+          content: email.content,
+          ...(email.participants !== undefined ? { participants: email.participants } : {}),
+        });
+      } catch {
+        // If extraction fails for one email, skip it (don't abort the whole batch)
+        results.push({ emailId: email.emailId, threadId, actionItems: 0, deadlines: 0, promises: 0 });
+        continue;
+      }
 
       let actionItemCount = 0;
       let deadlineCount = 0;
@@ -906,18 +924,21 @@ contextIntelligenceRouter.post(
           accountId,
           emailId: email.emailId,
           threadId,
-          actionText: item.actionText,
-          assignedTo: item.assignedTo,
+          actionText: item.description,
+          assignedTo: item.assignedTo ?? null,
           dueDate: item.dueDate ? new Date(item.dueDate) : null,
           priority: item.priority,
           status: "pending",
-          confidence: item.confidence,
+          confidence: 0.85,
           source: "ai_detected",
           createdAt: now,
           updatedAt: now,
         });
         actionItemCount++;
       }
+
+      const firstP = email.participants?.[0] ?? "unknown";
+      const secondP = email.participants?.[1] ?? "unknown";
 
       for (const dl of extracted.deadlines) {
         const id = generateId();
@@ -926,10 +947,10 @@ contextIntelligenceRouter.post(
           accountId,
           emailId: email.emailId,
           threadId,
-          deadlineDate: new Date(dl.deadlineDate),
+          deadlineDate: new Date(dl.dueDate),
           description: dl.description,
-          isExplicit: dl.isExplicit,
-          confidence: dl.confidence,
+          isExplicit: true,
+          confidence: dl.isUrgent ? 0.95 : 0.80,
           reminderSent: false,
           createdAt: now,
         });
@@ -938,17 +959,19 @@ contextIntelligenceRouter.post(
 
       for (const p of extracted.promises) {
         const id = generateId();
+        const promisor = p.direction === "made" ? firstP : secondP;
+        const promisee = p.direction === "made" ? secondP : firstP;
         await db.insert(emailPromises).values({
           id,
           accountId,
           emailId: email.emailId,
           threadId,
-          promiseText: p.promiseText,
-          promisor: p.promisor,
-          promisee: p.promisee,
+          promiseText: p.description,
+          promisor,
+          promisee,
           dueDate: p.dueDate ? new Date(p.dueDate) : null,
           status: "active",
-          confidence: p.confidence,
+          confidence: 0.80,
           followUpSent: false,
           createdAt: now,
           updatedAt: now,
