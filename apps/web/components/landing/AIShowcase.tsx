@@ -1,8 +1,4 @@
-"use client";
-
-import { motion } from "motion/react";
-
-const fadeUp = { initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-100px" }, transition: { duration: 0.6 } };
+import { Reveal } from "./Reveal";
 
 const capabilities = [
   { title: "Overnight Agent", desc: "AI triages your inbox while you sleep. Wake up to a sorted inbox with reply drafts ready for one-tap approval.", gradient: "from-blue-500 to-cyan-500" },
@@ -21,7 +17,7 @@ export function AIShowcase() {
       </div>
 
       <div className="max-w-6xl mx-auto relative z-10">
-        <motion.div {...fadeUp} className="text-center mb-16">
+        <Reveal className="text-center mb-16">
           <p className="text-sm font-medium uppercase tracking-widest text-purple-400 mb-4">AI Engine</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-4">
             AI in every layer. Not bolted on.
@@ -30,26 +26,24 @@ export function AIShowcase() {
             Three-tier AI: free on-device inference, sub-50ms edge processing,
             full cloud power when you need it.
           </p>
-        </motion.div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {capabilities.map((c, i) => (
-            <motion.div
+            <Reveal
               key={c.title}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.5, delay: i * 0.08 }}
+              delay={i * 0.08}
+              rootMargin="-50px"
               className="group relative p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-white/20 transition-all overflow-hidden"
             >
               <div className={`absolute top-0 left-0 right-0 h-px bg-gradient-to-r ${c.gradient} opacity-50 group-hover:opacity-100 transition-opacity`} />
               <h3 className="text-lg font-semibold text-white mb-3">{c.title}</h3>
               <p className="text-sm text-blue-100/50 leading-relaxed">{c.desc}</p>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
 
-        <motion.div {...fadeUp} className="mt-16 text-center">
+        <Reveal className="mt-16 text-center">
           <div className="inline-flex flex-col sm:flex-row items-center gap-6 p-6 rounded-2xl bg-white/[0.03] border border-white/10">
             <div className="text-left">
               <div className="text-sm text-blue-200/40 mb-1">On-device AI</div>
@@ -69,7 +63,7 @@ export function AIShowcase() {
               <div className="text-xs text-blue-200/30">H100 GPUs on demand</div>
             </div>
           </div>
-        </motion.div>
+        </Reveal>
       </div>
     </section>
   );

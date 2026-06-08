@@ -1,8 +1,4 @@
-"use client";
-
-import { motion } from "motion/react";
-
-const fadeUp = { initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-100px" }, transition: { duration: 0.6 } };
+import { Reveal } from "./Reveal";
 
 const features = [
   {
@@ -87,7 +83,7 @@ export function Features() {
   return (
     <section id="features" className="py-32 px-6">
       <div className="max-w-6xl mx-auto">
-        <motion.div {...fadeUp} className="text-center mb-16">
+        <Reveal className="text-center mb-16">
           <p className="text-sm font-medium uppercase tracking-widest text-blue-400 mb-4">Features</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-4">
             Everything you need. Nothing you don&apos;t.
@@ -95,16 +91,14 @@ export function Features() {
           <p className="text-lg text-blue-100/50 max-w-xl mx-auto">
             Every feature is built in — not bolted on. No plugins, no add-ons, no extra subscriptions.
           </p>
-        </motion.div>
+        </Reveal>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {features.map((f, i) => (
-            <motion.div
+            <Reveal
               key={f.title}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.5, delay: i * 0.05 }}
+              delay={i * 0.05}
+              rootMargin="-50px"
               className="group p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-white/20 transition-all"
             >
               <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -112,7 +106,7 @@ export function Features() {
               </div>
               <h3 className="text-base font-semibold text-white mb-2">{f.title}</h3>
               <p className="text-sm text-blue-100/50 leading-relaxed">{f.desc}</p>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
       </div>

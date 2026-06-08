@@ -29,3 +29,31 @@ html {
   0%, 100% { opacity: 0.15; }
   50% { opacity: 0.3; }
 }
+
+/*
+ * Scroll reveal — CSS replacement for Framer Motion `whileInView` fade-up on the
+ * below-the-fold landing sections. Keeps the spring engine off the FCP path.
+ * Visual parity target: opacity 0 -> 1, translateY(30px) -> 0.
+ * Toggled by the <Reveal> IntersectionObserver client component.
+ */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition-property: opacity, transform;
+  transition-duration: 0.6s;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

@@ -1,7 +1,5 @@
-"use client";
-
-import { motion } from "motion/react";
 import Link from "next/link";
+import { Reveal } from "./Reveal";
 
 export function CTA() {
   return (
@@ -10,13 +8,7 @@ export function CTA() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-blue-500 rounded-full mix-blend-screen filter blur-[200px] opacity-[0.08]" />
       </div>
 
-      <motion.div
-        className="max-w-3xl mx-auto text-center relative z-10"
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 0.6 }}
-      >
+      <Reveal className="max-w-3xl mx-auto text-center relative z-10">
         <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-6">
           Ready to upgrade your email?
         </h2>
@@ -32,7 +24,7 @@ export function CTA() {
             Get Started Free
           </Link>
         </div>
-      </motion.div>
+      </Reveal>
     </section>
   );
 }
