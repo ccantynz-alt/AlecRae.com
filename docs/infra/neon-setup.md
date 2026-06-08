@@ -200,3 +200,7 @@ The pooler endpoint (`-pooler` in the host) handles connection multiplexing so s
 **Beyond Scale:** Usage-based. Budget alerts live under **Billing → Alerts**. Set one at $50/mo to start.
 
 Ping Craig before moving to any paid tier — infra spend is a Boss-Rule item.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

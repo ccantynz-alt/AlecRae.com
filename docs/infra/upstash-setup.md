@@ -158,3 +158,7 @@ Don't change these without reviewing the relevant route code — TTL drift cause
 Set a budget alert: Console → **Account** → **Billing** → **Alerts** → $25/mo initial.
 
 Ping Craig before approving any auto-upgrade — infra spend is a Boss-Rule item.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

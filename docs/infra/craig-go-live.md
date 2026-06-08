@@ -274,3 +274,7 @@ Referenced files:
 - [`env-audit.md`](./env-audit.md)
 - [`.env.production.template`](./.env.production.template)
 - [`deliverability.md`](./deliverability.md)
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

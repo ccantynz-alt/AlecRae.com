@@ -1,6 +1,6 @@
 # SOC 2 Gap Analysis — AlecRae
 
-> **Last updated:** 2026-06-08
+_Last updated: 2026-06-08 23:35 UTC_
 > **Based on:** controls-matrix.md audit of codebase, CLAUDE.md, SECURITY.md, and GitHub workflows
 > **Audience:** Craig + any readiness consultant or auditor
 

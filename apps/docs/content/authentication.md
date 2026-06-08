@@ -38,3 +38,7 @@ Rotate keys at least every 90 days. The dashboard shows the last-used timestamp 
 ## Never commit keys
 
 Use environment variables or a secrets manager. AlecRae scans public GitHub for leaked keys and revokes them automatically.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

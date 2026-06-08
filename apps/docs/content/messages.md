@@ -66,3 +66,7 @@ GET /v1/messages/{message_id}
 ```
 
 Returns the current state: `queued`, `sending`, `delivered`, `bounced`, `complained`, or `failed`.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

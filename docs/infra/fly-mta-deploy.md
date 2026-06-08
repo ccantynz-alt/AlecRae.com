@@ -277,5 +277,5 @@ Monitor Google Postmaster Tools and Microsoft SNDS daily during warmup.
 
 ---
 
-**Last updated:** 2026-04-18
+_Last updated: 2026-06-08 23:35 UTC_
 **Owner:** Craig (escalate infra changes per CLAUDE.md Boss Rule)

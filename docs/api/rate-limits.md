@@ -117,3 +117,7 @@ GET /v1/analytics/overview
 ```
 
 The response includes cumulative send counts for the current billing period.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

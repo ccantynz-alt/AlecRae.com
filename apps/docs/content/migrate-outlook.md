@@ -121,3 +121,7 @@ AlecRae supports shared inboxes natively. Connect the shared mailbox as a separa
 - [Set up keyboard shortcuts](/quickstart) to navigate AlecRae like a power user
 - [Configure AI Compose](/messages) to draft emails in your writing style
 - [Set up E2E encryption](/authentication) for sensitive communications
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_

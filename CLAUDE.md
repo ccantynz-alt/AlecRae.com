@@ -32,6 +32,7 @@ This file is read at the start of every session. It is referenced before every a
 - Any doc file (`CLAUDE.md`, `docs/**`, `README`s, ADRs, runbooks) that is touched **must** have its `Last updated:` line refreshed in the same change, in the format `YYYY-MM-DD HH:MM UTC` (date AND time, not date alone).
 - Docs are kept current on a **daily cadence** — if you work in a doc, it gets today's stamp. Stale stamps mean stale docs.
 - The stamp is applied **on every edit** (when content changes), so the timestamp always reflects a real change — not a meaningless background bump.
+- **Enforced in CI:** `bun run docs:check` fails if any doc is missing a valid stamp (the `Docs` workflow gates every push + PR). Run `bun run docs:fix` to stamp/normalize. **Docs stay clean and green at all times.**
 
 ---
 
@@ -669,7 +670,7 @@ The platform's moat is the AI flywheel — every user action makes every AI feat
 1. Update the "Build Status" section with what got done
 2. Update the "Known Issues" section with anything discovered
 3. Update the "Next Actions" section with what's next
-4. Update "Date last updated" at the bottom
+4. Update "Last updated" (date + time, UTC) at the bottom — run `bun run docs:check`
 5. Commit and push everything
 6. Leave the codebase in a runnable state
 
@@ -729,7 +730,7 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Last updated:** 2026-06-08 23:28 UTC
+**Last updated:** 2026-06-08 23:36 UTC
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Google sign-in + Vapron platform integration landed (PR #48). **Vapron is the permanent platform** (email, AI, storage, secrets, deploy) — Cloudflare/Vercel/Neon were always interim scaffolding until Vapron was built, and the app migrates onto Vapron as the target infra. The off-stack AWS EKS deploy pipeline has been removed. Production deployment awaiting Craig's Vapron + infra setup.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)

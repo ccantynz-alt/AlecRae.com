@@ -1,6 +1,6 @@
 # SOC 2 Controls Matrix — AlecRae
 
-> **Last updated:** 2026-06-08
+_Last updated: 2026-06-08 23:35 UTC_
 > **Scope:** Security (CC), Availability (A), Confidentiality (C)
 > **Status key:** Implemented | Partial | Missing
 

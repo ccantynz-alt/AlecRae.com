@@ -60,3 +60,7 @@ The following files **are** typechecked and production-ready:
 
 Until then the IMAP service is **wired but not bootable** — the auth
 and mailbox handlers compile cleanly, but no one starts a TCP listener.
+
+---
+
+_Last updated: 2026-06-08 23:35 UTC_
