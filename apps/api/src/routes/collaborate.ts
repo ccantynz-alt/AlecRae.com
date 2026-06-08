@@ -41,11 +41,29 @@ import { validateBody, getValidatedBody } from "../middleware/validator.js";
 const COLLAB_WS_URL = process.env.COLLAB_WS_URL ?? "wss://collab.alecrae.com";
 const COLLAB_HTTP_URL =
   process.env.COLLAB_HTTP_URL ?? "https://collab.alecrae.com";
-const COLLAB_JWT_SECRET = new TextEncoder().encode(
-  process.env.COLLAB_JWT_SECRET ??
-    process.env.JWT_SECRET ??
-    "dev-collab-secret-change-me",
-);
+/**
+ * Resolve the collab JWT signing secret. In production we refuse to fall back to
+ * a hardcoded default — an unset secret there would make collab tokens forgeable.
+ * The dev fallback is kept ONLY for non-production.
+ */
+function getCollabJwtSecret(): Uint8Array {
+  const secret = process.env.COLLAB_JWT_SECRET ?? process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "[collaborate] Refusing to operate in production without COLLAB_JWT_SECRET or JWT_SECRET. " +
+          "Set one of these env vars before starting the API.",
+      );
+    }
+    return new TextEncoder().encode("dev-collab-secret-change-me");
+  }
+  if (secret.length < 32 && process.env.NODE_ENV === "production") {
+    throw new Error(
+      "[collaborate] COLLAB_JWT_SECRET / JWT_SECRET must be at least 32 characters in production.",
+    );
+  }
+  return new TextEncoder().encode(secret);
+}
 const JWT_ISSUER = process.env.JWT_ISSUER ?? "alecrae";
 const JWT_AUDIENCE = process.env.JWT_AUDIENCE ?? "alecrae-collab";
 const COLLAB_TOKEN_TTL_SECONDS = 60 * 60; // 1 hour
@@ -94,7 +112,7 @@ async function mintCollabToken(params: {
     .setAudience(JWT_AUDIENCE)
     .setIssuedAt()
     .setExpirationTime(`${COLLAB_TOKEN_TTL_SECONDS}s`)
-    .sign(COLLAB_JWT_SECRET);
+    .sign(getCollabJwtSecret());
 }
 
 async function mintAdminToken(): Promise<string> {
@@ -105,7 +123,7 @@ async function mintAdminToken(): Promise<string> {
     .setAudience(JWT_AUDIENCE)
     .setIssuedAt()
     .setExpirationTime("60s")
-    .sign(COLLAB_JWT_SECRET);
+    .sign(getCollabJwtSecret());
 }
 
 function generateId(): string {

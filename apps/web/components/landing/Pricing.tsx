@@ -1,9 +1,5 @@
-"use client";
-
-import { motion } from "motion/react";
 import Link from "next/link";
-
-const fadeUp = { initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-100px" }, transition: { duration: 0.6 } };
+import { Reveal } from "./Reveal";
 
 const plans = [
   {
@@ -48,7 +44,7 @@ export function Pricing() {
   return (
     <section id="pricing" className="py-32 px-6">
       <div className="max-w-6xl mx-auto">
-        <motion.div {...fadeUp} className="text-center mb-16">
+        <Reveal className="text-center mb-16">
           <p className="text-sm font-medium uppercase tracking-widest text-blue-400 mb-4">Pricing</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-4">
             Simple pricing. No surprises.
@@ -56,16 +52,14 @@ export function Pricing() {
           <p className="text-lg text-blue-100/50 max-w-xl mx-auto">
             Start free. Upgrade when you need more. Cancel anytime.
           </p>
-        </motion.div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {plans.map((plan, i) => (
-            <motion.div
+            <Reveal
               key={plan.name}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.5, delay: i * 0.08 }}
+              delay={i * 0.08}
+              rootMargin="-50px"
               className={`relative flex flex-col p-6 rounded-2xl border transition-all ${
                 plan.highlighted
                   ? "bg-white/[0.08] border-blue-500/50 shadow-lg shadow-blue-500/10"
@@ -105,14 +99,14 @@ export function Pricing() {
               >
                 {plan.cta}
               </Link>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
 
-        <motion.p {...fadeUp} className="text-center text-sm text-blue-100/30 mt-8">
+        <Reveal as="p" className="text-center text-sm text-blue-100/30 mt-8">
           Need enterprise? Custom pricing with on-prem deployment, SLA, and dedicated support.{" "}
           <a href="mailto:hello@alecrae.com" className="text-blue-400 hover:text-blue-300 underline">Contact us</a>
-        </motion.p>
+        </Reveal>
       </div>
     </section>
   );

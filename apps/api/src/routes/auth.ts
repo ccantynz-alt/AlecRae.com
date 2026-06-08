@@ -296,21 +296,8 @@ auth.post("/logout", async (c) => {
 
     return c.json({ data: { message: "All sessions revoked" } });
   } catch {
-    // Try legacy decode as fallback
-    try {
-      const parts = token.split(".");
-      if (parts.length !== 3) throw new Error("Invalid token");
-      const segment = parts[1];
-      if (!segment) throw new Error("Invalid token");
-      const payload = JSON.parse(atob(segment));
-      if (payload.userId) {
-        await revokeAllUserTokens(payload.userId as string);
-        return c.json({ data: { message: "All sessions revoked" } });
-      }
-    } catch {
-      // fall through
-    }
-
+    // SECURITY: do NOT fall back to an unsigned token decode here — that would let
+    // an attacker revoke any user's sessions by forging a token. Require a verified token.
     return c.json(
       {
         error: {
@@ -331,20 +318,19 @@ interface SessionPayload {
   readonly accountId: string;
 }
 
-function verifyBearerToken(authHeader: string | undefined): SessionPayload | null {
+async function verifyBearerToken(
+  authHeader: string | undefined,
+): Promise<SessionPayload | null> {
   if (!authHeader?.startsWith("Bearer ")) return null;
   const token = authHeader.slice(7);
-  const parts = token.split(".");
-  if (parts.length !== 3 || !parts[1]) return null;
+  // SECURITY: always verify the JWT signature + expiry via jose. Never trust an
+  // unsigned/base64-decoded payload — that would let anyone forge a token for any user.
   try {
-    const payload = JSON.parse(atob(parts[1])) as {
-      exp?: number;
-      userId?: string;
-      sub?: string;
-    };
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-    if (!payload.userId || !payload.sub) return null;
-    return { userId: payload.userId, accountId: payload.sub };
+    const payload = await verifyAccessToken(token);
+    const userId = payload.userId as string | undefined;
+    const accountId = payload.sub as string | undefined;
+    if (!userId || !accountId) return null;
+    return { userId, accountId };
   } catch {
     return null;
   }
@@ -362,7 +348,7 @@ function unauthenticatedResponse() {
 
 // GET /v1/auth/me — Get current user from bearer token
 auth.get("/me", async (c) => {
-  const session = verifyBearerToken(c.req.header("Authorization"));
+  const session = await verifyBearerToken(c.req.header("Authorization"));
   if (!session) return c.json(unauthenticatedResponse(), 401);
 
   const db = getDatabase();
@@ -390,7 +376,7 @@ const UpdateProfileSchema = z.object({
 });
 
 auth.patch("/me", validateBody(UpdateProfileSchema), async (c) => {
-  const session = verifyBearerToken(c.req.header("Authorization"));
+  const session = await verifyBearerToken(c.req.header("Authorization"));
   if (!session) return c.json(unauthenticatedResponse(), 401);
 
   const input = getValidatedBody<z.infer<typeof UpdateProfileSchema>>(c);
@@ -445,7 +431,7 @@ auth.patch("/me", validateBody(UpdateProfileSchema), async (c) => {
 
 // DELETE /v1/auth/me — Soft-delete the current user's account (30-day window)
 auth.delete("/me", async (c) => {
-  const session = verifyBearerToken(c.req.header("Authorization"));
+  const session = await verifyBearerToken(c.req.header("Authorization"));
   if (!session) return c.json(unauthenticatedResponse(), 401);
 
   const db = getDatabase();

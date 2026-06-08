@@ -1,8 +1,4 @@
-"use client";
-
-import { motion } from "motion/react";
-
-const fadeUp = { initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-100px" }, transition: { duration: 0.6 } };
+import { Reveal } from "./Reveal";
 
 const pledges = [
   { title: "No ads. Ever.", desc: "We make money from subscriptions, not surveillance. Your inbox is yours." },
@@ -21,7 +17,7 @@ export function Security() {
       </div>
 
       <div className="max-w-5xl mx-auto relative z-10">
-        <motion.div {...fadeUp} className="text-center mb-16">
+        <Reveal className="text-center mb-16">
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400 mb-4">Security & Privacy</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-4">
             Your email is none of our business.
@@ -29,16 +25,14 @@ export function Security() {
           <p className="text-lg text-blue-100/50 max-w-xl mx-auto">
             Privacy isn&apos;t a feature toggle. It&apos;s the architecture.
           </p>
-        </motion.div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {pledges.map((p, i) => (
-            <motion.div
+            <Reveal
               key={p.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.5, delay: i * 0.06 }}
+              delay={i * 0.06}
+              rootMargin="-50px"
               className="p-6 rounded-2xl bg-white/[0.03] border border-white/10"
             >
               <div className="flex items-center gap-2 mb-3">
@@ -48,7 +42,7 @@ export function Security() {
                 <h3 className="text-base font-semibold text-white">{p.title}</h3>
               </div>
               <p className="text-sm text-blue-100/50 leading-relaxed">{p.desc}</p>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
       </div>

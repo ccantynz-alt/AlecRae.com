@@ -32,13 +32,17 @@ import type {
 // ─── Lazy imports ───────────────────────────────────────────────────────────
 
 const LazySpatialInboxView = lazy(() =>
-  import("@alecrae/ui/composites/spatial-inbox-view").then((mod) => ({
+  import(
+    /* webpackChunkName: "spatial-inbox" */ "@alecrae/ui/composites/spatial-inbox-view"
+  ).then((mod) => ({
     default: mod.SpatialInboxView,
   })),
 );
 
 const LazySpatialControls = lazy(() =>
-  import("@alecrae/ui/composites/spatial-controls").then((mod) => ({
+  import(
+    /* webpackChunkName: "spatial-inbox" */ "@alecrae/ui/composites/spatial-controls"
+  ).then((mod) => ({
     default: mod.SpatialControls,
   })),
 );

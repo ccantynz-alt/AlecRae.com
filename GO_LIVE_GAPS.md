@@ -74,6 +74,25 @@ The <100KB initial-JS budget is at risk. None block a beta, but they erode the s
 
 **WebLLM (`@mlc-ai/web-llm`) verdict:** SAFE — already a dynamic `import()` inside a function body; not in the initial bundle.
 
+## 🔐 Security review results + decisions needed (2026-06-08)
+
+Pre-launch review of the API public surface. **Fixed + merged-ready:**
+- ✅ **Critical auth bypass** — unsigned JWTs were accepted (atob-decode, no signature check) on the global Bearer middleware + `/auth/me` + `/logout`. Now verified via jose. (Forgeable tokens for any account — would have been catastrophic.)
+- ✅ Reflected XSS on the unsubscribe page (`tracking.ts`).
+
+**ALL fixed (PR #47, owner-authorized 2026-06-08):**
+
+| # | Item | Severity | Resolution |
+|---|---|---|---|
+| S1 | SAML assertion signature never verified (`sso.ts`) | 🔴 SSO auth bypass | ✅ xml-crypto signature verification pinned to configured IdP cert (ignores attacker KeyInfo), signature-wrapping defense, conditions/audience checks; 403 on failure. 8 tests. |
+| S2 | OAuth `state` unsigned (`connect.ts`) | 🔴 Account-linking CSRF | ✅ HMAC-SHA256 signed, 10-min expiring state + nonce, constant-time verify. 5 tests. |
+| S3 | SSRF in link-preview fetch (`link-previews.ts`) | 🟠 | ✅ DNS-resolve + block private/loopback/link-local/metadata IPv4+IPv6, redirects manual + re-validated per hop. 24 tests. |
+| S4 | Hardcoded fallback secrets, no prod guard (`sso.ts`, `collaborate.ts`) | 🟠 | ✅ Fail-closed in production (throws if secret unset/<32 chars); dev fallback only outside prod. |
+| S5 | E2E encryption key store in-memory Map (`encryption.ts:18`) | 🟠 | ✅ DB-backed `encryptionKeys` table; zero-knowledge preserved (only public + client-encrypted keys). 6 tests. |
+| P4 | Framer Motion in Hero → 141KB gz landing | 🟡 | ✅ Hero → Server Component + CSS keyframes; **141KB → 104.5KB gz**, zero Framer Motion on `/`. Gate ratcheted to 108KB. Floor is ~102KB Next.js/React baseline (can't go lower without a framework-level change). |
+
+Lower severity (still open, note only): JWT lacks iss/aud binding; ephemeral RS256 keypair on startup breaks multi-instance; unsatisfiable `accounts:*`/`recall:write` scopes.
+
 ---
 
 ## ⏳ Long pole — Enterprise / "Google Workspace for business" track

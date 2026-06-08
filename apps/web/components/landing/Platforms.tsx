@@ -1,8 +1,4 @@
-"use client";
-
-import { motion } from "motion/react";
-
-const fadeUp = { initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-100px" }, transition: { duration: 0.6 } };
+import { Reveal } from "./Reveal";
 
 const platforms = [
   {
@@ -41,7 +37,7 @@ export function Platforms() {
   return (
     <section className="py-32 px-6">
       <div className="max-w-4xl mx-auto">
-        <motion.div {...fadeUp} className="text-center mb-16">
+        <Reveal className="text-center mb-16">
           <p className="text-sm font-medium uppercase tracking-widest text-blue-400 mb-4">Platforms</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-4">
             Every device. One experience.
@@ -49,16 +45,14 @@ export function Platforms() {
           <p className="text-lg text-blue-100/50 max-w-xl mx-auto">
             Start on your phone, finish on your desktop. Your inbox syncs everywhere.
           </p>
-        </motion.div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {platforms.map((p, i) => (
-            <motion.div
+            <Reveal
               key={p.name}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: i * 0.1 }}
+              delay={i * 0.1}
+              rootMargin="0px"
               className="flex flex-col items-center text-center p-8 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-all"
             >
               <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
@@ -66,7 +60,7 @@ export function Platforms() {
               </div>
               <h3 className="text-lg font-semibold text-white mb-2">{p.name}</h3>
               <p className="text-sm text-blue-100/50">{p.desc}</p>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
       </div>

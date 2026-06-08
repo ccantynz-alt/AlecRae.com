@@ -71,6 +71,7 @@ import { composeAssist } from "./routes/compose-assist.js";
 import { sso } from "./routes/sso.js";
 import { spellcheckRouter } from "./routes/spellcheck.js";
 import { status } from "./routes/status.js";
+import { uptime } from "./routes/uptime.js";
 import { gamification } from "./routes/gamification.js";
 import { changelog } from "./routes/changelog.js";
 import { heatmapAnalytics } from "./routes/heatmap.js";
@@ -213,6 +214,10 @@ app.route("/v1/health", health);
 
 // Public status health endpoint (no auth — consumed by status.alecrae.com)
 app.route("/v1/status", status);
+
+// Public uptime endpoint (no auth, light read rate limit — consumed by status.alecrae.com)
+app.use("/v1/uptime", readRateLimit);
+app.route("/v1/uptime", uptime);
 
 // Auth endpoints: strict IP rate limiting (10 req/min), no API key auth
 app.use("/v1/auth/*", authRateLimit);
