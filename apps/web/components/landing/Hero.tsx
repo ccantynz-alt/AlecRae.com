@@ -1,7 +1,21 @@
-"use client";
-
-import { motion } from "motion/react";
 import Link from "next/link";
+import type { CSSProperties } from "react";
+
+/**
+ * Entrance-animation style helper.
+ *
+ * Mirrors the prior Framer Motion on-mount config per element
+ * (`initial { opacity: 0, y } -> animate { opacity: 1, y: 0 }`) using the
+ * pure-CSS `.enter-up` keyframe (see globals.css). No `motion/react` runtime is
+ * loaded on the landing route — the Hero is a Server Component.
+ */
+function enter(y: number, durationSeconds: number, delaySeconds: number): CSSProperties {
+  return {
+    ["--enter-y" as string]: `${y}px`,
+    ["--enter-duration" as string]: `${durationSeconds}s`,
+    ["--enter-delay" as string]: `${delaySeconds}s`,
+  };
+}
 
 export function Hero() {
   return (
@@ -13,7 +27,7 @@ export function Hero() {
       </div>
 
       <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+        <div className="enter-up" style={enter(20, 0.6, 0)}>
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-blue-200 mb-8">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -21,13 +35,11 @@ export function Hero() {
             </span>
             Now in beta
           </div>
-        </motion.div>
+        </div>
 
-        <motion.h1
-          className="text-5xl sm:text-7xl md:text-8xl font-bold tracking-tighter leading-[0.9] mb-6"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.1 }}
+        <h1
+          className="enter-up text-5xl sm:text-7xl md:text-8xl font-bold tracking-tighter leading-[0.9] mb-6"
+          style={enter(30, 0.7, 0.1)}
         >
           <span className="bg-gradient-to-r from-white via-blue-100 to-cyan-200 bg-clip-text text-transparent">
             Your inbox,
@@ -36,23 +48,19 @@ export function Hero() {
           <span className="bg-gradient-to-r from-cyan-200 via-blue-400 to-purple-400 bg-clip-text text-transparent">
             finally intelligent.
           </span>
-        </motion.h1>
+        </h1>
 
-        <motion.p
-          className="text-lg md:text-xl text-blue-100/60 max-w-2xl mx-auto mb-10 leading-relaxed"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
+        <p
+          className="enter-up text-lg md:text-xl text-blue-100/60 max-w-2xl mx-auto mb-10 leading-relaxed"
+          style={enter(20, 0.6, 0.3)}
         >
           AlecRae replaces your email client, grammar checker, dictation software,
           and newsletter reader. One app. One subscription. Every account. AI in every layer.
-        </motion.p>
+        </p>
 
-        <motion.div
-          className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.5 }}
+        <div
+          className="enter-up flex flex-col sm:flex-row items-center justify-center gap-4 mb-20"
+          style={enter(20, 0.6, 0.5)}
         >
           <Link
             href="/register"
@@ -66,17 +74,15 @@ export function Hero() {
           >
             See Features
           </a>
-        </motion.div>
+        </div>
 
-        <motion.div
-          className="relative max-w-4xl mx-auto"
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.7 }}
+        <div
+          className="enter-up relative max-w-4xl mx-auto"
+          style={enter(40, 0.8, 0.7)}
         >
           <div className="absolute -inset-4 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-cyan-500/20 rounded-2xl blur-xl" />
           <InboxPreview />
-        </motion.div>
+        </div>
       </div>
     </section>
   );

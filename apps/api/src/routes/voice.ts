@@ -32,38 +32,41 @@ const ANTHROPIC_API_KEY = process.env["ANTHROPIC_API_KEY"] ?? process.env["CLAUD
 async function generateWithClaude(
   prompt: string,
   options?: { maxTokens?: number; temperature?: number },
-): Promise<string> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is not configured. Voice features require Claude API access.");
+): Promise<string | null> {
+  // Graceful degradation: return null when the AI provider is unavailable so
+  // callers can fall back instead of surfacing a 500 to the user.
+  if (!ANTHROPIC_API_KEY) return null;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: options?.maxTokens ?? 1024,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) return null;
+
+    const data = (await response.json()) as {
+      content: { type: string; text?: string }[];
+    };
+
+    const text = data.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text ?? "")
+      .join("");
+
+    return text.length > 0 ? text : null;
+  } catch {
+    return null;
   }
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: options?.maxTokens ?? 1024,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Claude API error ${response.status}: ${errText}`);
-  }
-
-  const data = (await response.json()) as {
-    content: { type: string; text?: string }[];
-  };
-
-  return data.content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text ?? "")
-    .join("");
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -255,12 +258,35 @@ voice.post(
 
     const body = await generateWithClaude(parts.join("\n"), { maxTokens });
 
+    // Graceful degradation: when the AI provider is unavailable, return a
+    // clearly-labelled lower-confidence draft instead of throwing a 500.
+    if (body === null) {
+      const greeting = input.recipientName ? `Hi ${input.recipientName},` : "Hi,";
+      const fallbackBody =
+        `${greeting}\n\n` +
+        `[AI draft unavailable — Claude could not be reached. ` +
+        `Compose your message about: ${input.instructions}]\n\n` +
+        `Best regards`;
+
+      return c.json({
+        data: {
+          subject: input.subject ?? `Re: ${input.instructions.slice(0, 60)}`,
+          body: fallbackBody,
+          tone: input.tone,
+          aiUnavailable: true,
+          confidence: 0.3,
+        },
+      });
+    }
+
     // Generate subject if not provided
     let subject = input.subject;
     if (!subject) {
       const subjectPrompt = `Based on this email body, suggest a concise subject line (max 10 words, no quotes):\n\n${body.slice(0, 500)}`;
-      subject = await generateWithClaude(subjectPrompt, { maxTokens: 50 });
-      subject = subject.trim().replace(/^["']|["']$/g, "");
+      const generatedSubject = await generateWithClaude(subjectPrompt, { maxTokens: 50 });
+      subject = generatedSubject
+        ? generatedSubject.trim().replace(/^["']|["']$/g, "")
+        : `Re: ${input.instructions.slice(0, 60)}`;
     }
 
     return c.json({
@@ -268,6 +294,8 @@ voice.post(
         subject,
         body: body.trim(),
         tone: input.tone,
+        aiUnavailable: false,
+        confidence: 0.9,
       },
     });
   },
@@ -300,10 +328,25 @@ voice.post(
 
     const body = await generateWithClaude(parts.join("\n"), { maxTokens: 1500 });
 
+    // Graceful degradation: when the AI provider is unavailable, return the
+    // original text untouched rather than throwing a 500.
+    if (body === null) {
+      return c.json({
+        data: {
+          body: input.body,
+          tone: input.tone,
+          aiUnavailable: true,
+          confidence: 0.3,
+        },
+      });
+    }
+
     return c.json({
       data: {
         body: body.trim(),
         tone: input.tone,
+        aiUnavailable: false,
+        confidence: 0.9,
       },
     });
   },

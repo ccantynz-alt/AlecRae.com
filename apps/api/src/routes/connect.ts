@@ -25,6 +25,7 @@ import {
 } from "../sync/engine.js";
 import { getDatabase, connectedAccounts } from "@alecrae/db";
 import { eq, and } from "drizzle-orm";
+import { signState, verifyState } from "../lib/oauth-state.js";
 
 function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "");
@@ -51,13 +52,12 @@ const connect = new Hono();
 connect.get(
   "/gmail",
   requireScope("accounts:write"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const state = Buffer.from(JSON.stringify({
+    const state = await signState({
       userId: auth.accountId,
       provider: "gmail",
-      ts: Date.now(),
-    })).toString("base64url");
+    });
 
     return c.redirect(getGoogleAuthUrl(state));
   },
@@ -67,13 +67,12 @@ connect.get(
 connect.get(
   "/outlook",
   requireScope("accounts:write"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const state = Buffer.from(JSON.stringify({
+    const state = await signState({
       userId: auth.accountId,
       provider: "outlook",
-      ts: Date.now(),
-    })).toString("base64url");
+    });
 
     return c.redirect(getMicrosoftAuthUrl(state));
   },
@@ -90,8 +89,16 @@ connect.get(
       return c.json({ error: { message: "Missing code or state" } }, 400);
     }
 
+    const stateResult = await verifyState(stateParam);
+    if (!stateResult.ok) {
+      return c.json({ error: { message: "Invalid or expired OAuth state" } }, 400);
+    }
+    if (stateResult.payload.provider !== "gmail") {
+      return c.json({ error: { message: "OAuth state provider mismatch" } }, 400);
+    }
+    const state = stateResult.payload;
+
     try {
-      const state = JSON.parse(Buffer.from(stateParam, "base64url").toString()) as { userId: string };
       const tokens = await exchangeGoogleCode(code);
 
       const account: EmailAccount = {
@@ -147,8 +154,16 @@ connect.get(
       return c.json({ error: { message: "Missing code or state" } }, 400);
     }
 
+    const stateResult = await verifyState(stateParam);
+    if (!stateResult.ok) {
+      return c.json({ error: { message: "Invalid or expired OAuth state" } }, 400);
+    }
+    if (stateResult.payload.provider !== "outlook") {
+      return c.json({ error: { message: "OAuth state provider mismatch" } }, 400);
+    }
+    const state = stateResult.payload;
+
     try {
-      const state = JSON.parse(Buffer.from(stateParam, "base64url").toString()) as { userId: string };
       const tokens = await exchangeMicrosoftCode(code);
 
       const account: EmailAccount = {

@@ -705,6 +705,25 @@ export {
 } from "./schema/sso-config.js";
 export type { OrganizationSettings } from "./schema/sso-config.js";
 
+// Schema - DPA Signatures (GDPR Data Processing Agreement self-serve signing)
+export {
+  dpaSignatures,
+  dpaSignaturesRelations,
+} from "./schema/dpa-signatures.js";
+
+// Schema - Dunning (failed-payment recovery state machine)
+export {
+  dunningRecords,
+  dunningStateEnum,
+  dunningRecordsRelations,
+} from "./schema/dunning.js";
+
+// Schema - Encryption Keys (zero-knowledge E2E keypairs)
+export {
+  encryptionKeys,
+  encryptionKeysRelations,
+} from "./schema/encryption-keys.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -1076,3 +1095,21 @@ export type TeamInvitation = InferSelectModel<typeof teamInvitations>;
 export type NewTeamInvitation = InferInsertModel<typeof teamInvitations>;
 export type Organization = InferSelectModel<typeof organizations>;
 export type NewOrganization = InferInsertModel<typeof organizations>;
+
+// DPA Signature types
+import type { dpaSignatures } from "./schema/dpa-signatures.js";
+
+export type DpaSignature = InferSelectModel<typeof dpaSignatures>;
+export type NewDpaSignature = InferInsertModel<typeof dpaSignatures>;
+
+// Dunning types
+import type { dunningRecords } from "./schema/dunning.js";
+
+export type DunningRecord = InferSelectModel<typeof dunningRecords>;
+export type NewDunningRecord = InferInsertModel<typeof dunningRecords>;
+
+// Encryption Key types
+import type { encryptionKeys } from "./schema/encryption-keys.js";
+
+export type EncryptionKey = InferSelectModel<typeof encryptionKeys>;
+export type NewEncryptionKey = InferInsertModel<typeof encryptionKeys>;

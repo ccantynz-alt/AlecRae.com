@@ -18,6 +18,7 @@ import {
 } from "../middleware/validator.js";
 import { getDatabase, linkPreviews } from "@alecrae/db";
 import type { LinkPreviewData } from "@alecrae/db";
+import { safeFetch } from "../lib/ssrf-guard.js";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -120,10 +121,8 @@ function decodeHtmlEntities(str: string): string {
     .replace(/&#x2F;/g, "/");
 }
 
-/**
- * Fetch a URL preview: check cache first, then fetch and parse if needed.
- */
-async function fetchPreview(url: string): Promise<{
+/** A successfully resolved (or cached) preview. */
+interface PreviewSuccess {
   id: string;
   url: string;
   urlHash: string;
@@ -131,7 +130,24 @@ async function fetchPreview(url: string): Promise<{
   fetchedAt: string;
   expiresAt: string;
   cached: boolean;
-}> {
+}
+
+/** A URL blocked by the SSRF guard — returned, never thrown. */
+interface PreviewBlocked {
+  blocked: true;
+  url: string;
+  reason: string;
+  detail: string;
+}
+
+type PreviewResult = PreviewSuccess | PreviewBlocked;
+
+/**
+ * Fetch a URL preview: check cache first, then fetch and parse if needed.
+ * Outbound fetches go through the SSRF guard; blocked URLs return a typed
+ * `PreviewBlocked` result instead of reaching internal services.
+ */
+async function fetchPreview(url: string): Promise<PreviewResult> {
   const db = getDatabase();
   const urlHash = await hashUrl(url);
   const now = new Date();
@@ -155,20 +171,32 @@ async function fetchPreview(url: string): Promise<{
     };
   }
 
-  // Fetch with timeout
+  // Fetch with timeout via the SSRF guard (scheme + DNS/IP allowlist + safe redirects)
   let html: string;
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
-    const response = await fetch(url, {
+    const fetchResult = await safeFetch(url, {
       signal: controller.signal,
       headers: {
         "User-Agent": "AlecRaeLinkPreview/1.0 (+https://alecrae.com)",
         Accept: "text/html, application/xhtml+xml",
       },
-      redirect: "follow",
+      maxRedirects: 3,
     });
+
+    if (!fetchResult.ok) {
+      clearTimeout(timeoutId);
+      return {
+        blocked: true,
+        url,
+        reason: fetchResult.error.reason,
+        detail: fetchResult.error.detail,
+      };
+    }
+
+    const response = fetchResult.value;
 
     clearTimeout(timeoutId);
 
@@ -276,6 +304,19 @@ linkPreviewRouter.post(
     const input = getValidatedBody<z.infer<typeof FetchPreviewSchema>>(c);
 
     const preview = await fetchPreview(input.url);
+
+    if ("blocked" in preview) {
+      return c.json(
+        {
+          error: {
+            type: "blocked_url",
+            message: "This URL was blocked for security reasons",
+            code: preview.reason,
+          },
+        },
+        422,
+      );
+    }
 
     return c.json({ data: preview }, 200);
   },

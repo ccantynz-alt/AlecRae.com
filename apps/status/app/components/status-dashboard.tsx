@@ -2,24 +2,37 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// ─── Types (mirror /v1/uptime response — validated against schema below) ─────
 
-type ServiceStatus = "operational" | "degraded" | "outage";
+type ServiceStatus = "operational" | "degraded" | "outage" | "unknown";
 
-interface ServiceHealth {
-  readonly name: string;
-  readonly status: ServiceStatus;
-  readonly latencyMs: number;
-  readonly description: string;
-  readonly error?: string;
+interface UptimeWindow {
+  readonly percentage: number | null;
+  readonly sampleCount: number;
 }
 
-interface HealthResponse {
+interface ComponentUptime {
+  readonly key: string;
+  readonly name: string;
+  readonly description: string;
+  readonly status: ServiceStatus;
+  readonly latencyMs: number;
+  readonly error?: string;
+  readonly uptime: {
+    readonly day: UptimeWindow;
+    readonly week: UptimeWindow;
+    readonly quarter: UptimeWindow;
+  };
+}
+
+interface UptimeResponse {
   readonly overall: ServiceStatus;
   readonly version: string;
-  readonly uptime: number;
+  readonly apiUptimeSeconds: number;
   readonly timestamp: string;
-  readonly services: readonly ServiceHealth[];
+  readonly historyAvailable: boolean;
+  readonly historyNote: string;
+  readonly components: readonly ComponentUptime[];
 }
 
 interface Incident {
@@ -31,54 +44,105 @@ interface Incident {
   readonly summary: string;
 }
 
-// ─── Static Data (will be replaced with DB-backed incidents when wired) ────
+// ─── Static Data (DB-backed incident history is a separate future build) ────
 
 const HISTORICAL_INCIDENTS: readonly Incident[] = [];
 
-// ─── Uptime Simulation (will be replaced with real metrics from DB/OTel) ───
+// ─── Lightweight runtime validation of the API payload ──────────────────────
+// Keeps the client honest: a malformed response is rejected and we fall back,
+// rather than rendering garbage or fabricated numbers.
 
-const UPTIME_MAP: Readonly<Record<string, number>> = {
-  "Web App": 100.0,
-  "Database (Neon Postgres)": 99.998,
-  "Cache (Upstash Redis)": 99.995,
-  "Search (Meilisearch)": 99.991,
-  "AI Services (Claude)": 99.987,
-  "Email Delivery (MTA)": 99.995,
-};
+function isServiceStatus(value: unknown): value is ServiceStatus {
+  return (
+    value === "operational" ||
+    value === "degraded" ||
+    value === "outage" ||
+    value === "unknown"
+  );
+}
 
-// ─── Status Helpers ─────────────────────────────────────────────────────────
+function isUptimeWindow(value: unknown): value is UptimeWindow {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  const pctOk = v["percentage"] === null || typeof v["percentage"] === "number";
+  return pctOk && typeof v["sampleCount"] === "number";
+}
+
+function isComponentUptime(value: unknown): value is ComponentUptime {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  const u = v["uptime"];
+  if (typeof u !== "object" || u === null) return false;
+  const uw = u as Record<string, unknown>;
+  return (
+    typeof v["key"] === "string" &&
+    typeof v["name"] === "string" &&
+    typeof v["description"] === "string" &&
+    isServiceStatus(v["status"]) &&
+    typeof v["latencyMs"] === "number" &&
+    isUptimeWindow(uw["day"]) &&
+    isUptimeWindow(uw["week"]) &&
+    isUptimeWindow(uw["quarter"])
+  );
+}
+
+function parseUptimeResponse(value: unknown): UptimeResponse | null {
+  if (typeof value !== "object" || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (!isServiceStatus(v["overall"])) return null;
+  if (!Array.isArray(v["components"])) return null;
+  if (!v["components"].every(isComponentUptime)) return null;
+  return {
+    overall: v["overall"],
+    version: typeof v["version"] === "string" ? v["version"] : "unknown",
+    apiUptimeSeconds:
+      typeof v["apiUptimeSeconds"] === "number" ? v["apiUptimeSeconds"] : 0,
+    timestamp:
+      typeof v["timestamp"] === "string" ? v["timestamp"] : new Date().toISOString(),
+    historyAvailable: v["historyAvailable"] === true,
+    historyNote: typeof v["historyNote"] === "string" ? v["historyNote"] : "",
+    components: v["components"] as readonly ComponentUptime[],
+  };
+}
+
+// ─── Status display maps ─────────────────────────────────────────────────────
 
 const STATUS_LABELS: Readonly<Record<ServiceStatus, string>> = {
   operational: "Operational",
   degraded: "Degraded performance",
   outage: "Outage",
+  unknown: "Unknown",
 };
 
 const STATUS_DOT: Readonly<Record<ServiceStatus, string>> = {
   operational: "bg-emerald-400",
   degraded: "bg-yellow-400",
   outage: "bg-red-500",
+  unknown: "bg-slate-400",
 };
 
 const STATUS_TEXT: Readonly<Record<ServiceStatus, string>> = {
   operational: "text-emerald-300",
   degraded: "text-yellow-300",
   outage: "text-red-400",
+  unknown: "text-slate-300",
 };
 
 const OVERALL_BORDER: Readonly<Record<ServiceStatus, string>> = {
   operational: "bg-emerald-500/10 border-emerald-400/30",
   degraded: "bg-yellow-500/10 border-yellow-400/30",
   outage: "bg-red-500/10 border-red-400/30",
+  unknown: "bg-slate-500/10 border-slate-400/30",
 };
 
 const OVERALL_LABEL: Readonly<Record<ServiceStatus, string>> = {
   operational: "All systems operational",
   degraded: "Some systems experiencing issues",
   outage: "Major service disruption",
+  unknown: "System status unknown",
 };
 
-function formatUptime(seconds: number): string {
+function formatApiUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -88,67 +152,100 @@ function formatUptime(seconds: number): string {
   return `${minutes}m`;
 }
 
+function formatUptimePct(window: UptimeWindow): string {
+  if (window.percentage === null) return "Unknown";
+  return `${window.percentage.toFixed(3)}%`;
+}
+
+// ─── Fallback (used only when the API is unreachable) ────────────────────────
+// We never fabricate uptime numbers: every window is "unknown" (null) here.
+
+function buildFallback(): UptimeResponse {
+  const unknownWindow: UptimeWindow = { percentage: null, sampleCount: 0 };
+  const mk = (
+    key: string,
+    name: string,
+    description: string,
+  ): ComponentUptime => ({
+    key,
+    name,
+    description,
+    status: "unknown",
+    latencyMs: 0,
+    uptime: { day: unknownWindow, week: unknownWindow, quarter: unknownWindow },
+  });
+
+  return {
+    overall: "unknown",
+    version: "unknown",
+    apiUptimeSeconds: 0,
+    timestamp: new Date().toISOString(),
+    historyAvailable: false,
+    historyNote:
+      "Status API is currently unreachable — live health and uptime are unavailable.",
+    components: [
+      mk("web", "Web App", "mail.alecrae.com — AlecRae inbox UI"),
+      mk("database", "Database (Neon Postgres)", "Primary database — Neon Serverless Postgres"),
+      mk("redis", "Cache (Upstash Redis)", "Cache and queue — Upstash Redis"),
+      mk("search", "Search (Meilisearch)", "Full-text search — Meilisearch"),
+      mk("ai", "AI Services (Claude)", "AI inference — Claude API (Anthropic)"),
+      mk("mta", "Email Delivery (MTA)", "Inbound MX + outbound SMTP — Fly.io"),
+    ],
+  };
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "https://api.alecrae.com";
 const REFRESH_INTERVAL_MS = 30_000;
 
 export function StatusDashboard(): React.JSX.Element {
-  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [data, setData] = useState<UptimeResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [lastChecked, setLastChecked] = useState<string>(new Date().toUTCString());
   const [error, setError] = useState<string | null>(null);
 
-  const fetchHealth = useCallback(async (): Promise<void> => {
+  const fetchUptime = useCallback(async (): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE}/v1/status/health`, {
+      const response = await fetch(`${API_BASE}/v1/uptime`, {
         cache: "no-store",
         signal: AbortSignal.timeout(10_000),
       });
 
-      if (!response.ok) {
+      if (!response.ok && response.status !== 503) {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = (await response.json()) as HealthResponse;
-      setHealth(data);
+      const raw: unknown = await response.json();
+      const parsed = parseUptimeResponse(raw);
+      if (!parsed) {
+        throw new Error("Malformed status payload");
+      }
+
+      setData(parsed);
       setError(null);
       setLastChecked(new Date().toUTCString());
     } catch (err: unknown) {
-      // If API is unreachable, show fallback static data
-      if (!health) {
-        setHealth({
-          overall: "operational",
-          version: "0.1.0",
-          uptime: 0,
-          timestamp: new Date().toISOString(),
-          services: [
-            { name: "Web App", status: "operational", latencyMs: 0, description: "mail.alecrae.com — AlecRae inbox UI" },
-            { name: "Database (Neon Postgres)", status: "operational", latencyMs: 0, description: "Primary database — Neon Serverless Postgres" },
-            { name: "Cache (Upstash Redis)", status: "operational", latencyMs: 0, description: "Cache and queue — Upstash Redis" },
-            { name: "Search (Meilisearch)", status: "operational", latencyMs: 0, description: "Full-text search — Meilisearch" },
-            { name: "AI Services (Claude)", status: "operational", latencyMs: 0, description: "AI inference — Claude API (Anthropic)" },
-            { name: "Email Delivery (MTA)", status: "operational", latencyMs: 0, description: "Inbound MX + outbound SMTP — Fly.io" },
-          ],
-        });
-      }
+      // If the API is unreachable, keep prior data if we have it; otherwise
+      // show an honest "unknown" fallback — never fabricated uptime.
+      setData((prev) => prev ?? buildFallback());
       setError(err instanceof Error ? err.message : String(err));
       setLastChecked(new Date().toUTCString());
     } finally {
       setLoading(false);
     }
-  }, [health]);
+  }, []);
 
   useEffect(() => {
-    void fetchHealth();
-    const interval = setInterval(() => void fetchHealth(), REFRESH_INTERVAL_MS);
+    void fetchUptime();
+    const interval = setInterval(() => void fetchUptime(), REFRESH_INTERVAL_MS);
     return (): void => {
       clearInterval(interval);
     };
-  }, [fetchHealth]);
+  }, [fetchUptime]);
 
-  const overall = health?.overall ?? "operational";
-  const services = health?.services ?? [];
+  const overall = data?.overall ?? "unknown";
+  const components = data?.components ?? [];
 
   return (
     <div className="relative z-10 max-w-5xl mx-auto px-6 py-16">
@@ -180,20 +277,20 @@ export function StatusDashboard(): React.JSX.Element {
             <div className="text-xl font-semibold">
               {loading ? "Checking systems..." : OVERALL_LABEL[overall]}
             </div>
-            <div className="text-sm text-blue-100/60">
-              Last checked {lastChecked}
-            </div>
+            <div className="text-sm text-blue-100/60">Last checked {lastChecked}</div>
             {error ? (
               <div className="text-xs text-yellow-400/80 mt-1">
-                Live check unavailable — showing cached data
+                Live check unavailable — {data?.historyAvailable ? "showing last known data" : "status unknown"}
               </div>
             ) : null}
           </div>
         </div>
-        {health?.uptime ? (
+        {data && data.apiUptimeSeconds > 0 ? (
           <div className="text-right hidden sm:block">
-            <div className="text-sm text-blue-100/50">API Uptime</div>
-            <div className="text-lg font-mono text-blue-100/80">{formatUptime(health.uptime)}</div>
+            <div className="text-sm text-blue-100/50">API instance uptime</div>
+            <div className="text-lg font-mono text-blue-100/80">
+              {formatApiUptime(data.apiUptimeSeconds)}
+            </div>
           </div>
         ) : null}
       </section>
@@ -202,8 +299,8 @@ export function StatusDashboard(): React.JSX.Element {
       <section className="mb-16">
         <h2 className="text-lg font-semibold mb-4 text-blue-100">Services</h2>
         <div className="rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm divide-y divide-white/10 overflow-hidden">
-          {services.map((service) => (
-            <div key={service.name} className="p-5 flex items-center justify-between gap-4">
+          {components.map((service) => (
+            <div key={service.key} className="p-5 flex items-center justify-between gap-4">
               <div className="flex items-center gap-4 min-w-0">
                 <span
                   className={`inline-block h-3 w-3 rounded-full shrink-0 ${STATUS_DOT[service.status]}`}
@@ -227,45 +324,68 @@ export function StatusDashboard(): React.JSX.Element {
         </div>
       </section>
 
-      {/* 90-Day Uptime */}
+      {/* 90-Day Uptime (real, from recorded probe samples) */}
       <section className="mb-16">
-        <h2 className="text-lg font-semibold mb-4 text-blue-100">90-day uptime</h2>
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="text-lg font-semibold text-blue-100">90-day uptime</h2>
+          {data && !data.historyAvailable ? (
+            <span className="text-xs text-blue-100/40">Awaiting probe history</span>
+          ) : null}
+        </div>
         <div className="rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm p-6 space-y-4">
-          {services.map((service) => {
-            const uptime = UPTIME_MAP[service.name] ?? 99.9;
+          {components.map((service) => {
+            const window = service.uptime.quarter;
+            const pct = window.percentage;
+            const known = pct !== null;
             return (
-              <div key={service.name}>
+              <div key={service.key}>
                 <div className="flex items-center justify-between text-sm mb-1">
                   <span className="text-blue-100/80">{service.name}</span>
-                  <span className="text-blue-100/50 tabular-nums">{uptime.toFixed(3)}%</span>
+                  <span className="text-blue-100/50 tabular-nums">
+                    {formatUptimePct(window)}
+                  </span>
                 </div>
-                <div className="h-2 rounded-full bg-white/5 overflow-hidden" role="progressbar" aria-valuenow={uptime} aria-valuemin={0} aria-valuemax={100}>
-                  <div
-                    className={`h-full rounded-full ${
-                      uptime >= 99.9
-                        ? "bg-gradient-to-r from-emerald-400 to-cyan-400"
-                        : uptime >= 99.0
-                          ? "bg-gradient-to-r from-yellow-400 to-amber-400"
-                          : "bg-gradient-to-r from-red-400 to-orange-400"
-                    }`}
-                    style={{ width: `${uptime}%` }}
-                  />
+                <div
+                  className="h-2 rounded-full bg-white/5 overflow-hidden"
+                  role="progressbar"
+                  aria-valuenow={known ? pct : undefined}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={`${service.name} 90-day uptime: ${formatUptimePct(window)}`}
+                >
+                  {known ? (
+                    <div
+                      className={`h-full rounded-full ${
+                        pct >= 99.9
+                          ? "bg-gradient-to-r from-emerald-400 to-cyan-400"
+                          : pct >= 99.0
+                            ? "bg-gradient-to-r from-yellow-400 to-amber-400"
+                            : "bg-gradient-to-r from-red-400 to-orange-400"
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-[repeating-linear-gradient(45deg,rgba(148,163,184,0.25),rgba(148,163,184,0.25)_6px,transparent_6px,transparent_12px)]" />
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
+        {data?.historyNote ? (
+          <p className="text-xs text-blue-100/40 mt-3">{data.historyNote}</p>
+        ) : null}
       </section>
 
       {/* Current Incidents */}
       <section className="mb-16">
         <h2 className="text-lg font-semibold mb-4 text-blue-100">Current incidents</h2>
-        {services.some((s) => s.status !== "operational") ? (
+        {components.some((s) => s.status === "degraded" || s.status === "outage") ? (
           <ul className="space-y-3">
-            {services
-              .filter((s) => s.status !== "operational")
+            {components
+              .filter((s) => s.status === "degraded" || s.status === "outage")
               .map((s) => (
-                <li key={s.name} className="rounded-2xl bg-white/5 border border-white/10 p-5">
+                <li key={s.key} className="rounded-2xl bg-white/5 border border-white/10 p-5">
                   <div className="flex items-center gap-2 mb-1">
                     <span className={`inline-block h-2.5 w-2.5 rounded-full ${STATUS_DOT[s.status]}`} />
                     <span className="font-medium">{s.name}</span>
@@ -278,7 +398,9 @@ export function StatusDashboard(): React.JSX.Element {
           </ul>
         ) : (
           <div className="rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm p-6 text-blue-100/50 text-sm">
-            No incidents reported. All services are running normally.
+            {overall === "unknown"
+              ? "Live status is currently unavailable."
+              : "No incidents reported. All services are running normally."}
           </div>
         )}
       </section>

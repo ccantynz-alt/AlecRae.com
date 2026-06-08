@@ -1,8 +1,4 @@
-"use client";
-
-import { motion } from "motion/react";
-
-const fadeUp = { initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-100px" }, transition: { duration: 0.6 } };
+import { Reveal } from "./Reveal";
 
 const products = [
   {
@@ -85,7 +81,7 @@ export function ProductSuite() {
       </div>
 
       <div className="max-w-6xl mx-auto relative z-10">
-        <motion.div {...fadeUp} className="text-center mb-16">
+        <Reveal className="text-center mb-16">
           <p className="text-sm font-medium uppercase tracking-widest text-cyan-400 mb-4">The Platform</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-4">
             Email is the hub.{" "}
@@ -96,16 +92,14 @@ export function ProductSuite() {
           <p className="text-lg text-blue-100/50 max-w-2xl mx-auto">
             AlecRae is not just a better inbox. It&apos;s a complete workspace built around email — with every tool your team needs, all talking to each other via AI.
           </p>
-        </motion.div>
+        </Reveal>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {products.map((p, i) => (
-            <motion.div
+            <Reveal
               key={p.name}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.5, delay: i * 0.08 }}
+              delay={i * 0.08}
+              rootMargin="-50px"
               className="group relative p-6 rounded-2xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.05] hover:border-white/20 transition-all overflow-hidden"
             >
               <div className={`absolute top-0 left-0 right-0 h-px bg-gradient-to-r ${p.gradient} opacity-40 group-hover:opacity-100 transition-opacity`} />
@@ -115,15 +109,15 @@ export function ProductSuite() {
               <h3 className="text-base font-semibold text-white mb-1">{p.name}</h3>
               <p className="text-sm font-medium text-blue-300/60 mb-3">{p.tagline}</p>
               <p className="text-sm text-blue-100/45 leading-relaxed">{p.desc}</p>
-            </motion.div>
+            </Reveal>
           ))}
         </div>
 
-        <motion.div {...fadeUp} className="mt-12 text-center">
+        <Reveal className="mt-12 text-center">
           <p className="text-sm text-blue-100/30">
             All platform tools are included in every paid plan. No separate app subscriptions.
           </p>
-        </motion.div>
+        </Reveal>
       </div>
     </section>
   );

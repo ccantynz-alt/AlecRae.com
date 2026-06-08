@@ -71,6 +71,7 @@ import { composeAssist } from "./routes/compose-assist.js";
 import { sso } from "./routes/sso.js";
 import { spellcheckRouter } from "./routes/spellcheck.js";
 import { status } from "./routes/status.js";
+import { uptime } from "./routes/uptime.js";
 import { gamification } from "./routes/gamification.js";
 import { changelog } from "./routes/changelog.js";
 import { heatmapAnalytics } from "./routes/heatmap.js";
@@ -123,6 +124,7 @@ import { contextIntelligenceRouter } from "./routes/context-intelligence.js";
 import { productivityAnalyticsRouter } from "./routes/productivity-analytics.js";
 import { knowledgeGraphRouter } from "./routes/knowledge-graph.js";
 import { organizationsRouter } from "./routes/organizations.js";
+import { dpaRouter } from "./routes/dpa.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
 import { closeSendQueue } from "./lib/queue.js";
@@ -212,6 +214,10 @@ app.route("/v1/health", health);
 
 // Public status health endpoint (no auth — consumed by status.alecrae.com)
 app.route("/v1/status", status);
+
+// Public uptime endpoint (no auth, light read rate limit — consumed by status.alecrae.com)
+app.use("/v1/uptime", readRateLimit);
+app.route("/v1/uptime", uptime);
 
 // Auth endpoints: strict IP rate limiting (10 req/min), no API key auth
 app.use("/v1/auth/*", authRateLimit);
@@ -726,6 +732,12 @@ app.use("/v1/organizations/*", authMiddleware, writeRateLimit);
 app.use("/v1/organizations", authMiddleware, writeRateLimit);
 // Organizations + Team Management + Audit Log
 app.route("/v1/organizations", organizationsRouter);
+
+// DPA self-serve signing: read-level for queries, write-level for signing
+app.use("/v1/dpa/current", authMiddleware, readRateLimit);
+app.use("/v1/dpa/sign", authMiddleware, writeRateLimit);
+app.use("/v1/dpa", authMiddleware, readRateLimit);
+app.route("/v1/dpa", dpaRouter);
 
 // Admin dashboard: requires admin API key auth (applied via authMiddleware above)
 app.use("/v1/admin/*", authMiddleware, readRateLimit);

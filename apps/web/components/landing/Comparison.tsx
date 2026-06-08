@@ -1,8 +1,4 @@
-"use client";
-
-import { motion } from "motion/react";
-
-const fadeUp = { initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-100px" }, transition: { duration: 0.6 } };
+import { Reveal } from "./Reveal";
 
 const stack = [
   { tool: "Email + AI assistant", theirPrice: "$12–30/mo", included: true },
@@ -18,7 +14,7 @@ export function Comparison() {
   return (
     <section className="py-32 px-6">
       <div className="max-w-4xl mx-auto">
-        <motion.div {...fadeUp} className="text-center mb-16">
+        <Reveal className="text-center mb-16">
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400 mb-4">The math</p>
           <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-4">
             Replace your entire stack.
@@ -26,9 +22,9 @@ export function Comparison() {
           <p className="text-lg text-blue-100/50 max-w-xl mx-auto">
             Stop paying seven subscriptions for things one app should do.
           </p>
-        </motion.div>
+        </Reveal>
 
-        <motion.div {...fadeUp} className="rounded-2xl border border-white/10 overflow-hidden">
+        <Reveal className="rounded-2xl border border-white/10 overflow-hidden">
           <div className="grid grid-cols-3 gap-0 px-6 py-4 bg-white/[0.05] border-b border-white/10 text-sm font-medium">
             <div className="text-blue-100/50">Tool</div>
             <div className="text-center text-blue-100/50">Separate cost</div>
@@ -46,7 +42,7 @@ export function Comparison() {
             <div className="text-center text-red-400 font-bold text-lg">$100+/mo</div>
             <div className="text-center text-emerald-400 font-bold text-lg">$9/mo</div>
           </div>
-        </motion.div>
+        </Reveal>
       </div>
     </section>
   );
