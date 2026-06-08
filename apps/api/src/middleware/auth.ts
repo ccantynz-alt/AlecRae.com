@@ -219,34 +219,10 @@ async function validateBearerToken(
       ...(userId !== undefined ? { userId } : {}),
     };
   } catch {
-    // Fallback: try raw decode for legacy tokens (unsigned / HS256 dev tokens)
-    try {
-      const parts = token.split(".");
-      if (parts.length !== 3) return null;
-      const segment = parts[1];
-      if (!segment) return null;
-
-      const payload = JSON.parse(atob(segment));
-      const now = Math.floor(Date.now() / 1000);
-
-      if (payload.exp && payload.exp < now) return null;
-      if (!payload.sub) return null;
-
-      const userId2 = payload.userId as string | undefined;
-      return {
-        accountId: payload.sub as string,
-        keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
-        tier: normaliseTier(payload.tier as string),
-        scopes: (payload.scope as string)?.split(" ") ?? [
-          "messages:send",
-          "messages:read",
-          "account:manage",
-        ],
-        ...(userId2 !== undefined ? { userId: userId2 } : {}),
-      };
-    } catch {
-      return null;
-    }
+    // SECURITY: a failed signature verification means the token is invalid.
+    // Never fall back to an unsigned base64 decode — that would accept forged
+    // tokens for any account. Reject outright.
+    return null;
   }
 }
 

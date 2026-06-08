@@ -175,6 +175,13 @@ tracking.post("/:emailId/unsubscribe", async (c) => {
 tracking.get("/:emailId/unsubscribe", async (c) => {
   const emailId = c.req.param("emailId");
 
+  // SECURITY: emailId is reflected into the HTML form action below. Reject
+  // anything that isn't a plain opaque identifier to prevent reflected XSS /
+  // HTML attribute injection.
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(emailId)) {
+    return c.text("Invalid request", 400);
+  }
+
   // Simple confirmation page
   return c.html(`<!DOCTYPE html>
 <html><head><title>Unsubscribed</title></head>
