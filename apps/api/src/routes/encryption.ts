@@ -10,12 +10,26 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
+import { getDatabase, encryptionKeys } from "@alecrae/db";
 
-// ─── Key Storage (production: encrypted in DB, decrypted client-side only) ──
+// ─── Key Storage ────────────────────────────────────────────────────────────
+//
+// Persisted to Postgres (encryption_keys table) so keys survive restarts and
+// are shared across instances. ZERO-KNOWLEDGE: only the public key and the
+// CLIENT-ENCRYPTED (passphrase-wrapped) private key are stored. The passphrase
+// never reaches the server, so the server can never decrypt the private key.
 
-const keyStore = new Map<string, { publicKey: string; encryptedPrivateKey: string; createdAt: string }>();
+const ENCRYPTION_ALGORITHM = "RSA-OAEP-4096 + AES-256-GCM";
+
+function generateId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -83,11 +97,29 @@ encryption.post(
 
     const encryptedPrivateKey = Buffer.from(iv).toString("base64") + "." + Buffer.from(encrypted).toString("base64");
 
-    keyStore.set(auth.accountId, {
-      publicKey: publicKeyB64,
-      encryptedPrivateKey,
-      createdAt: new Date().toISOString(),
-    });
+    // Upsert: exactly one keypair per account (regeneration overwrites).
+    const db = getDatabase();
+    const now = new Date();
+    await db
+      .insert(encryptionKeys)
+      .values({
+        id: generateId(),
+        accountId: auth.accountId,
+        publicKey: publicKeyB64,
+        encryptedPrivateKey,
+        algorithm: ENCRYPTION_ALGORITHM,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: encryptionKeys.accountId,
+        set: {
+          publicKey: publicKeyB64,
+          encryptedPrivateKey,
+          algorithm: ENCRYPTION_ALGORITHM,
+          updatedAt: now,
+        },
+      });
 
     return c.json({
       data: {
@@ -103,9 +135,17 @@ encryption.post(
 encryption.get(
   "/keys/public",
   requireScope("encryption:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const keys = keyStore.get(auth.accountId);
+    const db = getDatabase();
+    const [keys] = await db
+      .select({
+        publicKey: encryptionKeys.publicKey,
+        createdAt: encryptionKeys.createdAt,
+      })
+      .from(encryptionKeys)
+      .where(eq(encryptionKeys.accountId, auth.accountId))
+      .limit(1);
 
     if (!keys) {
       return c.json({ error: { message: "No encryption keys found. Generate keys first.", code: "no_keys" } }, 404);
@@ -114,7 +154,7 @@ encryption.get(
     return c.json({
       data: {
         publicKey: keys.publicKey,
-        createdAt: keys.createdAt,
+        createdAt: keys.createdAt.toISOString(),
       },
     });
   },
@@ -124,16 +164,24 @@ encryption.get(
 encryption.get(
   "/status",
   requireScope("encryption:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const keys = keyStore.get(auth.accountId);
+    const db = getDatabase();
+    const [keys] = await db
+      .select({
+        createdAt: encryptionKeys.createdAt,
+        algorithm: encryptionKeys.algorithm,
+      })
+      .from(encryptionKeys)
+      .where(eq(encryptionKeys.accountId, auth.accountId))
+      .limit(1);
 
     return c.json({
       data: {
         enabled: !!keys,
         hasKeys: !!keys,
-        keyCreatedAt: keys?.createdAt ?? null,
-        algorithm: "RSA-OAEP-4096 + AES-256-GCM",
+        keyCreatedAt: keys?.createdAt.toISOString() ?? null,
+        algorithm: keys?.algorithm ?? ENCRYPTION_ALGORITHM,
         message: keys
           ? "E2E encryption is active. Emails to other AlecRae users with keys will be encrypted automatically."
           : "E2E encryption is not set up. Generate keys to enable.",

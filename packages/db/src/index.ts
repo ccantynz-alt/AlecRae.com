@@ -718,6 +718,12 @@ export {
   dunningRecordsRelations,
 } from "./schema/dunning.js";
 
+// Schema - Encryption Keys (zero-knowledge E2E keypairs)
+export {
+  encryptionKeys,
+  encryptionKeysRelations,
+} from "./schema/encryption-keys.js";
+
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
 // ---------------------------------------------------------------------------
@@ -1101,3 +1107,9 @@ import type { dunningRecords } from "./schema/dunning.js";
 
 export type DunningRecord = InferSelectModel<typeof dunningRecords>;
 export type NewDunningRecord = InferInsertModel<typeof dunningRecords>;
+
+// Encryption Key types
+import type { encryptionKeys } from "./schema/encryption-keys.js";
+
+export type EncryptionKey = InferSelectModel<typeof encryptionKeys>;
+export type NewEncryptionKey = InferInsertModel<typeof encryptionKeys>;
