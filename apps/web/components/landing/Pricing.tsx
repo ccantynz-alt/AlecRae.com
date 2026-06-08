@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { Reveal } from "./Reveal";
+import type { Route } from "next";
+
+const fadeUp = { initial: { opacity: 0, y: 30 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-100px" }, transition: { duration: 0.6 } };
 
 const plans = [
   {
@@ -10,6 +12,7 @@ const plans = [
     features: ["1 email account", "5 AI composes per day", "30-day search history", "Basic smart inbox", "Keyboard shortcuts"],
     cta: "Start Free",
     highlighted: false,
+    href: "/register",
   },
   {
     name: "Personal",
@@ -19,6 +22,7 @@ const plans = [
     features: ["3 email accounts", "Unlimited AI compose", "Unlimited search", "E2E encryption", "Snooze & schedule send", "Voice dictation", "Grammar agent", "Email recall"],
     cta: "Get Personal",
     highlighted: true,
+    href: "/checkout?plan=starter",
   },
   {
     name: "Pro",
@@ -28,6 +32,7 @@ const plans = [
     features: ["Unlimited accounts", "Priority AI (faster model)", "Email analytics", "API access", "Custom automations", "Advanced search operators", "Everything in Personal"],
     cta: "Go Pro",
     highlighted: false,
+    href: "/checkout?plan=professional",
   },
   {
     name: "Team",
@@ -37,6 +42,7 @@ const plans = [
     features: ["Shared inboxes", "Admin console", "Audit logs", "SSO / SAML", "Priority support", "Collaboration tools", "Everything in Pro"],
     cta: "Start Team Trial",
     highlighted: false,
+    href: "/checkout?plan=enterprise",
   },
 ];
 
@@ -90,7 +96,7 @@ export function Pricing() {
                 ))}
               </ul>
               <Link
-                href="/register"
+                href={plan.href as Route}
                 className={`text-center py-2.5 rounded-full text-sm font-medium transition-all ${
                   plan.highlighted
                     ? "bg-white text-slate-950 hover:bg-blue-100"

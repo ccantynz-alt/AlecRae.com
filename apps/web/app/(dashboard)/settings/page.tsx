@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import type { Route } from "next";
 import {
   Box,
   Text,
@@ -68,6 +70,9 @@ export default function SettingsPage(): React.ReactNode {
         </motion.div>
         <motion.div variants={itemVariants}>
           <AccountOverview account={account} loading={loading} />
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <BillingLink account={account} loading={loading} />
         </motion.div>
         <motion.div variants={itemVariants}>
           <SecuritySection />
@@ -227,6 +232,39 @@ function AccountOverview({ account, loading }: { account: AccountData | null; lo
 }
 
 AccountOverview.displayName = "AccountOverview";
+
+function BillingLink({ account, loading }: { account: AccountData | null; loading: boolean }) {
+  const planLabel = loading
+    ? "..."
+    : account?.planTier
+      ? account.planTier.charAt(0).toUpperCase() + account.planTier.slice(1)
+      : "Free";
+
+  return (
+    <Card>
+      <CardHeader>
+        <Text variant="heading-sm">Billing &amp; Subscription</Text>
+      </CardHeader>
+      <CardContent>
+        <Box className="flex items-center justify-between flex-wrap gap-3">
+          <Box>
+            <Text variant="body-sm" muted>Current plan</Text>
+            <Text variant="body-md" className="font-medium capitalize">
+              {planLabel}
+            </Text>
+          </Box>
+          <Link href={"/billing" as Route}>
+            <Button variant="secondary" size="sm">
+              Manage Billing
+            </Button>
+          </Link>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
+BillingLink.displayName = "BillingLink";
 
 function SecuritySection() {
   const [passkeysData, setPasskeysData] = useState<PasskeyInfo[]>([]);
