@@ -20,8 +20,28 @@ import {
   verifyAccessToken,
   TokenError,
 } from "../lib/jwt.js";
+import {
+  getGoogleSignInUrl,
+  exchangeGoogleSignInCode,
+  isGoogleSignInConfigured,
+} from "../lib/google-auth.js";
+import { signAuthState, verifyAuthState } from "../lib/oauth-state.js";
 
 const auth = new Hono();
+
+const WEB_URL = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
+
+/** Default permission set for a fresh account owner (mirrors /register). */
+const OWNER_PERMISSIONS = {
+  sendEmail: true,
+  readEmail: true,
+  manageDomains: true,
+  manageApiKeys: true,
+  manageWebhooks: true,
+  viewAnalytics: true,
+  manageAccount: true,
+  manageTeamMembers: true,
+} as const;
 
 function generateId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -235,6 +255,113 @@ auth.post("/register", validateBody(RegisterSchema), async (c) => {
 });
 
 // ─── Schemas for new endpoints ────────────��───────────────────────────────
+
+// ─── Sign in with Google (identity only — NOT Gmail mailbox connection) ──────
+
+// GET /v1/auth/google — start the Google sign-in flow
+auth.get("/google", async (c) => {
+  if (!isGoogleSignInConfigured()) {
+    return c.redirect(`${WEB_URL}/login?error=google_unavailable`);
+  }
+  const state = await signAuthState({ flow: "google-signin" });
+  return c.redirect(getGoogleSignInUrl(state));
+});
+
+// GET /v1/auth/callback/google — Google sign-in callback (find-or-create + session)
+auth.get("/callback/google", async (c) => {
+  const code = c.req.query("code");
+  const stateParam = c.req.query("state");
+
+  if (!code || !stateParam) {
+    return c.redirect(`${WEB_URL}/login?error=google_signin_failed`);
+  }
+
+  const stateResult = await verifyAuthState(stateParam);
+  if (!stateResult.ok) {
+    return c.redirect(`${WEB_URL}/login?error=google_state_invalid`);
+  }
+
+  try {
+    const profile = await exchangeGoogleSignInCode(code);
+    const db = getDatabase();
+
+    // Find existing user by email — sign them in. Otherwise provision a new
+    // OAuth-only account (passwordHash stays null; they sign in via Google).
+    const [existing] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, profile.email))
+      .limit(1);
+
+    let userId: string;
+    let accountId: string;
+    let role: string;
+    let tier = "free";
+
+    if (existing) {
+      userId = existing.id;
+      accountId = existing.accountId;
+      role = existing.role;
+
+      const updates: Record<string, unknown> = { lastLoginAt: new Date() };
+      if (!existing.avatarUrl && profile.picture) updates.avatarUrl = profile.picture;
+      if (!existing.emailVerified && profile.emailVerified) updates.emailVerified = true;
+      await db.update(users).set(updates).where(eq(users.id, existing.id));
+
+      const [account] = await db
+        .select({ planTier: accounts.planTier })
+        .from(accounts)
+        .where(eq(accounts.id, existing.accountId))
+        .limit(1);
+      if (account) tier = account.planTier ?? "free";
+    } else {
+      accountId = generateId();
+      userId = generateId();
+      role = "owner";
+
+      await db.insert(accounts).values({
+        id: accountId,
+        name: `${profile.name}'s Account`,
+        planTier: "free",
+        billingEmail: profile.email,
+        emailsSentThisPeriod: 0,
+      });
+
+      await db.insert(users).values({
+        id: userId,
+        accountId,
+        email: profile.email,
+        name: profile.name,
+        passwordHash: null,
+        role: "owner",
+        emailVerified: profile.emailVerified,
+        avatarUrl: profile.picture,
+        permissions: { ...OWNER_PERMISSIONS },
+        lastLoginAt: new Date(),
+      });
+    }
+
+    const tokenPair = await issueTokenPair({
+      sub: accountId,
+      userId,
+      email: profile.email,
+      role,
+      tier,
+    });
+
+    // Hand the access token to the browser via the URL fragment (never sent to
+    // a server, kept out of referrers/logs). The web callback page reads it,
+    // stores the session, and routes to the inbox — matching the other flows.
+    const fragment = new URLSearchParams({
+      token: tokenPair.accessToken,
+      expiresIn: String(tokenPair.expiresIn),
+    });
+    return c.redirect(`${WEB_URL}/google/callback#${fragment.toString()}`);
+  } catch (err) {
+    console.error("[auth] Google sign-in failed:", err);
+    return c.redirect(`${WEB_URL}/login?error=google_signin_failed`);
+  }
+});
 
 const RefreshSchema = z.object({
   refreshToken: z.string().min(1),

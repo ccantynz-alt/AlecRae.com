@@ -246,6 +246,23 @@ export const authApi = {
     return data.data;
   },
 
+  /** URL that starts the "Sign in with Google" (identity) flow on the API. */
+  googleSignInUrl(): string {
+    return `${API_BASE}/v1/auth/google`;
+  },
+
+  /**
+   * Persist a session token handed back by the Google sign-in callback.
+   * Mirrors the storage used by login/register/passkey so the rest of the app
+   * (localStorage `alecrae_api_key` + cookie `alecrae_session`) just works.
+   */
+  completeGoogleSignIn(token: string): void {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("alecrae_api_key", token);
+      document.cookie = `alecrae_session=${token}; path=/; max-age=${7 * 86400}; SameSite=Lax`;
+    }
+  },
+
   logout() {
     if (typeof window !== "undefined") {
       localStorage.removeItem("alecrae_api_key");
