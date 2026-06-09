@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ function Spinner(): React.ReactNode {
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 
-export default function CheckoutPage(): React.ReactNode {
+function CheckoutContent(): React.ReactNode {
   const searchParams = useSearchParams();
   const planParam = searchParams.get("plan") ?? "";
 
@@ -210,5 +210,23 @@ export default function CheckoutPage(): React.ReactNode {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CheckoutPage(): React.ReactNode {
+  // useSearchParams requires a Suspense boundary for static export (Next 15).
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center px-6">
+          <div className="max-w-sm w-full text-center">
+            <p className="text-blue-400 font-bold text-lg tracking-tight">AlecRae</p>
+            <p className="text-slate-400 text-sm mt-4">Preparing checkout...</p>
+          </div>
+        </div>
+      }
+    >
+      <CheckoutContent />
+    </Suspense>
   );
 }
