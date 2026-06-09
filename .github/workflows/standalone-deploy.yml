@@ -44,7 +44,10 @@ jobs:
     name: Deploy via Vercel
     needs: quality
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && needs.quality.result == 'success'
+    # Gated: only runs when ENABLE_VERCEL_DEPLOY repo variable is "true".
+    # Off by default — Vercel is interim and deployment is moving to Vapron, so
+    # this stays skipped (green) until/unless explicitly re-enabled.
+    if: github.ref == 'refs/heads/main' && needs.quality.result == 'success' && vars.ENABLE_VERCEL_DEPLOY == 'true'
     environment: production
     steps:
       - uses: actions/checkout@v4
