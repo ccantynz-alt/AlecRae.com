@@ -25,7 +25,8 @@ describe("sendTransactionalEmail", () => {
   it("sends via Vapron when configured", async () => {
     process.env["VAPRON_API_KEY"] = "vpk_test";
     const fetchMock = vi.fn(
-      async () => new Response(JSON.stringify({ id: "msg_42" }), { status: 200 }),
+      async () =>
+        new Response(JSON.stringify({ result: { data: { json: { id: "msg_42" } } } }), { status: 200 }),
     ) as unknown as typeof fetch;
     globalThis.fetch = fetchMock;
 

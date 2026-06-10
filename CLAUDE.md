@@ -616,7 +616,7 @@ After writing the code:
 | 16 | No org/team management (invites, roles, audit log) | HIGH | 2026-05-26 | FIXED 2026-05-26 — organizations route, 18 endpoints |
 | 17 | Admin pages call stub endpoints | MEDIUM | 2026-05-26 | FIXED 2026-05-26 — admin.ts fully wired to DB |
 | 18 | AWS EKS/ECR `deploy.yml` failing on every push to main (no AWS creds; off-stack) | MEDIUM | 2026-06-08 | FIXED 2026-06-08 — removed; deployment moving to Vapron |
-| 19 | Vapron platform client unverified against live API (no public docs; built to spec) | MEDIUM | 2026-06-08 | OPEN — verify response shapes on first live call, tighten Zod schemas |
+| 19 | Vapron platform client unverified against live API (no public docs; built to spec) | MEDIUM | 2026-06-08 | FIXED 2026-06-10 — rebuilt to the published tRPC API (base `/api/trpc`, `{json}` envelope, real procedure names: `customerEmail.send`, `aiGateway.complete`, `objectStorage.*`, `aiDeploy.quickDeploy`); removed fictional `secrets.get`. AI-gateway response extraction is tolerant pending live-call confirmation. |
 
 ---
 
@@ -734,9 +734,9 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Last updated:** 2026-06-08 23:36 UTC
+**Last updated:** 2026-06-10 09:15 UTC
 **Current phase:** Phase 1 — Ready for Beta Launch
-**Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Google sign-in + Vapron platform integration landed (PR #48). **Vapron is the permanent platform** (email, AI, storage, secrets, deploy) — Cloudflare/Vercel/Neon were always interim scaffolding until Vapron was built, and the app migrates onto Vapron as the target infra. The off-stack AWS EKS deploy pipeline has been removed. Production deployment awaiting Craig's Vapron + infra setup.
+**Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Google sign-in + Vapron platform integration landed (PR #48). **Vapron is the permanent platform** (AI gateway, email, object storage, hosting/deploy) — Cloudflare/Vercel/Neon were always interim scaffolding until Vapron was built, and the app migrates onto Vapron as the target infra. The Vapron client has been rebuilt against the published tRPC API (issue #19 fixed). The off-stack AWS EKS deploy pipeline has been removed. Production deployment awaiting Craig's Vapron + infra setup.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.

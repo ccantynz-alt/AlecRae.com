@@ -1,23 +1,28 @@
 /**
- * Vapron Platform Client — typed, dependency-free REST wrapper.
+ * Vapron Platform Client — typed, dependency-free tRPC wrapper.
  *
  * Vapron (https://api.vapron.ai) is the managed platform AlecRae consumes for
- * transactional email, AI inference, object storage and secrets. We deliberately
- * talk to its REST API over `fetch` rather than importing a vendor SDK so the
- * client stays edge-compatible (Cloudflare Workers) and zero-dependency. When
- * `@vapron/sdk` is published we can swap the internals behind this same surface.
+ * transactional email, AI inference, object storage, deploys and more. We talk
+ * to its tRPC API over `fetch` rather than importing a vendor SDK so the client
+ * stays edge-compatible (Cloudflare Workers) and zero-dependency.
  *
- * Auth:   Authorization: Bearer vpk_<key>   (VAPRON_API_KEY)
- * Errors: the API returns { error, code } on failure — surfaced as VapronError.
+ * Transport (tRPC + superjson transformer):
+ *   Base URL:  https://api.vapron.ai/api/trpc
+ *   Auth:      Authorization: Bearer vpk_<key>     (VAPRON_API_KEY)
+ *   Mutation:  POST /<procedure>   body { "json": { ...params } }
+ *   Query:     GET  /<procedure>?input=<urlenc {"json":{...}}>
+ *   Success:   { "result": { "data": { "json": <data> } } }
+ *   Error:     { "error":  { "json": { "message", "data": { code, httpStatus } } } }
  *
  * NOTE: response schemas below are tolerant (`.passthrough()`, optional fields)
- * because Vapron's full OpenAPI isn't published yet. They assert the fields we
- * actually read without rejecting extra/unknown keys; tighten when docs land.
+ * because Vapron's full OpenAPI isn't published. They assert the fields we
+ * actually read without rejecting extra/unknown keys; tighten as shapes are
+ * confirmed against the live API (see CLAUDE.md known issue #19).
  */
 
 import { z } from "zod";
 
-const DEFAULT_BASE_URL = "https://api.vapron.ai";
+const DEFAULT_BASE_URL = "https://api.vapron.ai/api/trpc";
 
 function getBaseUrl(): string {
   return (process.env["VAPRON_BASE_URL"] ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
@@ -46,18 +51,37 @@ export class VapronError extends Error {
   }
 }
 
-const ErrorBodySchema = z.object({
-  error: z.string(),
-  code: z.string().optional(),
+/** tRPC/superjson error envelope: { error: { json: { message, data: {...} } } }. */
+const TrpcErrorSchema = z.object({
+  error: z.object({
+    json: z
+      .object({
+        message: z.string().optional(),
+        data: z
+          .object({
+            code: z.string().optional(),
+            httpStatus: z.number().optional(),
+          })
+          .partial()
+          .passthrough()
+          .optional(),
+      })
+      .passthrough(),
+  }),
 });
 
 // ─── Core request helper ────────────────────────────────────────────────────
 
+/**
+ * Call a Vapron tRPC procedure and return the unwrapped, schema-validated data.
+ * `input` is wrapped in the `{ json }` superjson envelope; the response is
+ * unwrapped from `result.data.json` before validation.
+ */
 async function request<T>(
   method: "GET" | "POST",
-  path: string,
+  procedure: string,
   schema: z.ZodType<T>,
-  body?: unknown,
+  input?: unknown,
 ): Promise<T> {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -68,15 +92,24 @@ async function request<T>(
     );
   }
 
+  let url = `${getBaseUrl()}/${procedure}`;
+  const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
+  let body: string | undefined;
+
+  if (method === "POST") {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify({ json: input ?? null });
+  } else if (input !== undefined) {
+    // tRPC GET query input: ?input=<urlencoded {"json": ...}>
+    url += `?input=${encodeURIComponent(JSON.stringify({ json: input }))}`;
+  }
+
   let res: Response;
   try {
-    res = await fetch(`${getBaseUrl()}${path}`, {
+    res = await fetch(url, {
       method,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      },
-      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      headers,
+      ...(body !== undefined ? { body } : {}),
     });
   } catch (err) {
     // Network-level failure — never leak the key or request body.
@@ -87,7 +120,6 @@ async function request<T>(
     );
   }
 
-  // 204 / empty bodies are valid for some endpoints.
   const text = await res.text();
   let json: unknown = undefined;
   if (text.length > 0) {
@@ -102,21 +134,26 @@ async function request<T>(
     }
   }
 
+  // tRPC carries application errors in an { error: { json: ... } } envelope even
+  // on some non-2xx responses; check it first so we surface the real message/code.
+  const errEnvelope = TrpcErrorSchema.safeParse(json);
+  if (errEnvelope.success) {
+    const e = errEnvelope.data.error.json;
+    throw new VapronError(
+      e.message ?? `Vapron request failed with status ${res.status}`,
+      e.data?.code ?? "vapron_error",
+      e.data?.httpStatus ?? res.status,
+    );
+  }
+
   if (!res.ok) {
-    const parsed = ErrorBodySchema.safeParse(json);
-    if (parsed.success) {
-      throw new VapronError(parsed.data.error, parsed.data.code ?? "vapron_error", res.status);
-    }
     throw new VapronError(`Vapron request failed with status ${res.status}`, "vapron_error", res.status);
   }
 
-  // Some success responses still carry an { error, code } envelope.
-  const maybeError = ErrorBodySchema.safeParse(json);
-  if (maybeError.success) {
-    throw new VapronError(maybeError.data.error, maybeError.data.code ?? "vapron_error", res.status);
-  }
+  // Unwrap result.data.json (superjson). Tolerate plainer shapes defensively.
+  const data = unwrapResult(json);
 
-  const result = schema.safeParse(json);
+  const result = schema.safeParse(data);
   if (!result.success) {
     throw new VapronError(
       `Unexpected Vapron response shape: ${result.error.message}`,
@@ -125,6 +162,22 @@ async function request<T>(
     );
   }
   return result.data;
+}
+
+/** Pull the payload out of `{ result: { data: { json } } }`, tolerating plainer shapes. */
+function unwrapResult(json: unknown): unknown {
+  if (json && typeof json === "object" && "result" in json) {
+    const result = (json as { result: unknown }).result;
+    if (result && typeof result === "object" && "data" in result) {
+      const dataNode = (result as { data: unknown }).data;
+      if (dataNode && typeof dataNode === "object" && "json" in dataNode) {
+        return (dataNode as { json: unknown }).json;
+      }
+      return dataNode;
+    }
+    return result;
+  }
+  return json;
 }
 
 // ─── Email ────────────────────────────────────────────────────────────────────
@@ -138,7 +191,7 @@ export interface VapronEmailParams {
 const EmailSendResponseSchema = z.object({ id: z.string().optional() }).passthrough();
 export type VapronEmailResult = z.infer<typeof EmailSendResponseSchema>;
 
-// ─── AI chat (OpenAI-compatible) ───────────────────────────────────────────────
+// ─── AI Gateway ────────────────────────────────────────────────────────────────
 
 export interface VapronChatMessage {
   role: "system" | "user" | "assistant";
@@ -151,27 +204,61 @@ export interface VapronChatParams {
   maxTokens?: number;
 }
 
-const ChatCompletionSchema = z
-  .object({
-    id: z.string().optional(),
-    model: z.string().optional(),
-    choices: z
-      .array(
-        z
-          .object({
-            index: z.number().optional(),
-            message: z.object({ role: z.string(), content: z.string() }).passthrough(),
-            finish_reason: z.string().nullable().optional(),
-          })
-          .passthrough(),
-      )
-      .min(1),
-    usage: z.unknown().optional(),
-  })
-  .passthrough();
-export type VapronChatCompletion = z.infer<typeof ChatCompletionSchema>;
+/** Default model for the Vapron AI gateway (per integration guide). */
+const DEFAULT_AI_MODEL = "claude-sonnet-4-6";
 
-// ─── Storage ────────────────────────────────────────────────────────────────
+/**
+ * The AI gateway's exact response shape isn't documented, so we keep the schema
+ * tolerant and extract the assistant text from whichever known shape comes back
+ * (Anthropic `content[].text`, OpenAI `choices[].message.content`, or a plain
+ * `text`/`content`/`completion` field).
+ */
+const AiCompleteSchema = z.record(z.string(), z.unknown());
+
+export interface VapronAiResult {
+  /** Best-effort extracted assistant text. */
+  text: string;
+  /** The raw, unwrapped gateway payload for callers that need more. */
+  raw: Record<string, unknown>;
+}
+
+function extractAiText(data: Record<string, unknown>): string {
+  // Plain string fields first.
+  for (const key of ["text", "content", "completion", "output"] as const) {
+    const v = data[key];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  // Anthropic-style: content: [{ type: "text", text }]
+  const content = data["content"];
+  if (Array.isArray(content)) {
+    const joined = content
+      .map((b) => (b && typeof b === "object" && typeof (b as { text?: unknown }).text === "string"
+        ? (b as { text: string }).text
+        : ""))
+      .join("");
+    if (joined.length > 0) return joined;
+  }
+  // OpenAI-style: choices: [{ message: { content } }]
+  const choices = data["choices"];
+  if (Array.isArray(choices) && choices.length > 0) {
+    const first = choices[0];
+    const msg = first && typeof first === "object" ? (first as { message?: unknown }).message : undefined;
+    if (msg && typeof msg === "object" && typeof (msg as { content?: unknown }).content === "string") {
+      return (msg as { content: string }).content;
+    }
+    if (first && typeof first === "object" && typeof (first as { text?: unknown }).text === "string") {
+      return (first as { text: string }).text;
+    }
+  }
+  // message: { content }
+  const message = data["message"];
+  if (message && typeof message === "object" && typeof (message as { content?: unknown }).content === "string") {
+    return (message as { content: string }).content;
+  }
+  return "";
+}
+
+// ─── Object storage ────────────────────────────────────────────────────────────
 
 const BucketSchema = z.object({ name: z.string() }).passthrough();
 const BucketListSchema = z.union([
@@ -180,25 +267,20 @@ const BucketListSchema = z.union([
 ]);
 export type VapronBucket = z.infer<typeof BucketSchema>;
 
-const UploadUrlSchema = z
-  .object({
-    url: z.string().url().optional(),
-    uploadUrl: z.string().url().optional(),
-    key: z.string().optional(),
-    expiresAt: z.string().optional(),
-  })
-  .passthrough();
-export type VapronUploadUrl = z.infer<typeof UploadUrlSchema>;
-
-export interface VapronUploadUrlParams {
-  key: string;
-  contentType?: string;
+export interface VapronCreateBucketParams {
+  name: string;
+  region?: string;
+  isPublic?: boolean;
 }
 
-// ─── Secrets ────────────────────────────────────────────────────────────────
+// ─── Hosting / deploy ────────────────────────────────────────────────────────
 
-const SecretSchema = z.object({ value: z.string().optional() }).passthrough();
-export type VapronSecret = z.infer<typeof SecretSchema>;
+export interface VapronQuickDeployParams {
+  repoUrl: string;
+}
+
+const DeploySchema = z.record(z.string(), z.unknown());
+export type VapronDeployResult = z.infer<typeof DeploySchema>;
 
 // ─── Public client ────────────────────────────────────────────────────────────
 
@@ -206,44 +288,42 @@ export const vapron = {
   email: {
     /** Send a transactional email via Vapron. */
     send(params: VapronEmailParams): Promise<VapronEmailResult> {
-      return request("POST", "/api/platform/email/send", EmailSendResponseSchema, params);
+      return request("POST", "customerEmail.send", EmailSendResponseSchema, params);
     },
   },
 
   ai: {
-    /** OpenAI-compatible chat completion. */
-    chat(params: VapronChatParams): Promise<VapronChatCompletion> {
-      const body: Record<string, unknown> = { messages: params.messages };
-      if (params.model !== undefined) body["model"] = params.model;
-      if (params.maxTokens !== undefined) body["max_tokens"] = params.maxTokens;
-      return request("POST", "/api/platform/ai/chat", ChatCompletionSchema, body);
+    /** Call the AI gateway and return normalized assistant text + the raw payload. */
+    async complete(params: VapronChatParams): Promise<VapronAiResult> {
+      const input: Record<string, unknown> = {
+        model: params.model ?? DEFAULT_AI_MODEL,
+        messages: params.messages,
+      };
+      if (params.maxTokens !== undefined) input["max_tokens"] = params.maxTokens;
+      const raw = await request("POST", "aiGateway.complete", AiCompleteSchema, input);
+      return { text: extractAiText(raw), raw };
     },
   },
 
   storage: {
     /** List storage buckets. */
     listBuckets(): Promise<z.infer<typeof BucketListSchema>> {
-      return request("GET", "/api/platform/storage/buckets", BucketListSchema);
+      return request("GET", "objectStorage.listBuckets", BucketListSchema);
     },
     /** Create a storage bucket. */
-    createBucket(name: string): Promise<VapronBucket> {
-      return request("POST", "/api/platform/storage/buckets", BucketSchema, { name });
-    },
-    /** Get a presigned URL to upload an object into a bucket. */
-    createUploadUrl(bucket: string, params: VapronUploadUrlParams): Promise<VapronUploadUrl> {
-      return request(
-        "POST",
-        `/api/platform/storage/buckets/${encodeURIComponent(bucket)}/upload-url`,
-        UploadUrlSchema,
-        params,
-      );
+    createBucket(params: VapronCreateBucketParams): Promise<VapronBucket> {
+      return request("POST", "objectStorage.createBucket", BucketSchema, {
+        name: params.name,
+        region: params.region ?? "us-east-1",
+        isPublic: params.isPublic ?? false,
+      });
     },
   },
 
-  secrets: {
-    /** Fetch a platform-managed secret by name (e.g. "DATABASE_URL"). */
-    get(name: string): Promise<VapronSecret> {
-      return request("GET", `/api/platform/secrets/${encodeURIComponent(name)}`, SecretSchema);
+  hosting: {
+    /** Quick-deploy a GitHub repo to Vapron hosting. */
+    quickDeploy(params: VapronQuickDeployParams): Promise<VapronDeployResult> {
+      return request("POST", "aiDeploy.quickDeploy", DeploySchema, params);
     },
   },
 } as const;

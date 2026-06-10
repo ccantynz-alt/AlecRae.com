@@ -17,8 +17,13 @@ function claudeResponse(text: string): Response {
 }
 
 function vapronResponse(text: string): Response {
+  // tRPC/superjson success envelope wrapping an OpenAI-style gateway payload.
   return new Response(
-    JSON.stringify({ id: "cmpl_1", choices: [{ index: 0, message: { role: "assistant", content: text } }] }),
+    JSON.stringify({
+      result: {
+        data: { json: { id: "cmpl_1", choices: [{ index: 0, message: { role: "assistant", content: text } }] } },
+      },
+    }),
     { status: 200 },
   );
 }

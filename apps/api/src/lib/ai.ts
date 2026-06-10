@@ -3,8 +3,8 @@
  *
  * The Bible mandates: "Never block on a single AI provider. Always have a
  * fallback path." This helper calls Claude (Anthropic) first and, only if Claude
- * is unavailable or errors, falls back to Vapron's OpenAI-compatible chat. The
- * fallback never affects the happy path — it triggers solely on primary failure.
+ * is unavailable or errors, falls back to Vapron's AI gateway. The fallback
+ * never affects the happy path — it triggers solely on primary failure.
  *
  * Both providers are called over `fetch` (no SDK dependency, edge-compatible).
  * Callers get a normalized { text, provider } regardless of which answered.
@@ -83,22 +83,21 @@ async function callClaude(params: AiCompleteParams): Promise<string> {
   return text;
 }
 
-/** Call Vapron's OpenAI-compatible chat. The system prompt becomes a message. */
+/** Call Vapron's AI gateway. The system prompt becomes a leading message. */
 async function callVapron(params: AiCompleteParams): Promise<string> {
   const messages: { role: "system" | "user" | "assistant"; content: string }[] =
     params.system !== undefined
       ? [{ role: "system", content: params.system }, ...params.messages]
       : [...params.messages];
 
-  const completion = await vapron.ai.chat({
+  const completion = await vapron.ai.complete({
     messages,
     ...(params.model !== undefined ? { model: params.model } : {}),
     ...(params.maxTokens !== undefined ? { maxTokens: params.maxTokens } : {}),
   });
 
-  const text = completion.choices[0]?.message.content ?? "";
-  if (!text) throw new AiError("Vapron returned no text content", "vapron_empty");
-  return text;
+  if (!completion.text) throw new AiError("Vapron returned no text content", "vapron_empty");
+  return completion.text;
 }
 
 /**
