@@ -144,7 +144,8 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
 const GOOGLE_CLIENT_ID = process.env["GOOGLE_CLIENT_ID"] ?? "";
 const GOOGLE_CLIENT_SECRET = process.env["GOOGLE_CLIENT_SECRET"] ?? "";
-const GOOGLE_REDIRECT_URI = process.env["GOOGLE_REDIRECT_URI"] ?? "https://api.alecrae.com/v1/auth/callback/google";
+const GOOGLE_REDIRECT_URI =
+  process.env["GOOGLE_REDIRECT_URI"] ?? "https://api.alecrae.com/v1/connect/callback/gmail";
 
 export function getGoogleAuthUrl(state: string): string {
   const params = new URLSearchParams({
