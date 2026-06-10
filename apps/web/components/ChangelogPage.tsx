@@ -17,6 +17,7 @@
 import type { ReactElement } from "react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Box, Text, ChangelogFeed, type ChangelogEntryData, type ChangelogCategory } from "@alecrae/ui";
+import { getApiBase } from "../lib/api-base";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -49,7 +50,7 @@ type LoadState = "idle" | "loading" | "loaded" | "error";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "https://api.alecrae.com";
+const API_BASE = getApiBase();
 const LAST_VISIT_KEY = "alecrae_changelog_last_visit";
 const PAGE_SIZE = 20;
 

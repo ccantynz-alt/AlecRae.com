@@ -5,7 +5,9 @@
  * Handles auth tokens, error responses, and response parsing.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+import { getApiBase } from "./api-base";
+
+const API_BASE = getApiBase();
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 

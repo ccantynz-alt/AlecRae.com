@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { getApiBase } from "../../../lib/api-base";
 import {
   Box,
   Text,
@@ -126,7 +127,7 @@ const PLAN_META: PlanMeta[] = [
 
 // ─── API helpers ────────────────────────────────────────────────────────────
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE = getApiBase();
 
 function getToken(): string {
   if (typeof window === "undefined") return "";

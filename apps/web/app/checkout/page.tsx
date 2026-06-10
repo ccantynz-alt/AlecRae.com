@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { getApiBase } from "../../lib/api-base";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -21,7 +22,7 @@ const PLAN_LABELS: Record<PlanId, string> = {
 
 // ─── API ───────────────────────────────────────────────────────────────────
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE = getApiBase();
 
 function getToken(): string {
   if (typeof window === "undefined") return "";
