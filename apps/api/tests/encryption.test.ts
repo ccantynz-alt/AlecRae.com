@@ -153,7 +153,8 @@ describe("Encryption key store (DB-persisted)", () => {
     expect(iv?.length).toBeGreaterThan(0);
     expect(ciphertext?.length).toBeGreaterThan(0);
     expect(ciphertext).not.toBe(iv);
-  });
+    // RSA-4096 keygen can exceed the 5s default on a loaded CI runner.
+  }, 30_000);
 
   it("retrieves the stored public key (persists across a fresh read)", async () => {
     await generateKeys("pass-one");
@@ -163,7 +164,8 @@ describe("Encryption key store (DB-persisted)", () => {
     const body = (await res.json()) as { data: { publicKey: string; createdAt: string } };
     expect(body.data.publicKey).toBe(mockKeyRows.get("acct_enc_001")?.publicKey);
     expect(typeof body.data.createdAt).toBe("string");
-  });
+    // RSA-4096 keygen can exceed the 5s default on a loaded CI runner.
+  }, 30_000);
 
   it("returns 404 from public-key read when no keys were generated", async () => {
     const res = await getPublicKey();
@@ -188,7 +190,8 @@ describe("Encryption key store (DB-persisted)", () => {
     // Public key + wrapped private key replaced; createdAt preserved by upsert.
     expect(second?.publicKey).not.toBe(firstPublicKey);
     expect(second?.createdAt).toEqual(firstCreatedAt);
-  });
+    // Two RSA-4096 keygens here — well over the 5s default on a loaded CI runner.
+  }, 30_000);
 
   it("status reflects enabled once keys exist, disabled before", async () => {
     const before = await getStatus();
@@ -204,5 +207,6 @@ describe("Encryption key store (DB-persisted)", () => {
     expect(afterBody.data.enabled).toBe(true);
     expect(afterBody.data.hasKeys).toBe(true);
     expect(typeof afterBody.data.keyCreatedAt).toBe("string");
-  });
+    // RSA-4096 keygen can exceed the 5s default on a loaded CI runner.
+  }, 30_000);
 });
