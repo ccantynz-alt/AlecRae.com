@@ -19,7 +19,7 @@ const health = new Hono();
 
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
 const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
-const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae:outbound";
+const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae-outbound";
 const startedAt = Date.now();
 
 // ─── Dependency check helpers ───────────────────────────────────────────────

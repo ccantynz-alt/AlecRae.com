@@ -617,6 +617,8 @@ After writing the code:
 | 17 | Admin pages call stub endpoints | MEDIUM | 2026-05-26 | FIXED 2026-05-26 — admin.ts fully wired to DB |
 | 18 | AWS EKS/ECR `deploy.yml` failing on every push to main (no AWS creds; off-stack) | MEDIUM | 2026-06-08 | FIXED 2026-06-08 — removed; deployment moving to Vapron |
 | 19 | Vapron platform client unverified against live API (no public docs; built to spec) | MEDIUM | 2026-06-08 | FIXED 2026-06-10 — rebuilt to the published tRPC API (base `/api/trpc`, `{json}` envelope, real procedure names: `customerEmail.send`, `aiGateway.complete`, `objectStorage.*`, `aiDeploy.quickDeploy`); removed fictional `secrets.get`. AI-gateway response extraction is tolerant pending live-call confirmation. |
+| 20 | Web client defaulted API base to `localhost:3001` → deployed login (passkey + Google) couldn't reach the server | HIGH | 2026-06-10 | FIXED 2026-06-10 — `apps/web/lib/api-base.ts` `getApiBase()`: env override → `https://api.alecrae.com` in browser → localhost for dev; all web `API_BASE` routed through it |
+| 21 | API crashed on boot — BullMQ rejects `:` in queue names (`alecrae:webhooks`/`:outbound`/`:dns-liveness`); webhook worker started unconditionally | HIGH | 2026-06-10 | FIXED 2026-06-10 — renamed queues to hyphens repo-wide; Redis-gated + fault-isolated worker/DLQ startup; API now boots & serves `/health` with no Redis/Meilisearch. Root `start`/`build:api` scripts added for Vapron (one-app-from-root, `process.env.PORT`) |
 
 ---
 
@@ -734,7 +736,7 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Last updated:** 2026-06-10 09:15 UTC
+**Last updated:** 2026-06-10 10:10 UTC
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Google sign-in + Vapron platform integration landed (PR #48). **Vapron is the permanent platform** (AI gateway, email, object storage, hosting/deploy) — Cloudflare/Vercel/Neon were always interim scaffolding until Vapron was built, and the app migrates onto Vapron as the target infra. The Vapron client has been rebuilt against the published tRPC API (issue #19 fixed). The off-stack AWS EKS deploy pipeline has been removed. Production deployment awaiting Craig's Vapron + infra setup.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)

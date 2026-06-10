@@ -24,11 +24,18 @@ import {
 
 // ─── Configuration ─────────────────────────────────────────────────────────
 
-const WEBHOOK_QUEUE_NAME = "alecrae:webhooks";
+// NOTE: BullMQ forbids ":" in queue names (it reserves the colon as the Redis
+// key separator), so use a hyphen. Must stay in sync with the MTA producer.
+const WEBHOOK_QUEUE_NAME = "alecrae-webhooks";
 const REDIS_URL =
   process.env["REDIS_URL"] ??
   process.env["UPSTASH_REDIS_URL"] ??
   "redis://localhost:6379";
+
+/** True only when Redis is explicitly configured (not the localhost fallback). */
+function isRedisConfigured(): boolean {
+  return Boolean(process.env["REDIS_URL"] ?? process.env["UPSTASH_REDIS_URL"]);
+}
 
 /** Maximum retries per delivery attempt. */
 const MAX_ATTEMPTS = 3;
@@ -188,6 +195,13 @@ let webhookWorker: Worker | null = null;
  */
 export function startWebhookWorker(): void {
   if (webhookWorker) return;
+
+  if (!isRedisConfigured()) {
+    console.warn(
+      "[webhook-worker] Redis not configured (set REDIS_URL or UPSTASH_REDIS_URL); webhook delivery worker not started.",
+    );
+    return;
+  }
 
   webhookWorker = new Worker<WebhookJobData>(
     WEBHOOK_QUEUE_NAME,

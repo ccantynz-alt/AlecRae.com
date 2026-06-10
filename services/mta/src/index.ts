@@ -21,7 +21,7 @@ const SMTP_PORT = parseInt(process.env["SMTP_PORT"] ?? "25", 10);
 const SMTP_HOST = process.env["SMTP_HOST"] ?? "0.0.0.0";
 const SMTP_HOSTNAME = process.env["SMTP_HOSTNAME"] ?? "mail.alecrae.dev";
 const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
-const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae:outbound";
+const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae-outbound";
 const WORKER_CONCURRENCY = parseInt(
   process.env["MTA_WORKER_CONCURRENCY"] ?? "10",
   10,

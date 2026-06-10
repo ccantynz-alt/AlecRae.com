@@ -127,7 +127,7 @@ import { organizationsRouter } from "./routes/organizations.js";
 import { dpaRouter } from "./routes/dpa.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
-import { closeSendQueue } from "./lib/queue.js";
+import { closeSendQueue, isRedisConfigured } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
 import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@alecrae/shared";
 import { startAutoIndexer, stopAutoIndexer } from "@alecrae/ai-engine/embeddings/auto-indexer";
@@ -802,11 +802,20 @@ initSearchIndex().catch((err) => {
   console.warn("[api] Meilisearch init failed (search will be unavailable):", err);
 });
 
-// Start the webhook delivery worker (BullMQ consumer)
-startWebhookWorker();
+// Start the webhook delivery worker (BullMQ consumer). No-ops without Redis;
+// wrapped so a startup failure can never take down the HTTP server.
+try {
+  startWebhookWorker();
+} catch (err) {
+  console.warn("[api] Webhook worker start failed:", err);
+}
 
 // Start the semantic search auto-indexer (embeds new emails in background)
-startAutoIndexer();
+try {
+  startAutoIndexer();
+} catch (err) {
+  console.warn("[api] Auto-indexer start failed:", err);
+}
 
 // Start blocklist monitoring (checks every 15 min for IP/domain listings)
 import("@alecrae/reputation").then(({ BlocklistMonitor }) => {
@@ -824,13 +833,16 @@ import("@alecrae/reputation").then(({ BlocklistMonitor }) => {
   console.warn("[api] Blocklist monitor unavailable");
 });
 
-// Register DLQ processor repeat job (every 15 minutes)
-const dlqInterval = setInterval(() => {
-  processDLQ().catch((err) => {
-    console.warn("[api] DLQ processing error:", err);
-  });
-}, 15 * 60 * 1000);
-dlqInterval.unref();
+// Register DLQ processor repeat job (every 15 minutes). Only when Redis is
+// configured — otherwise it would error every interval with no queue to drain.
+const dlqInterval = isRedisConfigured()
+  ? setInterval(() => {
+      processDLQ().catch((err) => {
+        console.warn("[api] DLQ processing error:", err);
+      });
+    }, 15 * 60 * 1000)
+  : null;
+dlqInterval?.unref();
 
 // Register storage reconciliation repeat job (weekly — every 7 days)
 const storageReconcileInterval = setInterval(() => {
