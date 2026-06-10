@@ -12,6 +12,8 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "build:api": "echo \"No build step: Bun runs the API directly from TypeScript\"",
+    "start": "bun run apps/api/src/index.ts",
     "test": "turbo run test",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

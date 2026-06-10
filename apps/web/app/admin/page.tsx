@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { getApiBase } from "../../lib/api-base";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -133,7 +134,7 @@ const STACK_REPLACED = [
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE = getApiBase();
 const IVORY = "#f5f4ef";
 const GOLD = "#cfa630";
 

@@ -15,11 +15,18 @@ import { Queue } from "bullmq";
 
 // ─── Configuration (must match MTA worker defaults) ────────────────────────
 
-const QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae:outbound";
+// NOTE: BullMQ forbids ":" in queue names — use a hyphen. Keep in sync with the
+// MTA worker default (services/mta) and the fly.toml MTA_QUEUE_NAME.
+const QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae-outbound";
 const REDIS_URL =
   process.env["REDIS_URL"] ??
   process.env["UPSTASH_REDIS_URL"] ??
   "redis://localhost:6379";
+
+/** True only when Redis is explicitly configured (not the localhost fallback). */
+export function isRedisConfigured(): boolean {
+  return Boolean(process.env["REDIS_URL"] ?? process.env["UPSTASH_REDIS_URL"]);
+}
 
 // ─── Singleton queue instance ──────────────────────────────────────────────
 

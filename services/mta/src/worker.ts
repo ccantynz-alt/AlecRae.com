@@ -43,7 +43,7 @@ export interface WorkerConfig {
 
 const DEFAULT_WORKER_CONFIG: WorkerConfig = {
   redisUrl: process.env["REDIS_URL"] ?? "redis://localhost:6379",
-  queueName: process.env["MTA_QUEUE_NAME"] ?? "alecrae:outbound",
+  queueName: process.env["MTA_QUEUE_NAME"] ?? "alecrae-outbound",
   concurrency: parseInt(process.env["MTA_WORKER_CONCURRENCY"] ?? "10", 10),
   localHostname: process.env["MTA_HOSTNAME"] ?? "mail.alecrae.dev",
   useRelay: !!process.env["RELAY_PROVIDER"],
@@ -637,7 +637,7 @@ export class MtaWorker {
 
   /**
    * Look up active webhooks for the account/event type and enqueue BullMQ
-   * jobs on the shared `alecrae:webhooks` queue.
+   * jobs on the shared `alecrae-webhooks` queue.
    */
   private async enqueueWebhooksForEvent(
     db: ReturnType<typeof getDatabase>,
@@ -658,7 +658,7 @@ export class MtaWorker {
     if (accountWebhooks.length === 0) return;
 
     // Lazily create a queue instance for the webhook queue
-    const webhookQueue = new Queue("alecrae:webhooks", {
+    const webhookQueue = new Queue("alecrae-webhooks", {
       connection: { url: this.config.redisUrl },
       defaultJobOptions: {
         removeOnComplete: 100,

@@ -18,8 +18,9 @@
 
 import { useState, useEffect, useCallback, type FormEvent } from "react";
 import { Box, Text, Card, CardContent, Button, Input } from "@alecrae/ui";
+import { getApiBase } from "../../../../lib/api-base";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE = getApiBase();
 
 interface CurrentDpa {
   version: string;

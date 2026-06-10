@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { getApiBase } from "../lib/api-base";
 
 interface Suggestion {
   email: string;
@@ -9,7 +10,7 @@ interface Suggestion {
   avatarUrl?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const API_BASE = getApiBase();
 
 export interface RecipientAutocompleteProps {
   value: string;
