@@ -1,11 +1,8 @@
 name: Mobile — Android
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/mobile/**'
-      - '.github/workflows/mobile-android.yml'
+  # Manual-only: needs EXPO_TOKEN + Google Play submit secrets. Run on demand
+  # once those exist, so it doesn't fail on every push without credentials.
   workflow_dispatch:
     inputs:
       profile:

@@ -1,11 +1,8 @@
 name: Desktop — Electron (Mac + Windows + Linux)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/desktop/**'
-      - '.github/workflows/desktop.yml'
+  # Manual-only: needs Apple/Windows code-signing secrets. Run on demand once
+  # those exist, so it doesn't fail on every push without credentials.
   workflow_dispatch:
     inputs:
       publish:
