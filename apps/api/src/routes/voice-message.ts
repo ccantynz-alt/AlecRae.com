@@ -8,6 +8,7 @@
  */
 
 import { Hono } from "hono";
+import { eq } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   processVoiceMessage,
@@ -15,25 +16,15 @@ import {
   formatDuration,
   MAX_VOICE_AUDIO_SIZE,
 } from "@alecrae/ai-engine/voice/voice-message";
+import {
+  getDatabase,
+  voiceMessages,
+  type VoiceMessage,
+} from "@alecrae/db";
 
-// ─── In-memory store (production: persist in Neon + R2) ─────────────────────
-
-interface StoredVoiceMessage {
-  readonly id: string;
-  readonly accountId: string;
-  readonly audioUrl: string;
-  readonly mimeType: string;
-  readonly filename: string;
-  readonly sizeBytes: number;
-  readonly transcriptText: string;
-  readonly language: string;
-  readonly duration: number;
-  readonly htmlEmbed: string;
-  readonly replyToId: string | null;
-  readonly createdAt: string;
-}
-
-const voiceMessages = new Map<string, StoredVoiceMessage>();
+// Voice message metadata + transcripts are persisted in the `voice_messages`
+// table (Drizzle) so they survive API restarts. Audio blobs themselves are
+// served from audioUrl (R2 in production).
 
 function generateId(): string {
   return `vm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
@@ -142,8 +133,9 @@ voiceMessageRouter.post(
       );
     }
 
-    // Store the voice message
-    const stored: StoredVoiceMessage = {
+    // Store the voice message (persisted — survives restarts)
+    const createdAt = new Date();
+    const stored: VoiceMessage = {
       id: messageId,
       accountId: auth.accountId,
       audioUrl: result.value.audioUrl,
@@ -155,10 +147,11 @@ voiceMessageRouter.post(
       duration: result.value.duration,
       htmlEmbed: result.value.htmlEmbed,
       replyToId: null,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
 
-    voiceMessages.set(messageId, stored);
+    const db = getDatabase();
+    await db.insert(voiceMessages).values(stored);
 
     return c.json({
       data: {
@@ -170,7 +163,7 @@ voiceMessageRouter.post(
         durationFormatted: formatDuration(stored.duration),
         htmlEmbed: stored.htmlEmbed,
         sizeBytes: stored.sizeBytes,
-        createdAt: stored.createdAt,
+        createdAt: createdAt.toISOString(),
       },
     });
   },
@@ -252,8 +245,13 @@ voiceMessageRouter.get(
   async (c) => {
     const auth = c.get("auth");
     const messageId = c.req.param("id");
+    const db = getDatabase();
 
-    const message = voiceMessages.get(messageId);
+    const [message] = await db
+      .select()
+      .from(voiceMessages)
+      .where(eq(voiceMessages.id, messageId))
+      .limit(1);
 
     if (!message) {
       return c.json(
@@ -294,7 +292,7 @@ voiceMessageRouter.get(
         durationFormatted: formatDuration(message.duration),
         htmlEmbed: message.htmlEmbed,
         replyToId: message.replyToId,
-        createdAt: message.createdAt,
+        createdAt: message.createdAt.toISOString(),
       },
     });
   },
@@ -323,7 +321,13 @@ voiceMessageRouter.post(
     }
 
     // Verify parent exists
-    const parent = voiceMessages.get(parentId);
+    const db = getDatabase();
+    const [parent] = await db
+      .select()
+      .from(voiceMessages)
+      .where(eq(voiceMessages.id, parentId))
+      .limit(1);
+
     if (!parent) {
       return c.json(
         {
@@ -395,7 +399,8 @@ voiceMessageRouter.post(
       );
     }
 
-    const stored: StoredVoiceMessage = {
+    const createdAt = new Date();
+    const stored: VoiceMessage = {
       id: replyId,
       accountId: auth.accountId,
       audioUrl: result.value.audioUrl,
@@ -407,10 +412,10 @@ voiceMessageRouter.post(
       duration: result.value.duration,
       htmlEmbed: result.value.htmlEmbed,
       replyToId: parentId,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
 
-    voiceMessages.set(replyId, stored);
+    await db.insert(voiceMessages).values(stored);
 
     return c.json({
       data: {
@@ -424,7 +429,7 @@ voiceMessageRouter.post(
         replyToId: parentId,
         parentTranscript: parent.transcriptText,
         sizeBytes: stored.sizeBytes,
-        createdAt: stored.createdAt,
+        createdAt: createdAt.toISOString(),
       },
     });
   },

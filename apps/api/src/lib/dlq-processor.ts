@@ -12,6 +12,8 @@
  */
 
 import { Queue, type Job } from "bullmq";
+import { eq } from "drizzle-orm";
+import { getDatabase, dlqRecords, type DlqRecordEntry } from "@alecrae/db";
 import { QUEUE_NAME, REDIS_URL } from "./queue.js";
 
 // ─── DLQ record type ─────────────────────────────────────────────────────────
@@ -27,8 +29,86 @@ export interface DlqRecord {
   retryScheduledAt?: string;
 }
 
-// In-memory DLQ store (production would persist to DB)
+// In-memory write-through cache over the `dlq_records` table.
+//
+// The admin route reads the DLQ synchronously, so the Map stays as the read
+// path; every mutation is also persisted to Postgres (best-effort) and the
+// Map is re-hydrated from the DB at the start of each processDLQ() run so
+// records survive API restarts. When DATABASE_URL is unset (dev no-DB mode)
+// everything degrades to the previous in-memory-only behavior.
 const dlqStore = new Map<string, DlqRecord>();
+
+/** Map a DB row back into the in-memory record shape. Exported for tests. */
+export function rowToDlqRecord(row: DlqRecordEntry): DlqRecord {
+  return {
+    jobId: row.jobId,
+    jobName: row.jobName,
+    data: row.data ?? null,
+    failedReason: row.failedReason,
+    attemptsMade: row.attemptsMade,
+    timestamp: row.createdAt.toISOString(),
+    status: row.status,
+    ...(row.retryScheduledAt
+      ? { retryScheduledAt: row.retryScheduledAt.toISOString() }
+      : {}),
+  };
+}
+
+/** Persist (upsert) a record — best-effort, no-op without a DB. */
+function persistDlqRecord(record: DlqRecord): void {
+  void (async (): Promise<void> => {
+    try {
+      const db = getDatabase();
+      const values = {
+        jobId: record.jobId,
+        jobName: record.jobName,
+        data: record.data,
+        failedReason: record.failedReason,
+        attemptsMade: record.attemptsMade,
+        status: record.status,
+        retryScheduledAt: record.retryScheduledAt
+          ? new Date(record.retryScheduledAt)
+          : null,
+        createdAt: new Date(record.timestamp),
+      };
+      await db
+        .insert(dlqRecords)
+        .values(values)
+        .onConflictDoUpdate({ target: dlqRecords.jobId, set: values });
+    } catch {
+      // No DB configured / DB unreachable — in-memory store still has the record.
+    }
+  })();
+}
+
+/** Delete a record from the DB — best-effort, no-op without a DB. */
+function deleteDlqRecordFromDb(jobId: string): void {
+  void (async (): Promise<void> => {
+    try {
+      const db = getDatabase();
+      await db.delete(dlqRecords).where(eq(dlqRecords.jobId, jobId));
+    } catch {
+      // No DB configured / DB unreachable.
+    }
+  })();
+}
+
+/** Re-load all persisted records into the in-memory cache. */
+async function hydrateDlqStore(): Promise<void> {
+  try {
+    const db = getDatabase();
+    const rows = await db.select().from(dlqRecords);
+    for (const row of rows) {
+      // DB is the durable source of truth across restarts, but never
+      // downgrade a permanently_failed record already known in-process.
+      const existing = dlqStore.get(row.jobId);
+      if (existing?.status === "permanently_failed") continue;
+      dlqStore.set(row.jobId, rowToDlqRecord(row));
+    }
+  } catch {
+    // No DB configured / DB unreachable — keep the in-memory view.
+  }
+}
 
 // ─── DLQ processor ───────────────────────────────────────────────────────────
 
@@ -38,6 +118,9 @@ const dlqStore = new Map<string, DlqRecord>();
  */
 export async function processDLQ(): Promise<number> {
   let queue: Queue | null = null;
+
+  // Recover persisted DLQ state (survives restarts; no-op without a DB).
+  await hydrateDlqStore();
 
   try {
     queue = new Queue(QUEUE_NAME, {
@@ -109,6 +192,7 @@ async function processFailedJob(queue: Queue, job: Job): Promise<void> {
     };
 
     dlqStore.set(jobId, record);
+    persistDlqRecord(record);
 
     // Schedule retry: re-add the job to the queue with a delay
     try {
@@ -120,7 +204,7 @@ async function processFailedJob(queue: Queue, job: Job): Promise<void> {
       });
 
       // Mark that we scheduled a DLQ retry for this job
-      dlqStore.set(dlqRetryMarker, {
+      const marker: DlqRecord = {
         jobId: dlqRetryMarker,
         jobName: job.name,
         data: null,
@@ -128,7 +212,9 @@ async function processFailedJob(queue: Queue, job: Job): Promise<void> {
         attemptsMade: 0,
         timestamp: new Date().toISOString(),
         status: "pending_retry",
-      });
+      };
+      dlqStore.set(dlqRetryMarker, marker);
+      persistDlqRecord(marker);
 
       // Remove the original failed job from the queue
       await job.remove().catch(() => {
@@ -170,6 +256,7 @@ function markPermanentlyFailed(
   };
 
   dlqStore.set(jobId, record);
+  persistDlqRecord(record);
 
   console.error(
     `[dlq] Job ${jobId} (${jobName}) PERMANENTLY FAILED after DLQ retry. Reason: ${failedReason}`,
@@ -205,20 +292,24 @@ export function getDlqStats(): {
 }
 
 /**
- * Clear a DLQ record (admin action).
+ * Clear a DLQ record (admin action). Removes from the in-memory cache
+ * immediately and from the DB best-effort.
  */
 export function clearDlqRecord(jobId: string): boolean {
-  return dlqStore.delete(jobId);
+  const deleted = dlqStore.delete(jobId);
+  if (deleted) deleteDlqRecordFromDb(jobId);
+  return deleted;
 }
 
 /**
- * Clear all permanently failed records.
+ * Clear all permanently failed records (in-memory + DB best-effort).
  */
 export function clearPermanentlyFailed(): number {
   let cleared = 0;
   for (const [key, record] of dlqStore.entries()) {
     if (record.status === "permanently_failed") {
       dlqStore.delete(key);
+      deleteDlqRecordFromDb(key);
       cleared++;
     }
   }

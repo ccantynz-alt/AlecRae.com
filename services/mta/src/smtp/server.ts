@@ -21,12 +21,13 @@ import {
   SmtpResponses,
   isCommandValidForState,
 } from "./commands.js";
+import { getMtaHostname } from "../config.js";
 import type { TlsManager } from "../tls/manager.js";
 
 const DEFAULT_CONFIG: SmtpServerConfig = {
   host: "0.0.0.0",
   port: 25,
-  hostname: "mail.alecrae.dev",
+  hostname: getMtaHostname(),
   maxMessageSize: 25 * 1024 * 1024, // 25 MB
   maxRecipients: 100,
   maxConnections: 500,

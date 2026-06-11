@@ -10,12 +10,14 @@ interface QuickReplyProps {
   toName: string;
   subject: string;
   userEmail: string;
+  /** Prefill the reply box (e.g. an AI-generated draft). */
+  initialBody?: string;
   onSent: () => void;
   onClose: () => void;
 }
 
-export function QuickReply({ emailId: _emailId, toEmail, toName, subject, userEmail, onSent, onClose }: QuickReplyProps) {
-  const [body, setBody] = useState("");
+export function QuickReply({ emailId: _emailId, toEmail, toName, subject, userEmail, initialBody, onSent, onClose }: QuickReplyProps) {
+  const [body, setBody] = useState(initialBody ?? "");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);

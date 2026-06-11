@@ -13,6 +13,9 @@
  *   GET    /v1/programs/:id/runs   — Recent execution history
  *   POST   /v1/programs/:id/toggle — Enable/disable
  *
+ * Programs + run history are persisted in the `programs` / `program_runs`
+ * tables (Drizzle) so they survive API restarts.
+ *
  * @example A user program that auto-files Stripe receipts
  * ```ts
  * export default (email, actions) => {
@@ -26,65 +29,94 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
+  getDatabase,
+  programs as programsTable,
+  programRuns,
+  type Program,
+  type ProgramRun as ProgramRunRow,
+  type ProgramRunAction,
+} from "@alecrae/db";
+import {
   runProgram,
-  type ProgramAction,
   type ProgramEmail,
   type ProgramResult,
 } from "../../../../services/ai-engine/src/programs/runtime.js";
 
-// ─── Domain types ────────────────────────────────────────────────────────────
+// ─── Serialization ───────────────────────────────────────────────────────────
 
-type ProgramTrigger = "email.received" | "email.sent";
-
-interface Program {
+/**
+ * Serialize a DB program row into the API response shape (ISO timestamps).
+ * Exported for unit tests.
+ */
+export function serializeProgram(row: Program): {
   id: string;
   accountId: string;
   name: string;
   description: string;
   code: string;
-  triggers: ProgramTrigger[];
+  triggers: ("email.received" | "email.sent")[];
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
-  /** Lifetime invocation counter. */
   runCount: number;
-  /** Lifetime error counter. */
   errorCount: number;
+} {
+  return {
+    id: row.id,
+    accountId: row.accountId,
+    name: row.name,
+    description: row.description,
+    code: row.code,
+    triggers: row.triggers,
+    enabled: row.enabled,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    runCount: row.runCount,
+    errorCount: row.errorCount,
+  };
 }
 
-interface ProgramRun {
+/** Serialize a DB run row into the API response shape. Exported for tests. */
+export function serializeRun(row: ProgramRunRow): {
   id: string;
   programId: string;
   emailId: string | null;
   startedAt: string;
   durationMs: number;
-  actions: readonly ProgramAction[];
-  logs: readonly string[];
+  actions: ProgramRunAction[];
+  logs: string[];
   error: string | null;
+} {
+  return {
+    id: row.id,
+    programId: row.programId,
+    emailId: row.emailId,
+    startedAt: row.startedAt.toISOString(),
+    durationMs: row.durationMs,
+    actions: row.actions,
+    logs: row.logs,
+    error: row.error,
+  };
 }
 
-// In-memory stores. Production: move to Postgres tables `programs` and
-// `program_runs`. Mirrors the pattern used by `ai-rules.ts`.
-const programStore = new Map<string, Program[]>();
-const runStore = new Map<string, ProgramRun[]>();
 const RUN_HISTORY_LIMIT = 50;
 
 function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "");
 }
 
-function findProgram(accountId: string, id: string): Program | undefined {
-  return (programStore.get(accountId) ?? []).find((p) => p.id === id);
-}
-
-function recordRun(programId: string, run: ProgramRun): void {
-  const list = runStore.get(programId) ?? [];
-  list.unshift(run);
-  if (list.length > RUN_HISTORY_LIMIT) list.length = RUN_HISTORY_LIMIT;
-  runStore.set(programId, list);
+async function findProgram(accountId: string, id: string): Promise<Program | undefined> {
+  const db = getDatabase();
+  const [row] = await db
+    .select()
+    .from(programsTable)
+    .where(and(eq(programsTable.id, id), eq(programsTable.accountId, accountId)))
+    .limit(1);
+  return row;
 }
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -162,12 +194,13 @@ programs.post(
   "/",
   requireScope("programs:write"),
   validateBody(CreateProgramSchema),
-  (c) => {
+  async (c) => {
     const input = getValidatedBody<z.infer<typeof CreateProgramSchema>>(c);
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const now = new Date().toISOString();
-    const program: Program = {
+    const now = new Date();
+    const row: Program = {
       id: generateId(),
       accountId: auth.accountId,
       name: input.name,
@@ -181,27 +214,33 @@ programs.post(
       errorCount: 0,
     };
 
-    const existing = programStore.get(auth.accountId) ?? [];
-    programStore.set(auth.accountId, [...existing, program]);
-    return c.json({ data: program }, 201);
+    await db.insert(programsTable).values(row);
+    return c.json({ data: serializeProgram(row) }, 201);
   },
 );
 
 // GET /v1/programs — list
-programs.get("/", requireScope("programs:read"), (c) => {
+programs.get("/", requireScope("programs:read"), async (c) => {
   const auth = c.get("auth");
-  const list = programStore.get(auth.accountId) ?? [];
-  return c.json({ data: list });
+  const db = getDatabase();
+
+  const rows = await db
+    .select()
+    .from(programsTable)
+    .where(eq(programsTable.accountId, auth.accountId))
+    .orderBy(desc(programsTable.createdAt));
+
+  return c.json({ data: rows.map(serializeProgram) });
 });
 
 // GET /v1/programs/:id — single
-programs.get("/:id", requireScope("programs:read"), (c) => {
+programs.get("/:id", requireScope("programs:read"), async (c) => {
   const auth = c.get("auth");
-  const program = findProgram(auth.accountId, c.req.param("id"));
+  const program = await findProgram(auth.accountId, c.req.param("id"));
   if (!program) {
     return c.json({ error: { message: "Program not found", code: "not_found" } }, 404);
   }
-  return c.json({ data: program });
+  return c.json({ data: serializeProgram(program) });
 });
 
 // PUT /v1/programs/:id — update
@@ -209,36 +248,69 @@ programs.put(
   "/:id",
   requireScope("programs:write"),
   validateBody(UpdateProgramSchema),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
     const input = getValidatedBody<z.infer<typeof UpdateProgramSchema>>(c);
-    const program = findProgram(auth.accountId, c.req.param("id"));
+    const program = await findProgram(auth.accountId, c.req.param("id"));
     if (!program) {
       return c.json({ error: { message: "Program not found", code: "not_found" } }, 404);
     }
 
-    if (input.name !== undefined) program.name = input.name;
-    if (input.description !== undefined) program.description = input.description;
-    if (input.code !== undefined) program.code = input.code;
-    if (input.triggers !== undefined) program.triggers = input.triggers;
-    if (input.enabled !== undefined) program.enabled = input.enabled;
-    program.updatedAt = new Date().toISOString();
+    const now = new Date();
+    const db = getDatabase();
 
-    return c.json({ data: program });
+    await db
+      .update(programsTable)
+      .set({
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.code !== undefined ? { code: input.code } : {}),
+        ...(input.triggers !== undefined ? { triggers: input.triggers } : {}),
+        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(programsTable.id, program.id),
+          eq(programsTable.accountId, auth.accountId),
+        ),
+      );
+
+    const updated: Program = {
+      ...program,
+      name: input.name ?? program.name,
+      description: input.description ?? program.description,
+      code: input.code ?? program.code,
+      triggers: input.triggers ?? program.triggers,
+      enabled: input.enabled ?? program.enabled,
+      updatedAt: now,
+    };
+
+    return c.json({ data: serializeProgram(updated) });
   },
 );
 
 // DELETE /v1/programs/:id
-programs.delete("/:id", requireScope("programs:write"), (c) => {
+programs.delete("/:id", requireScope("programs:write"), async (c) => {
   const auth = c.get("auth");
   const id = c.req.param("id");
-  const list = programStore.get(auth.accountId) ?? [];
-  const filtered = list.filter((p) => p.id !== id);
-  if (filtered.length === list.length) {
+  const db = getDatabase();
+
+  const [existing] = await db
+    .select({ id: programsTable.id })
+    .from(programsTable)
+    .where(and(eq(programsTable.id, id), eq(programsTable.accountId, auth.accountId)))
+    .limit(1);
+
+  if (!existing) {
     return c.json({ error: { message: "Program not found", code: "not_found" } }, 404);
   }
-  programStore.set(auth.accountId, filtered);
-  runStore.delete(id);
+
+  // program_runs rows cascade-delete with the program.
+  await db
+    .delete(programsTable)
+    .where(and(eq(programsTable.id, id), eq(programsTable.accountId, auth.accountId)));
+
   return c.json({ data: { deleted: true, id } });
 });
 
@@ -249,7 +321,7 @@ programs.post(
   validateBody(TestProgramSchema),
   async (c) => {
     const auth = c.get("auth");
-    const program = findProgram(auth.accountId, c.req.param("id"));
+    const program = await findProgram(auth.accountId, c.req.param("id"));
     if (!program) {
       return c.json({ error: { message: "Program not found", code: "not_found" } }, 404);
     }
@@ -262,52 +334,75 @@ programs.post(
       timeoutMs: input.timeoutMs ?? 5_000,
     });
 
-    const run: ProgramRun = {
+    const runRow: ProgramRunRow = {
       id: generateId(),
       programId: program.id,
       emailId: sample.id,
-      startedAt: new Date().toISOString(),
+      startedAt: new Date(),
       durationMs: result.durationMs,
-      actions: result.actions,
-      logs: result.logs,
+      actions: [...result.actions] as ProgramRunAction[],
+      logs: [...result.logs],
       error: result.error ?? null,
     };
-    recordRun(program.id, run);
-    program.runCount += 1;
-    if (result.error) program.errorCount += 1;
+
+    const db = getDatabase();
+    await db.insert(programRuns).values(runRow);
+    await db
+      .update(programsTable)
+      .set({
+        runCount: sql`${programsTable.runCount} + 1`,
+        ...(result.error ? { errorCount: sql`${programsTable.errorCount} + 1` } : {}),
+      })
+      .where(eq(programsTable.id, program.id));
 
     return c.json({
       data: {
         dryRun: true,
         result,
-        run,
+        run: serializeRun(runRow),
       },
     });
   },
 );
 
 // GET /v1/programs/:id/runs — recent runs
-programs.get("/:id/runs", requireScope("programs:read"), (c) => {
+programs.get("/:id/runs", requireScope("programs:read"), async (c) => {
   const auth = c.get("auth");
-  const program = findProgram(auth.accountId, c.req.param("id"));
+  const program = await findProgram(auth.accountId, c.req.param("id"));
   if (!program) {
     return c.json({ error: { message: "Program not found", code: "not_found" } }, 404);
   }
   const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10) || 20, RUN_HISTORY_LIMIT);
-  const runs = (runStore.get(program.id) ?? []).slice(0, limit);
-  return c.json({ data: runs });
+
+  const db = getDatabase();
+  const rows = await db
+    .select()
+    .from(programRuns)
+    .where(eq(programRuns.programId, program.id))
+    .orderBy(desc(programRuns.startedAt))
+    .limit(limit);
+
+  return c.json({ data: rows.map(serializeRun) });
 });
 
 // POST /v1/programs/:id/toggle — flip enabled
-programs.post("/:id/toggle", requireScope("programs:write"), (c) => {
+programs.post("/:id/toggle", requireScope("programs:write"), async (c) => {
   const auth = c.get("auth");
-  const program = findProgram(auth.accountId, c.req.param("id"));
+  const program = await findProgram(auth.accountId, c.req.param("id"));
   if (!program) {
     return c.json({ error: { message: "Program not found", code: "not_found" } }, 404);
   }
-  program.enabled = !program.enabled;
-  program.updatedAt = new Date().toISOString();
-  return c.json({ data: program });
+
+  const now = new Date();
+  const db = getDatabase();
+  await db
+    .update(programsTable)
+    .set({ enabled: !program.enabled, updatedAt: now })
+    .where(eq(programsTable.id, program.id));
+
+  return c.json({
+    data: serializeProgram({ ...program, enabled: !program.enabled, updatedAt: now }),
+  });
 });
 
 export { programs };

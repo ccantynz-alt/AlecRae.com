@@ -14,12 +14,13 @@ interface MxRecord {
 import { EventEmitter } from "node:events";
 import type { SmtpClientConfig, Result } from "../types.js";
 import { ok, err } from "../types.js";
+import { getMtaHostname } from "../config.js";
 import type { TlsManager } from "../tls/manager.js";
 
 const DEFAULT_CLIENT_CONFIG: SmtpClientConfig = {
   host: "",
   port: 25,
-  localHostname: "mail.alecrae.dev",
+  localHostname: getMtaHostname(),
   connectTimeout: 30_000,
   socketTimeout: 60_000,
   greetingTimeout: 30_000,

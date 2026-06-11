@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { SPRING_BOUNCY, useAlecRaeReducedMotion } from "../lib/animations";
+import { useCommandPalette } from "../lib/command-palette-store";
 
 interface CommandItem {
   id: string;
@@ -43,7 +44,11 @@ function getDefaultCommands(router: ReturnType<typeof useRouter>): CommandItem[]
 export function CommandPalette(): React.ReactNode {
   const router = useRouter();
   const reduced = useAlecRaeReducedMotion();
-  const [open, setOpen] = useState(false);
+  // Open state lives in a shared store so pages (e.g. inbox keyboard
+  // shortcuts) can open the palette programmatically.
+  const open = useCommandPalette((s) => s.open);
+  const setOpen = useCommandPalette((s) => s.setOpen);
+  const togglePalette = useCommandPalette((s) => s.toggle);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -84,17 +89,18 @@ export function CommandPalette(): React.ReactNode {
     const handleKey = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        setOpen((prev) => !prev);
-        setQuery("");
-        setActiveIndex(0);
+        togglePalette();
       }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+  }, [togglePalette]);
 
   useEffect(() => {
     if (open) {
+      // Reset search state whenever the palette opens (keyboard or store).
+      setQuery("");
+      setActiveIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);

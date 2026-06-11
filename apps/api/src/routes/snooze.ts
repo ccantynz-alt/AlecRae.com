@@ -23,8 +23,31 @@ import { getDatabase, emails } from "@alecrae/db";
 const DEFAULT_UNDO_WINDOW_SECONDS = 10;
 const MAX_UNDO_WINDOW_SECONDS = 30;
 
-// Track recently sent emails that can still be undone
+// In-process cancel functions for pending deliveries. The cancelFn itself
+// (a live setTimeout handle) can only exist in this process, so it stays in
+// memory — but the undo WINDOW is also persisted to the email row's metadata
+// (`undoableUntil`) so a restart doesn't lose undo state:
+//   - normal path: Map hit → cancel the pending delivery, flip to draft
+//   - after restart: Map miss → reconcile from DB. The pending-delivery timer
+//     died with the old process (the email was never sent), so if the row's
+//     `undoableUntil` is still in the future the undo succeeds by flipping
+//     the email back to draft; otherwise the window has expired (410).
 const undoableEmails = new Map<string, { expiresAt: number; cancelFn: () => void }>();
+
+/**
+ * Decide whether an email can still be undone from its persisted metadata.
+ * Pure helper — exported for unit tests.
+ */
+export function resolveUndoFromMetadata(
+  metadata: Record<string, string> | null | undefined,
+  nowMs: number,
+): "undoable" | "expired" | "not_registered" {
+  const until = metadata?.["undoableUntil"];
+  if (!until) return "not_registered";
+  const untilMs = Date.parse(until);
+  if (Number.isNaN(untilMs)) return "not_registered";
+  return untilMs > nowMs ? "undoable" : "expired";
+}
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -166,33 +189,48 @@ scheduleSend.post(
   async (c) => {
     const emailId = c.req.param("id");
     const auth = c.get("auth");
+    const db = getDatabase();
 
     const undoable = undoableEmails.get(emailId);
-    if (!undoable) {
-      return c.json(
-        { error: { message: "Email cannot be undone. The undo window has expired or email was not sent through AlecRae.", code: "undo_expired" } },
-        410,
-      );
-    }
 
-    if (undoable.expiresAt < Date.now()) {
+    if (!undoable) {
+      // No in-process timer — either the window never existed, it expired, or
+      // the API restarted. Reconcile from the persisted `undoableUntil` marker.
+      const [row] = await db
+        .select({ metadata: emails.metadata })
+        .from(emails)
+        .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+        .limit(1);
+
+      const state = resolveUndoFromMetadata(row?.metadata, Date.now());
+
+      if (state !== "undoable") {
+        return c.json(
+          { error: { message: "Email cannot be undone. The undo window has expired or email was not sent through AlecRae.", code: "undo_expired" } },
+          410,
+        );
+      }
+      // Window is still open but the delivery timer died with the previous
+      // process — the email was never handed to the MTA, so undoing is just
+      // flipping it back to draft (handled below).
+    } else if (undoable.expiresAt < Date.now()) {
       undoableEmails.delete(emailId);
       return c.json(
         { error: { message: "Undo window has expired", code: "undo_expired" } },
         410,
       );
+    } else {
+      // Cancel the pending delivery
+      undoable.cancelFn();
+      undoableEmails.delete(emailId);
     }
 
-    // Cancel the pending delivery
-    undoable.cancelFn();
-    undoableEmails.delete(emailId);
-
-    // Move email back to drafts
-    const db = getDatabase();
+    // Move email back to drafts (and clear the persisted undo marker)
     await db
       .update(emails)
       .set({
         status: "draft",
+        metadata: {} as Record<string, string>,
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -246,13 +284,40 @@ scheduleSend.get(
 /**
  * Register an email as undoable for the configured window.
  * Called internally after send — not an API route.
+ *
+ * The cancelFn stays in memory (it wraps a live timer), but the window itself
+ * is persisted to the email row's metadata so the undo endpoint can reconcile
+ * after a restart (see the undo route above). The DB write is best-effort:
+ * in no-DB dev mode the in-memory path still works for this process.
  */
 export function registerUndoable(emailId: string, cancelFn: () => void, windowSeconds?: number): void {
   const window = Math.min(windowSeconds ?? DEFAULT_UNDO_WINDOW_SECONDS, MAX_UNDO_WINDOW_SECONDS);
-  undoableEmails.set(emailId, {
-    expiresAt: Date.now() + window * 1000,
-    cancelFn,
-  });
+  const expiresAt = Date.now() + window * 1000;
+  undoableEmails.set(emailId, { expiresAt, cancelFn });
+
+  // Persist the undo window (merged into existing metadata) — best-effort.
+  void (async (): Promise<void> => {
+    try {
+      const db = getDatabase();
+      const [row] = await db
+        .select({ metadata: emails.metadata })
+        .from(emails)
+        .where(eq(emails.id, emailId))
+        .limit(1);
+      await db
+        .update(emails)
+        .set({
+          metadata: {
+            ...(row?.metadata ?? {}),
+            undoableUntil: new Date(expiresAt).toISOString(),
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(emails.id, emailId));
+    } catch (err) {
+      console.error(`[undo-send] Failed to persist undo window for ${emailId}:`, err);
+    }
+  })();
 
   // Auto-cleanup after window expires
   setTimeout(() => {

@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { getDnsConfig } from "../config";
 import {
   RecordType,
   type CreateRecordInput,
@@ -36,9 +37,11 @@ export class DnsRecordManager {
 
     const now = new Date();
     const serial = this.generateSerial();
+    const { nsHosts } = getDnsConfig();
+    const primaryNs = nsHosts[0] ?? "ns1.alecrae.com";
 
     const soa: SoaRecord = {
-      primaryNs: `ns1.alecrae.dev`,
+      primaryNs,
       adminEmail: adminEmail ?? `admin.${normalized}`,
       serial,
       refresh: 3600,
@@ -57,20 +60,15 @@ export class DnsRecordManager {
     };
 
     // Add default NS records
-    this.addRecordToZone(zone, {
-      domain: normalized,
-      name: "@",
-      type: RecordType.NS,
-      value: "ns1.alecrae.dev",
-      ttl: 86400,
-    });
-    this.addRecordToZone(zone, {
-      domain: normalized,
-      name: "@",
-      type: RecordType.NS,
-      value: "ns2.alecrae.dev",
-      ttl: 86400,
-    });
+    for (const nsHost of nsHosts) {
+      this.addRecordToZone(zone, {
+        domain: normalized,
+        name: "@",
+        type: RecordType.NS,
+        value: nsHost,
+        ttl: 86400,
+      });
+    }
 
     this.zones.set(normalized, zone);
     return zone;

@@ -15,6 +15,13 @@
       "when": 1781163887093,
       "tag": "0001_broad_leader",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781177896919,
+      "tag": "0002_goofy_scarecrow",
+      "breakpoints": true
     }
   ]
 }

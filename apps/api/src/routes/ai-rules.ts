@@ -10,50 +10,59 @@
  * PATCH /v1/rules/:id              — Update rule
  * DELETE /v1/rules/:id             — Delete rule
  * POST /v1/rules/:id/test          — Test rule against recent emails
+ *
+ * Rules are persisted in the `email_rules` table (Drizzle) so they survive
+ * API restarts.
  */
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { eq, and, desc } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
+import {
+  getDatabase,
+  emailRules,
+  type EmailRule,
+  type EmailRuleCondition,
+  type EmailRuleAction,
+} from "@alecrae/db";
 
 const ANTHROPIC_API_KEY = process.env["ANTHROPIC_API_KEY"] ?? process.env["CLAUDE_API_KEY"];
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Serialization ───────────────────────────────────────────────────────────
 
-interface EmailRule {
+/**
+ * Serialize a DB rule row into the API response shape (ISO timestamps).
+ * Exported for unit tests.
+ */
+export function serializeRule(row: EmailRule): {
   id: string;
   accountId: string;
   name: string;
-  /** The original natural language description */
   description: string;
-  /** Conditions that must match */
-  conditions: RuleCondition[];
-  /** Match mode: all conditions must match, or any */
+  conditions: EmailRuleCondition[];
   matchMode: "all" | "any";
-  /** Actions to take when matched */
-  actions: RuleAction[];
-  /** Is this rule active? */
+  actions: EmailRuleAction[];
   enabled: boolean;
-  /** How many emails this rule has matched */
   matchCount: number;
   createdAt: string;
   updatedAt: string;
+} {
+  return {
+    id: row.id,
+    accountId: row.accountId,
+    name: row.name,
+    description: row.description,
+    conditions: row.conditions,
+    matchMode: row.matchMode,
+    actions: row.actions,
+    enabled: row.enabled,
+    matchCount: row.matchCount,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
-
-interface RuleCondition {
-  field: "from" | "to" | "cc" | "subject" | "body" | "has_attachment" | "size" | "label" | "is_newsletter" | "is_transactional";
-  operator: "contains" | "not_contains" | "equals" | "starts_with" | "ends_with" | "matches_regex" | "greater_than" | "less_than" | "is_true" | "is_false";
-  value: string;
-}
-
-interface RuleAction {
-  type: "label" | "move" | "archive" | "star" | "mark_read" | "mark_important" | "delete" | "forward" | "snooze" | "auto_reply" | "categorize";
-  value?: string;
-}
-
-// In-memory store (production: DB table)
-const ruleStore = new Map<string, EmailRule[]>();
 
 function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "");
@@ -61,7 +70,7 @@ function generateId(): string {
 
 // ─── AI Rule Generator ───────────────────────────────────────────────────────
 
-async function generateRuleFromText(text: string): Promise<{ conditions: RuleCondition[]; actions: RuleAction[]; name: string } | null> {
+async function generateRuleFromText(text: string): Promise<{ conditions: EmailRuleCondition[]; actions: EmailRuleAction[]; name: string } | null> {
   if (!ANTHROPIC_API_KEY) return null;
 
   const prompt = `Convert this email filtering instruction into structured rules. Return ONLY valid JSON.
@@ -169,22 +178,25 @@ aiRules.post(
       }, 400);
     }
 
-    const rule: EmailRule = {
+    const db = getDatabase();
+    const now = new Date();
+    const row: EmailRule = {
       id: generateId(),
       accountId: auth.accountId,
       name: generated.name,
       description: input.instruction,
-      conditions: generated.conditions as RuleCondition[],
+      conditions: generated.conditions,
       matchMode: "all",
-      actions: generated.actions as RuleAction[],
+      actions: generated.actions,
       enabled: true,
       matchCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
 
-    const existing = ruleStore.get(auth.accountId) ?? [];
-    ruleStore.set(auth.accountId, [...existing, rule]);
+    await db.insert(emailRules).values(row);
+
+    const rule = serializeRule(row);
 
     return c.json({
       data: {
@@ -200,10 +212,17 @@ aiRules.post(
 aiRules.get(
   "/",
   requireScope("rules:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const rules = ruleStore.get(auth.accountId) ?? [];
-    return c.json({ data: rules });
+    const db = getDatabase();
+
+    const rows = await db
+      .select()
+      .from(emailRules)
+      .where(eq(emailRules.accountId, auth.accountId))
+      .orderBy(desc(emailRules.createdAt));
+
+    return c.json({ data: rows.map(serializeRule) });
   },
 );
 
@@ -212,28 +231,29 @@ aiRules.post(
   "/",
   requireScope("rules:write"),
   validateBody(CreateRuleSchema),
-  (c) => {
+  async (c) => {
     const input = getValidatedBody<z.infer<typeof CreateRuleSchema>>(c);
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const rule: EmailRule = {
+    const now = new Date();
+    const row: EmailRule = {
       id: generateId(),
       accountId: auth.accountId,
       name: input.name,
       description: input.description,
-      conditions: input.conditions as RuleCondition[],
+      conditions: input.conditions as EmailRuleCondition[],
       matchMode: input.matchMode,
-      actions: input.actions as RuleAction[],
+      actions: input.actions as EmailRuleAction[],
       enabled: input.enabled,
       matchCount: 0,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
     };
 
-    const existing = ruleStore.get(auth.accountId) ?? [];
-    ruleStore.set(auth.accountId, [...existing, rule]);
+    await db.insert(emailRules).values(row);
 
-    return c.json({ data: rule }, 201);
+    return c.json({ data: serializeRule(row) }, 201);
   },
 );
 
@@ -242,25 +262,49 @@ aiRules.patch(
   "/:id",
   requireScope("rules:write"),
   validateBody(UpdateRuleSchema),
-  (c) => {
+  async (c) => {
     const id = c.req.param("id");
     const input = getValidatedBody<z.infer<typeof UpdateRuleSchema>>(c);
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const rules = ruleStore.get(auth.accountId) ?? [];
-    const rule = rules.find((r) => r.id === id);
+    const [existing] = await db
+      .select()
+      .from(emailRules)
+      .where(and(eq(emailRules.id, id), eq(emailRules.accountId, auth.accountId)))
+      .limit(1);
 
-    if (!rule) {
+    if (!existing) {
       return c.json({ error: { message: "Rule not found" } }, 404);
     }
 
-    if (input.name !== undefined) rule.name = input.name;
-    if (input.enabled !== undefined) rule.enabled = input.enabled;
-    if (input.conditions) rule.conditions = input.conditions as RuleCondition[];
-    if (input.actions) rule.actions = input.actions as RuleAction[];
-    rule.updatedAt = new Date().toISOString();
+    const now = new Date();
 
-    return c.json({ data: rule });
+    await db
+      .update(emailRules)
+      .set({
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+        ...(input.conditions !== undefined
+          ? { conditions: input.conditions as EmailRuleCondition[] }
+          : {}),
+        ...(input.actions !== undefined
+          ? { actions: input.actions as EmailRuleAction[] }
+          : {}),
+        updatedAt: now,
+      })
+      .where(and(eq(emailRules.id, id), eq(emailRules.accountId, auth.accountId)));
+
+    const updated: EmailRule = {
+      ...existing,
+      name: input.name ?? existing.name,
+      enabled: input.enabled ?? existing.enabled,
+      conditions: (input.conditions as EmailRuleCondition[] | undefined) ?? existing.conditions,
+      actions: (input.actions as EmailRuleAction[] | undefined) ?? existing.actions,
+      updatedAt: now,
+    };
+
+    return c.json({ data: serializeRule(updated) });
   },
 );
 
@@ -268,18 +312,25 @@ aiRules.patch(
 aiRules.delete(
   "/:id",
   requireScope("rules:write"),
-  (c) => {
+  async (c) => {
     const id = c.req.param("id");
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const rules = ruleStore.get(auth.accountId) ?? [];
-    const filtered = rules.filter((r) => r.id !== id);
+    const [existing] = await db
+      .select({ id: emailRules.id })
+      .from(emailRules)
+      .where(and(eq(emailRules.id, id), eq(emailRules.accountId, auth.accountId)))
+      .limit(1);
 
-    if (filtered.length === rules.length) {
+    if (!existing) {
       return c.json({ error: { message: "Rule not found" } }, 404);
     }
 
-    ruleStore.set(auth.accountId, filtered);
+    await db
+      .delete(emailRules)
+      .where(and(eq(emailRules.id, id), eq(emailRules.accountId, auth.accountId)));
+
     return c.json({ data: { deleted: true, id } });
   },
 );

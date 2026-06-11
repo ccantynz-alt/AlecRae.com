@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import type { JSX } from "react";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -30,6 +31,17 @@ const navigationSections: AnimatedSidebarSection[] = [
     items: [
       { id: "templates", label: "Templates", href: "/templates" },
       { id: "contacts", label: "Contacts", href: "/contacts" },
+      { id: "calendar", label: "Calendar", href: "/calendar" },
+      { id: "tasks", label: "Tasks", href: "/tasks" },
+      { id: "search", label: "Search", href: "/search" },
+      { id: "voice", label: "Voice", href: "/voice" },
+      { id: "scripts", label: "Scripts", href: "/scripts" },
+    ],
+  },
+  {
+    title: "Automation",
+    items: [
+      { id: "automations", label: "Automations", href: "/automations" },
     ],
   },
   {
@@ -166,7 +178,7 @@ export default function DashboardLayout({
         sections={sectionsWithActive}
         footer={footer}
         collapsed={collapsed}
-        onNavigate={(item) => router.push(item.href)}
+        onNavigate={(item) => router.push(item.href as Route)}
       />
       <Box as="main" className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">

@@ -12,6 +12,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
+import { eq, and, gte, lte, asc } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { detectMeetingIntent } from "@alecrae/ai-engine/calendar/slot-detector";
@@ -19,6 +20,12 @@ import {
   suggestSlotsForCompose,
   type SlotSuggestion,
 } from "@alecrae/ai-engine/calendar/slot-suggester";
+import {
+  getDatabase,
+  calendarEvents,
+  schedulingLinks,
+  type CalendarEvent as CalendarEventRow,
+} from "@alecrae/db";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -80,10 +87,54 @@ const SuggestSlotsFromTextSchema = z.object({
   daysAhead: z.number().int().min(1).max(30).default(7),
 });
 
-// ─── In-memory store ─────────────────────────────────────────────────────────
+// ─── Persistence ──────────────────────────────────────────────────────────────
+// Events live in the `calendar_events` table (written by the calendar-events
+// route) and scheduling links in `scheduling_links` — both survive restarts.
 
-const eventStore = new Map<string, CalendarEvent[]>();
-const schedulingLinks = new Map<string, { config: z.infer<typeof ScheduleLinkSchema>; accountId: string; token: string }>();
+/**
+ * Map a `calendar_events` DB row onto this route's legacy response shape.
+ * Organizer/provider/sourceEmailId are not tracked on the table; the organizer
+ * defaults to empty and provider to "ical". Exported for unit tests.
+ */
+export function toCalendarEventResponse(row: CalendarEventRow): CalendarEvent {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? "",
+    ...(row.location !== null ? { location: row.location } : {}),
+    startTime: row.startAt.toISOString(),
+    endTime: row.endAt.toISOString(),
+    isAllDay: row.allDay,
+    organizer: { name: "", email: "" },
+    attendees: (row.attendees ?? []).map((a) => ({
+      name: a.name ?? "",
+      email: a.email,
+      status: a.status,
+    })),
+    ...(row.videoLink !== null ? { conferenceUrl: row.videoLink } : {}),
+    provider: "ical",
+  };
+}
+
+/** Load events for an account that start within [from, to]. */
+async function loadEvents(
+  accountId: string,
+  from: Date,
+  to: Date,
+): Promise<CalendarEventRow[]> {
+  const db = getDatabase();
+  return db
+    .select()
+    .from(calendarEvents)
+    .where(
+      and(
+        eq(calendarEvents.accountId, accountId),
+        gte(calendarEvents.startAt, from),
+        lte(calendarEvents.startAt, to),
+      ),
+    )
+    .orderBy(asc(calendarEvents.startAt));
+}
 
 // ─── ICS Parser (basic) ─────────────────────────────────────────────────────
 
@@ -132,15 +183,14 @@ const calendar = new Hono();
 calendar.get(
   "/events",
   requireScope("calendar:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
     const from = c.req.query("from") ?? new Date().toISOString();
     const to = c.req.query("to") ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    const events = (eventStore.get(auth.accountId) ?? [])
-      .filter((e) => e.startTime >= from && e.startTime <= to)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-    return c.json({ data: events });
+    const rows = await loadEvents(auth.accountId, new Date(from), new Date(to));
+
+    return c.json({ data: rows.map(toCalendarEventResponse) });
   },
 );
 
@@ -180,10 +230,18 @@ calendar.post(
     const input = getValidatedBody<z.infer<typeof AvailabilitySchema>>(c);
     const auth = c.get("auth");
 
-    const events = eventStore.get(auth.accountId) ?? [];
+    const events = await loadEvents(
+      auth.accountId,
+      new Date(input.dateFrom),
+      new Date(input.dateTo),
+    );
     const busySlots = events
-      .filter((e) => e.startTime >= input.dateFrom && e.endTime <= input.dateTo)
-      .map((e) => ({ start: new Date(e.startTime).getTime(), end: new Date(e.endTime).getTime() }));
+      .filter(
+        (e) =>
+          e.startAt >= new Date(input.dateFrom) &&
+          e.endAt <= new Date(input.dateTo),
+      )
+      .map((e) => ({ start: e.startAt.getTime(), end: e.endAt.getTime() }));
 
     // Generate available slots
     const available: AvailabilitySlot[] = [];
@@ -227,7 +285,19 @@ calendar.post(
     const auth = c.get("auth");
 
     const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-    schedulingLinks.set(token, { config: input, accountId: auth.accountId, token });
+
+    const db = getDatabase();
+    await db.insert(schedulingLinks).values({
+      token,
+      accountId: auth.accountId,
+      title: input.title,
+      durationMinutes: input.durationMinutes,
+      dateFrom: new Date(input.dateRange.from),
+      dateTo: new Date(input.dateRange.to),
+      location: input.location ?? null,
+      description: input.description ?? null,
+      createdAt: new Date(),
+    });
 
     const baseUrl = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
 
@@ -273,10 +343,10 @@ calendar.post(
     const dateFrom = new Date(now.getTime() + 24 * 60 * 60 * 1000); // tomorrow
     const dateTo = new Date(now.getTime() + input.daysAhead * 24 * 60 * 60 * 1000);
 
-    const events = eventStore.get(auth.accountId) ?? [];
+    const events = await loadEvents(auth.accountId, dateFrom, dateTo);
     const busySlots = events
-      .filter((e) => e.startTime >= dateFrom.toISOString() && e.endTime <= dateTo.toISOString())
-      .map((e) => ({ start: new Date(e.startTime).getTime(), end: new Date(e.endTime).getTime() }));
+      .filter((e) => e.startAt >= dateFrom && e.endAt <= dateTo)
+      .map((e) => ({ start: e.startAt.getTime(), end: e.endAt.getTime() }));
 
     // Build availability windows from working hours, excluding busy slots
     const availabilityWindows: { start: Date; end: Date }[] = [];

@@ -14,6 +14,7 @@
 
 import * as net from "node:net";
 import * as tls from "node:tls";
+import { getMtaHostname } from "../config.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -377,13 +378,13 @@ async function sendViaSes(
     }
 
     // 3. EHLO
-    await relay.ehlo("mail.alecrae.dev");
+    await relay.ehlo(getMtaHostname());
 
     // 4. STARTTLS (required for SES on port 587)
     if (relay.hasExtension("STARTTLS")) {
       await relay.starttls(config.host);
       // Re-EHLO after TLS upgrade
-      await relay.ehlo("mail.alecrae.dev");
+      await relay.ehlo(getMtaHostname());
     }
 
     // 5. AUTH LOGIN with SES SMTP credentials
@@ -518,12 +519,12 @@ async function sendViaSmtpRelay(
     }
 
     // 3. EHLO
-    await relay.ehlo("mail.alecrae.dev");
+    await relay.ehlo(getMtaHostname());
 
     // 4. STARTTLS if not already on TLS and server supports it
     if (config.tls !== false && config.port !== 465 && relay.hasExtension("STARTTLS")) {
       await relay.starttls(config.host);
-      await relay.ehlo("mail.alecrae.dev");
+      await relay.ehlo(getMtaHostname());
     }
 
     // 5. AUTH if credentials provided

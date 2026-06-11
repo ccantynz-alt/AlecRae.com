@@ -182,4 +182,19 @@ Acceptable: realtime WebSocket registry, rate-limit Redis fallback.
 
 ---
 
-_Last updated: 2026-06-11 11:08 UTC_
+## Status update — same day
+
+The build wave that followed this audit (PR #63) closed: priority 1 (orphans +
+no-ops, except the items blocked on packages/ui), priority 2 (sidebar IA + 7
+new pages + developer settings), priority 3 (all in-memory stores → DB,
+migration `0002`), priority 4 (`.dev` hostnames, full sweep incl.
+inbound/imap/support), and priority 5 (fail-fast env validation). Also fixed
+en route: dead sidebar navigation (the root cause of "nothing in the left pane
+is clickable"), unprotected `/v1/admin/*` (any authenticated user could read
+cross-account data), and two cross-tenant leaks (import job status, collab
+comments). Remaining open: priorities 6–8 (backend stubs, broader API tests,
+standards burn-down) and the unwired components listed in CLAUDE.md issue #27.
+
+---
+
+_Last updated: 2026-06-11 11:46 UTC_

@@ -9,6 +9,7 @@ import {
 } from "@alecrae/ui";
 import { motion } from "motion/react";
 import { analyticsApi, heatmapApi, type OverviewStats } from "../../../lib/api";
+import { InboxHeatmapView } from "../../../components/InboxHeatmapView";
 import {
   staggerGrid,
   fadeInUp,
@@ -196,6 +197,18 @@ export default function AnalyticsPage(): React.ReactNode {
             formatValue={(v) => `${v}%`}
           />
         </motion.div>
+      </motion.div>
+
+      {/* A3: Inbox heatmap — email habits dashboard */}
+      <motion.div
+        className="mt-8"
+        variants={itemVariants}
+        initial="initial"
+        animate="animate"
+        role="region"
+        aria-label="Inbox heatmap and email habits"
+      >
+        <InboxHeatmapView />
       </motion.div>
     </PageLayout>
   );

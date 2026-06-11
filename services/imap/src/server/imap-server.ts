@@ -60,7 +60,7 @@ const DEFAULT_CONFIG: ImapServerConfig = {
   host: "0.0.0.0",
   port: 143,
   tlsPort: 993,
-  hostname: "mail.alecrae.dev",
+  hostname: process.env["IMAP_HOSTNAME"] ?? "mail.alecrae.com",
   maxConnections: 1000,
   connectionTimeout: 1_800_000, // 30 minutes per RFC 9051 recommendation
   socketTimeout: 300_000, // 5 minutes idle
@@ -664,7 +664,7 @@ export class ImapServer extends EventEmitter<ImapServerEvents> {
   ): void {
     writer(
       formatUntagged(
-        'ID ("name" "AlecRae" "vendor" "AlecRae Platform" "support-url" "https://alecrae.dev/support")',
+        'ID ("name" "AlecRae" "vendor" "AlecRae Platform" "support-url" "https://alecrae.com/support")',
       ),
     );
     writer(formatTagged(command.tag, "OK", "ID completed"));

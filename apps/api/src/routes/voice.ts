@@ -15,15 +15,60 @@ import {
   validateBody,
   getValidatedBody,
 } from "../middleware/validator.js";
-import { getDatabase, emails } from "@alecrae/db";
+import { getDatabase, emails, voiceProfiles } from "@alecrae/db";
 
 // ─── Lazy import the AI compose module ───────────────────────────────────────
 // The ai-engine is a separate service; we import its core classes directly.
 // Currently unused; kept as a stub comment for future wiring.
 
-// ─── In-memory voice profile cache (production: use DB or Redis) ─────────────
+// ─── Voice profile cache ─────────────────────────────────────────────────────
+// Read-through cache over the `voice_profiles` table: reads hit the Map first,
+// fall back to the DB, and analysis writes through to both. Profiles survive
+// API restarts; the cache only saves the DB round-trip on hot paths.
 
-const voiceProfiles = new Map<string, unknown>();
+interface VoiceProfileResponse {
+  accountId: string;
+  averageSentenceLength: number;
+  vocabularyLevel: "simple" | "moderate" | "advanced";
+  sampleCount: number;
+  analyzedAt: string;
+}
+
+const voiceProfileCache = new Map<string, VoiceProfileResponse>();
+
+/**
+ * Load a profile: cache first, then DB (populating the cache). Returns
+ * undefined when no profile exists or the DB is unavailable (dev no-DB mode
+ * degrades to cache-only, matching the old in-memory behavior).
+ */
+async function loadVoiceProfile(
+  accountId: string,
+): Promise<VoiceProfileResponse | undefined> {
+  const cached = voiceProfileCache.get(accountId);
+  if (cached) return cached;
+
+  try {
+    const db = getDatabase();
+    const [row] = await db
+      .select()
+      .from(voiceProfiles)
+      .where(eq(voiceProfiles.accountId, accountId))
+      .limit(1);
+    if (!row) return undefined;
+
+    const profile: VoiceProfileResponse = {
+      accountId: row.accountId,
+      averageSentenceLength: row.averageSentenceLength,
+      vocabularyLevel: row.vocabularyLevel,
+      sampleCount: row.sampleCount,
+      analyzedAt: row.analyzedAt.toISOString(),
+    };
+    voiceProfileCache.set(accountId, profile);
+    return profile;
+  } catch {
+    return undefined;
+  }
+}
 
 // ─── Claude AI client adapter ────────────────────────────────────────────────
 
@@ -173,16 +218,35 @@ voice.post(
     else if (typeTokenRatio > 0.4 || avgWordLength > 4.5) vocabularyLevel = "moderate";
     else vocabularyLevel = "simple";
 
-    const profile = {
+    const analyzedAt = new Date();
+    const profile: VoiceProfileResponse = {
       accountId: auth.accountId,
       averageSentenceLength: Math.round(avgSentenceLength * 10) / 10,
       vocabularyLevel,
       sampleCount: sentEmails.length,
-      analyzedAt: new Date().toISOString(),
+      analyzedAt: analyzedAt.toISOString(),
     };
 
-    // Cache the profile
-    voiceProfiles.set(auth.accountId, profile);
+    // Write through: persist + cache
+    await db
+      .insert(voiceProfiles)
+      .values({
+        accountId: auth.accountId,
+        averageSentenceLength: profile.averageSentenceLength,
+        vocabularyLevel,
+        sampleCount: profile.sampleCount,
+        analyzedAt,
+      })
+      .onConflictDoUpdate({
+        target: voiceProfiles.accountId,
+        set: {
+          averageSentenceLength: profile.averageSentenceLength,
+          vocabularyLevel,
+          sampleCount: profile.sampleCount,
+          analyzedAt,
+        },
+      });
+    voiceProfileCache.set(auth.accountId, profile);
 
     return c.json({ data: profile });
   },
@@ -195,7 +259,7 @@ voice.get(
   async (c) => {
     const auth = c.get("auth");
 
-    const profile = voiceProfiles.get(auth.accountId);
+    const profile = await loadVoiceProfile(auth.accountId);
     if (!profile) {
       return c.json(
         {
@@ -222,7 +286,7 @@ voice.post(
     const input = getValidatedBody<z.infer<typeof DraftSchema>>(c);
     const auth = c.get("auth");
 
-    const profile = voiceProfiles.get(auth.accountId) as Record<string, unknown> | undefined;
+    const profile = await loadVoiceProfile(auth.accountId);
 
     const parts: string[] = [
       "You are an AI email writing assistant. Write an email based on these instructions.",
@@ -233,8 +297,8 @@ voice.post(
     if (profile) {
       parts.push("");
       parts.push("Match this writing style:");
-      parts.push(`- Average sentence length: ~${profile["averageSentenceLength"]} words`);
-      parts.push(`- Vocabulary level: ${profile["vocabularyLevel"]}`);
+      parts.push(`- Average sentence length: ~${profile.averageSentenceLength} words`);
+      parts.push(`- Vocabulary level: ${profile.vocabularyLevel}`);
     }
 
     if (input.recipientName) {
@@ -310,14 +374,14 @@ voice.post(
     const input = getValidatedBody<z.infer<typeof AdjustSchema>>(c);
     const auth = c.get("auth");
 
-    const profile = voiceProfiles.get(auth.accountId) as Record<string, unknown> | undefined;
+    const profile = await loadVoiceProfile(auth.accountId);
 
     const parts: string[] = [
       `Rewrite the following email with a ${input.tone} tone.`,
     ];
 
     if (profile) {
-      parts.push(`Maintain the user's writing style (avg sentence length: ~${profile["averageSentenceLength"]} words, vocabulary: ${profile["vocabularyLevel"]}).`);
+      parts.push(`Maintain the user's writing style (avg sentence length: ~${profile.averageSentenceLength} words, vocabulary: ${profile.vocabularyLevel}).`);
     }
 
     parts.push("");

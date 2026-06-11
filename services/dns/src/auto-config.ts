@@ -15,26 +15,18 @@ import {
   domains as domainsTable,
   dnsRecords as dnsRecordsTable,
 } from "@alecrae/db";
+import { getDnsConfig } from "./config";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
+// Hostname/record values (MX, SPF, DMARC, return-path) are env-driven with
+// production `.com` defaults — see ./config.ts.
 
 const DKIM_KEY_SIZE = 2048;
 const DKIM_SELECTOR_PREFIX = "alecrae";
 const DKIM_ROTATION_DAYS = 90;
 const SPF_MAX_LOOKUPS = 10;
-
-const MX_SERVERS = [
-  { host: "mx1.alecrae.dev", priority: 10 },
-  { host: "mx2.alecrae.dev", priority: 20 },
-] as const;
-const [MX_PRIMARY, MX_SECONDARY] = MX_SERVERS;
-
-const SPF_VALUE = "v=spf1 include:spf.alecrae.dev ~all";
-const DMARC_VALUE =
-  "v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@alecrae.dev; pct=100";
-const RETURN_PATH_CNAME = "bounce.alecrae.dev";
 
 const generateKeyPairAsync = promisify(crypto.generateKeyPair);
 
@@ -211,6 +203,7 @@ export async function generateDomainConfig(
   accountId: string,
 ): Promise<DomainConfigResult> {
   const db = getDatabase();
+  const dnsConfig = getDnsConfig();
   const domainId = generateId();
   const now = new Date();
 
@@ -223,35 +216,26 @@ export async function generateDomainConfig(
 
   const records: DnsRecordEntry[] = [
     // MX records
-    {
-      id: generateId(),
-      domainId,
-      type: "MX",
-      name: domain,
-      value: MX_PRIMARY.host,
-      ttl: 3600,
-      priority: MX_PRIMARY.priority,
-      verified: false,
-      purpose: "mx",
-    },
-    {
-      id: generateId(),
-      domainId,
-      type: "MX",
-      name: domain,
-      value: MX_SECONDARY.host,
-      ttl: 3600,
-      priority: MX_SECONDARY.priority,
-      verified: false,
-      purpose: "mx",
-    },
+    ...dnsConfig.mxHosts.map(
+      (mx): DnsRecordEntry => ({
+        id: generateId(),
+        domainId,
+        type: "MX",
+        name: domain,
+        value: mx.host,
+        ttl: 3600,
+        priority: mx.priority,
+        verified: false,
+        purpose: "mx",
+      }),
+    ),
     // SPF
     {
       id: generateId(),
       domainId,
       type: "TXT",
       name: domain,
-      value: SPF_VALUE,
+      value: dnsConfig.spfValue,
       ttl: 3600,
       priority: null,
       verified: false,
@@ -275,7 +259,7 @@ export async function generateDomainConfig(
       domainId,
       type: "TXT",
       name: `_dmarc.${domain}`,
-      value: DMARC_VALUE,
+      value: dnsConfig.dmarcValue,
       ttl: 3600,
       priority: null,
       verified: false,
@@ -287,7 +271,7 @@ export async function generateDomainConfig(
       domainId,
       type: "CNAME",
       name: `bounce.${domain}`,
-      value: RETURN_PATH_CNAME,
+      value: dnsConfig.returnPathHost,
       ttl: 3600,
       priority: null,
       verified: false,
@@ -304,9 +288,9 @@ export async function generateDomainConfig(
     dkimSelector,
     dkimPublicKey: publicKey,
     dkimPrivateKey: privateKey,
-    spfRecord: SPF_VALUE,
+    spfRecord: dnsConfig.spfValue,
     dmarcPolicy: "quarantine",
-    dmarcRecord: DMARC_VALUE,
+    dmarcRecord: dnsConfig.dmarcValue,
     returnPathDomain: `bounce.${domain}`,
     isActive: false,
     isDefault: false,
@@ -476,7 +460,8 @@ export async function verifyDomainConfig(
 // ---------------------------------------------------------------------------
 
 async function verifySPF(domain: string): Promise<RecordVerification> {
-  const expected = "include:spf.alecrae.dev";
+  const { spfInclude } = getDnsConfig();
+  const expected = spfInclude;
   const txtRecords = await safeResolve(domain, "TXT");
 
   if (!txtRecords) {
@@ -488,12 +473,12 @@ async function verifySPF(domain: string): Promise<RecordVerification> {
     return { verified: false, expected, found: null, error: "No SPF record found" };
   }
 
-  const hasOurInclude = spfRecords.some((r) => r.includes("include:spf.alecrae.dev"));
+  const hasOurInclude = spfRecords.some((r) => r.includes(spfInclude));
   return {
     verified: hasOurInclude,
     expected,
     found: spfRecords[0] ?? null,
-    error: hasOurInclude ? null : "SPF record does not include spf.alecrae.dev",
+    error: hasOurInclude ? null : `SPF record does not include ${spfInclude.replace(/^include:/, "")}`,
   };
 }
 
@@ -621,7 +606,7 @@ async function verifyDMARC(domain: string): Promise<RecordVerification> {
 }
 
 async function verifyMX(domain: string): Promise<RecordVerification> {
-  const expectedHosts = MX_SERVERS.map((s) => s.host.toLowerCase());
+  const expectedHosts = getDnsConfig().mxHosts.map((s) => s.host.toLowerCase());
   const mxRecords = await safeResolve(domain, "MX");
 
   if (!mxRecords) {
@@ -660,13 +645,14 @@ async function verifyMX(domain: string): Promise<RecordVerification> {
 }
 
 async function verifyReturnPath(domain: string): Promise<RecordVerification> {
+  const returnPathHost = getDnsConfig().returnPathHost.toLowerCase();
   const bounceHost = `bounce.${domain}`;
   const cnameRecords = await safeResolve(bounceHost, "CNAME");
 
   if (!cnameRecords) {
     return {
       verified: false,
-      expected: `CNAME to ${RETURN_PATH_CNAME}`,
+      expected: `CNAME to ${returnPathHost}`,
       found: null,
       error: "DNS lookup failed for Return-Path CNAME",
     };
@@ -675,7 +661,7 @@ async function verifyReturnPath(domain: string): Promise<RecordVerification> {
   if (cnameRecords.length === 0) {
     return {
       verified: false,
-      expected: `CNAME to ${RETURN_PATH_CNAME}`,
+      expected: `CNAME to ${returnPathHost}`,
       found: null,
       error: "No CNAME record found for bounce subdomain",
     };
@@ -684,13 +670,13 @@ async function verifyReturnPath(domain: string): Promise<RecordVerification> {
   const normalized = cnameRecords.map((r) =>
     r.toLowerCase().replace(/\.$/, ""),
   );
-  const hasOurCname = normalized.includes(RETURN_PATH_CNAME);
+  const hasOurCname = normalized.includes(returnPathHost);
 
   return {
     verified: hasOurCname,
-    expected: `CNAME to ${RETURN_PATH_CNAME}`,
+    expected: `CNAME to ${returnPathHost}`,
     found: cnameRecords.join(", "),
-    error: hasOurCname ? null : `CNAME does not point to ${RETURN_PATH_CNAME}`,
+    error: hasOurCname ? null : `CNAME does not point to ${returnPathHost}`,
   };
 }
 
@@ -747,10 +733,11 @@ export async function checkDomainHealth(
   // Calculate health score
   let score = 0;
   const recommendations: string[] = [];
+  const dnsConfig = getDnsConfig();
 
   // Verification score (up to 70 points)
   if (verification.spf.verified) score += 15;
-  else recommendations.push("Configure SPF record: add TXT record with 'v=spf1 include:spf.alecrae.dev ~all'");
+  else recommendations.push(`Configure SPF record: add TXT record with '${dnsConfig.spfValue}'`);
 
   if (verification.dkim.verified) score += 20;
   else recommendations.push(`Configure DKIM record: add TXT record at ${domainRecord.dkimSelector}._domainkey.${domainRecord.domain}`);
@@ -759,10 +746,14 @@ export async function checkDomainHealth(
   else recommendations.push("Configure DMARC record: add TXT record at _dmarc with 'v=DMARC1; p=quarantine; ...'");
 
   if (verification.mx.verified) score += 10;
-  else recommendations.push("Configure MX records: point to mx1.alecrae.dev (priority 10) and mx2.alecrae.dev (priority 20)");
+  else recommendations.push(
+    `Configure MX records: point to ${dnsConfig.mxHosts
+      .map((mx) => `${mx.host} (priority ${mx.priority})`)
+      .join(" and ")}`,
+  );
 
   if (verification.returnPath.verified) score += 10;
-  else recommendations.push("Configure Return-Path: add CNAME record 'bounce' pointing to bounce.alecrae.dev");
+  else recommendations.push(`Configure Return-Path: add CNAME record 'bounce' pointing to ${dnsConfig.returnPathHost}`);
 
   // Key rotation score (up to 15 points)
   if (dkimKeyAge !== null) {

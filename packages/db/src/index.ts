@@ -489,9 +489,11 @@ export {
 export {
   calendarEvents,
   calendarAvailability,
+  schedulingLinks,
   calendarEventStatusEnum,
   calendarEventsRelations,
   calendarAvailabilityRelations,
+  schedulingLinksRelations,
 } from "./schema/calendar-events.js";
 export type {
   RecurrenceRule,
@@ -730,6 +732,73 @@ export {
   encryptionKeys,
   encryptionKeysRelations,
 } from "./schema/encryption-keys.js";
+
+// Schema - Email Rules (AI/NL-generated + manual email filtering rules)
+export {
+  emailRules,
+  ruleMatchModeEnum,
+  emailRulesRelations,
+} from "./schema/email-rules.js";
+export type {
+  EmailRuleCondition,
+  EmailRuleAction,
+} from "./schema/email-rules.js";
+
+// Schema - Programs (programmable email TypeScript snippets + run history)
+export {
+  programs,
+  programRuns,
+  programsRelations,
+  programRunsRelations,
+} from "./schema/programs.js";
+export type {
+  ProgramTriggerValue,
+  ProgramRunAction,
+} from "./schema/programs.js";
+
+// Schema - Import Jobs (one-click email migration job state)
+export {
+  importJobs,
+  importSourceEnum,
+  importJobStatusEnum,
+  importJobsRelations,
+} from "./schema/import-jobs.js";
+export type { ImportJobProgress } from "./schema/import-jobs.js";
+
+// Schema - Phishing Reports (user-submitted phishing reports)
+export {
+  phishingReports,
+  phishingReportsRelations,
+} from "./schema/phishing-reports.js";
+
+// Schema - Voice Messages (voice-to-voice replies — B8)
+export {
+  voiceMessages,
+  voiceMessagesRelations,
+} from "./schema/voice-messages.js";
+
+// Schema - DLQ Records (dead-letter queue persistence)
+export { dlqRecords, dlqStatusEnum } from "./schema/dlq-records.js";
+
+// Schema - Shared Inboxes, Email Comments, Email Assignments (collaboration)
+export {
+  sharedInboxes,
+  emailComments,
+  emailAssignments,
+  assignmentStatusEnum,
+  assignmentPriorityEnum,
+  sharedInboxesRelations,
+  emailCommentsRelations,
+  emailAssignmentsRelations,
+} from "./schema/shared-inboxes.js";
+export type { SharedInboxMemberEntry } from "./schema/shared-inboxes.js";
+
+// Schema - Voice Profiles (lightweight per-account writing style analysis)
+export {
+  voiceProfiles,
+  vocabularyLevelEnum,
+  voiceProfilesRelations,
+} from "./schema/voice-profiles.js";
 
 // ---------------------------------------------------------------------------
 // Inferred types from schemas
@@ -1120,3 +1189,67 @@ import type { encryptionKeys } from "./schema/encryption-keys.js";
 
 export type EncryptionKey = InferSelectModel<typeof encryptionKeys>;
 export type NewEncryptionKey = InferInsertModel<typeof encryptionKeys>;
+
+// Email Rules types
+import type { emailRules } from "./schema/email-rules.js";
+
+export type EmailRule = InferSelectModel<typeof emailRules>;
+export type NewEmailRule = InferInsertModel<typeof emailRules>;
+
+// Programs types
+import type { programs, programRuns } from "./schema/programs.js";
+
+export type Program = InferSelectModel<typeof programs>;
+export type NewProgram = InferInsertModel<typeof programs>;
+export type ProgramRun = InferSelectModel<typeof programRuns>;
+export type NewProgramRun = InferInsertModel<typeof programRuns>;
+
+// Import Job types
+import type { importJobs } from "./schema/import-jobs.js";
+
+export type ImportJob = InferSelectModel<typeof importJobs>;
+export type NewImportJob = InferInsertModel<typeof importJobs>;
+
+// Phishing Report types
+import type { phishingReports } from "./schema/phishing-reports.js";
+
+export type PhishingReport = InferSelectModel<typeof phishingReports>;
+export type NewPhishingReport = InferInsertModel<typeof phishingReports>;
+
+// Voice Message types
+import type { voiceMessages } from "./schema/voice-messages.js";
+
+export type VoiceMessage = InferSelectModel<typeof voiceMessages>;
+export type NewVoiceMessage = InferInsertModel<typeof voiceMessages>;
+
+// DLQ Record types
+import type { dlqRecords } from "./schema/dlq-records.js";
+
+export type DlqRecordEntry = InferSelectModel<typeof dlqRecords>;
+export type NewDlqRecordEntry = InferInsertModel<typeof dlqRecords>;
+
+// Shared Inboxes / Comments / Assignments types
+import type {
+  sharedInboxes,
+  emailComments,
+  emailAssignments,
+} from "./schema/shared-inboxes.js";
+
+export type SharedInbox = InferSelectModel<typeof sharedInboxes>;
+export type NewSharedInbox = InferInsertModel<typeof sharedInboxes>;
+export type EmailComment = InferSelectModel<typeof emailComments>;
+export type NewEmailComment = InferInsertModel<typeof emailComments>;
+export type EmailAssignment = InferSelectModel<typeof emailAssignments>;
+export type NewEmailAssignment = InferInsertModel<typeof emailAssignments>;
+
+// Voice Profile types
+import type { voiceProfiles } from "./schema/voice-profiles.js";
+
+export type VoiceProfile = InferSelectModel<typeof voiceProfiles>;
+export type NewVoiceProfile = InferInsertModel<typeof voiceProfiles>;
+
+// Scheduling Link types
+import type { schedulingLinks } from "./schema/calendar-events.js";
+
+export type SchedulingLink = InferSelectModel<typeof schedulingLinks>;
+export type NewSchedulingLink = InferInsertModel<typeof schedulingLinks>;
