@@ -2,7 +2,7 @@
 
 import type { JSX } from "react";
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Box, Text } from "@alecrae/ui";
 import { AnimatedSidebar, type AnimatedSidebarSection } from "../../components/AnimatedSidebar";
 import { AnimatedPage } from "../../components/AnimatedPage";
@@ -53,6 +53,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }): JSX.Element {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState<UserInfo>({ name: "User", email: "" });
   const hydrate = useFocusMode((s) => s.hydrate);
@@ -165,6 +166,7 @@ export default function DashboardLayout({
         sections={sectionsWithActive}
         footer={footer}
         collapsed={collapsed}
+        onNavigate={(item) => router.push(item.href)}
       />
       <Box as="main" className="flex-1 flex flex-col min-h-0 overflow-hidden">
         <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">

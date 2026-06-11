@@ -16,7 +16,7 @@ import { logger } from "hono/logger";
 import { timing } from "hono/timing";
 import { secureHeaders } from "hono/secure-headers";
 
-import { authMiddleware } from "./middleware/auth.js";
+import { authMiddleware, requireAdmin } from "./middleware/auth.js";
 import {
   globalIpRateLimit,
   authRateLimit,
@@ -743,8 +743,8 @@ app.use("/v1/dpa/sign", authMiddleware, writeRateLimit);
 app.use("/v1/dpa", authMiddleware, readRateLimit);
 app.route("/v1/dpa", dpaRouter);
 
-// Admin dashboard: requires admin API key auth (applied via authMiddleware above)
-app.use("/v1/admin/*", authMiddleware, readRateLimit);
+// Admin dashboard: requires an admin credential (owner/admin role or admin:* scope)
+app.use("/v1/admin/*", authMiddleware, requireAdmin(), readRateLimit);
 app.route("/v1/admin", admin);
 
 // ─── 404 handler ────────────────────────────────────────────────────────────

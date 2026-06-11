@@ -13,7 +13,7 @@
 import { createMiddleware } from "hono/factory";
 import type { Context } from "hono";
 import { eq } from "drizzle-orm";
-import { getDatabase, apiKeys, accounts } from "@alecrae/db";
+import { getDatabase, apiKeys, accounts, users } from "@alecrae/db";
 import type { PlanTier } from "../types.js";
 
 // ─── Auth context attached to every authenticated request ───────────────────
@@ -293,6 +293,88 @@ export function requireScope(...requiredScopes: string[]) {
 
     await next();
     return;
+  });
+}
+
+// ─── Admin enforcement middleware ───────────────────────────────────────────
+
+/**
+ * Restricts a route to administrators. Passes when either:
+ *   - the credential carries an explicit `admin:read`/`admin:write` scope
+ *     (admin API keys / specially-minted JWTs), or
+ *   - the session belongs to a user whose DB role is `owner` or `admin`.
+ *
+ * Without a DATABASE_URL (local dev fallback auth) the role lookup is
+ * impossible, so access is allowed only outside production.
+ */
+export function requireAdmin() {
+  return createMiddleware(async (c, next) => {
+    const auth = c.get("auth");
+    if (!auth) {
+      return c.json(
+        {
+          error: {
+            type: "authentication_error",
+            message: "Not authenticated",
+            code: "unauthenticated",
+          },
+        },
+        401,
+      );
+    }
+
+    if (
+      auth.scopes.includes("admin:read") ||
+      auth.scopes.includes("admin:write")
+    ) {
+      await next();
+      return;
+    }
+
+    if (!process.env.DATABASE_URL) {
+      if (process.env.NODE_ENV === "production") {
+        return c.json(
+          {
+            error: {
+              type: "authorization_error",
+              message: "Admin access requires an admin credential",
+              code: "admin_required",
+            },
+          },
+          403,
+        );
+      }
+      await next();
+      return;
+    }
+
+    if (auth.userId) {
+      try {
+        const db = getDatabase();
+        const [user] = await db
+          .select({ role: users.role })
+          .from(users)
+          .where(eq(users.id, auth.userId))
+          .limit(1);
+        if (user && (user.role === "owner" || user.role === "admin")) {
+          await next();
+          return;
+        }
+      } catch (error) {
+        console.error("[auth] Admin role lookup failed:", error);
+      }
+    }
+
+    return c.json(
+      {
+        error: {
+          type: "authorization_error",
+          message: "Admin access requires an owner/admin role or admin scope",
+          code: "admin_required",
+        },
+      },
+      403,
+    );
   });
 }
 
