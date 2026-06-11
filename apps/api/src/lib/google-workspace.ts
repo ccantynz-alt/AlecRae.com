@@ -148,12 +148,12 @@ export async function listWorkspaceUsers(
       );
     }
     const body = (await res.json()) as {
-      users?: Array<{
+      users?: {
         primaryEmail: string;
         name?: { fullName?: string };
         suspended?: boolean;
         isAdmin?: boolean;
-      }>;
+      }[];
       nextPageToken?: string;
     };
 
