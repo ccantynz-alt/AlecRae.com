@@ -670,7 +670,7 @@ larger storage, unlimited accounts, dedicated support. Billing wiring pending
 13. **Configure DNS** for alecrae.com — MX, SPF, DKIM, DMARC, CNAMEs (Craig)
 14. **Set up Stripe** live keys + webhook URL → api.alecrae.com/billing/webhook (Craig)
 15. **Add API keys** — Anthropic, OpenAI, Google OAuth, Microsoft OAuth (Craig)
-16. **Deploy to Crontec** — connect repo, set env vars, point domain (Craig + Claude)
+16. **Deploy to Vapron** — Craig: get `VAPRON_API_KEY` (vpk_*) from the Vapron dashboard, then one command: `VAPRON_API_KEY=vpk_... bun run deploy:vapron`. Full checklist: `docs/infra/vapron-go-live.md`. For continuous deploys: add the key as a GH secret + set `ENABLE_VAPRON_DEPLOY=true` (gated job in standalone-deploy.yml). **The key is the only blocker — everything else is ready.**
 17. **Stand up sending for Craig** — see `docs/infra/email-sending-runbook.md` (DNS + SES relay + warmup, no Neon dependency)
 18. ~~Full CI suite green (lint, typecheck, test, build, security scan)~~ DONE 2026-05-29 — PR #44 merged
 19. ~~Wire full marketing landing page~~ DONE 2026-05-29 — dark component suite + ProductSuite section live
@@ -767,7 +767,7 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Last updated:** 2026-06-11 11:46 UTC
+**Last updated:** 2026-06-11 12:12 UTC
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Google sign-in + Vapron platform integration landed (PR #48). **Vapron is the permanent platform** (AI gateway, email, object storage, hosting/deploy) — Cloudflare/Vercel/Neon were always interim scaffolding until Vapron was built, and the app migrates onto Vapron as the target infra. The Vapron client has been rebuilt against the published tRPC API (issue #19 fixed). The off-stack AWS EKS deploy pipeline has been removed. Production deployment awaiting Craig's Vapron + infra setup.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
