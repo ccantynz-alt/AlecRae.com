@@ -64,6 +64,27 @@
       "when": 1700000008000,
       "tag": "0009_create_email_embeddings",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1700000009000,
+      "tag": "0010_create_draft_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1700000010000,
+      "tag": "0011_add_draft_to_email_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1700000011000,
+      "tag": "0012_fix_schema_drift",
+      "breakpoints": true
     }
   ]
 }
