@@ -25,27 +25,12 @@ import {
   type PhishingLink,
   type PhishingAttachment,
 } from "@alecrae/ai-engine/security/phishing";
-import { getDatabase, emails, attachments as attachmentsTable } from "@alecrae/db";
-
-// ─── In-memory phishing report store (DB-backed in a future migration) ───────
-
-interface PhishingReport {
-  readonly id: string;
-  readonly accountId: string;
-  readonly emailId: string | null;
-  readonly fromAddress: string;
-  readonly subject: string;
-  readonly reason: string | null;
-  readonly reportedAt: string;
-}
-
-const phishingReports = new Map<string, PhishingReport[]>();
-
-function recordReport(report: PhishingReport): void {
-  const list = phishingReports.get(report.accountId) ?? [];
-  list.push(report);
-  phishingReports.set(report.accountId, list);
-}
+import {
+  getDatabase,
+  emails,
+  attachments as attachmentsTable,
+  phishingReports,
+} from "@alecrae/db";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -301,17 +286,29 @@ security.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof ReportPhishingSchema>>(c);
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    const report: PhishingReport = {
+    // Persisted in the `phishing_reports` table so reports survive restarts.
+    const reportedAt = new Date();
+    const report = {
       id: safeRandomId(),
       accountId: auth.accountId,
       emailId: input.emailId ?? null,
       fromAddress: input.fromAddress.toLowerCase(),
       subject: input.subject,
       reason: input.reason ?? null,
-      reportedAt: new Date().toISOString(),
+      reportedAt: reportedAt.toISOString(),
     };
-    recordReport(report);
+
+    await db.insert(phishingReports).values({
+      id: report.id,
+      accountId: report.accountId,
+      emailId: report.emailId,
+      fromAddress: report.fromAddress,
+      subject: report.subject,
+      reason: report.reason,
+      reportedAt,
+    });
 
     return c.json({
       data: {

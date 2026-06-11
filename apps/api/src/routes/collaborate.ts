@@ -32,6 +32,10 @@ import {
   collaborationInvites,
   collaborationParticipants,
   collaborationHistory,
+  sharedInboxes,
+  emailComments,
+  emailAssignments,
+  type SharedInboxMemberEntry,
 } from "@alecrae/db";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
@@ -130,51 +134,9 @@ function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "");
 }
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-interface SharedInbox {
-  id: string;
-  accountId: string;
-  name: string;
-  email: string;
-  members: SharedInboxMember[];
-  createdAt: Date;
-}
-
-interface SharedInboxMember {
-  userId: string;
-  role: "owner" | "admin" | "member";
-  addedAt: Date;
-}
-
-interface InternalComment {
-  id: string;
-  emailId: string;
-  authorId: string;
-  authorName: string;
-  body: string;
-  mentions: string[];
-  createdAt: Date;
-}
-
-interface Assignment {
-  id: string;
-  emailId: string;
-  assignedTo: string;
-  assignedBy: string;
-  status: "open" | "in_progress" | "done" | "snoozed";
-  priority: "low" | "medium" | "high" | "urgent";
-  dueAt?: Date | undefined;
-  note?: string | undefined;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// ─── In-memory stores (production: DB tables) ────────────────────────────────
-
-const sharedInboxes = new Map<string, SharedInbox[]>();
-const comments = new Map<string, InternalComment[]>(); // emailId -> comments
-const assignments = new Map<string, Assignment[]>(); // accountId -> assignments
+// Shared inboxes, internal comments, and assignments are persisted in the
+// `shared_inboxes`, `email_comments`, and `email_assignments` tables (Drizzle)
+// so they survive API restarts.
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -235,25 +197,28 @@ collaborate.post(
   "/shared-inboxes",
   requireScope("collaborate:write"),
   validateBody(CreateSharedInboxSchema),
-  (c) => {
+  async (c) => {
     const input =
       getValidatedBody<z.infer<typeof CreateSharedInboxSchema>>(c);
     const auth = c.get("auth");
+    const db = getDb();
 
-    const inbox: SharedInbox = {
+    const now = new Date();
+    const members: SharedInboxMemberEntry[] = [
+      { userId: auth.accountId, role: "owner", addedAt: now.toISOString() },
+      ...input.members.map((m) => ({ ...m, addedAt: now.toISOString() })),
+    ];
+
+    const inbox = {
       id: generateId(),
       accountId: auth.accountId,
       name: input.name,
       email: input.email,
-      members: [
-        { userId: auth.accountId, role: "owner", addedAt: new Date() },
-        ...input.members.map((m) => ({ ...m, addedAt: new Date() })),
-      ],
-      createdAt: new Date(),
+      members,
+      createdAt: now,
     };
 
-    const existing = sharedInboxes.get(auth.accountId) ?? [];
-    sharedInboxes.set(auth.accountId, [...existing, inbox]);
+    await db.insert(sharedInboxes).values(inbox);
 
     return c.json({ data: inbox }, 201);
   },
@@ -262,9 +227,16 @@ collaborate.post(
 collaborate.get(
   "/shared-inboxes",
   requireScope("collaborate:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const inboxes = sharedInboxes.get(auth.accountId) ?? [];
+    const db = getDb();
+
+    const inboxes = await db
+      .select()
+      .from(sharedInboxes)
+      .where(eq(sharedInboxes.accountId, auth.accountId))
+      .orderBy(sharedInboxes.createdAt);
+
     return c.json({ data: inboxes });
   },
 );
@@ -275,12 +247,14 @@ collaborate.post(
   "/comments",
   requireScope("collaborate:write"),
   validateBody(AddCommentSchema),
-  (c) => {
+  async (c) => {
     const input = getValidatedBody<z.infer<typeof AddCommentSchema>>(c);
     const auth = c.get("auth");
+    const db = getDb();
 
-    const comment: InternalComment = {
+    const comment = {
       id: generateId(),
+      accountId: auth.accountId,
       emailId: input.emailId,
       authorId: auth.accountId,
       authorName: auth.accountId,
@@ -289,68 +263,139 @@ collaborate.post(
       createdAt: new Date(),
     };
 
-    const existing = comments.get(input.emailId) ?? [];
-    comments.set(input.emailId, [...existing, comment]);
+    await db.insert(emailComments).values(comment);
 
-    return c.json({ data: comment }, 201);
+    return c.json(
+      {
+        data: {
+          id: comment.id,
+          emailId: comment.emailId,
+          authorId: comment.authorId,
+          authorName: comment.authorName,
+          body: comment.body,
+          mentions: comment.mentions,
+          createdAt: comment.createdAt,
+        },
+      },
+      201,
+    );
   },
 );
 
 collaborate.get(
   "/comments/:emailId",
   requireScope("collaborate:read"),
-  (c) => {
+  async (c) => {
     const emailId = c.req.param("emailId");
-    const emailComments = comments.get(emailId) ?? [];
-    return c.json({ data: emailComments });
+    const auth = c.get("auth");
+    const db = getDb();
+
+    const rows = await db
+      .select({
+        id: emailComments.id,
+        emailId: emailComments.emailId,
+        authorId: emailComments.authorId,
+        authorName: emailComments.authorName,
+        body: emailComments.body,
+        mentions: emailComments.mentions,
+        createdAt: emailComments.createdAt,
+      })
+      .from(emailComments)
+      .where(
+        and(
+          eq(emailComments.emailId, emailId),
+          eq(emailComments.accountId, auth.accountId),
+        ),
+      )
+      .orderBy(emailComments.createdAt);
+
+    return c.json({ data: rows });
   },
 );
 
 // ── Assignments ──────────────────────────────────────────────────────────────
 
+/**
+ * Serialize an assignment row into the legacy response shape: dueAt/note are
+ * OMITTED (not null) when unset, matching the original in-memory behavior.
+ */
+function serializeAssignment(row: {
+  id: string;
+  emailId: string;
+  assignedTo: string;
+  assignedBy: string;
+  status: "open" | "in_progress" | "done" | "snoozed";
+  priority: "low" | "medium" | "high" | "urgent";
+  dueAt: Date | null;
+  note: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): Record<string, unknown> {
+  return {
+    id: row.id,
+    emailId: row.emailId,
+    assignedTo: row.assignedTo,
+    assignedBy: row.assignedBy,
+    status: row.status,
+    priority: row.priority,
+    ...(row.dueAt !== null ? { dueAt: row.dueAt } : {}),
+    ...(row.note !== null ? { note: row.note } : {}),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
 collaborate.post(
   "/assign",
   requireScope("collaborate:write"),
   validateBody(AssignSchema),
-  (c) => {
+  async (c) => {
     const input = getValidatedBody<z.infer<typeof AssignSchema>>(c);
     const auth = c.get("auth");
+    const db = getDb();
 
-    const assignment: Assignment = {
+    const now = new Date();
+    const assignment = {
       id: generateId(),
+      accountId: auth.accountId,
       emailId: input.emailId,
       assignedTo: input.assignedTo,
       assignedBy: auth.accountId,
-      status: "open",
+      status: "open" as const,
       priority: input.priority,
-      dueAt: input.dueAt ? new Date(input.dueAt) : undefined,
-      note: input.note,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      dueAt: input.dueAt ? new Date(input.dueAt) : null,
+      note: input.note ?? null,
+      createdAt: now,
+      updatedAt: now,
     };
 
-    const existing = assignments.get(auth.accountId) ?? [];
-    assignments.set(auth.accountId, [...existing, assignment]);
+    await db.insert(emailAssignments).values(assignment);
 
-    return c.json({ data: assignment }, 201);
+    return c.json({ data: serializeAssignment(assignment) }, 201);
   },
 );
 
 collaborate.get(
   "/assignments",
   requireScope("collaborate:read"),
-  (c) => {
+  async (c) => {
     const auth = c.get("auth");
-    const allAssignments = assignments.get(auth.accountId) ?? [];
+    const db = getDb();
     const status = c.req.query("status");
     const assignedTo = c.req.query("assignedTo");
 
-    let filtered = allAssignments;
+    const rows = await db
+      .select()
+      .from(emailAssignments)
+      .where(eq(emailAssignments.accountId, auth.accountId))
+      .orderBy(emailAssignments.createdAt);
+
+    let filtered = rows;
     if (status) filtered = filtered.filter((a) => a.status === status);
     if (assignedTo)
       filtered = filtered.filter((a) => a.assignedTo === assignedTo);
 
-    return c.json({ data: filtered });
+    return c.json({ data: filtered.map(serializeAssignment) });
   },
 );
 
@@ -358,14 +403,23 @@ collaborate.patch(
   "/assignments/:id",
   requireScope("collaborate:write"),
   validateBody(UpdateAssignmentSchema),
-  (c) => {
+  async (c) => {
     const id = c.req.param("id");
     const input =
       getValidatedBody<z.infer<typeof UpdateAssignmentSchema>>(c);
     const auth = c.get("auth");
+    const db = getDb();
 
-    const allAssignments = assignments.get(auth.accountId) ?? [];
-    const assignment = allAssignments.find((a) => a.id === id);
+    const [assignment] = await db
+      .select()
+      .from(emailAssignments)
+      .where(
+        and(
+          eq(emailAssignments.id, id),
+          eq(emailAssignments.accountId, auth.accountId),
+        ),
+      )
+      .limit(1);
 
     if (!assignment) {
       return c.json(
@@ -380,13 +434,33 @@ collaborate.patch(
       );
     }
 
-    if (input.status) assignment.status = input.status;
-    if (input.priority) assignment.priority = input.priority;
-    if (input.dueAt) assignment.dueAt = new Date(input.dueAt);
-    if (input.note !== undefined) assignment.note = input.note;
-    assignment.updatedAt = new Date();
+    const now = new Date();
+    const updated = {
+      ...assignment,
+      status: input.status ?? assignment.status,
+      priority: input.priority ?? assignment.priority,
+      dueAt: input.dueAt ? new Date(input.dueAt) : assignment.dueAt,
+      note: input.note !== undefined ? input.note : assignment.note,
+      updatedAt: now,
+    };
 
-    return c.json({ data: assignment });
+    await db
+      .update(emailAssignments)
+      .set({
+        status: updated.status,
+        priority: updated.priority,
+        dueAt: updated.dueAt,
+        note: updated.note,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(emailAssignments.id, id),
+          eq(emailAssignments.accountId, auth.accountId),
+        ),
+      );
+
+    return c.json({ data: serializeAssignment(updated) });
   },
 );
 

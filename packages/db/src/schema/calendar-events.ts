@@ -116,8 +116,51 @@ export const calendarAvailability = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Scheduling Links — shareable booking links (Calendly-style)
+// ---------------------------------------------------------------------------
+
+export const schedulingLinks = pgTable(
+  "scheduling_links",
+  {
+    /** URL token for the public scheduling page. */
+    token: text("token").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+
+    /** Meeting title shown on the booking page. */
+    title: text("title").notNull(),
+    /** Meeting duration in minutes. */
+    durationMinutes: integer("duration_minutes").notNull().default(30),
+    /** Earliest bookable time. */
+    dateFrom: timestamp("date_from", { withTimezone: true }).notNull(),
+    /** Latest bookable time (link expires after this). */
+    dateTo: timestamp("date_to", { withTimezone: true }).notNull(),
+    /** Optional meeting location. */
+    location: text("location"),
+    /** Optional meeting description. */
+    description: text("description"),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("scheduling_links_account_id_idx").on(table.accountId)],
+);
+
+// ---------------------------------------------------------------------------
 // Relations
 // ---------------------------------------------------------------------------
+
+export const schedulingLinksRelations = relations(
+  schedulingLinks,
+  ({ one }) => ({
+    account: one(accounts, {
+      fields: [schedulingLinks.accountId],
+      references: [accounts.id],
+    }),
+  }),
+);
 
 export const calendarEventsRelations = relations(calendarEvents, ({ one }) => ({
   account: one(accounts, {
