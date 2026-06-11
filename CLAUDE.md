@@ -389,6 +389,26 @@ After writing the code:
 
 **These prices are LOCKED. Changes require Craig's authorization.**
 
+### Business Email Plans (native mailboxes on your own domain) — APPROVED 2026-06-11 by Craig
+Separate product line from the consumer tiers above. Multi-currency from launch
+(localized price points, NOT FX conversion; Stripe Tax for GST/VAT). Positioned
+in the gap between Google Workspace Standard (floor) and MS 365 Premium+Copilot
+(ceiling), bundling all AI included.
+
+| Per user/mo | **Business** | **Business Plus** |
+|---|---|---|
+| NZD (incl. GST) | $25 | $45 |
+| AUD (incl. GST) | $22 | $39 |
+| GBP (+VAT) | £15 | £28 |
+| EUR (+VAT) | €16 | €30 |
+| USD | $16 | $30 |
+| CAD (+tax) | $22 | $42 |
+
+Business = mailboxes on your domain, full AI, shared inboxes, admin, SSO,
+migration. Plus = priority AI (Sonnet/Opus), advanced compliance/eDiscovery,
+larger storage, unlimited accounts, dedicated support. Billing wiring pending
+(currency-aware: price per tier per currency).
+
 ### Add-On Revenue
 - Custom domain email hosting: $4/user/mo
 - Priority AI processing: $5/mo
