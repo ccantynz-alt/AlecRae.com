@@ -785,9 +785,13 @@ app.onError((err, c) => {
 // ─── Server startup ─────────────────────────────────────────────────────────
 
 const port = parseInt(process.env["PORT"] ?? "3001", 10);
+// Bind address. Default 0.0.0.0; set HOST=127.0.0.1 for loopback-only deploys
+// where a reverse proxy terminates TLS (e.g. behind nginx/caddy on bare metal).
+const hostname = process.env["HOST"] ?? "0.0.0.0";
 
 console.log("=".repeat(60));
 console.log("  AlecRae API — Starting");
+console.log(`  Host: ${hostname}`);
 console.log(`  Port: ${port}`);
 console.log(`  Environment: ${process.env.NODE_ENV ?? "development"}`);
 console.log("=".repeat(60));
@@ -917,6 +921,7 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
 export default {
   port,
+  hostname,
   fetch: app.fetch,
   websocket: bunWebSocket,
 };
