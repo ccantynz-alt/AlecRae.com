@@ -78,7 +78,7 @@ interface SmtpReceiverConfig {
 }
 
 const DEFAULT_CONFIG: SmtpReceiverConfig = {
-  hostname: "mx.alecrae.dev",
+  hostname: process.env["SMTP_HOSTNAME"] ?? "mx1.alecrae.com",
   port: 25,
   maxMessageSize: 25 * 1024 * 1024, // 25 MB
   maxRecipients: 100,

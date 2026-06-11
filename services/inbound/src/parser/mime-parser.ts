@@ -442,7 +442,7 @@ export class MimeParser {
     const content = await extractContent(rootPart);
 
     const messageIdRaw = getHeaderValue(headers, "message-id");
-    const messageId = messageIdRaw?.replace(/^<|>$/g, "") ?? `generated-${Date.now()}@alecrae.dev`;
+    const messageId = messageIdRaw?.replace(/^<|>$/g, "") ?? `generated-${Date.now()}@alecrae.com`;
 
     const dateStr = getHeaderValue(headers, "date");
     let date: Date | undefined;

@@ -754,7 +754,7 @@ function generateRecommendations(checks: DiagnosticCheck[]): string[] {
         const issues = (check.details.issues as string[]) ?? [];
         if (issues.some((i) => i.toLowerCase().includes("spf"))) {
           recommendations.push(
-            "Add or fix your SPF record. Include 'include:spf.alecrae.dev' in your SPF TXT record.",
+            "Add or fix your SPF record. Include 'include:_spf.alecrae.com' in your SPF TXT record.",
           );
         }
         if (issues.some((i) => i.toLowerCase().includes("dkim"))) {

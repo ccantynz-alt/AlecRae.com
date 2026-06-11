@@ -136,7 +136,7 @@ async function handleInboundMessage(
 
 // --- Service Startup ---
 
-const hostname = process.env["SMTP_HOSTNAME"] ?? "mx.alecrae.dev";
+const hostname = process.env["SMTP_HOSTNAME"] ?? "mx1.alecrae.com";
 const smtpPort = parseInt(process.env["SMTP_PORT"] ?? "25", 10);
 const httpPort = parseInt(process.env["HTTP_PORT"] ?? "8025", 10);
 const enableSmtp = process.env["DISABLE_SMTP"] !== "true";
