@@ -283,8 +283,15 @@ auth.get("/google", async (c) => {
   if (!isGoogleSignInConfigured()) {
     return c.redirect(`${WEB_URL}/login?error=google_unavailable`);
   }
-  const state = await signAuthState({ flow: "google-signin" });
-  return c.redirect(getGoogleSignInUrl(state));
+  try {
+    const state = await signAuthState({ flow: "google-signin" });
+    return c.redirect(getGoogleSignInUrl(state));
+  } catch (err) {
+    // e.g. JWT_SECRET unset in production — surface a clean error to the user
+    // instead of a raw 500, and log the real cause for operators.
+    console.error("[auth] Failed to start Google sign-in:", err);
+    return c.redirect(`${WEB_URL}/login?error=google_unavailable`);
+  }
 });
 
 // GET /v1/auth/callback/google — Google sign-in callback (find-or-create + session)
@@ -296,12 +303,12 @@ auth.get("/callback/google", async (c) => {
     return c.redirect(`${WEB_URL}/login?error=google_signin_failed`);
   }
 
-  const stateResult = await verifyAuthState(stateParam);
-  if (!stateResult.ok) {
-    return c.redirect(`${WEB_URL}/login?error=google_state_invalid`);
-  }
-
   try {
+    const stateResult = await verifyAuthState(stateParam);
+    if (!stateResult.ok) {
+      return c.redirect(`${WEB_URL}/login?error=google_state_invalid`);
+    }
+
     const profile = await exchangeGoogleSignInCode(code);
     const db = getDatabase();
 

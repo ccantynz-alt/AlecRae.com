@@ -47,6 +47,13 @@ export {
   dnsRecordsRelations,
 } from "./schema/domains.js";
 
+// Schema - Native mailboxes (provisioned business-email addresses)
+export {
+  mailboxes,
+  mailboxesRelations,
+} from "./schema/mailboxes.js";
+export type { Mailbox, NewMailbox } from "./schema/mailboxes.js";
+
 // Schema - Connected Accounts (Gmail, Outlook, IMAP)
 export {
   connectedAccounts,

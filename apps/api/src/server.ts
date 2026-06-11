@@ -29,6 +29,7 @@ import {
 } from "./middleware/rate-limit.js";
 import { messages, unifiedSend } from "./routes/messages.js";
 import { domains } from "./routes/domains.js";
+import { mailboxes } from "./routes/mailboxes.js";
 import { webhooks } from "./routes/webhooks.js";
 import { analytics } from "./routes/analytics.js";
 import { suppressions } from "./routes/suppressions.js";
@@ -571,6 +572,7 @@ app.use("/v1/knowledge", authMiddleware, readRateLimit);
 // Mount route handlers
 app.route("/v1/messages", messages);
 app.route("/v1/domains", domains);
+app.route("/v1/mailboxes", mailboxes);
 // app.route("/v1/domains/:id/warmup", warmup); // see warmup import note
 app.route("/v1/webhooks", webhooks);
 app.route("/v1/analytics", analytics);

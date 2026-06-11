@@ -85,6 +85,36 @@ export class MailboxRouter {
   }
 
   /**
+   * Look up a provisioned (DB-backed) mailbox by full address. Returns the
+   * mailbox id + owning account when an active mailbox exists. Falls back to
+   * null on any error so routing degrades to the domain catch-all.
+   */
+  private async lookupMailbox(
+    address: string,
+  ): Promise<{ id: string; accountId: string } | null> {
+    if (!process.env["DATABASE_URL"]) return null;
+    try {
+      const { getDatabase, mailboxes: mailboxesTable } = await import("@alecrae/db");
+      const db = getDatabase();
+      const [row] = await db
+        .select({
+          id: mailboxesTable.id,
+          accountId: mailboxesTable.accountId,
+          isActive: mailboxesTable.isActive,
+        })
+        .from(mailboxesTable)
+        .where(eq(mailboxesTable.address, address))
+        .limit(1);
+      if (row && row.isActive) {
+        return { id: row.id, accountId: row.accountId };
+      }
+    } catch (e) {
+      console.warn(`[MailboxRouter] DB mailbox lookup failed for ${address}:`, e);
+    }
+    return null;
+  }
+
+  /**
    * Register a domain for receiving mail.
    */
   addDomain(config: DomainConfig): void {
@@ -172,7 +202,25 @@ export class MailboxRouter {
       return null;
     }
 
-    // 3. Check direct mailbox
+    // 3. Check direct mailbox — DB-backed provisioned mailbox first, then the
+    //    in-memory map.
+    const dbMailbox = await this.lookupMailbox(address);
+    if (dbMailbox) {
+      return {
+        originalAddress: address,
+        resolvedAddress: address,
+        mailboxId: dbMailbox.id,
+        accountId: dbMailbox.accountId,
+        rule: {
+          id: `mailbox:${dbMailbox.id}`,
+          pattern: address,
+          type: "exact",
+          action: "deliver",
+          destination: dbMailbox.id,
+          priority: 0,
+        },
+      };
+    }
     const mailbox = this.mailboxes.get(address);
     if (mailbox && mailbox.enabled) {
       return {
