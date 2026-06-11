@@ -71,6 +71,30 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
+  deploy-vapron:
+    name: Deploy via Vapron
+    needs: quality
+    runs-on: ubuntu-latest
+    # Vapron is the permanent platform (CLAUDE.md). Gated on the repo variable
+    # ENABLE_VAPRON_DEPLOY=true + the VAPRON_API_KEY secret. Until both are set
+    # this job is skipped (green). Runbook: docs/infra/vapron-go-live.md
+    if: github.ref == 'refs/heads/main' && needs.quality.result == 'success' && vars.ENABLE_VAPRON_DEPLOY == 'true'
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Deploy to Vapron (aiDeploy.quickDeploy)
+        env:
+          VAPRON_API_KEY: ${{ secrets.VAPRON_API_KEY }}
+        run: bun run deploy:vapron
+
   gate:
     name: GateTest Report
     needs: quality
