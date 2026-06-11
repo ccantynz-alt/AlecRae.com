@@ -5,85 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1700000000000,
-      "tag": "0001_create_users",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1700000001000,
-      "tag": "0002_create_domains",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1700000002000,
-      "tag": "0003_create_emails",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1700000003000,
-      "tag": "0004_create_api_keys",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1700000004000,
-      "tag": "0005_create_events",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1700000005000,
-      "tag": "0006_create_suppression_lists",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1700000006000,
-      "tag": "0007_create_webhooks",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1700000007000,
-      "tag": "0008_create_templates",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1700000008000,
-      "tag": "0009_create_email_embeddings",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1700000009000,
-      "tag": "0010_create_draft_snapshots",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1700000010000,
-      "tag": "0011_add_draft_to_email_status",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1700000011000,
-      "tag": "0012_fix_schema_drift",
+      "when": 1781157942331,
+      "tag": "0000_complete_baseline",
       "breakpoints": true
     }
   ]

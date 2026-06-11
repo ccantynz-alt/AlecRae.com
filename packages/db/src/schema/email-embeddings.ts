@@ -19,6 +19,7 @@ import {
   text,
   timestamp,
   index,
+  uniqueIndex,
   customType,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
@@ -72,10 +73,18 @@ export const emailEmbeddings = pgTable(
       .defaultNow(),
   },
   (table) => [
+    // B-tree for fast lookups/joins/deletes by email_id.
     index("email_embeddings_email_id_idx").on(table.emailId),
-    // The HNSW index is created in the migration SQL — Drizzle doesn't
-    // yet model HNSW indexes natively, but we declare a placeholder name
-    // here so introspection stays consistent.
+    // One embedding per email per model — required: the indexer upserts with
+    // ON CONFLICT (email_id, model).
+    uniqueIndex("email_embeddings_email_model_uniq").on(
+      table.emailId,
+      table.model,
+    ),
+    // HNSW index for fast approximate kNN with cosine distance (pgvector).
+    index("email_embeddings_vector_hnsw_idx")
+      .using("hnsw", table.embeddingVector.op("vector_cosine_ops"))
+      .with({ m: 16, ef_construction: 64 }),
   ],
 );
 
