@@ -91,10 +91,27 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The Vapron key lives in the Vercel project's production env. Pull it
+      # when the dedicated VAPRON_API_KEY GH secret isn't set; vercel env pull
+      # is best-effort so a missing/expired Vercel token still yields the
+      # script's clear "key not set" failure rather than a step crash.
+      - name: Pull production env vars from Vercel (key fallback)
+        continue-on-error: true
+        run: bunx vercel env pull .env.vercel-prod --environment=production --yes --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
       - name: Deploy to Vapron (aiDeploy.quickDeploy)
         env:
           VAPRON_API_KEY: ${{ secrets.VAPRON_API_KEY }}
-        run: bun run deploy:vapron
+        run: |
+          if [ -z "$VAPRON_API_KEY" ] && [ -f .env.vercel-prod ]; then
+            VAPRON_API_KEY=$(grep -E '^VAPRON_API_KEY=' .env.vercel-prod | head -1 | cut -d= -f2- | tr -d '"')
+            export VAPRON_API_KEY
+            [ -n "$VAPRON_API_KEY" ] && echo "Using VAPRON_API_KEY from Vercel production env"
+          fi
+          bun run deploy:vapron
 
   gate:
     name: GateTest Report
