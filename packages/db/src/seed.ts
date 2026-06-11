@@ -64,9 +64,11 @@ async function main() {
 
   // ── User ────────────────────────────────────────────────────────────────
   const userId = generateId();
-  // Password: "password123" — bcrypt hash (NOT for production use)
+  // Password: "password123" (dev only) — a real argon2id hash that the login
+  // route verifies with Bun.password.verify. The previous hardcoded bcrypt hash
+  // did NOT match the password, so the seeded admin could never sign in.
   const passwordHash =
-    "$2b$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36PqSy3QHe1gYKhyHPqa1F6";
+    "$argon2id$v=19$m=65536,t=2,p=1$v2koMJ9oJk908Ot9z9uBC66j0umz0I01nddrO1yfKBk$C32aSTPUPPly2zQVYecXVmdPAzNWAxnSZUws8bUsW/Q";
   await db
     .insert(users)
     .values({

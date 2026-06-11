@@ -31,52 +31,45 @@ const REDIS_URL =
   "redis://localhost:6379";
 
 let redisClient: Redis | null = null;
-let redisAvailable = true;
+// True only once the socket is "ready" to accept commands. Command issuance is
+// gated on this so we never send before the connection is writeable — otherwise
+// the first command races the connect and ioredis rejects it with "Stream isn't
+// writeable" (enableOfflineQueue: false). ioredis reconnects in the background
+// and re-fires "ready" when Redis returns, so no manual retry loop is needed.
+let redisReady = false;
 
 function getRedis(): Redis | null {
-  if (!redisAvailable) return null;
-
   if (!redisClient) {
     try {
-      redisClient = new Redis(REDIS_URL, {
+      const client = new Redis(REDIS_URL, {
         maxRetriesPerRequest: 1,
         connectTimeout: 3000,
-        lazyConnect: true,
         enableOfflineQueue: false,
       });
 
-      redisClient.on("error", (err) => {
-        console.warn("[rate-limit] Redis error, falling back to in-memory:", err.message);
-        redisAvailable = false;
-        redisClient?.disconnect();
-        redisClient = null;
+      client.on("ready", () => {
+        redisReady = true;
+      });
+      client.on("error", (err) => {
+        // Log only the first transition to down; ioredis retries quietly.
+        if (redisReady) {
+          console.warn("[rate-limit] Redis error, falling back to in-memory:", err.message);
+        }
+        redisReady = false;
+      });
+      client.on("end", () => {
+        redisReady = false;
       });
 
-      redisClient.on("connect", () => {
-        redisAvailable = true;
-      });
-
-      // Attempt initial connection
-      redisClient.connect().catch(() => {
-        redisAvailable = false;
-        redisClient = null;
-      });
+      redisClient = client;
     } catch {
-      redisAvailable = false;
       return null;
     }
   }
 
-  return redisClient;
+  // Until the connection is ready, callers use the in-memory fallback.
+  return redisReady ? redisClient : null;
 }
-
-// Periodically retry Redis if it went down (every 30s)
-setInterval(() => {
-  if (!redisAvailable) {
-    redisAvailable = true; // Allow next getRedis() to try reconnecting
-    redisClient = null;
-  }
-}, 30_000).unref();
 
 // ─── In-memory fallback store ──────────────────────────────────────────────
 
