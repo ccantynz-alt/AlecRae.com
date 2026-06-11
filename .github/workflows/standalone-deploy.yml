@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch: {}  # manual "Deploy via Vapron" from the Actions tab
 
 permissions:
   contents: read
@@ -78,7 +79,7 @@ jobs:
     # Vapron is the permanent platform (CLAUDE.md). Gated on the repo variable
     # ENABLE_VAPRON_DEPLOY=true + the VAPRON_API_KEY secret. Until both are set
     # this job is skipped (green). Runbook: docs/infra/vapron-go-live.md
-    if: github.ref == 'refs/heads/main' && needs.quality.result == 'success' && vars.ENABLE_VAPRON_DEPLOY == 'true'
+    if: needs.quality.result == 'success' && (github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && vars.ENABLE_VAPRON_DEPLOY == 'true'))
     environment: production
     steps:
       - uses: actions/checkout@v4
