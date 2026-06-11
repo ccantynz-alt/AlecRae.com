@@ -14,6 +14,7 @@ import {
   getDatabase,
   domains as domainsTable,
 } from "@alecrae/db";
+import { getDnsConfig } from "./config";
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
@@ -63,9 +64,10 @@ async function checkSpf(domain: string): Promise<{ ok: boolean; detail: string }
     return { ok: false, detail: "No SPF record found" };
   }
 
-  const hasInclude = spfRecords.some((r) => r.includes("include:spf.alecrae.dev"));
+  const { spfInclude } = getDnsConfig();
+  const hasInclude = spfRecords.some((r) => r.includes(spfInclude));
   if (!hasInclude) {
-    return { ok: false, detail: "SPF record does not include spf.alecrae.dev" };
+    return { ok: false, detail: `SPF record does not include ${spfInclude.replace(/^include:/, "")}` };
   }
 
   return { ok: true, detail: "" };

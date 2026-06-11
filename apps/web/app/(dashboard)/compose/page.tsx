@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { PageLayout, ComposeEditor, type ComposeData, type AISuggestion } from "@alecrae/ui";
+import { PageLayout, ComposeEditor, Box, Text, type ComposeData, type AISuggestion } from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
 import { messagesApi, authApi, calendarApi, grammarApi } from "../../../lib/api";
+import { RecipientAutocomplete } from "../../../components/RecipientAutocomplete";
 import { SendTimePanel } from "../../../components/SendTimePanel";
 import { AnimatedCompose } from "../../../components/AnimatedCompose";
 import { OfflineComposeBanner } from "../../../components/OfflineComposeBanner";
@@ -18,6 +19,21 @@ import {
 import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
+
+/** Merge two comma-separated recipient strings, trimming and de-duplicating. */
+function mergeRecipientLists(a: string, b: string): string[] {
+  const seen = new Set<string>();
+  const merged: string[] = [];
+  for (const raw of [...a.split(","), ...b.split(",")]) {
+    const email = raw.trim();
+    if (!email) continue;
+    const key = email.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(email);
+  }
+  return merged;
+}
 
 export default function ComposePageWrapper() {
   return (
@@ -36,6 +52,11 @@ function ComposePage(): React.ReactNode {
   const [recipientForPrediction, setRecipientForPrediction] = useState("");
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  // Contact-autocomplete recipients (merged into To/Cc on send).
+  // The ComposeEditor manages its own To/Cc inputs internally, so the
+  // autocomplete fields live at page level and their picks are merged in.
+  const [contactsTo, setContactsTo] = useState("");
+  const [contactsCc, setContactsCc] = useState("");
   const grammarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCheckedRef = useRef("");
 
@@ -135,8 +156,9 @@ function ComposePage(): React.ReactNode {
         return;
       }
 
+      // Merge recipients typed in the editor with contact-autocomplete picks
+      const toList = mergeRecipientLists(data.to, contactsTo);
       // Track the first recipient for send-time prediction panel
-      const toList = data.to.split(",").map((e: string) => e.trim()).filter(Boolean);
       if (toList[0] && toList[0] !== recipientForPrediction) {
         setRecipientForPrediction(toList[0]);
       }
@@ -149,10 +171,8 @@ function ComposePage(): React.ReactNode {
         text: data.body.replace(/<[^>]*>/g, ""),
         ...(scheduledAt ? { scheduledAt } : {}),
       };
-      if (data.cc) {
-        const ccList = data.cc.split(",").map((e: string) => ({ email: e.trim() })).filter((e) => e.email);
-        if (ccList.length > 0) sendPayload.cc = ccList;
-      }
+      const ccList = mergeRecipientLists(data.cc, contactsCc).map((e) => ({ email: e }));
+      if (ccList.length > 0) sendPayload.cc = ccList;
       const result = await messagesApi.send(sendPayload);
       setStatus(`Email queued successfully (ID: ${result.id})`);
     } catch (err) {
@@ -220,6 +240,30 @@ function ComposePage(): React.ReactNode {
             </motion.div>
           )}
         </AnimatePresence>
+        {/* Contact autocomplete for recipients — picks are merged into To/Cc on send */}
+        <Box className="mb-4 p-3 rounded-lg border border-border bg-surface-secondary">
+          <Text variant="body-sm" className="font-medium mb-2">
+            Add recipients from contacts
+          </Text>
+          <Box className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <RecipientAutocomplete
+              label="To"
+              value={contactsTo}
+              onChange={setContactsTo}
+              placeholder="Type a name or email..."
+            />
+            <RecipientAutocomplete
+              label="Cc"
+              value={contactsCc}
+              onChange={setContactsCc}
+              placeholder="Type a name or email..."
+            />
+          </Box>
+          <Text variant="caption" muted className="mt-2">
+            Suggestions come from your contacts. Selected addresses are added to
+            the To/Cc fields when you send.
+          </Text>
+        </Box>
         <motion.div
           className="flex-1 flex flex-col min-h-0"
           variants={contentVariants}

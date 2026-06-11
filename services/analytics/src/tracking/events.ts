@@ -20,7 +20,7 @@ import { ok, err } from "../types";
 
 // ─── Tracking Pixel & Link Generation ───────────────────────────────────────
 
-const TRACKING_BASE_URL = process.env.TRACKING_BASE_URL ?? "https://t.alecrae.dev";
+const TRACKING_BASE_URL = process.env.TRACKING_BASE_URL ?? "https://t.alecrae.com";
 
 /**
  * Generate a 1x1 tracking pixel URL for open tracking.

@@ -16,6 +16,7 @@
 import { Worker, Queue, type Job } from "bullmq";
 import { eq, and } from "drizzle-orm";
 import { getDatabase, emails, deliveryResults, domains, suppressionLists, events, webhooks as webhooksTable } from "@alecrae/db";
+import { getMtaHostname } from "./config.js";
 import { signMessage, addSignatureToMessage } from "./dkim/signer.js";
 import { SmtpClient } from "./smtp/client.js";
 import { RelayClient, relayConfigFromEnv } from "./relay/relay.js";
@@ -45,7 +46,7 @@ const DEFAULT_WORKER_CONFIG: WorkerConfig = {
   redisUrl: process.env["REDIS_URL"] ?? "redis://localhost:6379",
   queueName: process.env["MTA_QUEUE_NAME"] ?? "alecrae-outbound",
   concurrency: parseInt(process.env["MTA_WORKER_CONCURRENCY"] ?? "10", 10),
-  localHostname: process.env["MTA_HOSTNAME"] ?? "mail.alecrae.dev",
+  localHostname: getMtaHostname(),
   useRelay: !!process.env["RELAY_PROVIDER"],
 };
 

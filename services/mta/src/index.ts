@@ -8,6 +8,7 @@
  *   4. Handles graceful shutdown (SIGTERM, SIGINT)
  */
 
+import { getMtaHostname } from "./config.js";
 import { SmtpServer } from "./smtp/server.js";
 import { MtaWorker } from "./worker.js";
 import { createHealthServer, dbCheck, redisCheck } from "./health.js";
@@ -19,7 +20,7 @@ import Redis from "ioredis";
 
 const SMTP_PORT = parseInt(process.env["SMTP_PORT"] ?? "25", 10);
 const SMTP_HOST = process.env["SMTP_HOST"] ?? "0.0.0.0";
-const SMTP_HOSTNAME = process.env["SMTP_HOSTNAME"] ?? "mail.alecrae.dev";
+const SMTP_HOSTNAME = getMtaHostname();
 const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
 const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae-outbound";
 const WORKER_CONCURRENCY = parseInt(

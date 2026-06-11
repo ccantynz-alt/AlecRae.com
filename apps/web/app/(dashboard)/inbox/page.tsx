@@ -15,7 +15,9 @@ import {
   type EmailMessage,
 } from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
-import { messagesApi, snoozeApi, authApi, type Message, type MessageDetail } from "../../../lib/api";
+import { messagesApi, snoozeApi, authApi, aiWritingApi, type Message, type MessageDetail } from "../../../lib/api";
+import { useFocusMode } from "../../../lib/focus-mode";
+import { useCommandPalette } from "../../../lib/command-palette-store";
 import { NewsletterSummaryPreview } from "../../../components/NewsletterSummaryPreview";
 import { EmailExplainerPanel } from "../../../components/EmailExplainerPanel";
 import { QuickReply } from "../../../components/QuickReply";
@@ -162,6 +164,14 @@ export default function InboxPage(): React.ReactNode {
   // Whether to show full email content (toggled from newsletter summary)
   const [_showFullEmail, _setShowFullEmail] = useState(true);
   const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+  // AI reply draft injected into the quick reply box (versioned so a fresh
+  // draft remounts the QuickReply with the new initial body).
+  const [quickReplyDraft, setQuickReplyDraft] = useState("");
+  const [quickReplyDraftVersion, setQuickReplyDraftVersion] = useState(0);
+  // AI reply / summarize state
+  const [aiBusy, setAiBusy] = useState<"reply" | "summarize" | null>(null);
+  const [threadSummary, setThreadSummary] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");
   const [undoActions, setUndoActions] = useState<UndoAction[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -320,6 +330,59 @@ export default function InboxPage(): React.ReactNode {
     for (const id of ids) messagesApi.star(id, true).catch(() => { /* no-op */ });
   }, [selectedIds]);
 
+  // ─── AI reply + summarize ──────────────────────────────────────────────────
+
+  const handleAiReply = useCallback(async () => {
+    if (!selectedEmail || aiBusy) return;
+    setAiBusy("reply");
+    setAiError(null);
+    try {
+      const bodyText = selectedEmail.bodyParts
+        .map((p) => ("content" in p ? p.content : ""))
+        .join("\n\n");
+      const res = await aiWritingApi.compose({
+        topic:
+          `Write a reply to this email.\n` +
+          `From: ${selectedEmail.sender.name} <${selectedEmail.sender.email}>\n` +
+          `Subject: ${selectedEmail.subject}\n\n` +
+          bodyText.slice(0, 1500),
+        tone: "professional",
+        length: "short",
+      });
+      setQuickReplyDraft(res.data.body);
+      setQuickReplyDraftVersion((v) => v + 1);
+      setQuickReplyOpen(true);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "AI reply failed");
+    } finally {
+      setAiBusy(null);
+    }
+  }, [selectedEmail, aiBusy]);
+
+  const handleAiSummarize = useCallback(async () => {
+    if (!selectedEmail || aiBusy) return;
+    setAiBusy("summarize");
+    setAiError(null);
+    setThreadSummary(null);
+    try {
+      const bodyText = selectedEmail.bodyParts
+        .map((p) => ("content" in p ? p.content : ""))
+        .join("\n\n");
+      const res = await aiWritingApi.summarize({
+        text:
+          `Subject: ${selectedEmail.subject}\n` +
+          `From: ${selectedEmail.sender.name} <${selectedEmail.sender.email}>\n\n` +
+          bodyText,
+        maxLength: 100,
+      });
+      setThreadSummary(res.data.summary);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "AI summarize failed");
+    } finally {
+      setAiBusy(null);
+    }
+  }, [selectedEmail, aiBusy]);
+
   const selectedIndexRef = useRef(0);
 
   useEffect(() => {
@@ -329,7 +392,18 @@ export default function InboxPage(): React.ReactNode {
 
   useEffect(() => {
     const shortcuts = createDefaultShortcuts({
-      openCommandPalette: () => { /* no-op */ },
+      openCommandPalette: () => {
+        // The CommandPalette component also registers its own global Cmd+K
+        // listener that fires on this same keypress. Defer to the end of the
+        // event loop and only toggle if no other listener already did —
+        // otherwise the two toggles would cancel out.
+        const before = useCommandPalette.getState().open;
+        setTimeout(() => {
+          if (useCommandPalette.getState().open === before) {
+            useCommandPalette.getState().toggle();
+          }
+        }, 0);
+      },
       compose: () => router.push("/compose"),
       search: () => {
         const input = document.querySelector<HTMLInputElement>('input[type="search"], input[placeholder*="Search"]');
@@ -412,16 +486,27 @@ export default function InboxPage(): React.ReactNode {
         }
       },
       aiCompose: () => router.push("/compose"),
-      aiReply: () => { /* no-op: AI reply not yet wired */ },
-      aiSummarize: () => { /* no-op: AI summarize not yet wired */ },
+      aiReply: () => { void handleAiReply(); },
+      aiSummarize: () => { void handleAiSummarize(); },
       toggleDarkMode: () => { /* no-op: handled by theme provider */ },
-      toggleFocusMode: () => { /* no-op: handled by focus provider */ },
+      toggleFocusMode: () => {
+        // The dashboard layout also registers a global Cmd+Shift+F listener
+        // that toggles the same store on this keypress. Defer and only toggle
+        // if the store hasn't already flipped — otherwise the two toggles
+        // would cancel out.
+        const before = useFocusMode.getState().active;
+        setTimeout(() => {
+          if (useFocusMode.getState().active === before) {
+            void useFocusMode.getState().toggleFocusMode();
+          }
+        }, 0);
+      },
     });
 
     return registerShortcuts(shortcuts, () =>
       selectedEmail ? "thread" : "inbox",
     );
-  }, [router, selectedEmailId, selectedEmail, emailItems, filteredEmails, handleStar, archiveWithUndo, deleteWithUndo, undoActions, removeUndoAction]);
+  }, [router, selectedEmailId, selectedEmail, emailItems, filteredEmails, handleStar, archiveWithUndo, deleteWithUndo, undoActions, removeUndoAction, handleAiReply, handleAiSummarize]);
 
   const fetchEmails = useCallback(async () => {
     try {
@@ -515,6 +600,9 @@ export default function InboxPage(): React.ReactNode {
     if (selectedEmailId) {
       fetchDetail(selectedEmailId);
       setQuickReplyOpen(false);
+      setQuickReplyDraft("");
+      setThreadSummary(null);
+      setAiError(null);
     }
   }, [selectedEmailId, fetchDetail]);
 
@@ -748,9 +836,9 @@ export default function InboxPage(): React.ReactNode {
                   />
                 )}
 
-                {/* S7: "Why is this in my inbox?" button */}
+                {/* S7: "Why is this in my inbox?" + AI reply/summarize actions */}
                 {selectedEmailId && selectedEmail && (
-                  <Box className="px-4 pt-2 flex items-center gap-2">
+                  <Box className="px-4 pt-2 flex items-center gap-2 flex-wrap">
                     <PressableScale as="button" tapScale={0.95}>
                       <Button
                         variant="ghost"
@@ -761,6 +849,57 @@ export default function InboxPage(): React.ReactNode {
                         Why is this in my inbox?
                       </Button>
                     </PressableScale>
+                    <PressableScale as="button" tapScale={0.95}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={aiBusy !== null}
+                        onClick={() => void handleAiReply()}
+                        aria-label="Generate an AI reply draft"
+                      >
+                        {aiBusy === "reply" ? "Drafting reply..." : "AI Reply"}
+                      </Button>
+                    </PressableScale>
+                    <PressableScale as="button" tapScale={0.95}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={aiBusy !== null}
+                        onClick={() => void handleAiSummarize()}
+                        aria-label="Summarize this email with AI"
+                      >
+                        {aiBusy === "summarize" ? "Summarizing..." : "AI Summarize"}
+                      </Button>
+                    </PressableScale>
+                  </Box>
+                )}
+
+                {/* AI thread summary / error panel */}
+                {(threadSummary !== null || aiError !== null) && (
+                  <Box
+                    className="mx-4 mt-2 p-3 rounded-lg border border-border bg-surface-secondary"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <Box className="flex items-start justify-between gap-2">
+                      <Box className="flex-1 min-w-0">
+                        <Text variant="caption" muted>
+                          {aiError ? "AI unavailable" : "AI summary"}
+                        </Text>
+                        <Text variant="body-sm">{aiError ?? threadSummary}</Text>
+                      </Box>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setThreadSummary(null);
+                          setAiError(null);
+                        }}
+                        aria-label="Dismiss AI summary"
+                      >
+                        Dismiss
+                      </Button>
+                    </Box>
                   </Box>
                 )}
 
@@ -826,15 +965,21 @@ export default function InboxPage(): React.ReactNode {
                 <AnimatePresence>
                   {quickReplyOpen && selectedEmail && userEmail && (
                     <QuickReply
+                      key={`quick-reply-${quickReplyDraftVersion}`}
                       emailId={selectedEmailId ?? ""}
                       toEmail={selectedEmail.sender.email}
                       toName={selectedEmail.sender.name}
                       subject={selectedEmail.subject}
                       userEmail={userEmail}
+                      initialBody={quickReplyDraft}
                       onSent={() => {
                         setQuickReplyOpen(false);
+                        setQuickReplyDraft("");
                       }}
-                      onClose={() => setQuickReplyOpen(false)}
+                      onClose={() => {
+                        setQuickReplyOpen(false);
+                        setQuickReplyDraft("");
+                      }}
                     />
                   )}
                 </AnimatePresence>

@@ -9,6 +9,10 @@
  * standalone or in tests.
  */
 
+import { assertProductionEnv } from "./lib/env.js";
+// Fail fast in production: one aggregated error for all missing/invalid env vars.
+assertProductionEnv();
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";

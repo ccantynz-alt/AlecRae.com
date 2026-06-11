@@ -78,6 +78,9 @@ export default function SettingsPage(): React.ReactNode {
           <SecuritySection />
         </motion.div>
         <motion.div variants={itemVariants}>
+          <DeveloperLink />
+        </motion.div>
+        <motion.div variants={itemVariants}>
           <NotificationSection />
         </motion.div>
         <motion.div variants={itemVariants}>
@@ -382,6 +385,36 @@ function SecuritySection() {
 }
 
 SecuritySection.displayName = "SecuritySection";
+
+function DeveloperLink() {
+  return (
+    <Card>
+      <CardHeader>
+        <Text variant="heading-sm">Developer</Text>
+      </CardHeader>
+      <CardContent>
+        <Box className="flex items-center justify-between flex-wrap gap-3">
+          <Box>
+            <Text variant="body-md" className="font-medium">
+              API keys, webhooks &amp; integrations
+            </Text>
+            <Text variant="body-sm" muted>
+              Manage programmatic access, event webhooks, and Zapier/Make/n8n
+              connectors.
+            </Text>
+          </Box>
+          <Link href={"/settings/developer" as Route}>
+            <Button variant="secondary" size="sm">
+              Open Developer Settings
+            </Button>
+          </Link>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
+DeveloperLink.displayName = "DeveloperLink";
 
 function NotificationSection() {
   const [prefs, setPrefs] = useState<NotificationPrefs>({

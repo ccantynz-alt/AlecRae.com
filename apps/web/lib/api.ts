@@ -1038,6 +1038,62 @@ export const grammarApi = {
   },
 };
 
+// ─── AI Writing Intelligence ──────────────────────────────────────────────
+
+export type AIWritingTone =
+  | "formal"
+  | "casual"
+  | "friendly"
+  | "professional"
+  | "persuasive";
+
+export type AIWritingLength = "short" | "medium" | "long";
+
+export interface AIComposeResult {
+  subject: string;
+  body: string;
+  tone: AIWritingTone;
+  length: AIWritingLength;
+  confidence: number;
+  wordCount: number;
+  profileUsed: string | null;
+}
+
+export interface AISummarizeResult {
+  original: string;
+  summary: string;
+  originalWordCount: number;
+  summaryWordCount: number;
+  compressionRatio: number;
+  confidence: number;
+}
+
+export const aiWritingApi = {
+  /** AI compose an email (subject + body) from a topic / instruction. */
+  compose(payload: {
+    topic: string;
+    tone?: AIWritingTone;
+    length?: AIWritingLength;
+    profileId?: string;
+  }): Promise<{ data: AIComposeResult }> {
+    return apiFetch<{ data: AIComposeResult }>("/v1/ai/write/compose", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Summarize long email/thread text into a short summary. */
+  summarize(payload: {
+    text: string;
+    maxLength?: number;
+  }): Promise<{ data: AISummarizeResult }> {
+    return apiFetch<{ data: AISummarizeResult }>("/v1/ai/write/summarize", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
 // ─── Snooze ───────────────────────────────────────────────────────────────
 
 export const snoozeApi = {
