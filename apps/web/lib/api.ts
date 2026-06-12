@@ -197,6 +197,17 @@ export interface PublicKeyCredentialAssertionJSON {
   authenticatorAttachment?: string;
 }
 
+/**
+ * Persist the session cookie the web middleware reads. Host-only on purpose
+ * (the API is called with Bearer tokens, never cookies, so the cookie must not
+ * span subdomains). `Secure` is appended on HTTPS so the production gateway
+ * never sees it on plaintext.
+ */
+function writeSessionCookie(token: string): void {
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `alecrae_session=${token}; path=/; max-age=${7 * 86400}; SameSite=Lax${secure}`;
+}
+
 export const authApi = {
   async login(email: string, password: string): Promise<AuthResponse> {
     const res = await fetch(`${API_BASE}/v1/auth/login`, {
@@ -215,7 +226,7 @@ export const authApi = {
     // Store token
     if (typeof window !== "undefined") {
       localStorage.setItem("alecrae_api_key", data.data.token);
-      document.cookie = `alecrae_session=${data.data.token}; path=/; max-age=${7 * 86400}; SameSite=Lax`;
+      writeSessionCookie(data.data.token);
     }
 
     return data.data;
@@ -242,7 +253,7 @@ export const authApi = {
 
     if (typeof window !== "undefined") {
       localStorage.setItem("alecrae_api_key", data.data.token);
-      document.cookie = `alecrae_session=${data.data.token}; path=/; max-age=${7 * 86400}; SameSite=Lax`;
+      writeSessionCookie(data.data.token);
     }
 
     return data.data;
@@ -261,14 +272,14 @@ export const authApi = {
   completeGoogleSignIn(token: string): void {
     if (typeof window !== "undefined") {
       localStorage.setItem("alecrae_api_key", token);
-      document.cookie = `alecrae_session=${token}; path=/; max-age=${7 * 86400}; SameSite=Lax`;
+      writeSessionCookie(token);
     }
   },
 
   logout() {
     if (typeof window !== "undefined") {
       localStorage.removeItem("alecrae_api_key");
-      document.cookie = "alecrae_session=; path=/; max-age=0";
+      document.cookie = "alecrae_session=; path=/; max-age=0; SameSite=Lax";
     }
   },
 
@@ -337,7 +348,7 @@ export const authApi = {
 
     if (typeof window !== "undefined") {
       localStorage.setItem("alecrae_api_key", data.data.token);
-      document.cookie = `alecrae_session=${data.data.token}; path=/; max-age=${7 * 86400}; SameSite=Lax`;
+      writeSessionCookie(data.data.token);
     }
 
     return data.data;
@@ -382,7 +393,7 @@ export const authApi = {
 
     if (typeof window !== "undefined") {
       localStorage.setItem("alecrae_api_key", data.data.token);
-      document.cookie = `alecrae_session=${data.data.token}; path=/; max-age=${7 * 86400}; SameSite=Lax`;
+      writeSessionCookie(data.data.token);
     }
 
     return data.data;

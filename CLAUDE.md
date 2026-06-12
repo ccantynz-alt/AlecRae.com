@@ -767,7 +767,35 @@ If the answer isn't compelling, don't build it. If it is, build it 10x better th
 
 ## 📅 STATUS
 
-**Last updated:** 2026-06-11 12:12 UTC
+### 🚨 PRODUCTION DEPLOYMENT STATE — READ FIRST (recorded 2026-06-12, per Craig/operator)
+
+**Production is the dedicated box at `149.28.119.158`, NOT Vercel.** Migration
+direction is Vercel → box, one way; the old Vercel deployments and Neon DB are
+legacy with no customers. Do not add domains to Vercel or propose CNAMEs back.
+
+- **Verified from this repo's side (DNS, 2026-06-12):** `mail.alecrae.com` and
+  `api.alecrae.com` have A records to `149.28.119.158`; apex `alecrae.com`
+  still resolves to Vercel (legacy); `admin.alecrae.com` does not resolve.
+- **Operator-reported box layout (not independently verifiable from here):**
+  `vapron-bun-gateway` (custom Bun reverse proxy) owns 80/443 + TLS —
+  Caddy/nginx/certbot are not used on this box. systemd services:
+  `alecrae-api` (:4100), `alecrae-web` (:4200, Next.js build). Local
+  PostgreSQL migrated with the 136-table baseline and seeded.
+- **"Deployed" now means:** merged to main **AND** pulled+built on the box —
+  `git pull → bun install → bun run db:migrate → web build → restart units`.
+  The operator runs that ritual; anything merged after the last pull is NOT
+  live until he does. (This explains "merged but not visible" reports.)
+- Open items handed to repo-side (2026-06-12): (1) OAuth callback
+  session-cookie behavior across the api./mail. split — code review found the
+  flow sound (token via URL fragment + Bearer auth; cookie is host-only by
+  design); `Secure` flag hardening landed; re-verify on the box after it pulls
+  today's main, which also carries the earlier Google sign-in fixes (#25).
+  (2) DKIM for `mail.vapron.ai` + webhook consumer signing secret — both are
+  box/DNS-side (repo expects `WEBHOOK_SECRET` env for HMAC; no `mail.vapron.ai`
+  surface exists in this repo).
+
+
+**Last updated:** 2026-06-12 00:25 UTC
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Google sign-in + Vapron platform integration landed (PR #48). **Vapron is the permanent platform** (AI gateway, email, object storage, hosting/deploy) — Cloudflare/Vercel/Neon were always interim scaffolding until Vapron was built, and the app migrates onto Vapron as the target infra. The Vapron client has been rebuilt against the published tRPC API (issue #19 fixed). The off-stack AWS EKS deploy pipeline has been removed. Production deployment awaiting Craig's Vapron + infra setup.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
