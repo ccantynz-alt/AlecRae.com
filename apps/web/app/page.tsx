@@ -13,14 +13,14 @@ import { CTA } from "../components/landing/CTA";
 import { Footer } from "../components/landing/Footer";
 
 export const metadata: Metadata = {
-  title: "AlecRae — Email, Evolved.",
+  title: "AlecRae — Email, considered.",
   description:
-    "The AI-native workspace that replaces Gmail, Outlook, Grammarly, Superhuman, Slack, and Zoom. One subscription. Every account. Every device.",
+    "The email client you'd sign your name to. One subscription replaces your email client, grammar checker, dictation software, and meeting notes. Every account. Every device.",
 };
 
 export default function LandingPage() {
   return (
-    <div className="bg-slate-950 text-white">
+    <div className="bg-[#f5f4ef] text-[#1c1a17]">
       <Navbar />
       <Hero />
       <Problem />

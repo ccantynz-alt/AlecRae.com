@@ -9,7 +9,7 @@ const plans = [
     period: "forever",
     desc: "Get started with one account",
     features: ["1 email account", "5 AI composes per day", "30-day search history", "Basic smart inbox", "Keyboard shortcuts"],
-    cta: "Start Free",
+    cta: "Start free",
     highlighted: false,
     href: "/register",
   },
@@ -39,7 +39,7 @@ const plans = [
     period: "/user/month",
     desc: "For teams that share inboxes",
     features: ["Shared inboxes", "Admin console", "Audit logs", "SSO / SAML", "Priority support", "Collaboration tools", "Everything in Pro"],
-    cta: "Start Team Trial",
+    cta: "Start team trial",
     highlighted: false,
     href: "/checkout?plan=enterprise",
   },
@@ -47,14 +47,14 @@ const plans = [
 
 export function Pricing() {
   return (
-    <section id="pricing" className="py-32 px-6">
+    <section id="pricing" className="py-28 px-6 border-t border-[#e3dfd3]">
       <div className="max-w-6xl mx-auto">
         <Reveal className="text-center mb-16">
-          <p className="text-sm font-medium uppercase tracking-widest text-blue-400 mb-4">Pricing</p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-4">
+          <p className="text-xs uppercase tracking-[0.3em] text-[#9a7b4f] mb-5">Pricing</p>
+          <h2 className="font-serif text-3xl md:text-5xl tracking-tight text-[#1c1a17] mb-5">
             Simple pricing. No surprises.
           </h2>
-          <p className="text-lg text-blue-100/50 max-w-xl mx-auto">
+          <p className="text-lg text-[#6b6557] max-w-xl mx-auto">
             Start free. Upgrade when you need more. Cancel anytime.
           </p>
         </Reveal>
@@ -65,29 +65,29 @@ export function Pricing() {
               key={plan.name}
               delay={i * 0.08}
               rootMargin="-50px"
-              className={`relative flex flex-col p-6 rounded-2xl border transition-all ${
+              className={`relative flex flex-col p-7 rounded-2xl border transition-colors ${
                 plan.highlighted
-                  ? "bg-white/[0.08] border-blue-500/50 shadow-lg shadow-blue-500/10"
-                  : "bg-white/[0.03] border-white/10 hover:border-white/20"
+                  ? "bg-white border-[#1f3d2e] shadow-[0_20px_40px_-20px_rgba(31,61,46,0.25)]"
+                  : "bg-white border-[#e3dfd3] hover:border-[#1f3d2e]/30"
               }`}
             >
               {plan.highlighted && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-blue-500 text-white text-xs font-semibold rounded-full">
-                  Most Popular
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-[#1f3d2e] text-[#f5f4ef] text-xs font-medium tracking-wide rounded-full whitespace-nowrap">
+                  Most popular
                 </div>
               )}
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-white mb-1">{plan.name}</h3>
-                <p className="text-sm text-blue-100/40 mb-4">{plan.desc}</p>
+                <h3 className="text-lg font-semibold text-[#1c1a17] mb-1">{plan.name}</h3>
+                <p className="text-sm text-[#8a8475] mb-4">{plan.desc}</p>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-white">{plan.price}</span>
-                  <span className="text-sm text-blue-100/40">{plan.period}</span>
+                  <span className="font-serif text-4xl text-[#1c1a17]">{plan.price}</span>
+                  <span className="text-sm text-[#8a8475]">{plan.period}</span>
                 </div>
               </div>
               <ul className="flex-1 space-y-3 mb-8">
                 {plan.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-blue-100/60">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-emerald-400 mt-0.5 flex-shrink-0">
+                  <li key={f} className="flex items-start gap-2 text-sm text-[#57534a]">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#1f3d2e] mt-0.5 flex-shrink-0">
                       <path d="M20 6L9 17l-5-5" />
                     </svg>
                     {f}
@@ -96,10 +96,10 @@ export function Pricing() {
               </ul>
               <Link
                 href={plan.href as Route}
-                className={`text-center py-2.5 rounded-full text-sm font-medium transition-all ${
+                className={`text-center py-2.5 rounded-full text-sm font-medium transition-colors ${
                   plan.highlighted
-                    ? "bg-white text-slate-950 hover:bg-blue-100"
-                    : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
+                    ? "bg-[#1c1a17] text-[#f5f4ef] hover:bg-[#1f3d2e]"
+                    : "border border-[#1c1a17]/20 text-[#1c1a17] hover:border-[#1c1a17]/50"
                 }`}
               >
                 {plan.cta}
@@ -108,9 +108,9 @@ export function Pricing() {
           ))}
         </div>
 
-        <Reveal as="p" className="text-center text-sm text-blue-100/30 mt-8">
+        <Reveal as="p" className="text-center text-sm text-[#8a8475] mt-10">
           Need enterprise? Custom pricing with on-prem deployment, SLA, and dedicated support.{" "}
-          <a href="mailto:hello@alecrae.com" className="text-blue-400 hover:text-blue-300 underline">Contact us</a>
+          <a href="mailto:hello@alecrae.com" className="text-[#1f3d2e] hover:underline">Contact us</a>
         </Reveal>
       </div>
     </section>

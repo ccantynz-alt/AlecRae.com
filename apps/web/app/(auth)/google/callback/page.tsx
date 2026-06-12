@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Box, Text, Button } from "@alecrae/ui";
-import { authApi } from "../../../../lib/api";
+import { authApi, connectApi } from "../../../../lib/api";
 
 /**
  * Google sign-in landing page.
@@ -30,7 +30,18 @@ export default function GoogleCallbackPage(): React.ReactElement {
     authApi.completeGoogleSignIn(token);
     // Strip the token from the address bar before navigating away.
     window.history.replaceState(null, "", window.location.pathname);
-    window.location.href = "/inbox";
+
+    // First-run routing: a fresh sign-in with no connected email accounts
+    // lands on the onboarding wizard instead of an empty inbox. If the
+    // check itself fails, fail open to the inbox.
+    void connectApi
+      .listAccounts()
+      .then(({ data }) => {
+        window.location.href = data.length === 0 ? "/onboarding" : "/inbox";
+      })
+      .catch(() => {
+        window.location.href = "/inbox";
+      });
   }, []);
 
   return (

@@ -4,9 +4,9 @@ import type { Route } from "next";
 const links = {
   Product: [
     { label: "Features", href: "#features" },
-    { label: "AI Engine", href: "#ai" },
+    { label: "Intelligence", href: "#ai" },
     { label: "Pricing", href: "#pricing" },
-    { label: "Security", href: "#security" },
+    { label: "Privacy", href: "#security" },
     { label: "Changelog", href: "/changelog" },
     { label: "Status", href: "/status" },
   ],
@@ -27,26 +27,26 @@ const links = {
 
 export function Footer() {
   return (
-    <footer className="border-t border-white/5 py-16 px-6">
+    <footer className="border-t border-[#e3dfd3] py-16 px-6 bg-[#f5f4ef]">
       <div className="max-w-6xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-16">
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="text-xl font-bold tracking-tighter bg-gradient-to-r from-white to-blue-300 bg-clip-text text-transparent">
+            <Link href="/" className="font-script text-4xl leading-none text-[#1c1a17]">
               AlecRae
             </Link>
-            <p className="text-sm text-blue-100/40 mt-3 leading-relaxed">
-              Email, Evolved.
+            <p className="text-sm text-[#8a8475] mt-3 leading-relaxed">
+              Email, considered.
               <br />
-              The reinvention of email.
+              The email client you&apos;d sign your name to.
             </p>
           </div>
           {Object.entries(links).map(([category, items]) => (
             <div key={category}>
-              <h4 className="text-sm font-semibold text-white mb-4">{category}</h4>
+              <h4 className="text-xs uppercase tracking-[0.2em] text-[#9a7b4f] mb-4">{category}</h4>
               <ul className="space-y-2.5">
                 {items.map((item) => (
                   <li key={item.label}>
-                    <Link href={item.href as Route} className="text-sm text-blue-100/40 hover:text-white transition-colors">
+                    <Link href={item.href as Route} className="text-sm text-[#6b6557] hover:text-[#1c1a17] transition-colors">
                       {item.label}
                     </Link>
                   </li>
@@ -56,11 +56,11 @@ export function Footer() {
           ))}
         </div>
 
-        <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-blue-100/30">
+        <div className="pt-8 border-t border-[#e3dfd3] flex flex-col md:flex-row items-center justify-between gap-4">
+          <p className="text-xs text-[#8a8475]">
             &copy; {new Date().getFullYear()} AlecRae. All rights reserved.
           </p>
-          <p className="text-xs text-blue-100/20">
+          <p className="text-xs text-[#a8a294]">
             No ads. No tracking. No data mining. Ever.
           </p>
         </div>

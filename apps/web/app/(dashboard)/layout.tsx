@@ -57,6 +57,7 @@ const navigationSections: AnimatedSidebarSection[] = [
 interface UserInfo {
   name: string;
   email: string;
+  role: string;
 }
 
 export default function DashboardLayout({
@@ -67,7 +68,7 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
-  const [user, setUser] = useState<UserInfo>({ name: "User", email: "" });
+  const [user, setUser] = useState<UserInfo>({ name: "User", email: "", role: "" });
   const hydrate = useFocusMode((s) => s.hydrate);
   const toggleFocusMode = useFocusMode((s) => s.toggleFocusMode);
 
@@ -91,7 +92,7 @@ export default function DashboardLayout({
     authApi
       .me()
       .then((res) => {
-        setUser({ name: res.data.name, email: res.data.email });
+        setUser({ name: res.data.name, email: res.data.email, role: res.data.role });
       })
       .catch(() => {
         // Fallback to stored token info or defaults
@@ -146,9 +147,20 @@ export default function DashboardLayout({
       {!collapsed && (
         <>
           <Box className="flex-1 min-w-0">
-            <Text variant="body-sm" className="truncate font-medium">
-              {user.name}
-            </Text>
+            <Box className="flex items-center gap-1.5 min-w-0">
+              <Text variant="body-sm" className="truncate font-medium">
+                {user.name}
+              </Text>
+              {(user.role === "owner" || user.role === "admin") && (
+                <Text
+                  as="span"
+                  variant="caption"
+                  className="px-1.5 py-0.5 rounded bg-brand-100 text-brand-700 font-medium uppercase tracking-wide text-[10px] flex-shrink-0"
+                >
+                  {user.role}
+                </Text>
+              )}
+            </Box>
             <Text variant="caption" className="truncate">
               {user.email}
             </Text>

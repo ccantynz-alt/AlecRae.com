@@ -430,6 +430,24 @@ async function apiFetch<T>(
   return res.json() as Promise<T>;
 }
 
+// ─── Connected accounts ─────────────────────────────────────────────────────
+
+export interface ConnectedEmailAccount {
+  id: string;
+  provider: string;
+  email: string;
+  displayName: string | null;
+  status: string;
+  lastSyncAt: string | null;
+  createdAt: string;
+}
+
+export const connectApi = {
+  listAccounts(): Promise<{ data: ConnectedEmailAccount[] }> {
+    return apiFetch("/v1/connect/accounts");
+  },
+};
+
 // ─── Messages ──────────────────────────────────────────────────────────────
 
 export const messagesApi = {

@@ -15,7 +15,7 @@ import {
   type EmailMessage,
 } from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
-import { messagesApi, snoozeApi, authApi, aiWritingApi, type Message, type MessageDetail } from "../../../lib/api";
+import { messagesApi, snoozeApi, authApi, aiWritingApi, connectApi, type Message, type MessageDetail } from "../../../lib/api";
 import { useFocusMode } from "../../../lib/focus-mode";
 import { useCommandPalette } from "../../../lib/command-palette-store";
 import { NewsletterSummaryPreview } from "../../../components/NewsletterSummaryPreview";
@@ -154,6 +154,25 @@ export default function InboxPage(): React.ReactNode {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "unread" | "starred">("all");
+  // First-run: null while checking, false when the user has no connected
+  // email accounts (drives the "connect an account" empty state).
+  const [hasConnectedAccounts, setHasConnectedAccounts] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    connectApi
+      .listAccounts()
+      .then(({ data }) => {
+        if (!cancelled) setHasConnectedAccounts(data.length > 0);
+      })
+      .catch(() => {
+        // Fail open: don't push the connect CTA on users we can't verify.
+        if (!cancelled) setHasConnectedAccounts(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -782,9 +801,26 @@ export default function InboxPage(): React.ReactNode {
                 animate="animate"
                 exit="exit"
               >
-                <Text variant="body-sm" muted>
-                  {filter === "all" ? "No emails yet" : `No ${filter} emails`}
-                </Text>
+                {filter === "all" && hasConnectedAccounts === false ? (
+                  <Box className="flex flex-col items-center text-center gap-3 py-6">
+                    <Text variant="heading-sm">Connect your email to get started</Text>
+                    <Text variant="body-sm" muted className="max-w-xs">
+                      Link Gmail, Outlook, or any IMAP account and AlecRae will
+                      sync your mail here.
+                    </Text>
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onClick={() => router.push("/onboarding")}
+                    >
+                      Connect an account
+                    </Button>
+                  </Box>
+                ) : (
+                  <Text variant="body-sm" muted>
+                    {filter === "all" ? "No emails yet" : `No ${filter} emails`}
+                  </Text>
+                )}
               </motion.div>
             ) : (
               <motion.div

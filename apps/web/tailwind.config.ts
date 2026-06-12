@@ -50,6 +50,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
+        serif: ["var(--font-display)", "Georgia", "serif"],
+        script: ["var(--font-italianno)", "cursive"],
         mono: ["JetBrains Mono", "monospace"],
       },
       fontSize: {
