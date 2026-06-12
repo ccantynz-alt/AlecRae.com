@@ -10,6 +10,7 @@ import { AnimatedPage } from "../../components/AnimatedPage";
 import { FocusModeOverlay, type FocusModeOverlayEmail } from "../../components/FocusModeOverlay";
 import { FocusModeToggle } from "../../components/FocusModeToggle";
 import { useFocusMode } from "../../lib/focus-mode";
+import { useCommandPalette } from "../../lib/command-palette-store";
 import { authApi } from "../../lib/api";
 import { KeyboardShortcutHelp } from "../../components/KeyboardShortcutHelp";
 import { CommandPalette } from "../../components/CommandPalette";
@@ -71,6 +72,7 @@ export default function DashboardLayout({
   const [user, setUser] = useState<UserInfo>({ name: "User", email: "", role: "" });
   const hydrate = useFocusMode((s) => s.hydrate);
   const toggleFocusMode = useFocusMode((s) => s.toggleFocusMode);
+  const openCommandPalette = useCommandPalette((s) => s.setOpen);
 
   useEffect(() => {
     void hydrate();
@@ -116,9 +118,13 @@ export default function DashboardLayout({
 
   const brand = (
     <Box className="flex items-center justify-between">
-      <Text variant="heading-md" className="text-brand-600 font-bold">
+      <Box
+        as="span"
+        className="text-3xl leading-none text-content select-none"
+        style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
+      >
         AlecRae
-      </Text>
+      </Box>
       <Box
         as="button"
         className="text-content-tertiary hover:text-content transition-colors"
@@ -196,6 +202,23 @@ export default function DashboardLayout({
         <Box className="flex items-center justify-end gap-2 px-4 py-2 border-b border-border bg-surface-secondary/50">
           <OfflineBadge />
           <Box className="flex-1" />
+          <Box
+            as="button"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-border bg-surface text-content-secondary hover:text-content hover:border-border-strong transition-colors"
+            onClick={() => openCommandPalette(true)}
+            aria-label="Open command palette"
+          >
+            <Text as="span" variant="caption">
+              Ask AlecRae
+            </Text>
+            <Text
+              as="span"
+              variant="caption"
+              className="px-1.5 py-0.5 rounded bg-surface-tertiary text-content-tertiary font-mono text-[10px]"
+            >
+              ⌘K
+            </Text>
+          </Box>
           <FocusModeToggle />
         </Box>
         <AnimatedPage pageKey={pathname ?? "dashboard"} mode="slide" className="flex flex-col flex-1 min-h-0">

@@ -53,9 +53,22 @@ export const EmailViewer = forwardRef<HTMLDivElement, EmailViewerProps>(function
   if (!email) {
     return (
       <Box ref={ref} className={`flex items-center justify-center h-full ${className}`} {...props}>
-        <Text variant="body-md" muted>
-          Select an email to read
-        </Text>
+        <Box className="flex flex-col items-center gap-3 text-center select-none">
+          <Box
+            as="span"
+            className="text-5xl leading-none text-content-tertiary/60"
+            style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
+            aria-hidden="true"
+          >
+            AlecRae
+          </Box>
+          <Text variant="body-md" muted>
+            Select an email to read
+          </Text>
+          <Text variant="caption" muted>
+            Press ⌘K to ask AlecRae anything — reply, summarize, search, schedule
+          </Text>
+        </Box>
       </Box>
     );
   }
