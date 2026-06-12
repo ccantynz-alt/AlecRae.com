@@ -1,0 +1,58 @@
+# Deploy to the production box (149.28.119.158) — manual trigger only.
+#
+# Runs the pull ritual (scripts/box-deploy.sh) on the box over SSH. This gives
+# Craig a one-tap "Run workflow" button (works from the GitHub iPad app / web)
+# instead of needing a terminal.
+#
+# Requires repo secrets (Settings → Secrets and variables → Actions):
+#   BOX_SSH_KEY    — private key authorized on the box (one-time setup, on the box:
+#                    ssh-keygen -t ed25519 -f ~/.ssh/deploy_key -N "" &&
+#                    cat ~/.ssh/deploy_key.pub >> ~/.ssh/authorized_keys &&
+#                    cat ~/.ssh/deploy_key   ← paste THIS into the secret)
+#   BOX_HOST       — box IP/hostname (149.28.119.158)
+#   BOX_USER       — SSH user on the box
+#   BOX_REPO_PATH  — absolute path to the AlecRae.com checkout on the box
+#
+# The job refuses to run (with a clear message) until the secrets exist.
+# Production deploys remain Craig-authorized by construction: only a manual
+# workflow_dispatch can trigger this.
+
+name: Deploy to Box
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: box-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Pull ritual on production box
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Run scripts/box-deploy.sh on the box over SSH
+        env:
+          BOX_SSH_KEY: ${{ secrets.BOX_SSH_KEY }}
+          BOX_HOST: ${{ secrets.BOX_HOST }}
+          BOX_USER: ${{ secrets.BOX_USER }}
+          BOX_REPO_PATH: ${{ secrets.BOX_REPO_PATH }}
+        run: |
+          missing=""
+          for v in BOX_SSH_KEY BOX_HOST BOX_USER BOX_REPO_PATH; do
+            [ -z "${!v}" ] && missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repo secrets:$missing — see the comment at the top of .github/workflows/box-deploy.yml for one-time setup."
+            exit 1
+          fi
+
+          mkdir -p ~/.ssh
+          printf '%s\n' "$BOX_SSH_KEY" > ~/.ssh/box_key
+          chmod 600 ~/.ssh/box_key
+          ssh-keyscan -H "$BOX_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          # Login shell so the operator's profile env (DATABASE_URL etc.) loads.
+          ssh -i ~/.ssh/box_key -o ConnectTimeout=15 "$BOX_USER@$BOX_HOST" \
+            "bash -lc 'cd \"$BOX_REPO_PATH\" && git fetch origin main && git checkout main && git merge --ff-only origin/main && bash scripts/box-deploy.sh'"
