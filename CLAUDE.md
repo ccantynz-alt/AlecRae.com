@@ -788,6 +788,10 @@ legacy with no customers. Do not add domains to Vercel or propose CNAMEs back.
   `git pull → bun install → bun run db:migrate → web build → restart units`.
   The operator runs that ritual; anything merged after the last pull is NOT
   live until he does. (This explains "merged but not visible" reports.)
+  **Now scripted:** `scripts/box-deploy.sh` (one command on the box, fail-fast
+  + health checks) and the manual `Deploy to Box` GitHub workflow (one tap
+  from iPad once `BOX_SSH_KEY`/`BOX_HOST`/`BOX_USER`/`BOX_REPO_PATH` secrets
+  are set — runbook: `docs/infra/box-deploy.md`).
 - Open items handed to repo-side (2026-06-12): (1) OAuth callback
   session-cookie behavior across the api./mail. split — code review found the
   flow sound (token via URL fragment + Bearer auth; cookie is host-only by
@@ -798,7 +802,7 @@ legacy with no customers. Do not add domains to Vercel or propose CNAMEs back.
   surface exists in this repo).
 
 
-**Last updated:** 2026-06-12 12:37 UTC
+**Last updated:** 2026-06-12 12:55 UTC
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Google sign-in + Vapron platform integration landed (PR #48). **Vapron is the permanent platform** (AI gateway, email, object storage, hosting/deploy) — Cloudflare/Vercel/Neon were always interim scaffolding until Vapron was built, and the app migrates onto Vapron as the target infra. The Vapron client has been rebuilt against the published tRPC API (issue #19 fixed). The off-stack AWS EKS deploy pipeline has been removed. Production deployment awaiting Craig's Vapron + infra setup.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
