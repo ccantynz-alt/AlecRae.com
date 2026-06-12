@@ -24,7 +24,9 @@ async function initKeys(): Promise<void> {
 
   const privPem = process.env["JWT_PRIVATE_KEY"];
   const pubPem = process.env["JWT_PUBLIC_KEY"];
+  const isProd = process.env["NODE_ENV"] === "production";
 
+  // 1. Stable RS256 from a provided key pair (best for multi-node verification).
   if (privPem && pubPem) {
     try {
       privateKey = await jose.importPKCS8(privPem, "RS256");
@@ -33,45 +35,52 @@ async function initKeys(): Promise<void> {
       console.log("[jwt] Using RS256 with provided key pair");
       return;
     } catch (err) {
-      console.warn("[jwt] Failed to import RS256 keys, will attempt auto-generation:", err);
+      console.warn("[jwt] Failed to import RS256 keys, trying JWT_SECRET:", err);
     }
   }
 
-  // Attempt to generate RSA key pair at runtime if not provided
-  if (!privPem && !pubPem) {
-    try {
-      const { privateKey: genPriv, publicKey: genPub } = await jose.generateKeyPair("RS256", {
-        modulusLength: 2048,
-      });
-      privateKey = genPriv;
-      publicKey = genPub;
-      algorithm = "RS256";
-      console.log("[jwt] Generated ephemeral RS256 key pair (set JWT_PRIVATE_KEY / JWT_PUBLIC_KEY for persistence)");
-      return;
-    } catch {
-      // WebCrypto RSA generation may not be available in all runtimes
-      console.warn("[jwt] RS256 key generation unavailable, falling back to HS256");
-    }
-  }
-
-  // HS256 fallback
+  // 2. Stable HS256 from JWT_SECRET. Preferred over an ephemeral RS256 key pair
+  //    because ephemeral keys are regenerated on every boot, which silently
+  //    invalidates every active session on restart ("invalid or expired bearer
+  //    token" after a deploy). A configured JWT_SECRET must actually take effect.
   const explicitSecret = process.env["JWT_SECRET"];
-  if (!explicitSecret && process.env["NODE_ENV"] === "production") {
+  if (explicitSecret) {
+    if (explicitSecret.length < 32 && isProd) {
+      throw new Error("[jwt] JWT_SECRET must be at least 32 characters in production.");
+    }
+    const encoded = new TextEncoder().encode(explicitSecret);
+    privateKey = encoded;
+    publicKey = encoded;
+    algorithm = "HS256";
+    console.log("[jwt] Using HS256 with JWT_SECRET (stable across restarts)");
+    return;
+  }
+
+  // 3. No stable signing material provided. Refuse in production — an ephemeral
+  //    key pair would log every user out on every restart.
+  if (isProd) {
     throw new Error(
       "[jwt] Refusing to start in production without JWT_PRIVATE_KEY + JWT_PUBLIC_KEY or JWT_SECRET. " +
-        "Set one of these env vars before starting the API.",
+        "Set one of these so sessions survive restarts.",
     );
   }
-  if (explicitSecret && explicitSecret.length < 32 && process.env["NODE_ENV"] === "production") {
-    throw new Error("[jwt] JWT_SECRET must be at least 32 characters in production.");
+
+  // 4. Dev only: ephemeral RS256, or a dev secret as a last resort.
+  try {
+    const { privateKey: genPriv, publicKey: genPub } = await jose.generateKeyPair("RS256", {
+      modulusLength: 2048,
+    });
+    privateKey = genPriv;
+    publicKey = genPub;
+    algorithm = "RS256";
+    console.log("[jwt] Generated ephemeral RS256 key pair (dev only — set JWT_SECRET to persist sessions)");
+  } catch {
+    const encoded = new TextEncoder().encode("dev_secret");
+    privateKey = encoded;
+    publicKey = encoded;
+    algorithm = "HS256";
+    console.warn("[jwt] WARNING: using default dev HS256 secret.");
   }
-  const secret = explicitSecret ?? "dev_secret";
-  if (secret === "dev_secret") {
-    console.warn("[jwt] WARNING: Using default HS256 secret. Set JWT_PRIVATE_KEY + JWT_PUBLIC_KEY for RS256 in production.");
-  }
-  privateKey = new TextEncoder().encode(secret);
-  publicKey = new TextEncoder().encode(secret);
-  algorithm = "HS256";
 }
 
 // ─── Crypto helpers ──────────────────────────────────────────────────────────
