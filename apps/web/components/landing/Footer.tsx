@@ -35,9 +35,9 @@ export function Footer() {
               AlecRae
             </Link>
             <p className="text-sm text-[#8a8475] mt-3 leading-relaxed">
-              Email, considered.
+              Email, Evolved.
               <br />
-              The email client you&apos;d sign your name to.
+              The inbox you&apos;d sign your name to.
             </p>
           </div>
           {Object.entries(links).map(([category, items]) => (

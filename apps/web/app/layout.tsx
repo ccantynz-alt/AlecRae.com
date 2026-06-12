@@ -35,9 +35,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "AlecRae — Email, considered.",
+  title: "AlecRae — Email, Evolved.",
   description:
-    "The email client you'd sign your name to. One subscription. All your accounts. Every detail considered.",
+    "The inbox you'd sign your name to. One subscription. All your accounts. Every detail considered.",
   applicationName: "AlecRae",
   authors: [{ name: "AlecRae" }],
   keywords: [
@@ -49,16 +49,16 @@ export const metadata: Metadata = {
     "AlecRae",
   ],
   openGraph: {
-    title: "AlecRae — Email, considered.",
-    description: "The email client you'd sign your name to.",
+    title: "AlecRae — Email, Evolved.",
+    description: "The inbox you'd sign your name to.",
     url: "https://alecrae.com",
     siteName: "AlecRae",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "AlecRae — Email, considered.",
-    description: "The email client you'd sign your name to.",
+    title: "AlecRae — Email, Evolved.",
+    description: "The inbox you'd sign your name to.",
   },
   robots: {
     index: true,
