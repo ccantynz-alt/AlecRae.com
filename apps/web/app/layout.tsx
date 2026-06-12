@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Italianno, Inter } from "next/font/google";
+import { Italianno, Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { ConsentBanner } from "../components/ConsentBanner";
 
@@ -11,6 +11,16 @@ const italianno = Italianno({
   weight: "400",
   subsets: ["latin"],
   variable: "--font-italianno",
+  display: "swap",
+});
+
+/**
+ * Playfair Display — editorial serif for display headlines on the marketing site.
+ * Variable weight. Italianno signs the name; Playfair sets the headlines; Inter reads.
+ */
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -70,7 +80,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`h-full antialiased ${italianno.variable} ${inter.variable}`}
+      className={`h-full antialiased ${italianno.variable} ${inter.variable} ${playfair.variable}`}
     >
       <body className="h-full bg-[#f5f4ef] text-neutral-900 font-sans">
         {children}

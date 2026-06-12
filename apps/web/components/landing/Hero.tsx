@@ -19,68 +19,51 @@ function enter(y: number, durationSeconds: number, delaySeconds: number): CSSPro
 
 export function Hero() {
   return (
-    <section className="relative min-h-screen flex items-center justify-center pt-16 overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-[500px] h-[500px] bg-blue-500 rounded-full mix-blend-screen filter blur-[120px] opacity-20 animate-pulse" />
-        <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-purple-500 rounded-full mix-blend-screen filter blur-[120px] opacity-15 animate-pulse" style={{ animationDelay: "1s" }} />
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-cyan-500 rounded-full mix-blend-screen filter blur-[120px] opacity-10 animate-pulse" style={{ animationDelay: "2s" }} />
-      </div>
-
+    <section className="relative min-h-screen flex items-center justify-center pt-24 pb-16 overflow-hidden">
       <div className="relative z-10 max-w-6xl mx-auto px-6 text-center">
         <div className="enter-up" style={enter(20, 0.6, 0)}>
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-sm text-blue-200 mb-8">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-            Now in beta
+          <div className="inline-flex items-center gap-3 text-xs uppercase tracking-[0.3em] text-[#9a7b4f] mb-10">
+            <span className="block w-10 h-px bg-[#9a7b4f]/50" aria-hidden="true" />
+            Now in private beta
+            <span className="block w-10 h-px bg-[#9a7b4f]/50" aria-hidden="true" />
           </div>
         </div>
 
         <h1
-          className="enter-up text-5xl sm:text-7xl md:text-8xl font-bold tracking-tighter leading-[0.9] mb-6"
+          className="enter-up font-serif text-5xl sm:text-7xl md:text-[5.5rem] tracking-tight leading-[1.05] text-[#1c1a17] mb-8"
           style={enter(30, 0.7, 0.1)}
         >
-          <span className="bg-gradient-to-r from-white via-blue-100 to-cyan-200 bg-clip-text text-transparent">
-            Your inbox,
-          </span>
-          <br />
-          <span className="bg-gradient-to-r from-cyan-200 via-blue-400 to-purple-400 bg-clip-text text-transparent">
-            finally intelligent.
-          </span>
+          Email, considered.
         </h1>
 
         <p
-          className="enter-up text-lg md:text-xl text-blue-100/60 max-w-2xl mx-auto mb-10 leading-relaxed"
+          className="enter-up text-lg md:text-xl text-[#6b6557] max-w-2xl mx-auto mb-12 leading-relaxed"
           style={enter(20, 0.6, 0.3)}
         >
-          AlecRae replaces your email client, grammar checker, dictation software,
-          and newsletter reader. One app. One subscription. Every account. AI in every layer.
+          The email client you&apos;d sign your name to. AlecRae quietly replaces your
+          email apps, grammar checker, dictation software, and newsletter reader —
+          one considered subscription, every account, every device.
         </p>
 
         <div
-          className="enter-up flex flex-col sm:flex-row items-center justify-center gap-4 mb-20"
+          className="enter-up flex flex-col sm:flex-row items-center justify-center gap-4 mb-24"
           style={enter(20, 0.6, 0.5)}
         >
           <Link
             href="/register"
-            className="w-full sm:w-auto px-8 py-3.5 bg-white text-slate-950 font-semibold rounded-full hover:bg-blue-100 transition-all hover:shadow-lg hover:shadow-blue-500/20 text-center"
+            className="w-full sm:w-auto px-10 py-3.5 bg-[#1c1a17] text-[#f5f4ef] font-medium rounded-full hover:bg-[#1f3d2e] transition-colors text-center"
           >
-            Get Started Free
+            Request access
           </Link>
           <a
             href="#features"
-            className="w-full sm:w-auto px-8 py-3.5 border border-white/20 text-white font-medium rounded-full hover:bg-white/5 transition-all text-center"
+            className="w-full sm:w-auto px-10 py-3.5 border border-[#1c1a17]/20 text-[#1c1a17] font-medium rounded-full hover:border-[#1c1a17]/50 transition-colors text-center"
           >
-            See Features
+            Explore AlecRae
           </a>
         </div>
 
-        <div
-          className="enter-up relative max-w-4xl mx-auto"
-          style={enter(40, 0.8, 0.7)}
-        >
-          <div className="absolute -inset-4 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-cyan-500/20 rounded-2xl blur-xl" />
+        <div className="enter-up relative max-w-4xl mx-auto" style={enter(40, 0.8, 0.7)}>
           <InboxPreview />
         </div>
       </div>
@@ -98,31 +81,29 @@ function InboxPreview() {
   ];
 
   return (
-    <div className="relative bg-slate-900/90 backdrop-blur-sm border border-white/10 rounded-xl overflow-hidden shadow-2xl">
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-white/5 bg-slate-900/50">
-        <div className="flex gap-1.5">
-          <div className="w-3 h-3 rounded-full bg-red-500/70" />
-          <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
-          <div className="w-3 h-3 rounded-full bg-green-500/70" />
+    <div className="relative bg-white border border-[#e3dfd3] rounded-2xl overflow-hidden shadow-[0_30px_60px_-20px_rgba(28,26,23,0.15)]">
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-[#efede5] bg-[#faf9f5]">
+        <div className="flex gap-1.5" aria-hidden="true">
+          <div className="w-3 h-3 rounded-full bg-[#e3dfd3]" />
+          <div className="w-3 h-3 rounded-full bg-[#e3dfd3]" />
+          <div className="w-3 h-3 rounded-full bg-[#e3dfd3]" />
         </div>
-        <div className="flex-1 text-center text-xs text-blue-200/40">AlecRae — Inbox</div>
+        <div className="flex-1 text-center text-xs text-[#8a8475]">AlecRae — Inbox</div>
       </div>
-      <div className="divide-y divide-white/5">
+      <div className="divide-y divide-[#efede5]">
         {emails.map((email, i) => (
-          <div key={i} className={`flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors ${email.unread ? "bg-white/[0.03]" : ""}`}>
-            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${email.unread ? "bg-blue-400" : "bg-transparent"}`} />
+          <div key={i} className={`flex items-center gap-4 px-6 py-4 text-left hover:bg-[#faf9f5] transition-colors ${email.unread ? "bg-[#fcfbf8]" : ""}`}>
+            <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${email.unread ? "bg-[#1f3d2e]" : "bg-transparent"}`} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-4">
-                <span className={`text-sm truncate ${email.unread ? "text-white font-semibold" : "text-blue-100/70"}`}>{email.from}</span>
-                <span className="text-xs text-blue-200/30 flex-shrink-0">{email.time}</span>
+                <span className={`text-sm truncate ${email.unread ? "text-[#1c1a17] font-semibold" : "text-[#57534a]"}`}>{email.from}</span>
+                <span className="text-xs text-[#a8a294] flex-shrink-0">{email.time}</span>
               </div>
-              <div className="text-sm text-blue-100/50 truncate">{email.subject}</div>
+              <div className="text-sm text-[#8a8475] truncate">{email.subject}</div>
             </div>
-            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 flex-shrink-0">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-purple-400">
-                <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z" />
-              </svg>
-              <span className="text-[11px] text-purple-300">{email.ai}</span>
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1f3d2e]/[0.06] border border-[#1f3d2e]/15 flex-shrink-0">
+              <span className="w-1 h-1 rounded-full bg-[#1f3d2e]" aria-hidden="true" />
+              <span className="text-[11px] text-[#1f3d2e]">{email.ai}</span>
             </div>
           </div>
         ))}

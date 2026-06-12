@@ -11,18 +11,14 @@ const pledges = [
 
 export function Security() {
   return (
-    <section id="security" className="py-32 px-6 relative">
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-emerald-500 rounded-full mix-blend-screen filter blur-[200px] opacity-[0.05]" />
-      </div>
-
-      <div className="max-w-5xl mx-auto relative z-10">
+    <section id="security" className="py-28 px-6 bg-white border-t border-[#e3dfd3]">
+      <div className="max-w-5xl mx-auto">
         <Reveal className="text-center mb-16">
-          <p className="text-sm font-medium uppercase tracking-widest text-emerald-400 mb-4">Security & Privacy</p>
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight text-white mb-4">
+          <p className="text-xs uppercase tracking-[0.3em] text-[#9a7b4f] mb-5">Privacy &amp; Security</p>
+          <h2 className="font-serif text-3xl md:text-5xl tracking-tight text-[#1c1a17] mb-5">
             Your email is none of our business.
           </h2>
-          <p className="text-lg text-blue-100/50 max-w-xl mx-auto">
+          <p className="text-lg text-[#6b6557] max-w-xl mx-auto">
             Privacy isn&apos;t a feature toggle. It&apos;s the architecture.
           </p>
         </Reveal>
@@ -33,15 +29,15 @@ export function Security() {
               key={p.title}
               delay={i * 0.06}
               rootMargin="-50px"
-              className="p-6 rounded-2xl bg-white/[0.03] border border-white/10"
+              className="p-7 rounded-2xl bg-[#f5f4ef] border border-[#e3dfd3]"
             >
-              <div className="flex items-center gap-2 mb-3">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-emerald-400">
+              <div className="flex items-center gap-2.5 mb-3">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-[#1f3d2e]">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 </svg>
-                <h3 className="text-base font-semibold text-white">{p.title}</h3>
+                <h3 className="text-base font-semibold text-[#1c1a17]">{p.title}</h3>
               </div>
-              <p className="text-sm text-blue-100/50 leading-relaxed">{p.desc}</p>
+              <p className="text-sm text-[#6b6557] leading-relaxed">{p.desc}</p>
             </Reveal>
           ))}
         </div>
