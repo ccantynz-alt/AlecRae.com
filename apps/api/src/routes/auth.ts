@@ -27,6 +27,7 @@ import {
 } from "../lib/google-auth.js";
 import { signAuthState, verifyAuthState } from "../lib/oauth-state.js";
 import { sendTransactionalEmail } from "../lib/transactional-email.js";
+import { isOwnerEmail, reconcileOwnerPlan, OWNER_PLAN_TIER } from "../lib/owner-allowlist.js";
 
 const auth = new Hono();
 
@@ -158,6 +159,8 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
       .where(eq(accounts.id, user.accountId))
       .limit(1);
     if (account) tier = account.planTier ?? "free";
+    // Owner accounts are pinned to full access on every login.
+    tier = await reconcileOwnerPlan(user.accountId, user.email, tier);
   } catch {
     // fall through
   }
@@ -341,15 +344,20 @@ auth.get("/callback/google", async (c) => {
         .where(eq(accounts.id, existing.accountId))
         .limit(1);
       if (account) tier = account.planTier ?? "free";
+      // Owner accounts are pinned to full access — upgrade a pre-existing
+      // free/paid account in place if this email is on the allowlist.
+      tier = await reconcileOwnerPlan(existing.accountId, profile.email, tier);
     } else {
       accountId = generateId();
       userId = generateId();
       role = "owner";
+      // Founder / staff accounts start at full access; everyone else at free.
+      tier = isOwnerEmail(profile.email) ? OWNER_PLAN_TIER : "free";
 
       await db.insert(accounts).values({
         id: accountId,
         name: `${profile.name}'s Account`,
-        planTier: "free",
+        planTier: tier as typeof OWNER_PLAN_TIER | "free",
         billingEmail: profile.email,
         emailsSentThisPeriod: 0,
       });
