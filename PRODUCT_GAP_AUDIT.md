@@ -47,9 +47,9 @@ The backend for this is **real and mounted**, not a facade. The product in front
 |---|---|---|---|
 | Add / verify a sending **domain** (with DNS records) | ✅ live (`/v1/domains`) | ✅ `(dashboard)/domains` page, linked in sidebar | **WORKING end-to-end** |
 | **Connect** an external Gmail/Outlook/IMAP inbox | ✅ live (`/v1/connect`) | ✅ onboarding (**fixed this session**) | **WORKING** (was broken) |
-| **Provision mailboxes on your own domain** (the core Workspace move) | ✅ live (`/v1/mailboxes`) | ❌ none | **BACKEND-ONLY — no screen** |
-| **Bulk import a Google Workspace** (admin OAuth → list users → provision up to 1000) | ✅ live (`/v1/import/workspace/*`) | ❌ none | **BACKEND-ONLY — no screen** |
-| **Organizations / teams** — create org, invite users, roles, audit log, SSO | ✅ live (`/v1/organizations`, 12+ endpoints) | ❌ none | **BACKEND-ONLY — no screen** |
+| **Provision mailboxes on your own domain** (the core Workspace move) | ✅ live (`/v1/mailboxes`) | ✅ `(dashboard)/workspace` → Mailboxes | **WORKING** (built 2026-06-13) |
+| **Bulk import a Google Workspace** (admin OAuth → list users → provision up to 1000) | ⚠️ live API, OAuth start/callback need wiring | ❌ none | **DEFERRED** — needs the same OAuth-redirect fix as connect (#38) |
+| **Organizations / teams** — create org, invite users, roles, audit log, SSO | ✅ live (`/v1/organizations`, 12+ endpoints) | ✅ `(dashboard)/workspace` → Team | **WORKING** (built 2026-06-13) |
 | **Import jobs** (Gmail/Outlook/MBOX/EML mailbox migration) | ⚠️ routes live, **workers are stubs** | ❌ none | **STUB + no screen** — jobs mark "completed" without importing any messages |
 
 **So today, to actually provision a mailbox, bulk-import a Workspace, or invite a team member, you'd have to call the API directly** (e.g. with the seeded API key). There is no screen for any of it. That's why "the business side" feels unset-up: the engine is built, the dashboard for it isn't.
@@ -71,12 +71,12 @@ Import workers (above), R2 presigned uploads (files + voice depend on it), docum
 The backend is the moat and it's largely done. The fastest way to make AlecRae *feel* as complete as it *is*:
 
 1. ✅ **Admin console page** — DONE 2026-06-13. Real role-gated `(dashboard)/admin` wired to all 8 `/v1/admin/*` endpoints (overview stats, users, domains, messages, events, dead-letter queue with clear actions). The old unlinked static `/admin` stub was removed; the sidebar now shows "Admin" for owner/admin. Directly answers "how do I know I have admin / that things are set up."
-2. **Workspace setup flow** — one section under Manage that strings together the *existing* APIs: add domain (done) → provision mailboxes (`/v1/mailboxes`) → bulk-import Workspace (`/v1/import/workspace`) → invite team (`/v1/organizations`). All backend exists; this is pure UI. ~3–5 days.
-3. **Make import real** — replace the stub import workers with actual message ingestion (the sync engine already exists for live connect; reuse it for backfill). ~2–3 days.
+2. ✅ **Workspace setup flow** — DONE 2026-06-13 (mailboxes + team). New `(dashboard)/workspace` page: provision/list/remove native mailboxes on a verified domain (`/v1/mailboxes`) and create org / invite users / manage roles + pending invitations (`/v1/organizations`). Required fixing a **systemic scope/auth trap** first: session tokens carried only `messages:* + account:manage`, so `domains`/`mailboxes`/`org`/`import` routes (which need `domains:manage`/`account:read`/`team:manage`/`import:*`) blanket-403'd, and `/v1/mailboxes` + bare `/v1/domains` had no auth mount (401). Fixed at token issuance (role-derived scopes) + added the missing mounts. **Deferred:** bulk Google-Workspace directory import — its admin-OAuth start/callback need the same backend wiring as the connect redirect trap (#38).
+3. **Make import real** — replace the stub import workers with actual message ingestion (the sync engine already exists for live connect; reuse it for backfill). ~2–3 days. **(next)**
 4. Then chip at (C)/(D) by user demand.
 
 None of this is blocked on new backend or new dependencies — it's wiring screens onto endpoints that are already mounted and tested.
 
 ---
 
-_Last updated: 2026-06-13 04:54 UTC_
+_Last updated: 2026-06-13 05:04 UTC_

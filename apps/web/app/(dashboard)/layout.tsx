@@ -110,10 +110,15 @@ export default function DashboardLayout({
   const isAdmin = user.role === "owner" || user.role === "admin";
 
   const sectionsWithActive: AnimatedSidebarSection[] = navigationSections.map((section) => {
-    // The admin console is owner/admin-only; surface it in the Manage group.
+    // Workspace setup + admin console are owner/admin-only; surface them in
+    // the Manage group.
     const items =
       section.title === "Manage" && isAdmin
-        ? [...section.items, { id: "admin", label: "Admin", href: "/admin" }]
+        ? [
+            ...section.items,
+            { id: "workspace", label: "Workspace", href: "/workspace" },
+            { id: "admin", label: "Admin", href: "/admin" },
+          ]
         : section.items;
     return {
       ...section,

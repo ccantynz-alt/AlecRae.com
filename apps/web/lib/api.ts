@@ -586,6 +586,119 @@ export const adminApi = {
   },
 };
 
+// ─── Mailboxes (native addresses on a verified domain) ───────────────────────
+
+export interface Mailbox {
+  id: string;
+  accountId: string;
+  domainId: string;
+  localPart: string;
+  address: string;
+  displayName: string | null;
+  forwardTo: string[] | null;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export const mailboxesApi = {
+  list(): Promise<{ data: Mailbox[] }> {
+    return apiFetch("/v1/mailboxes");
+  },
+  create(payload: {
+    address: string;
+    displayName?: string;
+    forwardTo?: string[];
+  }): Promise<Mailbox> {
+    return apiFetch("/v1/mailboxes", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch(`/v1/mailboxes/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+};
+
+// ─── Organizations / Team ────────────────────────────────────────────────────
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  ownerAccountId: string;
+  domain: string | null;
+  logoUrl: string | null;
+  settings: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrgMember {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  avatarUrl: string | null;
+  emailVerified: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface OrgInvitation {
+  id: string;
+  accountId: string;
+  invitedBy?: string;
+  email: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+  acceptedAt?: string | null;
+  createdAt: string;
+}
+
+export type OrgRole = "admin" | "member" | "viewer";
+
+export const organizationsApi = {
+  get(): Promise<{ data: Organization[] }> {
+    return apiFetch("/v1/organizations");
+  },
+  create(payload: { name: string; slug: string; domain?: string | null }): Promise<{ data: Organization }> {
+    return apiFetch("/v1/organizations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  members(): Promise<{ data: OrgMember[] }> {
+    return apiFetch("/v1/organizations/members");
+  },
+  invitations(status?: string): Promise<{ data: OrgInvitation[] }> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    return apiFetch(`/v1/organizations/invitations${qs}`);
+  },
+  invite(payload: { email: string; role: OrgRole }): Promise<{ data: OrgInvitation }> {
+    return apiFetch("/v1/organizations/invitations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  revokeInvitation(invitationId: string): Promise<unknown> {
+    return apiFetch(`/v1/organizations/invitations/${encodeURIComponent(invitationId)}`, {
+      method: "DELETE",
+    });
+  },
+  changeRole(userId: string, role: OrgRole): Promise<unknown> {
+    return apiFetch(`/v1/organizations/members/${encodeURIComponent(userId)}/role`, {
+      method: "PUT",
+      body: JSON.stringify({ role }),
+    });
+  },
+  removeMember(userId: string): Promise<unknown> {
+    return apiFetch(`/v1/organizations/members/${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    });
+  },
+};
+
 // ─── Messages ──────────────────────────────────────────────────────────────
 
 export const messagesApi = {
