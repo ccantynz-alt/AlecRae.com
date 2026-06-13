@@ -25,15 +25,17 @@ import {
   domainsApi,
   mailboxesApi,
   organizationsApi,
+  importApi,
   type Domain,
   type Mailbox,
   type Organization,
   type OrgMember,
   type OrgInvitation,
   type OrgRole,
+  type ImportJobSummary,
 } from "../../../lib/api";
 
-type Tab = "mailboxes" | "team";
+type Tab = "mailboxes" | "team" | "import";
 
 export default function WorkspacePage(): ReactNode {
   const [role, setRole] = useState<string | null>(null);
@@ -76,6 +78,7 @@ export default function WorkspacePage(): ReactNode {
           [
             { id: "mailboxes", label: "Mailboxes" },
             { id: "team", label: "Team" },
+            { id: "import", label: "Import" },
           ] as { id: Tab; label: string }[]
         ).map((t) => (
           <Box
@@ -95,7 +98,9 @@ export default function WorkspacePage(): ReactNode {
         ))}
       </Box>
 
-      {tab === "mailboxes" ? <MailboxesSection /> : <TeamSection />}
+      {tab === "mailboxes" && <MailboxesSection />}
+      {tab === "team" && <TeamSection />}
+      {tab === "import" && <ImportSection />}
     </Box>
   );
 }
@@ -602,6 +607,147 @@ function TeamSection(): ReactNode {
           </CardContent>
         </Card>
       )}
+    </Box>
+  );
+}
+
+// ─── Import ──────────────────────────────────────────────────────────────────
+
+function ImportSection(): ReactNode {
+  const [jobs, setJobs] = useState<ImportJobSummary[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  const loadJobs = useCallback(() => {
+    importApi
+      .jobs()
+      .then((res) => setJobs(res.data))
+      .catch((e: unknown) => setError(errMsg(e)));
+  }, []);
+
+  useEffect(() => {
+    loadJobs();
+  }, [loadJobs]);
+
+  const onMbox = async (file: File): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    setOk(null);
+    try {
+      await importApi.mbox(file);
+      setOk(`Import of ${file.name} started — progress appears below.`);
+      // The MBOX worker runs in the background; give it a moment, then refresh.
+      setTimeout(loadJobs, 1500);
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onEml = async (files: File[]): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    setOk(null);
+    try {
+      const res = await importApi.eml(files);
+      const p = res.data.progress;
+      setOk(`Imported ${p.processed}, skipped ${p.skipped}, failed ${p.failed}.`);
+      loadJobs();
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Box className="space-y-6">
+      <Card>
+        <CardContent>
+          <Text variant="heading-sm" className="mb-2">
+            Import your mail
+          </Text>
+          <Text variant="body-md" muted className="mb-4">
+            Bring in an existing mailbox export. Drop in an <Text as="span" variant="body-md" className="font-medium">.mbox</Text> file
+            (Apple Mail, Thunderbird, Google Takeout) or one or more <Text as="span" variant="body-md" className="font-medium">.eml</Text> files.
+            Re-importing the same messages is safe — duplicates are skipped.
+          </Text>
+
+          <Box className="flex flex-wrap gap-6">
+            <Box>
+              <Text variant="caption" muted className="mb-1 block">
+                MBOX file
+              </Text>
+              <Box
+                as="input"
+                type="file"
+                accept=".mbox,.mbx"
+                disabled={busy}
+                aria-label="Upload MBOX file"
+                onChange={(e) => {
+                  const f = (e.target as HTMLInputElement).files?.[0];
+                  if (f) void onMbox(f);
+                  (e.target as HTMLInputElement).value = "";
+                }}
+                className="text-body-sm text-content-secondary"
+              />
+            </Box>
+            <Box>
+              <Text variant="caption" muted className="mb-1 block">
+                EML file(s)
+              </Text>
+              <Box
+                as="input"
+                type="file"
+                accept=".eml"
+                multiple
+                disabled={busy}
+                aria-label="Upload EML files"
+                onChange={(e) => {
+                  const files = Array.from((e.target as HTMLInputElement).files ?? []);
+                  if (files.length > 0) void onEml(files);
+                  (e.target as HTMLInputElement).value = "";
+                }}
+                className="text-body-sm text-content-secondary"
+              />
+            </Box>
+          </Box>
+          {error && <Notice tone="error">{error}</Notice>}
+          {ok && <Notice tone="success">{ok}</Notice>}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Box className="flex items-center justify-between mb-3">
+            <Text variant="heading-sm">Import jobs</Text>
+            <Button variant="ghost" size="sm" onClick={loadJobs}>
+              Refresh
+            </Button>
+          </Box>
+          {jobs === null && <Notice tone="info">Loading…</Notice>}
+          {jobs && jobs.length === 0 && <Notice tone="info">No imports yet.</Notice>}
+          <Box className="divide-y divide-border">
+            {jobs?.map((j) => (
+              <Box key={j.jobId} className="flex items-center justify-between py-2 gap-3">
+                <Box className="min-w-0">
+                  <Text variant="body-sm" className="font-medium capitalize">
+                    {j.source}
+                  </Text>
+                  <Text variant="caption" muted className="block">
+                    {j.progress.processed} imported · {j.progress.skipped} skipped · {j.progress.failed} failed
+                  </Text>
+                </Box>
+                <Text as="span" variant="caption" className="capitalize text-content-secondary">
+                  {j.status}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        </CardContent>
+      </Card>
     </Box>
   );
 }

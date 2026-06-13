@@ -699,6 +699,64 @@ export const organizationsApi = {
   },
 };
 
+// ─── Import (mailbox migration) ──────────────────────────────────────────────
+
+/** Multipart upload with Bearer auth + one silent refresh-and-retry on 401.
+ *  Kept separate from apiFetch because FormData must NOT carry a JSON
+ *  Content-Type (the browser sets the multipart boundary itself). */
+async function uploadFetch<T>(path: string, body: FormData, retried = false): Promise<T> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body,
+  });
+
+  if (res.status === 401 && !retried && getRefreshToken()) {
+    const fresh = await refreshSession();
+    if (fresh) return uploadFetch<T>(path, body, true);
+    redirectToLogin();
+  }
+
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => null)) as ApiError | null;
+    throw new Error(errorBody?.error?.message ?? `Upload failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export interface ImportProgress {
+  total: number;
+  processed: number;
+  failed: number;
+  skipped: number;
+}
+
+export interface ImportJobSummary {
+  jobId: string;
+  source: string;
+  status: string;
+  progress: ImportProgress;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export const importApi = {
+  mbox(file: File): Promise<{ data: { jobId: string; status: string } }> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return uploadFetch("/v1/import/mbox", fd);
+  },
+  eml(files: File[]): Promise<{ data: { jobId: string; status: string; progress: ImportProgress } }> {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    return uploadFetch("/v1/import/eml", fd);
+  },
+  jobs(): Promise<{ data: ImportJobSummary[] }> {
+    return apiFetch("/v1/import/jobs");
+  },
+};
+
 // ─── Messages ──────────────────────────────────────────────────────────────
 
 export const messagesApi = {
