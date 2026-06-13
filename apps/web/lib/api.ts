@@ -449,6 +449,314 @@ export const connectApi = {
   },
 };
 
+// ─── Admin (platform administration) ─────────────────────────────────────────
+
+export interface AdminStats {
+  totals: {
+    sent: number;
+    delivered: number;
+    bounced: number;
+    complained: number;
+    queued: number;
+    failed: number;
+    deferred: number;
+    opened: number;
+    clicked: number;
+    deliveryRate: number;
+    bounceRate: number;
+    openRate: number;
+    clickRate: number;
+  };
+  last24h: {
+    sent: number;
+    delivered: number;
+    bounced: number;
+    queued: number;
+    failed: number;
+    deferred: number;
+  };
+  platform: {
+    totalAccounts: number;
+    totalDomains: number;
+    totalUsers: number;
+  };
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  accountId: string;
+  accountName: string | null;
+  plan: string;
+  emailsSentThisPeriod: number;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+export interface AdminDomain {
+  id: string;
+  accountId: string;
+  domain: string;
+  status: string;
+  spfVerified: boolean;
+  dkimVerified: boolean;
+  dmarcVerified: boolean;
+  returnPathVerified: boolean;
+  isActive: boolean;
+  isDefault: boolean;
+  messagesSent24h: number;
+  createdAt: string;
+  verifiedAt: string | null;
+}
+
+export interface AdminMessage {
+  id: string;
+  accountId: string;
+  messageId: string | null;
+  from: { email: string; name: string | null };
+  to: { email: string; name?: string | null }[] | null;
+  subject: string | null;
+  status: string;
+  tags: string[] | null;
+  createdAt: string;
+  sentAt: string | null;
+}
+
+export interface AdminEvent {
+  id: string;
+  accountId: string;
+  emailId: string | null;
+  messageId: string | null;
+  type: string;
+  recipient: string | null;
+  timestamp: string;
+  bounceCategory: string | null;
+  url: string | null;
+}
+
+export interface AdminDlqRecord {
+  jobId: string;
+  jobName: string;
+  failedReason: string;
+  attemptsMade: number;
+  timestamp: string;
+  status: "pending_retry" | "permanently_failed";
+  retryScheduledAt: string | null;
+}
+
+export interface AdminDlq {
+  stats: { total: number; pendingRetry: number; permanentlyFailed: number };
+  records: AdminDlqRecord[];
+}
+
+export const adminApi = {
+  stats(): Promise<{ data: AdminStats }> {
+    return apiFetch("/v1/admin/stats");
+  },
+  users(): Promise<{ data: AdminUser[] }> {
+    return apiFetch("/v1/admin/users");
+  },
+  domains(): Promise<{ data: AdminDomain[] }> {
+    return apiFetch("/v1/admin/domains");
+  },
+  messages(params?: { limit?: number; status?: string }): Promise<{ data: AdminMessage[] }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.status) qs.set("status", params.status);
+    const query = qs.toString();
+    return apiFetch(`/v1/admin/messages${query ? `?${query}` : ""}`);
+  },
+  events(params?: { limit?: number; type?: string }): Promise<{ data: AdminEvent[] }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.type) qs.set("type", params.type);
+    const query = qs.toString();
+    return apiFetch(`/v1/admin/events${query ? `?${query}` : ""}`);
+  },
+  dlq(): Promise<{ data: AdminDlq }> {
+    return apiFetch("/v1/admin/dlq");
+  },
+  clearDlqRecord(jobId: string): Promise<{ data: { cleared: boolean } }> {
+    return apiFetch(`/v1/admin/dlq/${encodeURIComponent(jobId)}`, { method: "DELETE" });
+  },
+  clearFailedDlq(): Promise<{ data: { cleared: number } }> {
+    return apiFetch("/v1/admin/dlq/clear", { method: "POST" });
+  },
+};
+
+// ─── Mailboxes (native addresses on a verified domain) ───────────────────────
+
+export interface Mailbox {
+  id: string;
+  accountId: string;
+  domainId: string;
+  localPart: string;
+  address: string;
+  displayName: string | null;
+  forwardTo: string[] | null;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export const mailboxesApi = {
+  list(): Promise<{ data: Mailbox[] }> {
+    return apiFetch("/v1/mailboxes");
+  },
+  create(payload: {
+    address: string;
+    displayName?: string;
+    forwardTo?: string[];
+  }): Promise<Mailbox> {
+    return apiFetch("/v1/mailboxes", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch(`/v1/mailboxes/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+};
+
+// ─── Organizations / Team ────────────────────────────────────────────────────
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  ownerAccountId: string;
+  domain: string | null;
+  logoUrl: string | null;
+  settings: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrgMember {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  avatarUrl: string | null;
+  emailVerified: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface OrgInvitation {
+  id: string;
+  accountId: string;
+  invitedBy?: string;
+  email: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+  acceptedAt?: string | null;
+  createdAt: string;
+}
+
+export type OrgRole = "admin" | "member" | "viewer";
+
+export const organizationsApi = {
+  get(): Promise<{ data: Organization[] }> {
+    return apiFetch("/v1/organizations");
+  },
+  create(payload: { name: string; slug: string; domain?: string | null }): Promise<{ data: Organization }> {
+    return apiFetch("/v1/organizations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  members(): Promise<{ data: OrgMember[] }> {
+    return apiFetch("/v1/organizations/members");
+  },
+  invitations(status?: string): Promise<{ data: OrgInvitation[] }> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    return apiFetch(`/v1/organizations/invitations${qs}`);
+  },
+  invite(payload: { email: string; role: OrgRole }): Promise<{ data: OrgInvitation }> {
+    return apiFetch("/v1/organizations/invitations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  revokeInvitation(invitationId: string): Promise<unknown> {
+    return apiFetch(`/v1/organizations/invitations/${encodeURIComponent(invitationId)}`, {
+      method: "DELETE",
+    });
+  },
+  changeRole(userId: string, role: OrgRole): Promise<unknown> {
+    return apiFetch(`/v1/organizations/members/${encodeURIComponent(userId)}/role`, {
+      method: "PUT",
+      body: JSON.stringify({ role }),
+    });
+  },
+  removeMember(userId: string): Promise<unknown> {
+    return apiFetch(`/v1/organizations/members/${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+// ─── Import (mailbox migration) ──────────────────────────────────────────────
+
+/** Multipart upload with Bearer auth + one silent refresh-and-retry on 401.
+ *  Kept separate from apiFetch because FormData must NOT carry a JSON
+ *  Content-Type (the browser sets the multipart boundary itself). */
+async function uploadFetch<T>(path: string, body: FormData, retried = false): Promise<T> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body,
+  });
+
+  if (res.status === 401 && !retried && getRefreshToken()) {
+    const fresh = await refreshSession();
+    if (fresh) return uploadFetch<T>(path, body, true);
+    redirectToLogin();
+  }
+
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => null)) as ApiError | null;
+    throw new Error(errorBody?.error?.message ?? `Upload failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export interface ImportProgress {
+  total: number;
+  processed: number;
+  failed: number;
+  skipped: number;
+}
+
+export interface ImportJobSummary {
+  jobId: string;
+  source: string;
+  status: string;
+  progress: ImportProgress;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export const importApi = {
+  mbox(file: File): Promise<{ data: { jobId: string; status: string } }> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return uploadFetch("/v1/import/mbox", fd);
+  },
+  eml(files: File[]): Promise<{ data: { jobId: string; status: string; progress: ImportProgress } }> {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    return uploadFetch("/v1/import/eml", fd);
+  },
+  jobs(): Promise<{ data: ImportJobSummary[] }> {
+    return apiFetch("/v1/import/jobs");
+  },
+};
+
 // ─── Messages ──────────────────────────────────────────────────────────────
 
 export const messagesApi = {

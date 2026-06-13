@@ -250,9 +250,17 @@ app.use("/v1/messages/send", authMiddleware, sendRateLimit);
 app.use("/v1/messages/search", authMiddleware, searchRateLimit);
 // Read messages: 600 req/min per API key
 app.use("/v1/messages/*", authMiddleware, readRateLimit);
-// Domains: write-level limits (200 req/min)
+// Domains: write-level limits (200 req/min). The bare path needs its own mount
+// — `/v1/domains/*` does not match `/v1/domains`, so list/create were unauthed
+// (→ 401 from requireScope, with no auth context).
+app.use("/v1/domains", authMiddleware, writeRateLimit);
 app.use("/v1/domains/*", authMiddleware, writeRateLimit);
 // app.use("/v1/domains/:id/warmup/*", authMiddleware, writeRateLimit); // see warmup import note
+// Mailboxes (native addresses on a verified domain): write-level. Both the
+// bare and wildcard paths need a mount or every call hits requireScope with
+// no auth context and 401s.
+app.use("/v1/mailboxes", authMiddleware, writeRateLimit);
+app.use("/v1/mailboxes/*", authMiddleware, writeRateLimit);
 // Webhooks: write-level limits (200 req/min)
 app.use("/v1/webhooks/*", authMiddleware, writeRateLimit);
 // Analytics: read-level limits (600 req/min)

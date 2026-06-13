@@ -34,7 +34,7 @@ The gap is **frontend wiring + a few stub workers**, not missing backend.
 
 - **Are you admin?** Yes. `ccantynz@gmail.com` is hard-coded in the owner allowlist (`apps/api/src/lib/owner-allowlist.ts`) and every first user of an account is created with role `owner`. `requireAdmin()` (`apps/api/src/middleware/auth.ts`) passes for `owner`/`admin` roles, so you reach all `/v1/admin/*` endpoints.
 - **Can you tell from the UI?** Yes — the sidebar footer shows an **"OWNER"/"ADMIN" badge** next to your name (sourced from `/v1/auth/me`). That's the role indicator you said you had no way to see.
-- **The gap:** the only admin page in the web app (`apps/web/app/admin/page.tsx`) is **unlinked, ungated, and wired to nothing** — it renders static launch/pricing content and links out to `admin.alecrae.com`, which doesn't resolve in DNS. It calls **none** of the 8 real `/v1/admin/*` endpoints (`stats`, `users`, `events`, `domains`, `messages`, `dlq`). So the admin *capability* exists in the API; the *console* does not exist in the product.
+- **The gap (now closed):** previously the only admin page (`apps/web/app/admin/page.tsx`) was unlinked, ungated, and wired to nothing — static content linking out to a dead `admin.alecrae.com`. **Fixed 2026-06-13:** that stub is removed and replaced by a real role-gated console at `(dashboard)/admin` (inside the dashboard shell), wired to all 8 `/v1/admin/*` endpoints, with an "Admin" sidebar entry for owner/admin.
 - ⚠️ **Security note worth your attention:** because "owner" means "owner of your own account," and `/v1/admin/*` exposes **cross-account** data, the role gate is the only thing standing between any signed-up user and global stats. That's by-design today but worth hardening before public signups (a separate "platform staff" flag distinct from per-account owner).
 
 ---
@@ -47,10 +47,11 @@ The backend for this is **real and mounted**, not a facade. The product in front
 |---|---|---|---|
 | Add / verify a sending **domain** (with DNS records) | ✅ live (`/v1/domains`) | ✅ `(dashboard)/domains` page, linked in sidebar | **WORKING end-to-end** |
 | **Connect** an external Gmail/Outlook/IMAP inbox | ✅ live (`/v1/connect`) | ✅ onboarding (**fixed this session**) | **WORKING** (was broken) |
-| **Provision mailboxes on your own domain** (the core Workspace move) | ✅ live (`/v1/mailboxes`) | ❌ none | **BACKEND-ONLY — no screen** |
-| **Bulk import a Google Workspace** (admin OAuth → list users → provision up to 1000) | ✅ live (`/v1/import/workspace/*`) | ❌ none | **BACKEND-ONLY — no screen** |
-| **Organizations / teams** — create org, invite users, roles, audit log, SSO | ✅ live (`/v1/organizations`, 12+ endpoints) | ❌ none | **BACKEND-ONLY — no screen** |
-| **Import jobs** (Gmail/Outlook/MBOX/EML mailbox migration) | ⚠️ routes live, **workers are stubs** | ❌ none | **STUB + no screen** — jobs mark "completed" without importing any messages |
+| **Provision mailboxes on your own domain** (the core Workspace move) | ✅ live (`/v1/mailboxes`) | ✅ `(dashboard)/workspace` → Mailboxes | **WORKING** (built 2026-06-13) |
+| **Bulk import a Google Workspace** (admin OAuth → list users → provision up to 1000) | ⚠️ live API, OAuth start/callback need wiring | ❌ none | **DEFERRED** — needs the same OAuth-redirect fix as connect (#38) |
+| **Organizations / teams** — create org, invite users, roles, audit log, SSO | ✅ live (`/v1/organizations`, 12+ endpoints) | ✅ `(dashboard)/workspace` → Team | **WORKING** (built 2026-06-13) |
+| **Import jobs** (MBOX/EML mailbox migration) | ✅ real (parse + store, deduped) | ✅ `(dashboard)/workspace` → Import | **WORKING** (built 2026-06-13) — needs `db:migrate` on the box |
+| **Import jobs** (Gmail/Outlook history backfill) | ⚠️ depends on sync-engine persistence (stub) | ✅ upload UI present | **HONEST-FAIL** — blocked on #41 (engine stores nothing); connected accounts also show empty inbox until then |
 
 **So today, to actually provision a mailbox, bulk-import a Workspace, or invite a team member, you'd have to call the API directly** (e.g. with the seeded API key). There is no screen for any of it. That's why "the business side" feels unset-up: the engine is built, the dashboard for it isn't.
 
@@ -70,13 +71,15 @@ Import workers (above), R2 presigned uploads (files + voice depend on it), docum
 
 The backend is the moat and it's largely done. The fastest way to make AlecRae *feel* as complete as it *is*:
 
-1. **Admin console page** — a real `(dashboard)/admin` gated on the role badge, wired to the 8 `/v1/admin/*` endpoints (stats, users, domains, messages, DLQ). ~1–2 days. Directly answers "how do I know I have admin / that things are set up."
-2. **Workspace setup flow** — one section under Manage that strings together the *existing* APIs: add domain (done) → provision mailboxes (`/v1/mailboxes`) → bulk-import Workspace (`/v1/import/workspace`) → invite team (`/v1/organizations`). All backend exists; this is pure UI. ~3–5 days.
-3. **Make import real** — replace the stub import workers with actual message ingestion (the sync engine already exists for live connect; reuse it for backfill). ~2–3 days.
+1. ✅ **Admin console page** — DONE 2026-06-13. Real role-gated `(dashboard)/admin` wired to all 8 `/v1/admin/*` endpoints (overview stats, users, domains, messages, events, dead-letter queue with clear actions). The old unlinked static `/admin` stub was removed; the sidebar now shows "Admin" for owner/admin. Directly answers "how do I know I have admin / that things are set up."
+2. ✅ **Workspace setup flow** — DONE 2026-06-13 (mailboxes + team). New `(dashboard)/workspace` page: provision/list/remove native mailboxes on a verified domain (`/v1/mailboxes`) and create org / invite users / manage roles + pending invitations (`/v1/organizations`). Required fixing a **systemic scope/auth trap** first: session tokens carried only `messages:* + account:manage`, so `domains`/`mailboxes`/`org`/`import` routes (which need `domains:manage`/`account:read`/`team:manage`/`import:*`) blanket-403'd, and `/v1/mailboxes` + bare `/v1/domains` had no auth mount (401). Fixed at token issuance (role-derived scopes) + added the missing mounts. **Deferred:** bulk Google-Workspace directory import — its admin-OAuth start/callback need the same backend wiring as the connect redirect trap (#38).
+3. ✅ **Make import real** — PARTIAL DONE 2026-06-13. Authorized data-model change (`0003`: `emails.domain_id` nullable + `source`) so connected/imported mail fits the unified table. **MBOX/EML import now genuinely parses + stores** (deduped) with an upload UI in Workspace → Import. Gmail/Outlook history backfill is honest-failing pending the **sync-engine persistence fix (known issue #41)** — the engine fetches but never writes to `emails`, which is also why a freshly connected Gmail/Outlook account shows an empty inbox. That fix needs live-OAuth verification, so it was split out rather than shipped unverified.
+
+**Discovered in step 3:** connected-account mail persistence (#41) is a real, previously-unrecorded gap — live sync stores nothing. The data model + sink (`received-email-store.ts`) are now in place for it.
 4. Then chip at (C)/(D) by user demand.
 
 None of this is blocked on new backend or new dependencies — it's wiring screens onto endpoints that are already mounted and tested.
 
 ---
 
-_Last updated: 2026-06-13 02:45 UTC_
+_Last updated: 2026-06-13 05:46 UTC_

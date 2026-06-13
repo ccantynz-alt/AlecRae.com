@@ -121,16 +121,56 @@ export interface TokenPayload {
 const ACCESS_TOKEN_TTL = "15m";
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
+/**
+ * Scopes granted to a human SESSION token, derived from the account role.
+ *
+ * Route guards (`requireScope(...)`) were written for API keys, whose scopes
+ * come from explicit permission flags. Session tokens previously defaulted to
+ * just `messages:* + account:manage`, which silently 403'd the web app out of
+ * every management surface — domains, mailboxes, org/team, Workspace import,
+ * import jobs — because those routes require `domains:manage` / `account:read`
+ * / `team:manage` / `import:*` that no session token ever carried.
+ *
+ * All those handlers are account-scoped (every query filters by the caller's
+ * accountId), so an owner granted these scopes can only ever manage their OWN
+ * account — there is no cross-tenant reach. Cross-account `/v1/admin/*` stays
+ * separately gated by `requireAdmin` (role-based), which this does NOT widen.
+ */
+function scopesForRole(role: string | undefined): string {
+  const base = ["messages:send", "messages:read", "account:manage", "account:read"];
+  switch (role) {
+    case "owner":
+    case "admin":
+      return [
+        ...base,
+        "domains:manage",
+        "team:manage",
+        "analytics:read",
+        "webhooks:manage",
+        "api_keys:manage",
+        "import:read",
+        "import:write",
+      ].join(" ");
+    case "viewer":
+      return ["messages:read", "account:read", "analytics:read"].join(" ");
+    default:
+      // member and any unknown role: preserve the prior baseline.
+      return base.join(" ");
+  }
+}
+
 export async function createAccessToken(payload: TokenPayload): Promise<string> {
   await initKeys();
   if (!privateKey) throw new Error("JWT keys not initialized");
+
+  const scope = payload.scope ?? scopesForRole(payload.role);
 
   return new jose.SignJWT({
     userId: payload.userId,
     email: payload.email,
     role: payload.role,
     tier: payload.tier,
-    scope: payload.scope,
+    scope,
   })
     .setProtectedHeader({ alg: algorithm })
     .setSubject(payload.sub)
