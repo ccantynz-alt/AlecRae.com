@@ -391,6 +391,7 @@ auth.get("/callback/google", async (c) => {
     // stores the session, and routes to the inbox — matching the other flows.
     const fragment = new URLSearchParams({
       token: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
       expiresIn: String(tokenPair.expiresIn),
     });
     return c.redirect(`${WEB_URL}/google/callback#${fragment.toString()}`);

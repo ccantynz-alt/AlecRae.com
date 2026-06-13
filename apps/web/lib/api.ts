@@ -6,6 +6,14 @@
  */
 
 import { getApiBase } from "./api-base";
+import {
+  clearSession,
+  getAccessToken,
+  getRefreshToken,
+  redirectToLogin,
+  refreshSession,
+  setSession,
+} from "./auth-token";
 
 const API_BASE = getApiBase();
 
@@ -121,6 +129,10 @@ export interface Account {
 
 export interface AuthResponse {
   token: string;
+  /** Long-lived rotating refresh token — captured so the client can renew the
+   *  short-lived access token silently instead of logging the user out. */
+  refreshToken?: string;
+  expiresIn?: number;
   user: {
     id: string;
     email: string;
@@ -197,17 +209,6 @@ export interface PublicKeyCredentialAssertionJSON {
   authenticatorAttachment?: string;
 }
 
-/**
- * Persist the session cookie the web middleware reads. Host-only on purpose
- * (the API is called with Bearer tokens, never cookies, so the cookie must not
- * span subdomains). `Secure` is appended on HTTPS so the production gateway
- * never sees it on plaintext.
- */
-function writeSessionCookie(token: string): void {
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `alecrae_session=${token}; path=/; max-age=${7 * 86400}; SameSite=Lax${secure}`;
-}
-
 export const authApi = {
   async login(email: string, password: string): Promise<AuthResponse> {
     const res = await fetch(`${API_BASE}/v1/auth/login`, {
@@ -224,10 +225,7 @@ export const authApi = {
     const data = (await res.json()) as { data: AuthResponse };
 
     // Store token
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", data.data.token);
-      writeSessionCookie(data.data.token);
-    }
+    setSession(data.data.token, data.data.refreshToken);
 
     return data.data;
   },
@@ -251,10 +249,7 @@ export const authApi = {
 
     const data = (await res.json()) as { data: AuthResponse };
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", data.data.token);
-      writeSessionCookie(data.data.token);
-    }
+    setSession(data.data.token, data.data.refreshToken);
 
     return data.data;
   },
@@ -265,22 +260,16 @@ export const authApi = {
   },
 
   /**
-   * Persist a session token handed back by the Google sign-in callback.
-   * Mirrors the storage used by login/register/passkey so the rest of the app
-   * (localStorage `alecrae_api_key` + cookie `alecrae_session`) just works.
+   * Persist a session handed back by the Google sign-in callback. Mirrors the
+   * storage used by login/register/passkey so the rest of the app just works.
+   * The refresh token (if the callback forwards one) enables silent renewal.
    */
-  completeGoogleSignIn(token: string): void {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", token);
-      writeSessionCookie(token);
-    }
+  completeGoogleSignIn(token: string, refreshToken?: string | null): void {
+    setSession(token, refreshToken ?? null);
   },
 
   logout() {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("alecrae_api_key");
-      document.cookie = "alecrae_session=; path=/; max-age=0; SameSite=Lax";
-    }
+    clearSession();
   },
 
   async me(): Promise<{ data: AuthResponse["user"] }> {
@@ -346,10 +335,7 @@ export const authApi = {
 
     const data = (await res.json()) as { data: AuthResponse };
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", data.data.token);
-      writeSessionCookie(data.data.token);
-    }
+    setSession(data.data.token, data.data.refreshToken);
 
     return data.data;
   },
@@ -391,10 +377,7 @@ export const authApi = {
 
     const data = (await res.json()) as { data: AuthResponse };
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", data.data.token);
-      writeSessionCookie(data.data.token);
-    }
+    setSession(data.data.token, data.data.refreshToken);
 
     return data.data;
   },
@@ -405,11 +388,9 @@ export const authApi = {
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
+  retried = false,
 ): Promise<T> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("alecrae_api_key") ?? ""
-      : "";
+  const token = getAccessToken();
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -419,6 +400,16 @@ async function apiFetch<T>(
       ...options.headers,
     },
   });
+
+  // Access token expired → renew silently with the refresh token and retry
+  // once, rather than surfacing "invalid or expired bearer token" to the user.
+  if (res.status === 401 && !retried && getRefreshToken()) {
+    const fresh = await refreshSession();
+    if (fresh) {
+      return apiFetch<T>(path, options, true);
+    }
+    redirectToLogin();
+  }
 
   if (!res.ok) {
     const errorBody = (await res.json().catch(() => null)) as ApiError | null;
@@ -445,6 +436,16 @@ export interface ConnectedEmailAccount {
 export const connectApi = {
   listAccounts(): Promise<{ data: ConnectedEmailAccount[] }> {
     return apiFetch("/v1/connect/accounts");
+  },
+
+  /** Fetch the Google OAuth consent URL (authenticated), then navigate to it. */
+  gmailAuthUrl(): Promise<{ data: { url: string } }> {
+    return apiFetch("/v1/connect/gmail");
+  },
+
+  /** Fetch the Microsoft OAuth consent URL (authenticated), then navigate to it. */
+  outlookAuthUrl(): Promise<{ data: { url: string } }> {
+    return apiFetch("/v1/connect/outlook");
   },
 };
 

@@ -84,6 +84,12 @@ export default function DashboardLayout({
         e.preventDefault();
         void toggleFocusMode();
       }
+      // Toggle the navigation sidebar (collapse/expand) — keyboard path back
+      // so a collapsed sidebar is never a dead end.
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        setCollapsed((prev) => !prev);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -117,19 +123,25 @@ export default function DashboardLayout({
     .slice(0, 2) || "U";
 
   const brand = (
-    <Box className="flex items-center justify-between">
-      <Box
-        as="span"
-        className="text-3xl leading-none text-content select-none"
-        style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
-      >
-        AlecRae
-      </Box>
+    <Box className={`flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
+      {/* Wordmark is hidden when collapsed so it can't overflow the 64px rail and
+          push the expand toggle out of the (overflow-hidden) sidebar \u2014 that left
+          the sidebar collapsed with no visible way back. */}
+      {!collapsed && (
+        <Box
+          as="span"
+          className="text-3xl leading-none text-content select-none"
+          style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
+        >
+          AlecRae
+        </Box>
+      )}
       <Box
         as="button"
-        className="text-content-tertiary hover:text-content transition-colors"
+        className="flex-shrink-0 text-content-tertiary hover:text-content transition-colors"
         onClick={() => setCollapsed((prev) => !prev)}
         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={collapsed ? "Expand sidebar (\u2318\\)" : "Collapse sidebar (\u2318\\)"}
       >
         <Text as="span" variant="body-sm">
           {collapsed ? "\u276F" : "\u276E"}
