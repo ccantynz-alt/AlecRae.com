@@ -33,16 +33,16 @@ export function Hero() {
           className="enter-up font-serif text-5xl sm:text-7xl md:text-[5.5rem] tracking-tight leading-[1.05] text-[#1c1a17] mb-8"
           style={enter(30, 0.7, 0.1)}
         >
-          Email, considered.
+          Email, Evolved.
         </h1>
 
         <p
           className="enter-up text-lg md:text-xl text-[#6b6557] max-w-2xl mx-auto mb-12 leading-relaxed"
           style={enter(20, 0.6, 0.3)}
         >
-          The email client you&apos;d sign your name to. AlecRae quietly replaces your
+          The inbox you&apos;d sign your name to. AlecRae replaces your
           email apps, grammar checker, dictation software, and newsletter reader —
-          one considered subscription, every account, every device.
+          one subscription, every account, every device.
         </p>
 
         <div
