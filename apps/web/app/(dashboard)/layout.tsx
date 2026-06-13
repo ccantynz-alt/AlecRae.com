@@ -107,13 +107,22 @@ export default function DashboardLayout({
       });
   }, []);
 
-  const sectionsWithActive: AnimatedSidebarSection[] = navigationSections.map((section) => ({
-    ...section,
-    items: section.items.map((item) => ({
-      ...item,
-      active: pathname === item.href || pathname?.startsWith(item.href + "/"),
-    })),
-  }));
+  const isAdmin = user.role === "owner" || user.role === "admin";
+
+  const sectionsWithActive: AnimatedSidebarSection[] = navigationSections.map((section) => {
+    // The admin console is owner/admin-only; surface it in the Manage group.
+    const items =
+      section.title === "Manage" && isAdmin
+        ? [...section.items, { id: "admin", label: "Admin", href: "/admin" }]
+        : section.items;
+    return {
+      ...section,
+      items: items.map((item) => ({
+        ...item,
+        active: pathname === item.href || pathname?.startsWith(item.href + "/"),
+      })),
+    };
+  });
 
   const initials = user.name
     .split(" ")

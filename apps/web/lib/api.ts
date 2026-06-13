@@ -449,6 +449,143 @@ export const connectApi = {
   },
 };
 
+// ─── Admin (platform administration) ─────────────────────────────────────────
+
+export interface AdminStats {
+  totals: {
+    sent: number;
+    delivered: number;
+    bounced: number;
+    complained: number;
+    queued: number;
+    failed: number;
+    deferred: number;
+    opened: number;
+    clicked: number;
+    deliveryRate: number;
+    bounceRate: number;
+    openRate: number;
+    clickRate: number;
+  };
+  last24h: {
+    sent: number;
+    delivered: number;
+    bounced: number;
+    queued: number;
+    failed: number;
+    deferred: number;
+  };
+  platform: {
+    totalAccounts: number;
+    totalDomains: number;
+    totalUsers: number;
+  };
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  accountId: string;
+  accountName: string | null;
+  plan: string;
+  emailsSentThisPeriod: number;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+export interface AdminDomain {
+  id: string;
+  accountId: string;
+  domain: string;
+  status: string;
+  spfVerified: boolean;
+  dkimVerified: boolean;
+  dmarcVerified: boolean;
+  returnPathVerified: boolean;
+  isActive: boolean;
+  isDefault: boolean;
+  messagesSent24h: number;
+  createdAt: string;
+  verifiedAt: string | null;
+}
+
+export interface AdminMessage {
+  id: string;
+  accountId: string;
+  messageId: string | null;
+  from: { email: string; name: string | null };
+  to: { email: string; name?: string | null }[] | null;
+  subject: string | null;
+  status: string;
+  tags: string[] | null;
+  createdAt: string;
+  sentAt: string | null;
+}
+
+export interface AdminEvent {
+  id: string;
+  accountId: string;
+  emailId: string | null;
+  messageId: string | null;
+  type: string;
+  recipient: string | null;
+  timestamp: string;
+  bounceCategory: string | null;
+  url: string | null;
+}
+
+export interface AdminDlqRecord {
+  jobId: string;
+  jobName: string;
+  failedReason: string;
+  attemptsMade: number;
+  timestamp: string;
+  status: "pending_retry" | "permanently_failed";
+  retryScheduledAt: string | null;
+}
+
+export interface AdminDlq {
+  stats: { total: number; pendingRetry: number; permanentlyFailed: number };
+  records: AdminDlqRecord[];
+}
+
+export const adminApi = {
+  stats(): Promise<{ data: AdminStats }> {
+    return apiFetch("/v1/admin/stats");
+  },
+  users(): Promise<{ data: AdminUser[] }> {
+    return apiFetch("/v1/admin/users");
+  },
+  domains(): Promise<{ data: AdminDomain[] }> {
+    return apiFetch("/v1/admin/domains");
+  },
+  messages(params?: { limit?: number; status?: string }): Promise<{ data: AdminMessage[] }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.status) qs.set("status", params.status);
+    const query = qs.toString();
+    return apiFetch(`/v1/admin/messages${query ? `?${query}` : ""}`);
+  },
+  events(params?: { limit?: number; type?: string }): Promise<{ data: AdminEvent[] }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.type) qs.set("type", params.type);
+    const query = qs.toString();
+    return apiFetch(`/v1/admin/events${query ? `?${query}` : ""}`);
+  },
+  dlq(): Promise<{ data: AdminDlq }> {
+    return apiFetch("/v1/admin/dlq");
+  },
+  clearDlqRecord(jobId: string): Promise<{ data: { cleared: boolean } }> {
+    return apiFetch(`/v1/admin/dlq/${encodeURIComponent(jobId)}`, { method: "DELETE" });
+  },
+  clearFailedDlq(): Promise<{ data: { cleared: number } }> {
+    return apiFetch("/v1/admin/dlq/clear", { method: "POST" });
+  },
+};
+
 // ─── Messages ──────────────────────────────────────────────────────────────
 
 export const messagesApi = {

@@ -34,7 +34,7 @@ The gap is **frontend wiring + a few stub workers**, not missing backend.
 
 - **Are you admin?** Yes. `ccantynz@gmail.com` is hard-coded in the owner allowlist (`apps/api/src/lib/owner-allowlist.ts`) and every first user of an account is created with role `owner`. `requireAdmin()` (`apps/api/src/middleware/auth.ts`) passes for `owner`/`admin` roles, so you reach all `/v1/admin/*` endpoints.
 - **Can you tell from the UI?** Yes — the sidebar footer shows an **"OWNER"/"ADMIN" badge** next to your name (sourced from `/v1/auth/me`). That's the role indicator you said you had no way to see.
-- **The gap:** the only admin page in the web app (`apps/web/app/admin/page.tsx`) is **unlinked, ungated, and wired to nothing** — it renders static launch/pricing content and links out to `admin.alecrae.com`, which doesn't resolve in DNS. It calls **none** of the 8 real `/v1/admin/*` endpoints (`stats`, `users`, `events`, `domains`, `messages`, `dlq`). So the admin *capability* exists in the API; the *console* does not exist in the product.
+- **The gap (now closed):** previously the only admin page (`apps/web/app/admin/page.tsx`) was unlinked, ungated, and wired to nothing — static content linking out to a dead `admin.alecrae.com`. **Fixed 2026-06-13:** that stub is removed and replaced by a real role-gated console at `(dashboard)/admin` (inside the dashboard shell), wired to all 8 `/v1/admin/*` endpoints, with an "Admin" sidebar entry for owner/admin.
 - ⚠️ **Security note worth your attention:** because "owner" means "owner of your own account," and `/v1/admin/*` exposes **cross-account** data, the role gate is the only thing standing between any signed-up user and global stats. That's by-design today but worth hardening before public signups (a separate "platform staff" flag distinct from per-account owner).
 
 ---
@@ -70,7 +70,7 @@ Import workers (above), R2 presigned uploads (files + voice depend on it), docum
 
 The backend is the moat and it's largely done. The fastest way to make AlecRae *feel* as complete as it *is*:
 
-1. **Admin console page** — a real `(dashboard)/admin` gated on the role badge, wired to the 8 `/v1/admin/*` endpoints (stats, users, domains, messages, DLQ). ~1–2 days. Directly answers "how do I know I have admin / that things are set up."
+1. ✅ **Admin console page** — DONE 2026-06-13. Real role-gated `(dashboard)/admin` wired to all 8 `/v1/admin/*` endpoints (overview stats, users, domains, messages, events, dead-letter queue with clear actions). The old unlinked static `/admin` stub was removed; the sidebar now shows "Admin" for owner/admin. Directly answers "how do I know I have admin / that things are set up."
 2. **Workspace setup flow** — one section under Manage that strings together the *existing* APIs: add domain (done) → provision mailboxes (`/v1/mailboxes`) → bulk-import Workspace (`/v1/import/workspace`) → invite team (`/v1/organizations`). All backend exists; this is pure UI. ~3–5 days.
 3. **Make import real** — replace the stub import workers with actual message ingestion (the sync engine already exists for live connect; reuse it for backfill). ~2–3 days.
 4. Then chip at (C)/(D) by user demand.
@@ -79,4 +79,4 @@ None of this is blocked on new backend or new dependencies — it's wiring scree
 
 ---
 
-_Last updated: 2026-06-13 02:45 UTC_
+_Last updated: 2026-06-13 04:54 UTC_
