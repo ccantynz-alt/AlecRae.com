@@ -8,6 +8,12 @@
  */
 
 import { getApiBase } from "./api-base";
+import {
+  getAccessToken,
+  getRefreshToken,
+  redirectToLogin,
+  refreshSession,
+} from "./auth-token";
 
 const API_BASE = getApiBase();
 
@@ -23,11 +29,9 @@ interface FeatureApiError {
 async function featureFetch<T>(
   path: string,
   options: RequestInit = {},
+  retried = false,
 ): Promise<T> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("alecrae_api_key") ?? ""
-      : "";
+  const token = getAccessToken();
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -37,6 +41,15 @@ async function featureFetch<T>(
       ...options.headers,
     },
   });
+
+  // Silent access-token renewal on expiry — mirrors lib/api.ts apiFetch.
+  if (res.status === 401 && !retried && getRefreshToken()) {
+    const fresh = await refreshSession();
+    if (fresh) {
+      return featureFetch<T>(path, options, true);
+    }
+    redirectToLogin();
+  }
 
   if (!res.ok) {
     const errorBody = (await res

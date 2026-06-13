@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { Box, Text, Button, Card, CardContent } from "@alecrae/ui";
+import { connectApi } from "../../../lib/api";
 
 /* ───────────────────────────────────────────────────────────────────────────
  *  Types
@@ -51,8 +52,6 @@ const DENSITY_OPTIONS: {
     lineCount: 3,
   },
 ];
-
-const API_BASE = "/v1/connect";
 
 /* ───────────────────────────────────────────────────────────────────────────
  *  Main Page
@@ -229,14 +228,28 @@ function StepConnect({
 
   const hasAccounts = connectedAccounts.length > 0;
 
-  const handleGmail = (): void => {
-    // Redirect to OAuth flow
-    window.location.href = `${API_BASE}/gmail`;
+  const [connectError, setConnectError] = useState<string | null>(null);
+
+  const handleGmail = async (): Promise<void> => {
+    // Fetch the OAuth consent URL with an authenticated request, then navigate.
+    // (A bare top-level redirect to the API can't carry the Bearer token.)
+    try {
+      setConnectError(null);
+      const { data } = await connectApi.gmailAuthUrl();
+      window.location.href = data.url;
+    } catch {
+      setConnectError("Couldn't start Gmail connection. Please try again.");
+    }
   };
 
-  const handleOutlook = (): void => {
-    // Redirect to OAuth flow
-    window.location.href = `${API_BASE}/outlook`;
+  const handleOutlook = async (): Promise<void> => {
+    try {
+      setConnectError(null);
+      const { data } = await connectApi.outlookAuthUrl();
+      window.location.href = data.url;
+    } catch {
+      setConnectError("Couldn't start Outlook connection. Please try again.");
+    }
   };
 
   const handleImapSubmit = (): void => {
@@ -306,7 +319,7 @@ function StepConnect({
         <Box
           as="button"
           className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-neutral-300/60 bg-[#fafaf6] hover:border-neutral-500 hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2 focus:ring-offset-[#f5f4ef]"
-          onClick={handleGmail}
+          onClick={() => void handleGmail()}
           aria-label="Connect Gmail account"
           type="button"
         >
@@ -330,7 +343,7 @@ function StepConnect({
         <Box
           as="button"
           className="group flex flex-col items-center gap-3 p-6 rounded-2xl border border-neutral-300/60 bg-[#fafaf6] hover:border-neutral-500 hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2 focus:ring-offset-[#f5f4ef]"
-          onClick={handleOutlook}
+          onClick={() => void handleOutlook()}
           aria-label="Connect Outlook account"
           type="button"
         >
@@ -351,6 +364,14 @@ function StepConnect({
           </Box>
         </Box>
       </Box>
+
+      {connectError && (
+        <Box className="text-center" role="alert">
+          <Text variant="caption" className="text-red-700">
+            {connectError}
+          </Text>
+        </Box>
+      )}
 
       {/* IMAP option */}
       {!showImap ? (
