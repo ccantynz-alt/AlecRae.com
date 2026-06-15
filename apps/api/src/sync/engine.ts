@@ -15,6 +15,8 @@
  *   5. Background worker keeps accounts in sync
  */
 
+import { storeReceivedEmail } from "../lib/received-email-store.js";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type AccountProvider = "gmail" | "outlook" | "imap" | "yahoo" | "icloud";
@@ -355,6 +357,51 @@ async function fullGmailSync(
   }
 }
 
+/**
+ * Decode a base64url-encoded Gmail body part to a UTF-8 string.
+ * Gmail uses URL-safe base64 (replacing + with - and / with _) without padding.
+ */
+function decodeBase64Url(data: string): string {
+  // Convert base64url to standard base64, then decode
+  const base64 = data.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(base64, "base64").toString("utf-8");
+}
+
+/**
+ * Recursively walk Gmail MIME parts and collect the first text/plain and
+ * text/html bodies found.
+ */
+function extractGmailBodies(
+  payload: GmailMessage["payload"],
+): { textBody: string | null; htmlBody: string | null } {
+  let textBody: string | null = null;
+  let htmlBody: string | null = null;
+
+  function walk(part: {
+    mimeType: string;
+    body?: { data?: string; size: number; attachmentId?: string };
+    parts?: typeof part[];
+    headers?: { name: string; value: string }[];
+    filename?: string;
+  }): void {
+    const mime = part.mimeType ?? "";
+
+    if (mime === "text/plain" && part.body?.data && !textBody) {
+      textBody = decodeBase64Url(part.body.data);
+    } else if (mime === "text/html" && part.body?.data && !htmlBody) {
+      htmlBody = decodeBase64Url(part.body.data);
+    } else if (mime.startsWith("multipart/") && part.parts) {
+      for (const child of part.parts) {
+        walk(child);
+      }
+    }
+  }
+
+  // The top-level payload is itself a part
+  walk(payload as Parameters<typeof walk>[0]);
+  return { textBody, htmlBody };
+}
+
 async function fetchAndStoreGmailMessage(
   messageId: string,
   accountId: string,
@@ -371,10 +418,32 @@ async function fetchAndStoreGmailMessage(
 
   const msg = (await res.json()) as GmailMessage;
   const parsed = parseGmailMessage(msg, accountId);
+  const { textBody, htmlBody } = extractGmailBodies(msg.payload);
 
-  // Store in database (upsert)
-  // In production: batch insert
-  console.log(`[sync] Stored Gmail message: ${parsed.subject?.slice(0, 50)}`);
+  const getHeader = (name: string): string | null => {
+    const h = msg.payload.headers.find((hdr) => hdr.name.toLowerCase() === name.toLowerCase());
+    return h?.value ?? null;
+  };
+
+  const referencesRaw = getHeader("References");
+  const references = referencesRaw
+    ? referencesRaw.trim().split(/\s+/).filter((r) => r.length > 0)
+    : [];
+
+  await storeReceivedEmail({
+    accountId,
+    source: "gmail",
+    from: parsed.from ?? { name: null, email: "unknown" },
+    to: parsed.to ?? [],
+    cc: parsed.cc ?? [],
+    subject: parsed.subject ?? "(no subject)",
+    textBody: textBody ?? null,
+    htmlBody: htmlBody ?? null,
+    messageId: parsed.messageId ?? null,
+    inReplyTo: parsed.inReplyTo ?? null,
+    references,
+    receivedAt: parsed.receivedAt,
+  });
 }
 
 interface GmailMessage {
@@ -600,8 +669,27 @@ export async function syncOutlookMessages(
 
     for (const msg of data.value) {
       const parsed = parseOutlookMessage(msg, account.id);
+
+      const referencesRaw: string[] = [];
+      // Outlook Graph API doesn't return References header in the delta
+      // select — store what we have and leave references empty.
+
+      await storeReceivedEmail({
+        accountId: account.id,
+        source: "outlook",
+        from: parsed.from ?? { name: null, email: "unknown" },
+        to: parsed.to ?? [],
+        cc: parsed.cc ?? [],
+        subject: parsed.subject ?? "(no subject)",
+        textBody: parsed.textBody ?? null,
+        htmlBody: parsed.htmlBody ?? null,
+        messageId: parsed.messageId ?? null,
+        inReplyTo: null,
+        references: referencesRaw,
+        receivedAt: parsed.receivedAt,
+      });
+
       result.messagesAdded++;
-      console.log(`[sync] Stored Outlook message: ${parsed.subject?.slice(0, 50)}`);
     }
 
     const nextState = data["@odata.deltaLink"] ?? data["@odata.nextLink"];
