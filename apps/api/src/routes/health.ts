@@ -69,10 +69,11 @@ async function checkRedis(): Promise<ServiceStatus> {
       maxRetriesPerRequest: 1,
       lazyConnect: true,
     });
+    const redis = client;
     await Promise.race([
       (async () => {
-        await client!.connect();
-        await client!.ping();
+        await redis.connect();
+        await redis.ping();
       })(),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("timeout after 2s")), PROBE_TIMEOUT_MS),
@@ -243,7 +244,7 @@ async function checkDatabaseDetailed(): Promise<ConfigCheck> {
     ]);
 
     // Drizzle execute() returns the rows directly as an iterable array
-    const resultRows = tableCountResult as unknown as Array<{ count: string | number }>;
+    const resultRows = tableCountResult as unknown as { count: string | number }[];
     const tableCount = resultRows[0]?.count ?? "?";
     return { status: "ok", message: `Connected (${tableCount} tables)` };
   } catch (error: unknown) {
@@ -271,10 +272,11 @@ async function checkRedisDetailed(): Promise<ConfigCheck> {
       maxRetriesPerRequest: 1,
       lazyConnect: true,
     });
+    const redisClient = client;
     await Promise.race([
       (async () => {
-        await client!.connect();
-        await client!.ping();
+        await redisClient.connect();
+        await redisClient.ping();
       })(),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("timeout after 2s")), PROBE_TIMEOUT_MS),
@@ -401,14 +403,14 @@ health.get("/detailed", async (c) => {
   };
 
   // Required checks — any "error" here is critical
-  const requiredChecks: Array<{ key: string; result: ConfigCheck }> = [
+  const requiredChecks: { key: string; result: ConfigCheck }[] = [
     { key: "DATABASE_URL", result: database },
     { key: "JWT_SECRET", result: jwtSecret },
     { key: "WEBAUTHN_RP_ID + WEBAUTHN_ORIGIN", result: webauthn },
   ];
 
   // Optional checks — "missing" or "warning" degrades but doesn't block boot
-  const optionalChecks: Array<{ key: string; result: ConfigCheck }> = [
+  const optionalChecks: { key: string; result: ConfigCheck }[] = [
     { key: "REDIS_URL", result: redis },
     { key: "GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET", result: googleOauth },
     { key: "VAPRON_API_KEY", result: vapron },
@@ -489,7 +491,7 @@ export async function printStartupConfigReport(): Promise<void> {
     const anthropicResult = checkAnthropic();
     const stripeResult = checkStripe();
 
-    const rows: Array<{ label: string; result: ConfigCheck }> = [
+    const rows: { label: string; result: ConfigCheck }[] = [
       { label: "Database", result: dbResult },
       { label: "JWT Secret", result: jwtResult },
       { label: "WebAuthn", result: webauthnResult },
