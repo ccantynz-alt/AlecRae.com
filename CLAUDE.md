@@ -111,19 +111,19 @@ Every tool here was chosen because it is the **best in its class right now**. If
 | **Primary DB** | Neon Serverless Postgres | Scale-to-zero, branches like Git, edge replicas |
 | **Cache/Queue** | Upstash Redis | Serverless, CF Workers compatible, REST API |
 | **Search** | Meilisearch | Sub-50ms full-text, typo tolerance, zero config |
-| **Object Storage** | Cloudflare R2 | S3-compatible, ZERO egress fees |
+| **Object Storage** | Vapron Object Storage | S3-compatible, integrated with platform |
 | **Local Cache** | IndexedDB | Browser-native, offline-first, infinite size |
 | **Analytics DB** | ClickHouse | Time-series at scale (when needed) |
 
 ### Infrastructure
 | Layer | Choice | Why |
 |---|---|---|
-| **Hosting** | Cloudflare Pages + Workers | Sub-5ms cold starts, 330+ cities, $5/mo for 10M requests |
-| **DNS** | Cloudflare | One vendor, full control |
-| **CDN** | Cloudflare | Built-in with Pages |
-| **Container Registry** | Cloudflare R2 | When we need it |
+| **Hosting** | Vapron | Permanent platform — AI gateway, email, object storage, deploy |
+| **DNS** | Vapron / Custom DNS | Managed via production box (149.28.119.158) |
+| **CDN** | Vapron | Built-in with platform |
+| **Container Registry** | Vapron Object Storage | S3-compatible, integrated |
 | **GPU Compute** | Modal.com | A100/H100 on-demand for heavy AI |
-| **Long-Lived Processes** | Fly.io | Firecracker microVMs for MTA, WebSocket |
+| **Long-Lived Processes** | Vapron / Production Box (149.28.119.158) | MTA, WebSocket, systemd-managed |
 | **CI/CD** | GitHub Actions | Already wired |
 | **Monitoring** | OpenTelemetry + Grafana LGTM stack | Vendor-neutral observability |
 
@@ -808,7 +808,7 @@ legacy with no customers. Do not add domains to Vercel or propose CNAMEs back.
   surface exists in this repo).
 
 
-**Last updated:** 2026-06-13 05:46 UTC
+**Last updated:** 2026-06-15 13:44 UTC
 **Current phase:** Phase 1 — Ready for Beta Launch
 **Current focus:** Feature-complete build (84 features, 90 routes, 61 schemas, 290+ endpoints). Tier 6-8 AI platform features complete. Google sign-in + Vapron platform integration landed (PR #48). **Vapron is the permanent platform** (AI gateway, email, object storage, hosting/deploy) — Cloudflare/Vercel/Neon were always interim scaffolding until Vapron was built, and the app migrates onto Vapron as the target infra. The Vapron client has been rebuilt against the published tRPC API (issue #19 fixed). The off-stack AWS EKS deploy pipeline has been removed. Production deployment awaiting Craig's Vapron + infra setup.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
