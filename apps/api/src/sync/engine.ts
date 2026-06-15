@@ -430,12 +430,17 @@ async function fetchAndStoreGmailMessage(
     ? referencesRaw.trim().split(/\s+/).filter((r) => r.length > 0)
     : [];
 
+  const toReceivedAddr = (a: { name: string | null; email: string }) => ({
+    address: a.email,
+    name: a.name,
+  });
+
   await storeReceivedEmail({
     accountId,
     source: "gmail",
-    from: parsed.from ?? { name: null, email: "unknown" },
-    to: parsed.to ?? [],
-    cc: parsed.cc ?? [],
+    from: parsed.from ? toReceivedAddr(parsed.from) : { address: "unknown" },
+    to: (parsed.to ?? []).map(toReceivedAddr),
+    cc: (parsed.cc ?? []).map(toReceivedAddr),
     subject: parsed.subject ?? "(no subject)",
     textBody: textBody ?? null,
     htmlBody: htmlBody ?? null,
@@ -674,12 +679,17 @@ export async function syncOutlookMessages(
       // Outlook Graph API doesn't return References header in the delta
       // select — store what we have and leave references empty.
 
+      const toAddr = (a: { name: string | null; email: string }) => ({
+        address: a.email,
+        name: a.name,
+      });
+
       await storeReceivedEmail({
         accountId: account.id,
         source: "outlook",
-        from: parsed.from ?? { name: null, email: "unknown" },
-        to: parsed.to ?? [],
-        cc: parsed.cc ?? [],
+        from: parsed.from ? toAddr(parsed.from) : { address: "unknown" },
+        to: (parsed.to ?? []).map(toAddr),
+        cc: (parsed.cc ?? []).map(toAddr),
         subject: parsed.subject ?? "(no subject)",
         textBody: parsed.textBody ?? null,
         htmlBody: parsed.htmlBody ?? null,
