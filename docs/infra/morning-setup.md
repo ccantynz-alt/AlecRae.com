@@ -197,13 +197,18 @@ Remove the `route1/route2/route3.mx.cloudflare.net` MX records if they exist, th
 | MX | `@` | `mx1.alecrae.com` | `10` |
 | MX | `@` | `mx2.alecrae.com` | `20` |
 
-### Add SPF record
+### Add SPF records
 
-| Type | Name | Content | TTL |
-|------|------|---------|-----|
-| TXT | `@` | `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all` | Auto |
+Two SPF records are required — one for `alecrae.com` itself, one for customer domains:
 
-(If an SPF record already exists, edit it — there can only be one.)
+| Type | Name | Content | TTL | Purpose |
+|------|------|---------|-----|---------|
+| TXT | `@` | `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all` | Auto | Outbound from alecrae.com via Resend |
+| TXT | `_spf` | `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all` | Auto | Included by customer domain SPF records |
+
+The `_spf.alecrae.com` record is what the DNS auto-config service tells customers to include in their SPF (`include:_spf.alecrae.com`). Without it, customer domain SPF verification fails.
+
+(If an SPF record already exists on `@`, edit it — there can only be one.)
 
 ### Resend domain verification
 
