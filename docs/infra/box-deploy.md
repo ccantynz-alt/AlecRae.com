@@ -1,6 +1,6 @@
 # Box Deploy — the pull ritual, one command (or one tap)
 
-> **Last updated:** 2026-06-12 12:55 UTC
+> **Last updated:** 2026-06-15 23:35 UTC
 
 Production is the dedicated box at `149.28.119.158` (`mail.alecrae.com` +
 `api.alecrae.com`). "Deployed" means **merged to main AND pulled + rebuilt on
@@ -61,3 +61,19 @@ Connect, then paste the Option B one-liner. Five minutes, total.
 
 `https://mail.alecrae.com/api/version` returns the deployed commit — compare
 it to `main` on GitHub. If they differ, the box hasn't pulled.
+
+Also verify:
+```bash
+curl -s https://api.alecrae.com/health   # should return {"status":"ok",...}
+curl -s https://alecrae.com              # should return landing page HTML
+```
+
+**Gateway routing note:** The Caddy config routes `alecrae.com`, `mail.alecrae.com`, and `api.alecrae.com` to the vapron-bun-gateway. The gateway's `/etc/vapron-gateway/config.json` needs entries for all three:
+```json
+{
+  "api.alecrae.com": { "target": "http://127.0.0.1:4100" },
+  "mail.alecrae.com": { "target": "http://127.0.0.1:4200" },
+  "alecrae.com": { "target": "http://127.0.0.1:4200" }
+}
+```
+The same Next.js app (port 4200) serves both the landing page (at `/`) and the mail app, so routing `alecrae.com` to 4200 is correct. If `https://alecrae.com` returns a gateway error, add the `alecrae.com` entry to the config and reload the service.
