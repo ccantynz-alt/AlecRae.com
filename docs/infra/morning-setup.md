@@ -1,8 +1,8 @@
 # Morning Setup — Get AlecRae Live Today
 
-> **Last updated: 2026-06-15 04:30 UTC**
+> **Last updated: 2026-06-15 22:00 UTC**
 
-This is the single document you follow tomorrow morning. Every command is copy-pasteable. No options — one path, start to finish.
+This is the single document you follow on the box. Every command is copy-pasteable. No options — one path, start to finish.
 
 **Time to live:** ~45 minutes.
 
@@ -21,12 +21,14 @@ ssh root@149.28.119.158
 ### 1b. Pull latest main and migrate
 
 ```bash
-cd /root/AlecRae.com   # adjust if your checkout is elsewhere
+cd /opt/alecrae
 git pull --ff-only origin main
 bun install
 bun run -C packages/db build
 bun run db:migrate
 ```
+
+> **Box path is `/opt/alecrae`** — NOT `/root/AlecRae.com`.
 
 ### 1c. Set all required env vars
 
@@ -39,7 +41,7 @@ openssl rand -base64 48
 Copy the output, then open the env file:
 
 ```bash
-nano /root/AlecRae.com/.env
+nano /opt/alecrae/.env
 ```
 
 Paste and fill in every line:
@@ -69,6 +71,14 @@ VAPRON_WELCOME_EMAIL=true
 
 # Owner access — add your Gmail so you get owner/admin role
 OWNER_EMAILS=ccantynz@gmail.com
+
+# Email relay (Resend — domain alecrae.com must be verified in Resend dashboard)
+RELAY_PROVIDER=smtp
+SMTP_RELAY_HOST=smtp.resend.com
+SMTP_RELAY_PORT=465
+SMTP_RELAY_USERNAME=resend
+SMTP_RELAY_PASSWORD=YOUR_RESEND_API_KEY
+SMTP_RELAY_TLS=true
 
 # Optional but strongly recommended
 ANTHROPIC_API_KEY=sk-ant-YOUR_KEY
@@ -132,7 +142,7 @@ You need this so "Sign in with Google" works on the login page.
 8. Go back to the box:
 
 ```bash
-nano /root/AlecRae.com/.env
+nano /opt/alecrae/.env
 ```
 
 Fill in:
@@ -154,25 +164,33 @@ sudo systemctl restart alecrae-api
 
 Go to **https://dash.cloudflare.com** → click `alecrae.com` → **DNS** → **Records**.
 
-### Change the apex A record
+### Fix the apex A record
 
-Find the existing `A` record for `alecrae.com` (currently pointing at Vercel). Click **Edit**:
+Find the existing `A` record for `alecrae.com` (if still pointing at Vercel, change it). Click **Edit**:
 - Type: `A`
 - Name: `@`
 - IPv4 address: `149.28.119.158`
 - Proxy status: **DNS only** (grey cloud — NOT orange)
 - Click **Save**
 
-### Add MX host records
+### Fix www.alecrae.com (remove Vercel CNAME)
 
-Click **Add record** for each:
+Find the `CNAME` for `www` pointing to `cname.vercel-dns.com`. Delete it, then add:
+- Type: `A`
+- Name: `www`
+- IPv4 address: `149.28.119.158`
+- Proxy status: **DNS only**
+
+### Add MX host records (if not already present)
 
 | Type | Name | IPv4 address | Proxy |
 |------|------|-------------|-------|
 | A | `mx1` | `149.28.119.158` | DNS only |
 | A | `mx2` | `149.28.119.158` | DNS only |
 
-### Add MX routing record
+### Add MX routing record (replace Cloudflare Email Routing if present)
+
+Remove the `route1/route2/route3.mx.cloudflare.net` MX records if they exist, then add:
 
 | Type | Name | Mail server | Priority |
 |------|------|-------------|----------|
@@ -183,9 +201,16 @@ Click **Add record** for each:
 
 | Type | Name | Content | TTL |
 |------|------|---------|-----|
-| TXT | `@` | `v=spf1 ip4:149.28.119.158 ~all` | Auto |
+| TXT | `@` | `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all` | Auto |
 
 (If an SPF record already exists, edit it — there can only be one.)
+
+### Resend domain verification
+
+If you haven't already:
+1. Go to **https://resend.com/domains** → your `alecrae.com` domain
+2. Add the DNS records shown (DKIM TXT + MX for bounces)
+3. Click **Verify Domain** — must show green ✓ before outbound email works
 
 ### Set reverse DNS (PTR) in Vultr
 
@@ -201,7 +226,7 @@ Click **Add record** for each:
 2. Add a rule: Protocol `TCP`, Port `25`, Source `0.0.0.0/0` → **Add**
 3. If there's a banner saying "Port 25 is blocked for spam prevention", open a support ticket:
    > "Please unblock port 25 on instance 149.28.119.158. I'm running AlecRae, a business email service. Outbound SMTP is required for our MTA."
-   Vultr typically unblocks within a few hours.
+   Vultr typically unblocks within a few hours. Until then, Resend relay on port 465 is the fallback.
 
 ---
 
@@ -275,22 +300,44 @@ Work through these top to bottom. Stop at the first failure and fix it before mo
 
 ---
 
+## Section 7: Start the MTA Worker (outbound email)
+
+Email sending requires Redis + the MTA worker. If you haven't set this up yet, follow `docs/infra/mta-box-setup.md`. Short version:
+
+```bash
+# Install Redis (if not already installed)
+apt-get install -y redis-server && systemctl enable redis-server && systemctl start redis-server
+
+# Create and start the MTA service (see mta-box-setup.md for the full service file)
+systemctl enable alecrae-mta && systemctl start alecrae-mta
+```
+
+Until the MTA is running, emails compose and queue fine but are never delivered.
+
+---
+
 ## Quick Reference: Useful Commands on the Box
 
 ```bash
 # Check service logs
 sudo journalctl -u alecrae-api -f --since "5 minutes ago"
 sudo journalctl -u alecrae-web -f --since "5 minutes ago"
+sudo journalctl -u alecrae-mta -f --since "5 minutes ago"
 
 # Check which build is running
 curl http://localhost:4200/api/version
 
 # Run DB migrations manually
-cd /root/AlecRae.com && bun run db:migrate
+cd /opt/alecrae && bun run db:migrate
 
-# Restart everything
+# Restart everything (+ MTA if it exists)
 sudo systemctl restart alecrae-api alecrae-web
+if systemctl is-enabled alecrae-mta 2>/dev/null; then sudo systemctl restart alecrae-mta; fi
 
 # Check the health endpoint directly (bypasses vapron-bun-gateway)
 curl http://localhost:4100/health
+
+# Check Redis (BullMQ queue)
+redis-cli ping
+redis-cli LLEN "bull:alecrae-outbound:wait"
 ```
