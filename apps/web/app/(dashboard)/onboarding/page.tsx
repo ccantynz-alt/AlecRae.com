@@ -876,9 +876,10 @@ function StepReady({
       {/* CTA */}
       <Box className="pt-2">
         <Box
-          as="a"
-          href="/inbox"
-          className="inline-block px-10 py-4 bg-neutral-900 text-[#f5f4ef] rounded-full text-sm tracking-[0.12em] uppercase hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2 focus:ring-offset-[#f5f4ef]"
+          as="button"
+          type="button"
+          onClick={handleGoToInbox}
+          className="inline-block px-10 py-4 bg-neutral-900 text-[#f5f4ef] rounded-full text-sm tracking-[0.12em] uppercase hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:ring-offset-2 focus:ring-offset-[#f5f4ef] cursor-pointer"
           style={{ fontFamily: "var(--font-inter), sans-serif" }}
           aria-label="Go to your inbox"
         >
