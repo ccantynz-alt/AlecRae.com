@@ -447,7 +447,7 @@ async function fetchAndStoreGmailMessage(
     messageId: parsed.messageId ?? null,
     inReplyTo: parsed.inReplyTo ?? null,
     references,
-    receivedAt: parsed.receivedAt,
+    ...(parsed.receivedAt !== undefined ? { receivedAt: parsed.receivedAt } : {}),
   });
 }
 
@@ -696,7 +696,7 @@ export async function syncOutlookMessages(
         messageId: parsed.messageId ?? null,
         inReplyTo: null,
         references: referencesRaw,
-        receivedAt: parsed.receivedAt,
+        ...(parsed.receivedAt !== undefined ? { receivedAt: parsed.receivedAt } : {}),
       });
 
       result.messagesAdded++;
