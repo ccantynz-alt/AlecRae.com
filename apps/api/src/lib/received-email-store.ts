@@ -6,12 +6,18 @@
  * `domainId` is null (the column was made nullable for exactly this). Inserts
  * are idempotent: a message already stored for the account (same Message-ID)
  * is skipped, so re-running an import never duplicates.
+ *
+ * AI auto-triage: immediately after each INSERT, a fire-and-forget async
+ * call to Claude Haiku classifies the email (priority, category, actionRequired,
+ * summary) and stores the result back into `emails.metadata`. This call never
+ * blocks email storage and degrades gracefully when ANTHROPIC_API_KEY is absent.
  */
 
 import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { getDatabase, emails } from "@alecrae/db";
 import type { ParsedEmail } from "@alecrae/email-parser";
+import { aiComplete } from "./ai.js";
 
 export interface ReceivedAddress {
   address: string;
@@ -40,6 +46,114 @@ function genId(): string {
 
 function normalizeAddr(a: ReceivedAddress): { address: string; name?: string } {
   return a.name ? { address: a.address, name: a.name } : { address: a.address };
+}
+
+/* ── AI auto-triage ─────────────────────────────────────────────────────────
+ *
+ * Classify the email with Claude Haiku and write priority/category/
+ * actionRequired/summary back into `emails.metadata`.
+ *
+ * This runs fire-and-forget: a caught error is logged but NEVER propagated to
+ * the caller. The function does nothing when ANTHROPIC_API_KEY is absent, so
+ * dev/CI environments without the key are unaffected.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+type TriagePriority = "urgent" | "high" | "normal" | "low";
+type TriageCategory =
+  | "work"
+  | "personal"
+  | "newsletter"
+  | "notification"
+  | "receipt"
+  | "social"
+  | "spam";
+
+interface TriageResult {
+  priority: TriagePriority;
+  category: TriageCategory;
+  actionRequired: boolean;
+  summary: string;
+}
+
+const TRIAGE_SYSTEM = "You are an email classification assistant. Respond with valid JSON only — no prose, no markdown fences.";
+
+function buildTriagePrompt(input: ReceivedEmailInput): string {
+  const bodyPreview = (input.textBody ?? input.htmlBody ?? "").slice(0, 500);
+  return [
+    'Classify this email. Return JSON only:',
+    '{',
+    '  "priority": "urgent"|"high"|"normal"|"low",',
+    '  "category": "work"|"personal"|"newsletter"|"notification"|"receipt"|"social"|"spam",',
+    '  "actionRequired": boolean,',
+    '  "summary": "one sentence, max 100 chars"',
+    '}',
+    '',
+    `From: ${input.from.address}${input.from.name ? ` <${input.from.name}>` : ""}`,
+    `Subject: ${input.subject}`,
+    `Body (first 500 chars): ${bodyPreview}`,
+  ].join("\n");
+}
+
+function isTriageResult(v: unknown): v is TriageResult {
+  if (typeof v !== "object" || v === null) return false;
+  const r = v as Record<string, unknown>;
+  return (
+    typeof r["priority"] === "string" &&
+    typeof r["category"] === "string" &&
+    typeof r["actionRequired"] === "boolean" &&
+    typeof r["summary"] === "string"
+  );
+}
+
+async function runAiTriage(emailId: string, input: ReceivedEmailInput): Promise<void> {
+  if (!process.env["ANTHROPIC_API_KEY"]) return;
+
+  try {
+    const result = await aiComplete({
+      system: TRIAGE_SYSTEM,
+      messages: [{ role: "user", content: buildTriagePrompt(input) }],
+      model: "claude-haiku-4-5-20251001",
+      maxTokens: 256,
+    });
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(result.text);
+    } catch {
+      // If the model returned prose or bad JSON, silently bail.
+      return;
+    }
+
+    if (!isTriageResult(parsed)) return;
+
+    const db = getDatabase();
+    // Fetch the existing metadata so we can merge rather than overwrite.
+    const [row] = await db
+      .select({ metadata: emails.metadata })
+      .from(emails)
+      .where(eq(emails.id, emailId))
+      .limit(1);
+
+    const existing: Record<string, string> = (row?.metadata as Record<string, string> | null) ?? {};
+
+    await db
+      .update(emails)
+      .set({
+        metadata: {
+          ...existing,
+          ai_priority: parsed.priority,
+          ai_category: parsed.category,
+          ai_action_required: parsed.actionRequired ? "true" : "false",
+          ai_summary: parsed.summary.slice(0, 100),
+          ai_triaged_at: new Date().toISOString(),
+          ai_provider: result.provider,
+        },
+      })
+      .where(eq(emails.id, emailId));
+  } catch (err) {
+    // Triage failures must never surface to callers.
+    console.error("[ai-triage] failed for email", emailId, err instanceof Error ? err.message : String(err));
+  }
 }
 
 /**
@@ -90,6 +204,9 @@ export async function storeReceivedEmail(
     createdAt: received,
     updatedAt: now,
   });
+
+  // AI auto-triage: fire-and-forget — never blocks the caller.
+  void runAiTriage(id, input);
 
   return { stored: true, id };
 }
