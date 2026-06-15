@@ -461,10 +461,10 @@ export const QueryConsole = forwardRef<HTMLDivElement, QueryConsoleProps>(
           {/* Keyboard shortcuts hint */}
           <Box className="mt-2 flex items-center gap-4">
             <Text variant="caption" className="text-slate-500">
-              {navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}+Enter to run
+              {typeof navigator !== "undefined" && navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}+Enter to run
             </Text>
             <Text variant="caption" className="text-slate-500">
-              {navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}+Shift+Enter to explain
+              {typeof navigator !== "undefined" && navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}+Shift+Enter to explain
             </Text>
           </Box>
         </Box>
