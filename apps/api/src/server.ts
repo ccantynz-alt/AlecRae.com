@@ -13,6 +13,14 @@ import { assertProductionEnv } from "./lib/env.js";
 // Fail fast in production: one aggregated error for all missing/invalid env vars.
 assertProductionEnv();
 
+import { printStartupConfigReport } from "./routes/health.js";
+// Print a human-readable config summary to stdout on every boot.
+// Async and non-throwing — runs in the background while the rest of server.ts
+// wires up routes so it doesn't add latency to first-request readiness.
+printStartupConfigReport().catch(() => {
+  // never propagate — a summary failure must not crash the API
+});
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";

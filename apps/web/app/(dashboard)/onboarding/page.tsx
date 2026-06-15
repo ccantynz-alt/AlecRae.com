@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Box, Text, Button, Card, CardContent } from "@alecrae/ui";
-import { connectApi } from "../../../lib/api";
+import { connectApi, importApi } from "../../../lib/api";
+import type { ImportJobSummary } from "../../../lib/api";
 
 /* ───────────────────────────────────────────────────────────────────────────
  *  Types
@@ -620,31 +621,118 @@ function StepReady({
   connectedAccounts,
   density,
 }: StepReadyProps): React.ReactElement {
-  const [progress, setProgress] = useState(0);
+  /**
+   * Real progress state from import jobs, or null when using an indeterminate
+   * spinner (OAuth connect path where no import job is created yet).
+   */
+  const [progress, setProgress] = useState<number | null>(
+    connectedAccounts.length === 0 ? 100 : null,
+  );
+  /** Whether to show "Continue" after the 5-second grace period (OAuth path). */
+  const [showContinue, setShowContinue] = useState(false);
 
-  // Simulate sync progress
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const graceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Calculate a 0-100 percentage from all jobs returned by the API. */
+  function calcProgress(jobs: ImportJobSummary[]): number {
+    if (jobs.length === 0) return 0;
+    let totalAll = 0;
+    let totalDone = 0;
+    for (const job of jobs) {
+      const { processed, failed, skipped, total } = job.progress;
+      // `total` from the API is the sum of all buckets; fall back to computed.
+      const jobTotal = total > 0 ? total : processed + failed + skipped;
+      totalAll += jobTotal;
+      totalDone += processed + failed + skipped;
+    }
+    if (totalAll === 0) return 0;
+    return Math.min(100, Math.round((totalDone / totalAll) * 100));
+  }
+
   useEffect(() => {
+    // No accounts — nothing to sync.
     if (connectedAccounts.length === 0) {
       setProgress(100);
       return;
     }
 
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          return 100;
-        }
-        // Accelerate near the start, slow down near the end
-        const increment = prev < 60 ? 4 : prev < 85 ? 2 : 1;
-        return Math.min(prev + increment, 100);
-      });
-    }, 120);
+    let stopped = false;
 
-    return () => clearInterval(interval);
+    async function poll(): Promise<void> {
+      if (stopped) return;
+      try {
+        const { data: jobs } = await importApi.jobs();
+
+        if (stopped) return;
+
+        if (jobs.length === 0) {
+          // OAuth connect path: no import job exists. Show indeterminate
+          // spinner and reveal "Continue to inbox" after 5 seconds.
+          setProgress(null);
+          if (!graceRef.current) {
+            graceRef.current = setTimeout(() => {
+              if (!stopped) setShowContinue(true);
+            }, 5000);
+          }
+          return;
+        }
+
+        const pct = calcProgress(jobs);
+        setProgress(pct);
+
+        if (pct >= 100) {
+          // All done — stop polling.
+          if (intervalRef.current !== null) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+        }
+      } catch {
+        // Polling errors are silent — we never block the user from continuing.
+        setShowContinue(true);
+      }
+    }
+
+    // Kick off immediately then every 3 s.
+    void poll();
+    intervalRef.current = setInterval(() => { void poll(); }, 3000);
+
+    return () => {
+      stopped = true;
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (graceRef.current !== null) {
+        clearTimeout(graceRef.current);
+        graceRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectedAccounts.length]);
 
-  const syncComplete = progress >= 100;
+  /** Stop polling and navigate when the user clicks "Go to inbox". */
+  function handleGoToInbox(): void {
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (graceRef.current !== null) {
+      clearTimeout(graceRef.current);
+      graceRef.current = null;
+    }
+    window.location.href = "/inbox";
+  }
+
+  /**
+   * Determine display state:
+   *  - progress === null  → indeterminate (OAuth connect, no import job yet)
+   *  - progress === 100   → sync complete (or no accounts)
+   *  - otherwise          → deterministic progress bar
+   */
+  const isDeterminate = progress !== null;
+  const syncComplete = isDeterminate && progress >= 100;
 
   return (
     <Box className="space-y-8 text-center">
@@ -660,7 +748,9 @@ function StepReady({
           {connectedAccounts.length > 0
             ? syncComplete
               ? "Your inbox is synced and ready to go."
-              : "Your inbox is syncing. This won’t take long."
+              : isDeterminate
+                ? "Your inbox is syncing. This won’t take long."
+                : "Syncing your email…"
             : "You can connect email accounts anytime from Settings."}
         </Text>
       </Box>
@@ -668,23 +758,46 @@ function StepReady({
       {/* Sync progress */}
       {connectedAccounts.length > 0 && (
         <Box className="max-w-sm mx-auto space-y-3">
-          {/* Progress bar */}
-          <Box
-            className="w-full h-2 rounded-full bg-neutral-200 overflow-hidden"
-            role="progressbar"
-            aria-valuenow={progress}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label="Inbox sync progress"
-          >
-            <Box
-              className="h-full rounded-full bg-neutral-900 transition-all duration-300 ease-out"
-              style={{ width: `${String(progress)}%` }}
-            />
-          </Box>
-          <Text variant="caption" muted>
-            {syncComplete ? "Sync complete" : `Syncing… ${String(progress)}%`}
-          </Text>
+          {isDeterminate ? (
+            /* Determinate progress bar — real percentage from import jobs */
+            <>
+              <Box
+                className="w-full h-2 rounded-full bg-neutral-200 overflow-hidden"
+                role="progressbar"
+                aria-valuenow={progress}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Inbox sync progress"
+              >
+                <Box
+                  className="h-full rounded-full bg-neutral-900 transition-all duration-300 ease-out"
+                  style={{ width: `${String(progress)}%` }}
+                />
+              </Box>
+              <Text variant="caption" muted>
+                {syncComplete ? "Sync complete" : `Syncing… ${String(progress)}%`}
+              </Text>
+            </>
+          ) : (
+            /* Indeterminate spinner — OAuth connect path, waiting for first sync */
+            <>
+              <Box
+                className="w-full h-2 rounded-full bg-neutral-200 overflow-hidden"
+                role="progressbar"
+                aria-label="Syncing your email"
+              >
+                <Box className="h-full rounded-full bg-neutral-900 animate-[slide_1.5s_ease-in-out_infinite]" />
+              </Box>
+              <Text variant="caption" muted>
+                Connecting to your inbox…
+              </Text>
+              {showContinue && (
+                <Button variant="ghost" size="sm" onClick={handleGoToInbox}>
+                  Continue to inbox
+                </Button>
+              )}
+            </>
+          )}
         </Box>
       )}
 
