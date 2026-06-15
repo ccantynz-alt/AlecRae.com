@@ -230,20 +230,21 @@ async function checkDatabaseDetailed(): Promise<ConfigCheck> {
   try {
     const db = getDatabase();
 
-    const [, tableCountResult] = await Promise.race([
-      Promise.all([
-        db.execute(sql`SELECT 1`),
-        db.execute(
+    const tableCountResult = await Promise.race([
+      (async () => {
+        await db.execute(sql`SELECT 1`);
+        return db.execute(
           sql`SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = 'public'`,
-        ),
-      ]),
+        );
+      })(),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("timeout after 2s")), PROBE_TIMEOUT_MS),
       ),
     ]);
 
-    const rows = tableCountResult.rows as Array<{ count: string | number }>;
-    const tableCount = rows[0]?.count ?? "?";
+    // Drizzle execute() returns the rows directly as an iterable array
+    const resultRows = tableCountResult as unknown as Array<{ count: string | number }>;
+    const tableCount = resultRows[0]?.count ?? "?";
     return { status: "ok", message: `Connected (${tableCount} tables)` };
   } catch (error: unknown) {
     return {
