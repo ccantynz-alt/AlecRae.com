@@ -109,10 +109,7 @@ import { labelsRouter } from "./routes/labels.js";
 import { notesRouter, emailNotesRouter, threadNotesRouter } from "./routes/notes.js";
 import { filesRouter, emailAttachmentsRouter } from "./routes/files.js";
 import { chatRouter } from "./routes/chat.js";
-// NOTE: warmup route is built but mounting it pulls in @alecrae/reputation + services/dns,
-// which have pre-existing exactOptionalPropertyTypes errors blocking the typecheck gate.
-// Fix those errors first, then re-enable this import and the route mount below.
-// import { warmup } from "./routes/warmup.js";
+import { warmup } from "./routes/warmup.js";
 import { linkPreviewRouter } from "./routes/link-previews.js";
 import { integrationsRouter } from "./routes/integrations.js";
 import { schedulingAnalyticsRouter } from "./routes/scheduling-analytics.js";
@@ -263,7 +260,7 @@ app.use("/v1/messages/*", authMiddleware, readRateLimit);
 // (→ 401 from requireScope, with no auth context).
 app.use("/v1/domains", authMiddleware, writeRateLimit);
 app.use("/v1/domains/*", authMiddleware, writeRateLimit);
-// app.use("/v1/domains/:id/warmup/*", authMiddleware, writeRateLimit); // see warmup import note
+app.use("/v1/domains/:id/warmup/*", authMiddleware, writeRateLimit);
 // Mailboxes (native addresses on a verified domain): write-level. Both the
 // bare and wildcard paths need a mount or every call hits requireScope with
 // no auth context and 401s.
@@ -594,7 +591,7 @@ app.use("/v1/knowledge", authMiddleware, readRateLimit);
 app.route("/v1/messages", messages);
 app.route("/v1/domains", domains);
 app.route("/v1/mailboxes", mailboxes);
-// app.route("/v1/domains/:id/warmup", warmup); // see warmup import note
+app.route("/v1/domains/:id/warmup", warmup);
 app.route("/v1/webhooks", webhooks);
 app.route("/v1/analytics", analytics);
 app.route("/v1/suppressions", suppressions);
