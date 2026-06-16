@@ -227,90 +227,104 @@ function DnsRecordsModal({
   domain: ReturnType<typeof mapDomain>;
   onClose: () => void;
 }) {
-  const copyToClipboard = async (text: string) => {
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  const copyToClipboard = async (text: string, index: number) => {
     try {
       await navigator.clipboard.writeText(text);
     } catch {
-      // fallback: select + copy via execCommand (Safari)
-      const el = document.createElement("textarea");
+      // iOS Safari fallback — create a temporary input, select it, trigger copy
+      const el = document.createElement("input");
       el.value = text;
+      el.style.position = "fixed";
+      el.style.top = "0";
+      el.style.left = "0";
+      el.style.opacity = "0";
       document.body.appendChild(el);
+      el.focus();
       el.select();
+      el.setSelectionRange(0, text.length);
       document.execCommand("copy");
       document.body.removeChild(el);
     }
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 w-full max-w-2xl mx-4 bg-surface rounded-xl border border-border shadow-xl overflow-hidden">
+      <div className="relative z-10 w-full max-w-2xl bg-surface rounded-xl border border-border shadow-xl overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <Text variant="heading-sm">DNS Records</Text>
             <Text variant="body-sm" muted className="mt-0.5">
-              Add these records to your DNS provider for{" "}
+              Add these to your DNS provider for{" "}
               <span className="font-mono text-content">{domain.domain}</span>
             </Text>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-content-secondary hover:text-content transition-colors text-xl leading-none"
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-content-secondary hover:text-content hover:bg-surface-secondary transition-colors text-xl"
             aria-label="Close"
           >
             &#10005;
           </button>
         </div>
-        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+        <div className="p-4 space-y-3 max-h-[65vh] overflow-y-auto">
           {domain.dnsRecords.map((rec, i) => (
             <div
               key={i}
               className={`rounded-lg border p-4 ${rec.verified ? "border-green-200 bg-green-50" : "border-border bg-surface-secondary"}`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-brand-50 text-brand-700">
-                      {rec.type}
-                    </span>
-                    {rec.verified ? (
-                      <span className="text-xs text-green-700 font-medium">&#10003; Verified</span>
-                    ) : (
-                      <span className="text-xs text-content-secondary">Pending</span>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    <div>
-                      <span className="text-xs font-medium text-content-secondary uppercase tracking-wide">Name / Host</span>
-                      <p className="font-mono text-xs text-content break-all mt-0.5">{rec.name}</p>
-                    </div>
-                    <div>
-                      <span className="text-xs font-medium text-content-secondary uppercase tracking-wide">Value</span>
-                      <p className="font-mono text-xs text-content break-all mt-0.5">{rec.value}</p>
-                    </div>
-                  </div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-brand-50 text-brand-700">
+                  {rec.type}
+                </span>
+                {rec.verified ? (
+                  <span className="text-xs text-green-700 font-medium">&#10003; Verified</span>
+                ) : (
+                  <span className="text-xs text-content-secondary">Pending</span>
+                )}
+              </div>
+              <div className="space-y-2">
+                <div>
+                  <p className="text-xs font-medium text-content-secondary uppercase tracking-wide mb-1">Name / Host</p>
+                  <p className="font-mono text-xs text-content break-all select-all bg-surface rounded px-2 py-1.5 border border-border">
+                    {rec.name}
+                  </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => copyToClipboard(rec.value)}
-                  className="flex-shrink-0 text-xs"
-                >
-                  Copy
-                </Button>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-medium text-content-secondary uppercase tracking-wide">Value</p>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(rec.value, i)}
+                      className={`text-xs font-medium px-3 py-1 rounded-md transition-colors min-w-[70px] text-center ${
+                        copiedIndex === i
+                          ? "bg-green-100 text-green-700"
+                          : "bg-brand-50 text-brand-700 hover:bg-brand-100 active:bg-brand-200"
+                      }`}
+                    >
+                      {copiedIndex === i ? "✓ Copied!" : "Copy"}
+                    </button>
+                  </div>
+                  <p className="font-mono text-xs text-content break-all select-all bg-surface rounded px-2 py-1.5 border border-border">
+                    {rec.value}
+                  </p>
+                </div>
               </div>
             </div>
           ))}
         </div>
         <div className="px-6 py-4 border-t border-border bg-surface-secondary">
           <Text variant="body-sm" muted>
-            DNS changes can take up to 48 hours to propagate. Once added, click{" "}
-            <strong>Verify</strong> on the domain card to check.
+            Tap any value to select it, or tap <strong>Copy</strong> to copy to clipboard. DNS changes can take up to 48 hours to propagate — then tap <strong>Verify</strong> on the domain card.
           </Text>
         </div>
       </div>
