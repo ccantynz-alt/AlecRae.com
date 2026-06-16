@@ -2599,3 +2599,359 @@ export const chatApi = {
     );
   },
 };
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+export type DocumentType = "doc" | "spreadsheet" | "presentation" | "form";
+export type AiAssistAction = "summarize" | "expand" | "rewrite" | "translate" | "proofread";
+export type ExportFormat = "pdf" | "html" | "markdown";
+
+export interface AlecRaeDocument {
+  id: string;
+  title: string;
+  type: DocumentType;
+  content: string | null;
+  folderId: string | null;
+  isTemplate: boolean;
+  isPublic: boolean;
+  tags: string[];
+  wordCount: number;
+  charCount: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  color: string | null;
+  createdAt: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  versionNumber: number;
+  title: string;
+  wordCount: number;
+  createdAt: string;
+}
+
+export interface AiAssistResult {
+  action: AiAssistAction;
+  result: string;
+  targetLanguage?: string;
+}
+
+export interface ExportResult {
+  format: ExportFormat;
+  content: string;
+  mimeType: string;
+  filename: string;
+}
+
+export const documentsApi = {
+  list(params?: {
+    limit?: number;
+    cursor?: string;
+    type?: DocumentType;
+    folderId?: string;
+  }): Promise<{ data: AlecRaeDocument[]; nextCursor?: string }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.type) qs.set("type", params.type);
+    if (params?.folderId) qs.set("folderId", params.folderId);
+    const query = qs.toString();
+    return apiFetch<{ data: AlecRaeDocument[]; nextCursor?: string }>(
+      `/v1/documents${query ? `?${query}` : ""}`,
+    );
+  },
+
+  get(id: string): Promise<{ data: AlecRaeDocument }> {
+    return apiFetch<{ data: AlecRaeDocument }>(`/v1/documents/${encodeURIComponent(id)}`);
+  },
+
+  create(data: {
+    title: string;
+    type: DocumentType;
+    folderId?: string | null;
+    isTemplate?: boolean;
+    tags?: string[];
+  }): Promise<{ data: AlecRaeDocument }> {
+    return apiFetch<{ data: AlecRaeDocument }>("/v1/documents", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  update(
+    id: string,
+    data: {
+      title?: string;
+      content?: string;
+      tags?: string[];
+      isPublic?: boolean;
+    },
+  ): Promise<{ data: AlecRaeDocument }> {
+    return apiFetch<{ data: AlecRaeDocument }>(`/v1/documents/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/documents/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  aiAssist(
+    id: string,
+    action: AiAssistAction,
+    targetLanguage?: string,
+  ): Promise<{ data: AiAssistResult }> {
+    return apiFetch<{ data: AiAssistResult }>(
+      `/v1/documents/${encodeURIComponent(id)}/ai-assist`,
+      {
+        method: "POST",
+        body: JSON.stringify({ action, ...(targetLanguage ? { targetLanguage } : {}) }),
+      },
+    );
+  },
+
+  exportDoc(id: string, format: ExportFormat): Promise<{ data: ExportResult }> {
+    return apiFetch<{ data: ExportResult }>(
+      `/v1/documents/${encodeURIComponent(id)}/export`,
+      {
+        method: "POST",
+        body: JSON.stringify({ format }),
+      },
+    );
+  },
+
+  listFolders(): Promise<{ data: DocumentFolder[] }> {
+    return apiFetch<{ data: DocumentFolder[] }>("/v1/documents/folders");
+  },
+
+  createFolder(name: string): Promise<{ data: DocumentFolder }> {
+    return apiFetch<{ data: DocumentFolder }>("/v1/documents/folders", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  deleteFolder(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/documents/folders/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  listVersions(id: string): Promise<{ data: DocumentVersion[] }> {
+    return apiFetch<{ data: DocumentVersion[] }>(
+      `/v1/documents/${encodeURIComponent(id)}/versions`,
+    );
+  },
+};
+
+// ─── A/B Tests ────────────────────────────────────────────────────────────────
+
+export interface ABTestVariant {
+  id: string;
+  subject?: string;
+  htmlBody?: string;
+  textBody?: string;
+  percentage: number;
+  metrics?: {
+    sent: number;
+    opened: number;
+    clicked: number;
+    replied: number;
+    openRate: number;
+    clickRate: number;
+  };
+}
+
+export interface ABTest {
+  id: string;
+  name: string;
+  status: "draft" | "running" | "completed" | "cancelled";
+  variants: ABTestVariant[];
+  winnerMetric: "open_rate" | "click_rate" | "reply_rate";
+  winnerVariantId?: string;
+  recipientCount?: number;
+  results?: {
+    totalSent: number;
+    winner?: string;
+    confidence?: number;
+    variants: Record<
+      string,
+      {
+        sent: number;
+        opened: number;
+        clicked: number;
+        replied: number;
+        openRate: number;
+        clickRate: number;
+      }
+    >;
+  };
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+}
+
+export const abTestsApi = {
+  list(params?: { limit?: number; cursor?: string }): Promise<{
+    data: ABTest[];
+    cursor: string | null;
+    hasMore: boolean;
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<{ data: ABTest[]; cursor: string | null; hasMore: boolean }>(
+      `/v1/ab-tests${query ? `?${query}` : ""}`,
+    );
+  },
+
+  get(id: string): Promise<{ data: ABTest }> {
+    return apiFetch<{ data: ABTest }>(`/v1/ab-tests/${encodeURIComponent(id)}`);
+  },
+
+  create(payload: {
+    name: string;
+    variants: { subject?: string; htmlBody?: string; textBody?: string; percentage: number }[];
+    winnerMetric?: "open_rate" | "click_rate" | "reply_rate";
+  }): Promise<{ data: ABTest }> {
+    return apiFetch<{ data: ABTest }>("/v1/ab-tests", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  start(id: string): Promise<{ data: { id: string; status: string; startedAt: string } }> {
+    return apiFetch<{ data: { id: string; status: string; startedAt: string } }>(
+      `/v1/ab-tests/${encodeURIComponent(id)}/start`,
+      { method: "POST" },
+    );
+  },
+
+  complete(
+    id: string,
+    winnerId?: string,
+  ): Promise<{ data: { id: string; status: string; winner: string | null; completedAt: string } }> {
+    return apiFetch<{
+      data: { id: string; status: string; winner: string | null; completedAt: string };
+    }>(`/v1/ab-tests/${encodeURIComponent(id)}/complete`, {
+      method: "POST",
+      body: JSON.stringify(winnerId !== undefined ? { winnerId } : {}),
+    });
+  },
+
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/ab-tests/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+};
+
+// ─── Auto-Responder / Out-of-Office ──────────────────────────────────────────
+
+export type AutoResponderMode = "off" | "vacation" | "busy" | "custom";
+
+export interface AutoResponder {
+  id: string;
+  mode: AutoResponderMode;
+  subject: string;
+  htmlBody?: string;
+  textBody?: string;
+  isActive: boolean;
+  schedule?: {
+    startDate: string;
+    endDate?: string;
+    timezone: string;
+  };
+  rules?: {
+    respondToContacts: boolean;
+    respondToUnknown: boolean;
+    excludeDomains?: string[];
+    excludeLabels?: string[];
+    maxResponsesPerSender?: number;
+    aiSmartReply: boolean;
+  };
+  createdAt: string;
+}
+
+export interface AutoResponderLogEntry {
+  id: string;
+  toEmail: string;
+  subject: string;
+  sentAt: string;
+}
+
+export const autoResponderApi = {
+  getConfig(): Promise<{ data: AutoResponder | null }> {
+    return apiFetch<{ data: AutoResponder | null }>("/v1/auto-responder");
+  },
+
+  upsert(data: {
+    mode: AutoResponderMode;
+    subject: string;
+    htmlBody?: string;
+    textBody?: string;
+    schedule?: { startDate: string; endDate?: string; timezone: string };
+    rules?: {
+      respondToContacts: boolean;
+      respondToUnknown: boolean;
+      excludeDomains?: string[];
+      excludeLabels?: string[];
+      maxResponsesPerSender?: number;
+      aiSmartReply: boolean;
+    };
+  }): Promise<{ data: { id: string; mode: string; subject: string } }> {
+    return apiFetch<{ data: { id: string; mode: string; subject: string } }>(
+      "/v1/auto-responder",
+      { method: "PUT", body: JSON.stringify(data) },
+    );
+  },
+
+  activate(): Promise<{ data: { id: string; isActive: boolean } }> {
+    return apiFetch<{ data: { id: string; isActive: boolean } }>(
+      "/v1/auto-responder/activate",
+      { method: "POST" },
+    );
+  },
+
+  deactivate(): Promise<{ data: { id: string; isActive: boolean } }> {
+    return apiFetch<{ data: { id: string; isActive: boolean } }>(
+      "/v1/auto-responder/deactivate",
+      { method: "POST" },
+    );
+  },
+
+  getLog(params?: { limit?: number; cursor?: string }): Promise<{
+    data: AutoResponderLogEntry[];
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<{ data: AutoResponderLogEntry[] }>(
+      `/v1/auto-responder/log${query ? `?${query}` : ""}`,
+    );
+  },
+
+  preview(sampleEmailBody: string): Promise<{ reply: string }> {
+    return apiFetch<{ reply: string }>("/v1/auto-responder/preview", {
+      method: "POST",
+      body: JSON.stringify({ sampleEmailBody }),
+    });
+  },
+};
