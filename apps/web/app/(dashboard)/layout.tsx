@@ -38,6 +38,7 @@ const navigationSections: AnimatedSidebarSection[] = [
       { id: "smart-folders", label: "Smart Folders", href: "/smart-folders" },
       { id: "voice", label: "Voice", href: "/voice" },
       { id: "scripts", label: "Scripts", href: "/scripts" },
+      { id: "chat", label: "Team Chat", href: "/chat" },
     ],
   },
   {
