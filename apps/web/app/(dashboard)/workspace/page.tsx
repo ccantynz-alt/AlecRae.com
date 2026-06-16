@@ -174,7 +174,7 @@ function MailboxesSection(): ReactNode {
     load();
   }, [load]);
 
-  const verifiedDomains = (domains ?? []).filter((d) => d.verificationStatus === "verified");
+  const verifiedDomains = (domains ?? []).filter((d) => d.status === "verified");
 
   // Default the domain picker to the first verified domain once loaded.
   useEffect(() => {

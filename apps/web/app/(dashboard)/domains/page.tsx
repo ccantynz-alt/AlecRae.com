@@ -27,7 +27,7 @@ function mapDomain(d: Domain): {
   return {
     id: d.id,
     domain: d.domain,
-    verificationState: (d.verificationStatus === "verifying" ? "pending" : d.verificationStatus) as "pending" | "verified" | "failed",
+    verificationState: (d.status === "verifying" ? "pending" : d.status) as "pending" | "verified" | "failed",
     dnsRecords: [
       { type: "TXT", name: `_alecrae-verify.${d.domain}`, value: `alecrae-verify=${d.id.slice(0, 8)}`, verified: d.spfVerified },
       { type: "TXT", name: d.domain, value: `v=spf1 include:spf.alecrae.com ~all`, verified: d.spfVerified },

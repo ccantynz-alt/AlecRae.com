@@ -73,7 +73,7 @@ export interface MessageDetail extends Message {
 export interface Domain {
   id: string;
   domain: string;
-  verificationStatus: string;
+  status: string;
   spfVerified: boolean;
   dkimVerified: boolean;
   dmarcVerified: boolean;
