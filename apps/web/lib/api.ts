@@ -2505,3 +2505,97 @@ export const mailMergeApi = {
     );
   },
 };
+
+// ─── Team Chat ───────────────────────────────────────────────────────────────
+
+export interface ChatChannel {
+  id: string;
+  type: "direct" | "group" | "thread";
+  name: string | null;
+  topic: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  content: string;
+  replyToId: string | null;
+  isEdited: boolean;
+  createdAt: string;
+}
+
+export interface ChatChannelDetail extends ChatChannel {
+  members: { userId: string; role: string; joinedAt: string }[];
+  recentMessages: ChatMessage[];
+}
+
+export const chatApi = {
+  listChannels(): Promise<{ data: ChatChannel[] }> {
+    return apiFetch<{ data: ChatChannel[] }>("/v1/chat/channels");
+  },
+
+  getChannel(id: string): Promise<{ data: ChatChannelDetail }> {
+    return apiFetch<{ data: ChatChannelDetail }>(`/v1/chat/channels/${encodeURIComponent(id)}`);
+  },
+
+  createChannel(payload: {
+    name?: string;
+    topic?: string;
+    type?: "direct" | "group" | "thread";
+    memberIds: string[];
+  }): Promise<{ data: { id: string; type: string; name: string | undefined; memberCount: number; createdAt: string } }> {
+    return apiFetch("/v1/chat/channels", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getMessages(
+    channelId: string,
+    params?: { limit?: number; cursor?: string },
+  ): Promise<{ data: ChatMessage[]; cursor: string | null; hasMore: boolean }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<{ data: ChatMessage[]; cursor: string | null; hasMore: boolean }>(
+      `/v1/chat/channels/${encodeURIComponent(channelId)}/messages${query ? `?${query}` : ""}`,
+    );
+  },
+
+  sendMessage(
+    channelId: string,
+    payload: { content: string; replyToId?: string },
+  ): Promise<{ data: { id: string; channelId: string; content: string; createdAt: string } }> {
+    return apiFetch(`/v1/chat/channels/${encodeURIComponent(channelId)}/messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  editMessage(
+    messageId: string,
+    content: string,
+  ): Promise<{ data: { id: string; updated: boolean } }> {
+    return apiFetch(`/v1/chat/messages/${encodeURIComponent(messageId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    });
+  },
+
+  deleteMessage(messageId: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/chat/messages/${encodeURIComponent(messageId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  markRead(channelId: string): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>(
+      `/v1/chat/channels/${encodeURIComponent(channelId)}/read`,
+      { method: "POST" },
+    );
+  },
+};
