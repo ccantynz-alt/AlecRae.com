@@ -814,9 +814,9 @@ legacy with no customers. Do not add domains to Vercel or propose CNAMEs back.
   surface exists in this repo).
 
 
-**Last updated:** 2026-06-16 02:30 UTC
+**Last updated:** 2026-06-16 09:50 UTC
 **Current phase:** Phase 1 — Beta Launch in Progress
-**Current focus:** Box is live at 149.28.119.158. MTA worker operational. Massive UI catch-up: 5 new pages built (Smart Folders, Shared Inboxes/Delegation, Mail Merge, Team Chat, plus grammar wiring + DNS records modal). Web app UI now covers ~55% of backend. Three remaining Craig tasks: (1) uninstall Vercel GitHub App; (2) complete Resend domain verification; (3) add alecrae.com as domain + create craig@alecrae.com mailbox in Workspace page. PRs #72–75 merged + current branch `claude/code-audit-vapron-migration-6jya3k` ready for PR.
+**Current focus:** Box is live at 149.28.119.158. MTA worker operational. All priority features now in main: PRs #80 + #81 merged. Web app UI now covers ~70% of backend — 9 new pages shipped this session (Smart Folders, Mail Merge, Shared Inboxes/Delegation, Team Chat, Documents, A/B Testing, Auto-Responder/OOO, plus grammar wiring + DNS records modal). Three Craig tasks remaining: (1) remove AlecRae.com from Vercel GitHub App repo access (not full uninstall); (2) complete Resend domain verification; (3) add alecrae.com as domain + create craig@alecrae.com mailbox in Workspace page. Pull ritual on box to get everything live.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
