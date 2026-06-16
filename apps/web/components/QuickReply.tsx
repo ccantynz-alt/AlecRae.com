@@ -20,10 +20,12 @@ export function QuickReply({ emailId: _emailId, toEmail, toName, subject, userEm
   const [body, setBody] = useState(initialBody ?? "");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isMac, setIsMac] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     textareaRef.current?.focus();
+    setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
   }, []);
 
   const handleSend = async () => {
@@ -93,7 +95,7 @@ export function QuickReply({ emailId: _emailId, toEmail, toName, subject, userEm
 
       <div className="flex items-center justify-between mt-2">
         <span className="text-caption text-content-tertiary">
-          {typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl"}+Enter to send
+          {isMac ? "⌘" : "Ctrl"}+Enter to send
         </span>
         <button
           type="button"
