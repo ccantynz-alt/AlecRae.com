@@ -53,7 +53,7 @@ export const DomainCard = forwardRef<HTMLDivElement, DomainCardProps>(function D
   },
   ref
 ) {
-  const state = stateStyles[verificationState];
+  const state = stateStyles[verificationState] ?? stateStyles.pending;
 
   return (
     <Card ref={ref} className={className} hoverable {...props}>
