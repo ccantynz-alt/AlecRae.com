@@ -115,10 +115,9 @@ export function SyncStatusBar({
 }
 
 export function OfflineBadge(): React.ReactNode {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
     setIsOnline(navigator.onLine);
     const handleOnline = (): void => setIsOnline(true);
     const handleOffline = (): void => setIsOnline(false);
@@ -130,7 +129,7 @@ export function OfflineBadge(): React.ReactNode {
     };
   }, []);
 
-  if (isOnline) return null;
+  if (isOnline !== false) return null;
 
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
