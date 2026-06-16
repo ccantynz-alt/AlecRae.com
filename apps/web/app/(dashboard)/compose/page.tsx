@@ -286,7 +286,10 @@ function ComposePage(): React.ReactNode {
               setStatus(null);
               window.history.back();
             }}
-            onApplySuggestion={() => { /* no-op */ }}
+            onBodyChange={_checkGrammar}
+            onApplySuggestion={(suggestion) => {
+              setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
+            }}
             onRequestCalendarSlots={handleRequestCalendarSlots}
             className="flex-1"
           />
