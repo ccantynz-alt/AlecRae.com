@@ -2227,3 +2227,281 @@ export const templatesApi = {
     );
   },
 };
+
+// ─── Smart Folders (Saved Searches) ──────────────────────────────────────────
+
+export interface SmartFolderFilter {
+  from?: string;
+  to?: string;
+  subject?: string;
+  hasAttachment?: boolean;
+  isRead?: boolean;
+  isStarred?: boolean;
+  labels?: string[];
+  dateAfter?: string;
+  dateBefore?: string;
+  query?: string;
+  senderDomain?: string;
+  category?: string;
+}
+
+export interface SmartFolder {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  type: "smart" | "saved_search";
+  filters: SmartFolderFilter;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const smartFoldersApi = {
+  list(params?: { limit?: number; cursor?: string; type?: "smart" | "saved_search" }): Promise<{
+    data: SmartFolder[];
+    cursor: string | null;
+    hasMore: boolean;
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.type) qs.set("type", params.type);
+    const query = qs.toString();
+    return apiFetch(`/v1/smart-folders${query ? `?${query}` : ""}`);
+  },
+
+  get(id: string): Promise<{ data: SmartFolder }> {
+    return apiFetch(`/v1/smart-folders/${encodeURIComponent(id)}`);
+  },
+
+  create(payload: {
+    name: string;
+    icon?: string;
+    color?: string;
+    type?: "smart" | "saved_search";
+    filters: SmartFolderFilter;
+    sortOrder?: number;
+  }): Promise<{ data: SmartFolder }> {
+    return apiFetch("/v1/smart-folders", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  update(
+    id: string,
+    payload: {
+      name?: string;
+      icon?: string;
+      color?: string;
+      type?: "smart" | "saved_search";
+      filters?: SmartFolderFilter;
+      sortOrder?: number;
+    },
+  ): Promise<{ data: { id: string; updatedAt: string } }> {
+    return apiFetch(`/v1/smart-folders/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch(`/v1/smart-folders/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+// ─── Shared Inboxes ───────────────────────────────────────────────────────────
+
+export interface SharedInboxMember {
+  userId: string;
+  role: "owner" | "admin" | "member";
+  addedAt: string;
+}
+
+export interface SharedInbox {
+  id: string;
+  accountId: string;
+  name: string;
+  email: string;
+  members: SharedInboxMember[];
+  createdAt: string;
+}
+
+export const sharedInboxesApi = {
+  list(): Promise<{ data: SharedInbox[] }> {
+    return apiFetch<{ data: SharedInbox[] }>("/v1/collaborate/shared-inboxes");
+  },
+
+  create(payload: {
+    name: string;
+    email: string;
+    members?: { userId: string; role?: "owner" | "admin" | "member" }[];
+  }): Promise<{ data: SharedInbox }> {
+    return apiFetch<{ data: SharedInbox }>("/v1/collaborate/shared-inboxes", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+// ─── Email Delegations ────────────────────────────────────────────────────────
+
+export interface DelegationPermissions {
+  canReply: boolean;
+  canArchive: boolean;
+  canDelete: boolean;
+  canForward: boolean;
+}
+
+export interface EmailDelegation {
+  id: string;
+  accountId: string;
+  delegatorUserId: string;
+  delegateUserId: string;
+  scope: "all" | "label" | "sender" | "thread";
+  scopeValue: string | null;
+  permissions: DelegationPermissions;
+  isActive: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const delegationsApi = {
+  /** List delegations I created (as delegator). */
+  listAsOwner(): Promise<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }> {
+    return apiFetch<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }>(
+      "/v1/delegations?role=delegator",
+    );
+  },
+
+  /** List delegations where I am the delegate. */
+  listAsDelegate(): Promise<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }> {
+    return apiFetch<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }>(
+      "/v1/delegations?role=delegate",
+    );
+  },
+
+  /** Create a new delegation. */
+  create(payload: {
+    delegateUserId: string;
+    scope: "all" | "label" | "sender" | "thread";
+    scopeValue?: string | null;
+    permissions: DelegationPermissions;
+    expiresAt?: string | null;
+  }): Promise<{ data: EmailDelegation }> {
+    return apiFetch<{ data: EmailDelegation }>("/v1/delegations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Revoke (delete) a delegation by ID. */
+  revoke(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/delegations/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+};
+
+// ─── Mail Merge ────────────────────────────────────────────────────────────
+
+export interface MailMergeRecipientStatus {
+  email: string;
+  variables: Record<string, string>;
+  status: "pending" | "sent" | "failed" | "skipped";
+  error?: string;
+}
+
+export interface MailMergeCampaign {
+  id: string;
+  name: string;
+  subject: string;
+  status: "draft" | "sending" | "completed" | "cancelled";
+  totalRecipients: number;
+  sentCount: number;
+  failedCount: number;
+  scheduledAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MailMergeCampaignDetail extends MailMergeCampaign {
+  htmlBody: string | null;
+  textBody: string | null;
+  templateId: string | null;
+  recipients: MailMergeRecipientStatus[];
+}
+
+export const mailMergeApi = {
+  list(params?: {
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ data: MailMergeCampaign[]; cursor: string | null; hasMore: boolean }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<{ data: MailMergeCampaign[]; cursor: string | null; hasMore: boolean }>(
+      `/v1/mail-merge${query ? `?${query}` : ""}`,
+    );
+  },
+
+  create(payload: {
+    name: string;
+    subject: string;
+    htmlBody?: string;
+    textBody?: string;
+    scheduledAt?: string;
+  }): Promise<{ data: MailMergeCampaign }> {
+    return apiFetch<{ data: MailMergeCampaign }>("/v1/mail-merge", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  get(id: string): Promise<{ data: MailMergeCampaignDetail }> {
+    return apiFetch<{ data: MailMergeCampaignDetail }>(
+      `/v1/mail-merge/${encodeURIComponent(id)}`,
+    );
+  },
+
+  addRecipients(
+    id: string,
+    recipients: { email: string; variables: Record<string, string> }[],
+  ): Promise<{ data: { added: number; skipped: number; totalRecipients: number } }> {
+    return apiFetch<{ data: { added: number; skipped: number; totalRecipients: number } }>(
+      `/v1/mail-merge/${encodeURIComponent(id)}/recipients`,
+      { method: "POST", body: JSON.stringify({ recipients }) },
+    );
+  },
+
+  start(id: string): Promise<{
+    data: { id: string; status: string; totalRecipients: number; startedAt: string };
+  }> {
+    return apiFetch<{
+      data: { id: string; status: string; totalRecipients: number; startedAt: string };
+    }>(`/v1/mail-merge/${encodeURIComponent(id)}/start`, { method: "POST" });
+  },
+
+  cancel(id: string): Promise<{
+    data: { id: string; status: string; completedAt: string };
+  }> {
+    return apiFetch<{
+      data: { id: string; status: string; completedAt: string };
+    }>(`/v1/mail-merge/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+  },
+
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/mail-merge/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+};

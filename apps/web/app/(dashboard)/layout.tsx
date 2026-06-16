@@ -35,6 +35,7 @@ const navigationSections: AnimatedSidebarSection[] = [
       { id: "calendar", label: "Calendar", href: "/calendar" },
       { id: "tasks", label: "Tasks", href: "/tasks" },
       { id: "search", label: "Search", href: "/search" },
+      { id: "smart-folders", label: "Smart Folders", href: "/smart-folders" },
       { id: "voice", label: "Voice", href: "/voice" },
       { id: "scripts", label: "Scripts", href: "/scripts" },
     ],
@@ -43,6 +44,7 @@ const navigationSections: AnimatedSidebarSection[] = [
     title: "Automation",
     items: [
       { id: "automations", label: "Automations", href: "/automations" },
+      { id: "mail-merge", label: "Mail Merge", href: "/mail-merge" },
     ],
   },
   {
