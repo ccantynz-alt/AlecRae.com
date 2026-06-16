@@ -50,6 +50,7 @@ const navigationSections: AnimatedSidebarSection[] = [
   {
     title: "Manage",
     items: [
+      { id: "shared-inboxes", label: "Shared Inboxes", href: "/shared-inboxes" },
       { id: "domains", label: "Domains", href: "/domains" },
       { id: "analytics", label: "Analytics", href: "/analytics" },
       { id: "settings", label: "Settings", href: "/settings" },
