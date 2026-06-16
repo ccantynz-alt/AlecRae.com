@@ -272,9 +272,9 @@ function MailboxesSection(): ReactNode {
                   className="h-10 px-3 rounded-lg border border-border bg-surface text-content text-body-md"
                 >
                   {verifiedDomains.map((d) => (
-                    <Box as="option" key={d.id} value={d.domain}>
+                    <option key={d.id} value={d.domain}>
                       {d.domain}
-                    </Box>
+                    </option>
                   ))}
                 </Box>
               </Box>
@@ -535,15 +535,9 @@ function TeamSection(): ReactNode {
                 aria-label="Invite role"
                 className="h-10 px-3 rounded-lg border border-border bg-surface text-content text-body-md"
               >
-                <Box as="option" value="member">
-                  Member
-                </Box>
-                <Box as="option" value="admin">
-                  Admin
-                </Box>
-                <Box as="option" value="viewer">
-                  Viewer
-                </Box>
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+                <option value="viewer">Viewer</option>
               </Box>
             </Box>
             <Button variant="primary" size="md" onClick={() => void invite()} disabled={busy || !inviteEmail.trim()}>

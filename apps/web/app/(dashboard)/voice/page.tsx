@@ -15,6 +15,7 @@ import {
   type VoiceAttachment,
 } from "../../../components/VoiceReplyComposer";
 import { getApiBase } from "../../../lib/api-base";
+import { getAccessToken } from "../../../lib/auth-token";
 
 export default function VoicePage(): React.ReactNode {
   const [authToken, setAuthToken] = useState<string>("");
@@ -22,7 +23,7 @@ export default function VoicePage(): React.ReactNode {
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
   useEffect(() => {
-    setAuthToken(localStorage.getItem("alecrae_api_key") ?? "");
+    setAuthToken(getAccessToken());
   }, []);
 
   return (

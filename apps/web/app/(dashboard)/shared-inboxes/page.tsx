@@ -660,10 +660,10 @@ function CreateDelegationForm({ onCreated }: CreateDelegationFormProps): ReactNo
               className="h-10 w-full px-3 rounded-lg border border-border bg-surface text-content text-body-md"
               aria-label="Delegation scope"
             >
-              <Box as="option" value="all">All email</Box>
-              <Box as="option" value="label">Specific label</Box>
-              <Box as="option" value="sender">Specific sender</Box>
-              <Box as="option" value="thread">Specific thread</Box>
+              <option value="all">All email</option>
+              <option value="label">Specific label</option>
+              <option value="sender">Specific sender</option>
+              <option value="thread">Specific thread</option>
             </Box>
           </Box>
 
