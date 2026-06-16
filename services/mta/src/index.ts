@@ -173,8 +173,8 @@ async function start(): Promise<void> {
   try {
     await healthServer.start();
     console.log(`[mta] Health server listening on :${HEALTH_PORT} (/healthz, /readyz)`);
-  } catch (error) {
-    console.warn(`[mta] Health server failed to start on port ${HEALTH_PORT} — continuing without it. Set HEALTH_PORT to an available port to enable.`);
+  } catch (err) {
+    console.warn(`[mta] Health server failed to start on port ${HEALTH_PORT}: ${String(err)}. Continuing without health endpoint. Set HEALTH_PORT to override.`);
     healthServer = null;
   }
 
