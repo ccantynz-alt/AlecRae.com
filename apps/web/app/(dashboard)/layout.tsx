@@ -38,6 +38,7 @@ const navigationSections: AnimatedSidebarSection[] = [
       { id: "smart-folders", label: "Smart Folders", href: "/smart-folders" },
       { id: "voice", label: "Voice", href: "/voice" },
       { id: "scripts", label: "Scripts", href: "/scripts" },
+      { id: "documents", label: "Documents", href: "/documents" },
       { id: "chat", label: "Team Chat", href: "/chat" },
     ],
   },
@@ -45,6 +46,8 @@ const navigationSections: AnimatedSidebarSection[] = [
     title: "Automation",
     items: [
       { id: "automations", label: "Automations", href: "/automations" },
+      { id: "auto-responder", label: "Auto-Responder", href: "/auto-responder" },
+      { id: "ab-tests", label: "A/B Testing", href: "/ab-tests" },
       { id: "mail-merge", label: "Mail Merge", href: "/mail-merge" },
     ],
   },
