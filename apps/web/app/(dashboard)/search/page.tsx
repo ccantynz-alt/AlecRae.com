@@ -92,8 +92,8 @@ function AISearchSection(): React.ReactNode {
               variant="text"
               placeholder="Find emails about..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                 if (e.key === "Enter") void handleSearch();
               }}
             />

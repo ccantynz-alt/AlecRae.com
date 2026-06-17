@@ -67,7 +67,7 @@ function ConsentGatedRegistration(): React.ReactElement {
             type="checkbox"
             className="mt-1 h-4 w-4 rounded border-neutral-400 text-brand-600 focus:ring-brand-600"
             checked={ageConfirmed}
-            onChange={(e) => setAgeConfirmed(e.target.checked)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAgeConfirmed(e.target.checked)}
             aria-describedby="age-help"
           />
           <Box className="flex-1">
@@ -84,7 +84,7 @@ function ConsentGatedRegistration(): React.ReactElement {
             type="checkbox"
             className="mt-1 h-4 w-4 rounded border-neutral-400 text-brand-600 focus:ring-brand-600"
             checked={termsAccepted}
-            onChange={(e) => setTermsAccepted(e.target.checked)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTermsAccepted(e.target.checked)}
             aria-describedby="terms-help"
           />
           <Box className="flex-1">
@@ -114,7 +114,7 @@ function ConsentGatedRegistration(): React.ReactElement {
             type="checkbox"
             className="mt-1 h-4 w-4 rounded border-neutral-400 text-brand-600 focus:ring-brand-600"
             checked={marketingOptIn}
-            onChange={(e) => setMarketingOptIn(e.target.checked)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMarketingOptIn(e.target.checked)}
           />
           <Box className="flex-1">
             <Text variant="body-sm" className="text-content">
@@ -247,7 +247,7 @@ function PasskeyRegistration(): React.ReactElement {
         placeholder="Jane Doe"
         autoComplete="name"
         value={name}
-        onChange={(e) => setName(e.target.value)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
       />
       <Input
         label="Email address"
@@ -255,7 +255,7 @@ function PasskeyRegistration(): React.ReactElement {
         placeholder="you@example.com"
         autoComplete="email"
         value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
       />
       <Button
         variant="primary"
@@ -346,7 +346,7 @@ function EmailRegistration(): React.ReactElement {
           placeholder="Jane"
           autoComplete="given-name"
           value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFirstName(e.target.value)}
         />
         <Input
           label="Last name"
@@ -354,7 +354,7 @@ function EmailRegistration(): React.ReactElement {
           placeholder="Doe"
           autoComplete="family-name"
           value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLastName(e.target.value)}
         />
       </Box>
       <Input
@@ -363,7 +363,7 @@ function EmailRegistration(): React.ReactElement {
         placeholder="you@example.com"
         autoComplete="email"
         value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
       />
       <Input
         label="Password"
@@ -372,7 +372,7 @@ function EmailRegistration(): React.ReactElement {
         autoComplete="new-password"
         hint="Must be at least 8 characters."
         value={password}
-        onChange={(e) => setPassword(e.target.value)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
       />
       <Button
         variant="secondary"

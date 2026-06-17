@@ -264,7 +264,7 @@ export default function DpaSignPage(): React.ReactElement {
                 <Input
                   label="Full name"
                   value={signerName}
-                  onChange={(e) => setSignerName(e.currentTarget.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSignerName(e.currentTarget.value)}
                   required
                   autoComplete="name"
                 />
@@ -272,21 +272,21 @@ export default function DpaSignPage(): React.ReactElement {
                   label="Work email"
                   variant="email"
                   value={signerEmail}
-                  onChange={(e) => setSignerEmail(e.currentTarget.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSignerEmail(e.currentTarget.value)}
                   required
                   autoComplete="email"
                 />
                 <Input
                   label="Job title"
                   value={signerTitle}
-                  onChange={(e) => setSignerTitle(e.currentTarget.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSignerTitle(e.currentTarget.value)}
                   required
                   autoComplete="organization-title"
                 />
                 <Input
                   label="Company (legal entity)"
                   value={companyName}
-                  onChange={(e) => setCompanyName(e.currentTarget.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCompanyName(e.currentTarget.value)}
                   required
                   autoComplete="organization"
                 />

@@ -44,6 +44,8 @@ export interface ComposeEditorProps extends HTMLAttributes<HTMLDivElement> {
   onSaveDraft?: () => void;
   onDiscard?: () => void;
   onApplySuggestion?: (suggestion: AISuggestion) => void;
+  /** Fires on every body keystroke — used to drive grammar checking. */
+  onBodyChange?: (text: string) => void;
   showAIPanel?: boolean;
   /** Callback to fetch AI calendar slot suggestions. When provided, enables B7 feature. */
   onRequestCalendarSlots?: CalendarSlotRequestFn;
@@ -90,6 +92,7 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
     onSaveDraft,
     onDiscard,
     onApplySuggestion,
+    onBodyChange,
     showAIPanel = true,
     onRequestCalendarSlots,
     className = "",
@@ -292,7 +295,10 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
               as="textarea"
               ref={textareaRef}
               value={body}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+                setBody(e.target.value);
+                onBodyChange?.(e.target.value);
+              }}
               placeholder="Write your email..."
               className="w-full flex-1 resize-none bg-transparent text-body-md text-content focus:outline-none placeholder:text-content-tertiary"
             />

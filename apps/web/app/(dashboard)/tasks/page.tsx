@@ -252,14 +252,14 @@ function ExtractFromEmailCard({
             variant="text"
             placeholder="sender@example.com"
             value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFrom(e.target.value)}
           />
           <Input
             label="Subject (optional)"
             variant="text"
             placeholder="e.g. Project kickoff follow-ups"
             value={subject}
-            onChange={(e) => setSubject(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubject(e.target.value)}
           />
           <Box>
             <Text variant="body-sm" className="mb-1 font-medium text-content">
@@ -270,7 +270,7 @@ function ExtractFromEmailCard({
               rows={5}
               placeholder="Paste the email content here..."
               value={body}
-              onChange={(e) => setBody(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setBody(e.target.value)}
               aria-label="Email body to extract tasks from"
             />
           </Box>

@@ -264,6 +264,70 @@ function ComposePage(): React.ReactNode {
             the To/Cc fields when you send.
           </Text>
         </Box>
+        {/* Grammar AI status bar — visible once the engine has a result */}
+        {suggestions.length > 0 && (
+          <Box className="mb-3 px-3 py-2 rounded-lg border border-border bg-surface-secondary flex items-center gap-3">
+            <Box className="flex items-center gap-1.5 flex-shrink-0">
+              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" aria-hidden="true" />
+              <Text variant="caption" className="font-medium text-content">
+                Grammar AI active
+              </Text>
+              <Text variant="caption" muted>
+                &mdash; {suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""}
+              </Text>
+            </Box>
+            {/* Suggestion chips — horizontally scrollable */}
+            <Box className="flex-1 min-w-0 overflow-x-auto">
+              <Box className="flex items-center gap-2 pb-0.5" style={{ minWidth: "max-content" }}>
+                {suggestions.map((s) => {
+                  // Extract original and correction from the preview string
+                  // preview format: "Suggestion: <correction>" or just the label
+                  const correctionMatch = s.preview.match(/^Suggestion:\s*(.+)$/);
+                  const correction: string = correctionMatch?.[1] ?? s.preview;
+                  return (
+                    <Box
+                      key={s.id}
+                      className="flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-surface text-sm flex-shrink-0"
+                    >
+                      <Text as="span" variant="caption" muted className="line-through max-w-[80px] truncate">
+                        {s.label.length > 30 ? `${s.label.slice(0, 30)}…` : s.label}
+                      </Text>
+                      <Text as="span" variant="caption" muted>→</Text>
+                      <Text as="span" variant="caption" className="text-brand-600 max-w-[100px] truncate">
+                        {correction.length > 30 ? `${correction.slice(0, 30)}…` : correction}
+                      </Text>
+                      <button
+                        type="button"
+                        className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-brand-100 text-brand-700 hover:bg-brand-600 hover:text-white transition-colors"
+                        onClick={() => {
+                          setSuggestions((prev) => prev.filter((x) => x.id !== s.id));
+                        }}
+                        aria-label={`Apply suggestion: ${correction}`}
+                      >
+                        Apply
+                      </button>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+            <button
+              type="button"
+              className="flex-shrink-0 text-content-tertiary hover:text-content text-xs transition-colors"
+              onClick={() => setSuggestions([])}
+              aria-label="Dismiss all grammar suggestions"
+            >
+              Dismiss all
+            </button>
+          </Box>
+        )}
+        {/* Grammar AI idle state — shown while body is being typed, before first check */}
+        {suggestions.length === 0 && (
+          <Box className="mb-3 px-3 py-1.5 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-surface-tertiary inline-block" aria-hidden="true" />
+            <Text variant="caption" muted>Grammar AI — type 20+ characters to activate</Text>
+          </Box>
+        )}
         <motion.div
           className="flex-1 flex flex-col min-h-0"
           variants={contentVariants}
@@ -286,7 +350,10 @@ function ComposePage(): React.ReactNode {
               setStatus(null);
               window.history.back();
             }}
-            onApplySuggestion={() => { /* no-op */ }}
+            onBodyChange={_checkGrammar}
+            onApplySuggestion={(suggestion: AISuggestion) => {
+              setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
+            }}
             onRequestCalendarSlots={handleRequestCalendarSlots}
             className="flex-1"
           />

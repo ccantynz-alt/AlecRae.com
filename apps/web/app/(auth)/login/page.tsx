@@ -293,7 +293,7 @@ function EmailLogin(): React.ReactElement {
         placeholder="you@example.com"
         autoComplete="email"
         value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
       />
       <Input
         label="Password"
@@ -301,7 +301,7 @@ function EmailLogin(): React.ReactElement {
         placeholder="Enter your password"
         autoComplete="current-password"
         value={password}
-        onChange={(e) => setPassword(e.target.value)}
+        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
       />
       <Box className="flex items-center justify-between">
         <Box className="flex items-center gap-2">
