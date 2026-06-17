@@ -28,18 +28,27 @@ const navigationSections: AnimatedSidebarSection[] = [
     ],
   },
   {
+    title: "AI Features",
+    items: [
+      { id: "agent", label: "AI Agent", href: "/agent", badge: "PRO" },
+      { id: "voice", label: "Voice", href: "/voice", badge: "PERSONAL" },
+      { id: "translate", label: "Translation", href: "/translate", badge: "PERSONAL" },
+      { id: "hygiene", label: "Email Hygiene", href: "/hygiene", badge: "PERSONAL" },
+      { id: "achievements", label: "Inbox Zero", href: "/achievements" },
+    ],
+  },
+  {
     title: "Tools",
     items: [
       { id: "templates", label: "Templates", href: "/templates" },
       { id: "contacts", label: "Contacts", href: "/contacts" },
       { id: "calendar", label: "Calendar", href: "/calendar" },
       { id: "tasks", label: "Tasks", href: "/tasks" },
+      { id: "files", label: "Files", href: "/files", badge: "PERSONAL" },
+      { id: "documents", label: "Documents", href: "/documents" },
       { id: "search", label: "Search", href: "/search" },
       { id: "smart-folders", label: "Smart Folders", href: "/smart-folders" },
-      { id: "voice", label: "Voice", href: "/voice" },
       { id: "scripts", label: "Scripts", href: "/scripts" },
-      { id: "documents", label: "Documents", href: "/documents" },
-      { id: "chat", label: "Team Chat", href: "/chat" },
     ],
   },
   {
@@ -47,17 +56,33 @@ const navigationSections: AnimatedSidebarSection[] = [
     items: [
       { id: "automations", label: "Automations", href: "/automations" },
       { id: "auto-responder", label: "Auto-Responder", href: "/auto-responder" },
-      { id: "ab-tests", label: "A/B Testing", href: "/ab-tests" },
-      { id: "mail-merge", label: "Mail Merge", href: "/mail-merge" },
+      { id: "ab-tests", label: "A/B Testing", href: "/ab-tests", badge: "PRO" },
+      { id: "mail-merge", label: "Mail Merge", href: "/mail-merge", badge: "PRO" },
     ],
   },
   {
-    title: "Manage",
+    title: "Team",
     items: [
-      { id: "shared-inboxes", label: "Shared Inboxes", href: "/shared-inboxes" },
-      { id: "domains", label: "Domains", href: "/domains" },
+      { id: "chat", label: "Team Chat", href: "/chat", badge: "TEAM" },
+      { id: "shared-inboxes", label: "Shared Inboxes", href: "/shared-inboxes", badge: "TEAM" },
+    ],
+  },
+  {
+    title: "Insights",
+    items: [
       { id: "analytics", label: "Analytics", href: "/analytics" },
+      { id: "notifications", label: "Notifications", href: "/notifications" },
+      { id: "security-center", label: "Security", href: "/security-center" },
+      { id: "integrations", label: "Integrations", href: "/integrations", badge: "PRO" },
+    ],
+  },
+  {
+    title: "Settings",
+    items: [
       { id: "settings", label: "Settings", href: "/settings" },
+      { id: "billing", label: "Billing", href: "/billing" },
+      { id: "domains", label: "Domains", href: "/domains" },
+      { id: "developer", label: "Developer", href: "/settings/developer" },
     ],
   },
 ];
@@ -116,25 +141,27 @@ export default function DashboardLayout({
 
   const isAdmin = user.role === "owner" || user.role === "admin";
 
-  const sectionsWithActive: AnimatedSidebarSection[] = navigationSections.map((section) => {
-    // Workspace setup + admin console are owner/admin-only; surface them in
-    // the Manage group.
-    const items =
-      section.title === "Manage" && isAdmin
-        ? [
-            ...section.items,
-            { id: "workspace", label: "Workspace", href: "/workspace" },
-            { id: "admin", label: "Admin", href: "/admin" },
-          ]
-        : section.items;
-    return {
+  const sectionsWithActive: AnimatedSidebarSection[] = [
+    ...navigationSections.map((section) => ({
       ...section,
-      items: items.map((item) => ({
+      items: section.items.map((item) => ({
         ...item,
         active: pathname === item.href || pathname?.startsWith(item.href + "/"),
       })),
-    };
-  });
+    })),
+    // Admin-only section — only injected when user is owner/admin
+    ...(isAdmin
+      ? [
+          {
+            title: "Admin",
+            items: [
+              { id: "workspace", label: "Workspace", href: "/workspace", active: pathname === "/workspace" },
+              { id: "admin", label: "Admin Console", href: "/admin", active: pathname === "/admin" || pathname?.startsWith("/admin/") },
+            ],
+          },
+        ]
+      : []),
+  ];
 
   const initials = user.name
     .split(" ")
