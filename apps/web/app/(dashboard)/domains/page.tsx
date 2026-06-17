@@ -24,10 +24,17 @@ function mapDomain(d: Domain): {
   dmarcVerified: boolean;
   addedAt: string;
 } {
+  const rawStatus = d.status;
+  const verificationState: "pending" | "verified" | "failed" | "expired" =
+    rawStatus === "verified" ? "verified" :
+    rawStatus === "failed"   ? "failed"   :
+    rawStatus === "expired"  ? "expired"  :
+    "pending"; // covers "verifying", "pending", null, undefined, unknown
+
   return {
     id: d.id,
     domain: d.domain,
-    verificationState: (d.status === "verifying" ? "pending" : d.status) as "pending" | "verified" | "failed",
+    verificationState,
     dnsRecords: [
       { type: "TXT", name: `_alecrae-verify.${d.domain}`, value: `alecrae-verify=${d.id.slice(0, 8)}`, verified: d.spfVerified },
       { type: "TXT", name: d.domain, value: `v=spf1 include:spf.alecrae.com ~all`, verified: d.spfVerified },
