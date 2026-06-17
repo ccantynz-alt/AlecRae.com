@@ -10,6 +10,7 @@ import {
   useAlecRaeReducedMotion,
 } from "../../../lib/animations";
 import { getApiBase } from "../../../lib/api-base";
+import { getAccessToken, refreshSession, redirectToLogin } from "../../../lib/auth-token";
 
 const API_BASE = getApiBase();
 
@@ -25,8 +26,8 @@ interface Contact {
   lastContactedAt: string | null;
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("alecrae_api_key") ?? "" : "";
+async function apiFetch<T>(path: string, options: RequestInit = {}, retried = false): Promise<T> {
+  const token = getAccessToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -35,6 +36,11 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
       ...options.headers,
     },
   });
+  if (res.status === 401 && !retried) {
+    const fresh = await refreshSession();
+    if (fresh) return apiFetch<T>(path, options, true);
+    redirectToLogin();
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => null);
     throw new Error((err as { error?: { message?: string } })?.error?.message ?? `Request failed: ${res.status}`);

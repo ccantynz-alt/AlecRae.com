@@ -21,13 +21,14 @@ export default function GoogleCallbackPage(): React.ReactElement {
       : "";
     const params = new URLSearchParams(fragment);
     const token = params.get("token");
+    const refreshToken = params.get("refreshToken");
 
     if (!token) {
       setError("We couldn't complete your Google sign-in. Please try again.");
       return;
     }
 
-    authApi.completeGoogleSignIn(token);
+    authApi.completeGoogleSignIn(token, refreshToken);
     // Strip the token from the address bar before navigating away.
     window.history.replaceState(null, "", window.location.pathname);
 

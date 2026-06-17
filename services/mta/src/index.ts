@@ -27,7 +27,7 @@ const WORKER_CONCURRENCY = parseInt(
   process.env["MTA_WORKER_CONCURRENCY"] ?? "10",
   10,
 );
-const HEALTH_PORT = parseInt(process.env["HEALTH_PORT"] ?? "8080", 10);
+const HEALTH_PORT = parseInt(process.env["HEALTH_PORT"] ?? "8082", 10);
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
 
 // ─── Service state ──────────────────────────────────────────────────────────
@@ -159,7 +159,7 @@ async function start(): Promise<void> {
 
   await mtaWorker.start();
 
-  // ── 5. Start health server (Fly.io http_checks target) ─────────────
+  // ── 5. Start health server ──────────────────────────────────────────
   console.log(`[mta] Starting health server on port ${HEALTH_PORT}...`);
   const redisClient = redis;
   healthServer = createHealthServer({
@@ -170,8 +170,13 @@ async function start(): Promise<void> {
       ...(redisClient ? [redisCheck(redisClient)] : []),
     ],
   });
-  await healthServer.start();
-  console.log(`[mta] Health server listening on :${HEALTH_PORT} (/healthz, /readyz)`);
+  try {
+    await healthServer.start();
+    console.log(`[mta] Health server listening on :${HEALTH_PORT} (/healthz, /readyz)`);
+  } catch (err) {
+    console.warn(`[mta] Health server failed to start on port ${HEALTH_PORT}: ${String(err)}. Continuing without health endpoint. Set HEALTH_PORT to override.`);
+    healthServer = null;
+  }
 
   // ── 6. Register shutdown handlers ───────────────────────────────────
   process.on("SIGTERM", () => shutdown("SIGTERM"));

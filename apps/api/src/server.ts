@@ -13,6 +13,14 @@ import { assertProductionEnv } from "./lib/env.js";
 // Fail fast in production: one aggregated error for all missing/invalid env vars.
 assertProductionEnv();
 
+import { printStartupConfigReport } from "./routes/health.js";
+// Print a human-readable config summary to stdout on every boot.
+// Async and non-throwing — runs in the background while the rest of server.ts
+// wires up routes so it doesn't add latency to first-request readiness.
+printStartupConfigReport().catch(() => {
+  // never propagate — a summary failure must not crash the API
+});
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { requestId } from "hono/request-id";
@@ -101,10 +109,7 @@ import { labelsRouter } from "./routes/labels.js";
 import { notesRouter, emailNotesRouter, threadNotesRouter } from "./routes/notes.js";
 import { filesRouter, emailAttachmentsRouter } from "./routes/files.js";
 import { chatRouter } from "./routes/chat.js";
-// NOTE: warmup route is built but mounting it pulls in @alecrae/reputation + services/dns,
-// which have pre-existing exactOptionalPropertyTypes errors blocking the typecheck gate.
-// Fix those errors first, then re-enable this import and the route mount below.
-// import { warmup } from "./routes/warmup.js";
+import { warmup } from "./routes/warmup.js";
 import { linkPreviewRouter } from "./routes/link-previews.js";
 import { integrationsRouter } from "./routes/integrations.js";
 import { schedulingAnalyticsRouter } from "./routes/scheduling-analytics.js";
@@ -250,9 +255,17 @@ app.use("/v1/messages/send", authMiddleware, sendRateLimit);
 app.use("/v1/messages/search", authMiddleware, searchRateLimit);
 // Read messages: 600 req/min per API key
 app.use("/v1/messages/*", authMiddleware, readRateLimit);
-// Domains: write-level limits (200 req/min)
+// Domains: write-level limits (200 req/min). The bare path needs its own mount
+// — `/v1/domains/*` does not match `/v1/domains`, so list/create were unauthed
+// (→ 401 from requireScope, with no auth context).
+app.use("/v1/domains", authMiddleware, writeRateLimit);
 app.use("/v1/domains/*", authMiddleware, writeRateLimit);
-// app.use("/v1/domains/:id/warmup/*", authMiddleware, writeRateLimit); // see warmup import note
+app.use("/v1/domains/:id/warmup/*", authMiddleware, writeRateLimit);
+// Mailboxes (native addresses on a verified domain): write-level. Both the
+// bare and wildcard paths need a mount or every call hits requireScope with
+// no auth context and 401s.
+app.use("/v1/mailboxes", authMiddleware, writeRateLimit);
+app.use("/v1/mailboxes/*", authMiddleware, writeRateLimit);
 // Webhooks: write-level limits (200 req/min)
 app.use("/v1/webhooks/*", authMiddleware, writeRateLimit);
 // Analytics: read-level limits (600 req/min)
@@ -578,7 +591,7 @@ app.use("/v1/knowledge", authMiddleware, readRateLimit);
 app.route("/v1/messages", messages);
 app.route("/v1/domains", domains);
 app.route("/v1/mailboxes", mailboxes);
-// app.route("/v1/domains/:id/warmup", warmup); // see warmup import note
+app.route("/v1/domains/:id/warmup", warmup);
 app.route("/v1/webhooks", webhooks);
 app.route("/v1/analytics", analytics);
 app.route("/v1/suppressions", suppressions);

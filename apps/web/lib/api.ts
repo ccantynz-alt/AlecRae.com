@@ -6,6 +6,14 @@
  */
 
 import { getApiBase } from "./api-base";
+import {
+  clearSession,
+  getAccessToken,
+  getRefreshToken,
+  redirectToLogin,
+  refreshSession,
+  setSession,
+} from "./auth-token";
 
 const API_BASE = getApiBase();
 
@@ -65,7 +73,7 @@ export interface MessageDetail extends Message {
 export interface Domain {
   id: string;
   domain: string;
-  verificationStatus: string;
+  status: string;
   spfVerified: boolean;
   dkimVerified: boolean;
   dmarcVerified: boolean;
@@ -121,6 +129,10 @@ export interface Account {
 
 export interface AuthResponse {
   token: string;
+  /** Long-lived rotating refresh token — captured so the client can renew the
+   *  short-lived access token silently instead of logging the user out. */
+  refreshToken?: string;
+  expiresIn?: number;
   user: {
     id: string;
     email: string;
@@ -197,17 +209,6 @@ export interface PublicKeyCredentialAssertionJSON {
   authenticatorAttachment?: string;
 }
 
-/**
- * Persist the session cookie the web middleware reads. Host-only on purpose
- * (the API is called with Bearer tokens, never cookies, so the cookie must not
- * span subdomains). `Secure` is appended on HTTPS so the production gateway
- * never sees it on plaintext.
- */
-function writeSessionCookie(token: string): void {
-  const secure = window.location.protocol === "https:" ? "; Secure" : "";
-  document.cookie = `alecrae_session=${token}; path=/; max-age=${7 * 86400}; SameSite=Lax${secure}`;
-}
-
 export const authApi = {
   async login(email: string, password: string): Promise<AuthResponse> {
     const res = await fetch(`${API_BASE}/v1/auth/login`, {
@@ -224,10 +225,7 @@ export const authApi = {
     const data = (await res.json()) as { data: AuthResponse };
 
     // Store token
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", data.data.token);
-      writeSessionCookie(data.data.token);
-    }
+    setSession(data.data.token, data.data.refreshToken);
 
     return data.data;
   },
@@ -251,10 +249,7 @@ export const authApi = {
 
     const data = (await res.json()) as { data: AuthResponse };
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", data.data.token);
-      writeSessionCookie(data.data.token);
-    }
+    setSession(data.data.token, data.data.refreshToken);
 
     return data.data;
   },
@@ -265,22 +260,16 @@ export const authApi = {
   },
 
   /**
-   * Persist a session token handed back by the Google sign-in callback.
-   * Mirrors the storage used by login/register/passkey so the rest of the app
-   * (localStorage `alecrae_api_key` + cookie `alecrae_session`) just works.
+   * Persist a session handed back by the Google sign-in callback. Mirrors the
+   * storage used by login/register/passkey so the rest of the app just works.
+   * The refresh token (if the callback forwards one) enables silent renewal.
    */
-  completeGoogleSignIn(token: string): void {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", token);
-      writeSessionCookie(token);
-    }
+  completeGoogleSignIn(token: string, refreshToken?: string | null): void {
+    setSession(token, refreshToken ?? null);
   },
 
   logout() {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("alecrae_api_key");
-      document.cookie = "alecrae_session=; path=/; max-age=0; SameSite=Lax";
-    }
+    clearSession();
   },
 
   async me(): Promise<{ data: AuthResponse["user"] }> {
@@ -346,10 +335,7 @@ export const authApi = {
 
     const data = (await res.json()) as { data: AuthResponse };
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", data.data.token);
-      writeSessionCookie(data.data.token);
-    }
+    setSession(data.data.token, data.data.refreshToken);
 
     return data.data;
   },
@@ -391,10 +377,7 @@ export const authApi = {
 
     const data = (await res.json()) as { data: AuthResponse };
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("alecrae_api_key", data.data.token);
-      writeSessionCookie(data.data.token);
-    }
+    setSession(data.data.token, data.data.refreshToken);
 
     return data.data;
   },
@@ -405,11 +388,9 @@ export const authApi = {
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
+  retried = false,
 ): Promise<T> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("alecrae_api_key") ?? ""
-      : "";
+  const token = getAccessToken();
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -419,6 +400,16 @@ async function apiFetch<T>(
       ...options.headers,
     },
   });
+
+  // Access token expired → renew silently with the refresh token and retry
+  // once, rather than surfacing "invalid or expired bearer token" to the user.
+  if (res.status === 401 && !retried && getRefreshToken()) {
+    const fresh = await refreshSession();
+    if (fresh) {
+      return apiFetch<T>(path, options, true);
+    }
+    redirectToLogin();
+  }
 
   if (!res.ok) {
     const errorBody = (await res.json().catch(() => null)) as ApiError | null;
@@ -445,6 +436,324 @@ export interface ConnectedEmailAccount {
 export const connectApi = {
   listAccounts(): Promise<{ data: ConnectedEmailAccount[] }> {
     return apiFetch("/v1/connect/accounts");
+  },
+
+  /** Fetch the Google OAuth consent URL (authenticated), then navigate to it. */
+  gmailAuthUrl(): Promise<{ data: { url: string } }> {
+    return apiFetch("/v1/connect/gmail");
+  },
+
+  /** Fetch the Microsoft OAuth consent URL (authenticated), then navigate to it. */
+  outlookAuthUrl(): Promise<{ data: { url: string } }> {
+    return apiFetch("/v1/connect/outlook");
+  },
+};
+
+// ─── Admin (platform administration) ─────────────────────────────────────────
+
+export interface AdminStats {
+  totals: {
+    sent: number;
+    delivered: number;
+    bounced: number;
+    complained: number;
+    queued: number;
+    failed: number;
+    deferred: number;
+    opened: number;
+    clicked: number;
+    deliveryRate: number;
+    bounceRate: number;
+    openRate: number;
+    clickRate: number;
+  };
+  last24h: {
+    sent: number;
+    delivered: number;
+    bounced: number;
+    queued: number;
+    failed: number;
+    deferred: number;
+  };
+  platform: {
+    totalAccounts: number;
+    totalDomains: number;
+    totalUsers: number;
+  };
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  accountId: string;
+  accountName: string | null;
+  plan: string;
+  emailsSentThisPeriod: number;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+export interface AdminDomain {
+  id: string;
+  accountId: string;
+  domain: string;
+  status: string;
+  spfVerified: boolean;
+  dkimVerified: boolean;
+  dmarcVerified: boolean;
+  returnPathVerified: boolean;
+  isActive: boolean;
+  isDefault: boolean;
+  messagesSent24h: number;
+  createdAt: string;
+  verifiedAt: string | null;
+}
+
+export interface AdminMessage {
+  id: string;
+  accountId: string;
+  messageId: string | null;
+  from: { email: string; name: string | null };
+  to: { email: string; name?: string | null }[] | null;
+  subject: string | null;
+  status: string;
+  tags: string[] | null;
+  createdAt: string;
+  sentAt: string | null;
+}
+
+export interface AdminEvent {
+  id: string;
+  accountId: string;
+  emailId: string | null;
+  messageId: string | null;
+  type: string;
+  recipient: string | null;
+  timestamp: string;
+  bounceCategory: string | null;
+  url: string | null;
+}
+
+export interface AdminDlqRecord {
+  jobId: string;
+  jobName: string;
+  failedReason: string;
+  attemptsMade: number;
+  timestamp: string;
+  status: "pending_retry" | "permanently_failed";
+  retryScheduledAt: string | null;
+}
+
+export interface AdminDlq {
+  stats: { total: number; pendingRetry: number; permanentlyFailed: number };
+  records: AdminDlqRecord[];
+}
+
+export const adminApi = {
+  stats(): Promise<{ data: AdminStats }> {
+    return apiFetch("/v1/admin/stats");
+  },
+  users(): Promise<{ data: AdminUser[] }> {
+    return apiFetch("/v1/admin/users");
+  },
+  domains(): Promise<{ data: AdminDomain[] }> {
+    return apiFetch("/v1/admin/domains");
+  },
+  messages(params?: { limit?: number; status?: string }): Promise<{ data: AdminMessage[] }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.status) qs.set("status", params.status);
+    const query = qs.toString();
+    return apiFetch(`/v1/admin/messages${query ? `?${query}` : ""}`);
+  },
+  events(params?: { limit?: number; type?: string }): Promise<{ data: AdminEvent[] }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.type) qs.set("type", params.type);
+    const query = qs.toString();
+    return apiFetch(`/v1/admin/events${query ? `?${query}` : ""}`);
+  },
+  dlq(): Promise<{ data: AdminDlq }> {
+    return apiFetch("/v1/admin/dlq");
+  },
+  clearDlqRecord(jobId: string): Promise<{ data: { cleared: boolean } }> {
+    return apiFetch(`/v1/admin/dlq/${encodeURIComponent(jobId)}`, { method: "DELETE" });
+  },
+  clearFailedDlq(): Promise<{ data: { cleared: number } }> {
+    return apiFetch("/v1/admin/dlq/clear", { method: "POST" });
+  },
+};
+
+// ─── Mailboxes (native addresses on a verified domain) ───────────────────────
+
+export interface Mailbox {
+  id: string;
+  accountId: string;
+  domainId: string;
+  localPart: string;
+  address: string;
+  displayName: string | null;
+  forwardTo: string[] | null;
+  isActive: boolean;
+  createdAt?: string;
+}
+
+export const mailboxesApi = {
+  list(): Promise<{ data: Mailbox[] }> {
+    return apiFetch("/v1/mailboxes");
+  },
+  create(payload: {
+    address: string;
+    displayName?: string;
+    forwardTo?: string[];
+  }): Promise<Mailbox> {
+    return apiFetch("/v1/mailboxes", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch(`/v1/mailboxes/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+};
+
+// ─── Organizations / Team ────────────────────────────────────────────────────
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  ownerAccountId: string;
+  domain: string | null;
+  logoUrl: string | null;
+  settings: unknown;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrgMember {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  avatarUrl: string | null;
+  emailVerified: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface OrgInvitation {
+  id: string;
+  accountId: string;
+  invitedBy?: string;
+  email: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+  acceptedAt?: string | null;
+  createdAt: string;
+}
+
+export type OrgRole = "admin" | "member" | "viewer";
+
+export const organizationsApi = {
+  get(): Promise<{ data: Organization[] }> {
+    return apiFetch("/v1/organizations");
+  },
+  create(payload: { name: string; slug: string; domain?: string | null }): Promise<{ data: Organization }> {
+    return apiFetch("/v1/organizations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  members(): Promise<{ data: OrgMember[] }> {
+    return apiFetch("/v1/organizations/members");
+  },
+  invitations(status?: string): Promise<{ data: OrgInvitation[] }> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    return apiFetch(`/v1/organizations/invitations${qs}`);
+  },
+  invite(payload: { email: string; role: OrgRole }): Promise<{ data: OrgInvitation }> {
+    return apiFetch("/v1/organizations/invitations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  revokeInvitation(invitationId: string): Promise<unknown> {
+    return apiFetch(`/v1/organizations/invitations/${encodeURIComponent(invitationId)}`, {
+      method: "DELETE",
+    });
+  },
+  changeRole(userId: string, role: OrgRole): Promise<unknown> {
+    return apiFetch(`/v1/organizations/members/${encodeURIComponent(userId)}/role`, {
+      method: "PUT",
+      body: JSON.stringify({ role }),
+    });
+  },
+  removeMember(userId: string): Promise<unknown> {
+    return apiFetch(`/v1/organizations/members/${encodeURIComponent(userId)}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+// ─── Import (mailbox migration) ──────────────────────────────────────────────
+
+/** Multipart upload with Bearer auth + one silent refresh-and-retry on 401.
+ *  Kept separate from apiFetch because FormData must NOT carry a JSON
+ *  Content-Type (the browser sets the multipart boundary itself). */
+async function uploadFetch<T>(path: string, body: FormData, retried = false): Promise<T> {
+  const token = getAccessToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body,
+  });
+
+  if (res.status === 401 && !retried && getRefreshToken()) {
+    const fresh = await refreshSession();
+    if (fresh) return uploadFetch<T>(path, body, true);
+    redirectToLogin();
+  }
+
+  if (!res.ok) {
+    const errorBody = (await res.json().catch(() => null)) as ApiError | null;
+    throw new Error(errorBody?.error?.message ?? `Upload failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+export interface ImportProgress {
+  total: number;
+  processed: number;
+  failed: number;
+  skipped: number;
+}
+
+export interface ImportJobSummary {
+  jobId: string;
+  source: string;
+  status: string;
+  progress: ImportProgress;
+  startedAt: string;
+  completedAt: string | null;
+}
+
+export const importApi = {
+  mbox(file: File): Promise<{ data: { jobId: string; status: string } }> {
+    const fd = new FormData();
+    fd.append("file", file);
+    return uploadFetch("/v1/import/mbox", fd);
+  },
+  eml(files: File[]): Promise<{ data: { jobId: string; status: string; progress: ImportProgress } }> {
+    const fd = new FormData();
+    for (const f of files) fd.append("files", f);
+    return uploadFetch("/v1/import/eml", fd);
+  },
+  jobs(): Promise<{ data: ImportJobSummary[] }> {
+    return apiFetch("/v1/import/jobs");
   },
 };
 
@@ -1916,5 +2225,733 @@ export const templatesApi = {
       `/v1/templates/${encodeURIComponent(id)}/render`,
       { method: "POST", body: JSON.stringify({ variables }) },
     );
+  },
+};
+
+// ─── Smart Folders (Saved Searches) ──────────────────────────────────────────
+
+export interface SmartFolderFilter {
+  from?: string;
+  to?: string;
+  subject?: string;
+  hasAttachment?: boolean;
+  isRead?: boolean;
+  isStarred?: boolean;
+  labels?: string[];
+  dateAfter?: string;
+  dateBefore?: string;
+  query?: string;
+  senderDomain?: string;
+  category?: string;
+}
+
+export interface SmartFolder {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  type: "smart" | "saved_search";
+  filters: SmartFolderFilter;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const smartFoldersApi = {
+  list(params?: { limit?: number; cursor?: string; type?: "smart" | "saved_search" }): Promise<{
+    data: SmartFolder[];
+    cursor: string | null;
+    hasMore: boolean;
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.type) qs.set("type", params.type);
+    const query = qs.toString();
+    return apiFetch(`/v1/smart-folders${query ? `?${query}` : ""}`);
+  },
+
+  get(id: string): Promise<{ data: SmartFolder }> {
+    return apiFetch(`/v1/smart-folders/${encodeURIComponent(id)}`);
+  },
+
+  create(payload: {
+    name: string;
+    icon?: string;
+    color?: string;
+    type?: "smart" | "saved_search";
+    filters: SmartFolderFilter;
+    sortOrder?: number;
+  }): Promise<{ data: SmartFolder }> {
+    return apiFetch("/v1/smart-folders", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  update(
+    id: string,
+    payload: {
+      name?: string;
+      icon?: string;
+      color?: string;
+      type?: "smart" | "saved_search";
+      filters?: SmartFolderFilter;
+      sortOrder?: number;
+    },
+  ): Promise<{ data: { id: string; updatedAt: string } }> {
+    return apiFetch(`/v1/smart-folders/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch(`/v1/smart-folders/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+// ─── Shared Inboxes ───────────────────────────────────────────────────────────
+
+export interface SharedInboxMember {
+  userId: string;
+  role: "owner" | "admin" | "member";
+  addedAt: string;
+}
+
+export interface SharedInbox {
+  id: string;
+  accountId: string;
+  name: string;
+  email: string;
+  members: SharedInboxMember[];
+  createdAt: string;
+}
+
+export const sharedInboxesApi = {
+  list(): Promise<{ data: SharedInbox[] }> {
+    return apiFetch<{ data: SharedInbox[] }>("/v1/collaborate/shared-inboxes");
+  },
+
+  create(payload: {
+    name: string;
+    email: string;
+    members?: { userId: string; role?: "owner" | "admin" | "member" }[];
+  }): Promise<{ data: SharedInbox }> {
+    return apiFetch<{ data: SharedInbox }>("/v1/collaborate/shared-inboxes", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+};
+
+// ─── Email Delegations ────────────────────────────────────────────────────────
+
+export interface DelegationPermissions {
+  canReply: boolean;
+  canArchive: boolean;
+  canDelete: boolean;
+  canForward: boolean;
+}
+
+export interface EmailDelegation {
+  id: string;
+  accountId: string;
+  delegatorUserId: string;
+  delegateUserId: string;
+  scope: "all" | "label" | "sender" | "thread";
+  scopeValue: string | null;
+  permissions: DelegationPermissions;
+  isActive: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const delegationsApi = {
+  /** List delegations I created (as delegator). */
+  listAsOwner(): Promise<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }> {
+    return apiFetch<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }>(
+      "/v1/delegations?role=delegator",
+    );
+  },
+
+  /** List delegations where I am the delegate. */
+  listAsDelegate(): Promise<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }> {
+    return apiFetch<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }>(
+      "/v1/delegations?role=delegate",
+    );
+  },
+
+  /** Create a new delegation. */
+  create(payload: {
+    delegateUserId: string;
+    scope: "all" | "label" | "sender" | "thread";
+    scopeValue?: string | null;
+    permissions: DelegationPermissions;
+    expiresAt?: string | null;
+  }): Promise<{ data: EmailDelegation }> {
+    return apiFetch<{ data: EmailDelegation }>("/v1/delegations", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Revoke (delete) a delegation by ID. */
+  revoke(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/delegations/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+};
+
+// ─── Mail Merge ────────────────────────────────────────────────────────────
+
+export interface MailMergeRecipientStatus {
+  email: string;
+  variables: Record<string, string>;
+  status: "pending" | "sent" | "failed" | "skipped";
+  error?: string;
+}
+
+export interface MailMergeCampaign {
+  id: string;
+  name: string;
+  subject: string;
+  status: "draft" | "sending" | "completed" | "cancelled";
+  totalRecipients: number;
+  sentCount: number;
+  failedCount: number;
+  scheduledAt: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MailMergeCampaignDetail extends MailMergeCampaign {
+  htmlBody: string | null;
+  textBody: string | null;
+  templateId: string | null;
+  recipients: MailMergeRecipientStatus[];
+}
+
+export const mailMergeApi = {
+  list(params?: {
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ data: MailMergeCampaign[]; cursor: string | null; hasMore: boolean }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<{ data: MailMergeCampaign[]; cursor: string | null; hasMore: boolean }>(
+      `/v1/mail-merge${query ? `?${query}` : ""}`,
+    );
+  },
+
+  create(payload: {
+    name: string;
+    subject: string;
+    htmlBody?: string;
+    textBody?: string;
+    scheduledAt?: string;
+  }): Promise<{ data: MailMergeCampaign }> {
+    return apiFetch<{ data: MailMergeCampaign }>("/v1/mail-merge", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  get(id: string): Promise<{ data: MailMergeCampaignDetail }> {
+    return apiFetch<{ data: MailMergeCampaignDetail }>(
+      `/v1/mail-merge/${encodeURIComponent(id)}`,
+    );
+  },
+
+  addRecipients(
+    id: string,
+    recipients: { email: string; variables: Record<string, string> }[],
+  ): Promise<{ data: { added: number; skipped: number; totalRecipients: number } }> {
+    return apiFetch<{ data: { added: number; skipped: number; totalRecipients: number } }>(
+      `/v1/mail-merge/${encodeURIComponent(id)}/recipients`,
+      { method: "POST", body: JSON.stringify({ recipients }) },
+    );
+  },
+
+  start(id: string): Promise<{
+    data: { id: string; status: string; totalRecipients: number; startedAt: string };
+  }> {
+    return apiFetch<{
+      data: { id: string; status: string; totalRecipients: number; startedAt: string };
+    }>(`/v1/mail-merge/${encodeURIComponent(id)}/start`, { method: "POST" });
+  },
+
+  cancel(id: string): Promise<{
+    data: { id: string; status: string; completedAt: string };
+  }> {
+    return apiFetch<{
+      data: { id: string; status: string; completedAt: string };
+    }>(`/v1/mail-merge/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+  },
+
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/mail-merge/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+};
+
+// ─── Team Chat ───────────────────────────────────────────────────────────────
+
+export interface ChatChannel {
+  id: string;
+  type: "direct" | "group" | "thread";
+  name: string | null;
+  topic: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  content: string;
+  replyToId: string | null;
+  isEdited: boolean;
+  createdAt: string;
+}
+
+export interface ChatChannelDetail extends ChatChannel {
+  members: { userId: string; role: string; joinedAt: string }[];
+  recentMessages: ChatMessage[];
+}
+
+export const chatApi = {
+  listChannels(): Promise<{ data: ChatChannel[] }> {
+    return apiFetch<{ data: ChatChannel[] }>("/v1/chat/channels");
+  },
+
+  getChannel(id: string): Promise<{ data: ChatChannelDetail }> {
+    return apiFetch<{ data: ChatChannelDetail }>(`/v1/chat/channels/${encodeURIComponent(id)}`);
+  },
+
+  createChannel(payload: {
+    name?: string;
+    topic?: string;
+    type?: "direct" | "group" | "thread";
+    memberIds: string[];
+  }): Promise<{ data: { id: string; type: string; name: string | undefined; memberCount: number; createdAt: string } }> {
+    return apiFetch("/v1/chat/channels", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getMessages(
+    channelId: string,
+    params?: { limit?: number; cursor?: string },
+  ): Promise<{ data: ChatMessage[]; cursor: string | null; hasMore: boolean }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<{ data: ChatMessage[]; cursor: string | null; hasMore: boolean }>(
+      `/v1/chat/channels/${encodeURIComponent(channelId)}/messages${query ? `?${query}` : ""}`,
+    );
+  },
+
+  sendMessage(
+    channelId: string,
+    payload: { content: string; replyToId?: string },
+  ): Promise<{ data: { id: string; channelId: string; content: string; createdAt: string } }> {
+    return apiFetch(`/v1/chat/channels/${encodeURIComponent(channelId)}/messages`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  editMessage(
+    messageId: string,
+    content: string,
+  ): Promise<{ data: { id: string; updated: boolean } }> {
+    return apiFetch(`/v1/chat/messages/${encodeURIComponent(messageId)}`, {
+      method: "PUT",
+      body: JSON.stringify({ content }),
+    });
+  },
+
+  deleteMessage(messageId: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/chat/messages/${encodeURIComponent(messageId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  markRead(channelId: string): Promise<{ success: boolean }> {
+    return apiFetch<{ success: boolean }>(
+      `/v1/chat/channels/${encodeURIComponent(channelId)}/read`,
+      { method: "POST" },
+    );
+  },
+};
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+export type DocumentType = "doc" | "spreadsheet" | "presentation" | "form";
+export type AiAssistAction = "summarize" | "expand" | "rewrite" | "translate" | "proofread";
+export type ExportFormat = "pdf" | "html" | "markdown";
+
+export interface AlecRaeDocument {
+  id: string;
+  title: string;
+  type: DocumentType;
+  content: string | null;
+  folderId: string | null;
+  isTemplate: boolean;
+  isPublic: boolean;
+  tags: string[];
+  wordCount: number;
+  charCount: number;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  color: string | null;
+  createdAt: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  versionNumber: number;
+  title: string;
+  wordCount: number;
+  createdAt: string;
+}
+
+export interface AiAssistResult {
+  action: AiAssistAction;
+  result: string;
+  targetLanguage?: string;
+}
+
+export interface ExportResult {
+  format: ExportFormat;
+  content: string;
+  mimeType: string;
+  filename: string;
+}
+
+export const documentsApi = {
+  list(params?: {
+    limit?: number;
+    cursor?: string;
+    type?: DocumentType;
+    folderId?: string;
+  }): Promise<{ data: AlecRaeDocument[]; nextCursor?: string }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    if (params?.type) qs.set("type", params.type);
+    if (params?.folderId) qs.set("folderId", params.folderId);
+    const query = qs.toString();
+    return apiFetch<{ data: AlecRaeDocument[]; nextCursor?: string }>(
+      `/v1/documents${query ? `?${query}` : ""}`,
+    );
+  },
+
+  get(id: string): Promise<{ data: AlecRaeDocument }> {
+    return apiFetch<{ data: AlecRaeDocument }>(`/v1/documents/${encodeURIComponent(id)}`);
+  },
+
+  create(data: {
+    title: string;
+    type: DocumentType;
+    folderId?: string | null;
+    isTemplate?: boolean;
+    tags?: string[];
+  }): Promise<{ data: AlecRaeDocument }> {
+    return apiFetch<{ data: AlecRaeDocument }>("/v1/documents", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  update(
+    id: string,
+    data: {
+      title?: string;
+      content?: string;
+      tags?: string[];
+      isPublic?: boolean;
+    },
+  ): Promise<{ data: AlecRaeDocument }> {
+    return apiFetch<{ data: AlecRaeDocument }>(`/v1/documents/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/documents/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  aiAssist(
+    id: string,
+    action: AiAssistAction,
+    targetLanguage?: string,
+  ): Promise<{ data: AiAssistResult }> {
+    return apiFetch<{ data: AiAssistResult }>(
+      `/v1/documents/${encodeURIComponent(id)}/ai-assist`,
+      {
+        method: "POST",
+        body: JSON.stringify({ action, ...(targetLanguage ? { targetLanguage } : {}) }),
+      },
+    );
+  },
+
+  exportDoc(id: string, format: ExportFormat): Promise<{ data: ExportResult }> {
+    return apiFetch<{ data: ExportResult }>(
+      `/v1/documents/${encodeURIComponent(id)}/export`,
+      {
+        method: "POST",
+        body: JSON.stringify({ format }),
+      },
+    );
+  },
+
+  listFolders(): Promise<{ data: DocumentFolder[] }> {
+    return apiFetch<{ data: DocumentFolder[] }>("/v1/documents/folders");
+  },
+
+  createFolder(name: string): Promise<{ data: DocumentFolder }> {
+    return apiFetch<{ data: DocumentFolder }>("/v1/documents/folders", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  deleteFolder(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/documents/folders/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  listVersions(id: string): Promise<{ data: DocumentVersion[] }> {
+    return apiFetch<{ data: DocumentVersion[] }>(
+      `/v1/documents/${encodeURIComponent(id)}/versions`,
+    );
+  },
+};
+
+// ─── A/B Tests ────────────────────────────────────────────────────────────────
+
+export interface ABTestVariant {
+  id: string;
+  subject?: string;
+  htmlBody?: string;
+  textBody?: string;
+  percentage: number;
+  metrics?: {
+    sent: number;
+    opened: number;
+    clicked: number;
+    replied: number;
+    openRate: number;
+    clickRate: number;
+  };
+}
+
+export interface ABTest {
+  id: string;
+  name: string;
+  status: "draft" | "running" | "completed" | "cancelled";
+  variants: ABTestVariant[];
+  winnerMetric: "open_rate" | "click_rate" | "reply_rate";
+  winnerVariantId?: string;
+  recipientCount?: number;
+  results?: {
+    totalSent: number;
+    winner?: string;
+    confidence?: number;
+    variants: Record<
+      string,
+      {
+        sent: number;
+        opened: number;
+        clicked: number;
+        replied: number;
+        openRate: number;
+        clickRate: number;
+      }
+    >;
+  };
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+}
+
+export const abTestsApi = {
+  list(params?: { limit?: number; cursor?: string }): Promise<{
+    data: ABTest[];
+    cursor: string | null;
+    hasMore: boolean;
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<{ data: ABTest[]; cursor: string | null; hasMore: boolean }>(
+      `/v1/ab-tests${query ? `?${query}` : ""}`,
+    );
+  },
+
+  get(id: string): Promise<{ data: ABTest }> {
+    return apiFetch<{ data: ABTest }>(`/v1/ab-tests/${encodeURIComponent(id)}`);
+  },
+
+  create(payload: {
+    name: string;
+    variants: { subject?: string; htmlBody?: string; textBody?: string; percentage: number }[];
+    winnerMetric?: "open_rate" | "click_rate" | "reply_rate";
+  }): Promise<{ data: ABTest }> {
+    return apiFetch<{ data: ABTest }>("/v1/ab-tests", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  start(id: string): Promise<{ data: { id: string; status: string; startedAt: string } }> {
+    return apiFetch<{ data: { id: string; status: string; startedAt: string } }>(
+      `/v1/ab-tests/${encodeURIComponent(id)}/start`,
+      { method: "POST" },
+    );
+  },
+
+  complete(
+    id: string,
+    winnerId?: string,
+  ): Promise<{ data: { id: string; status: string; winner: string | null; completedAt: string } }> {
+    return apiFetch<{
+      data: { id: string; status: string; winner: string | null; completedAt: string };
+    }>(`/v1/ab-tests/${encodeURIComponent(id)}/complete`, {
+      method: "POST",
+      body: JSON.stringify(winnerId !== undefined ? { winnerId } : {}),
+    });
+  },
+
+  remove(id: string): Promise<{ deleted: boolean; id: string }> {
+    return apiFetch<{ deleted: boolean; id: string }>(
+      `/v1/ab-tests/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    );
+  },
+};
+
+// ─── Auto-Responder / Out-of-Office ──────────────────────────────────────────
+
+export type AutoResponderMode = "off" | "vacation" | "busy" | "custom";
+
+export interface AutoResponder {
+  id: string;
+  mode: AutoResponderMode;
+  subject: string;
+  htmlBody?: string;
+  textBody?: string;
+  isActive: boolean;
+  schedule?: {
+    startDate: string;
+    endDate?: string;
+    timezone: string;
+  };
+  rules?: {
+    respondToContacts: boolean;
+    respondToUnknown: boolean;
+    excludeDomains?: string[];
+    excludeLabels?: string[];
+    maxResponsesPerSender?: number;
+    aiSmartReply: boolean;
+  };
+  createdAt: string;
+}
+
+export interface AutoResponderLogEntry {
+  id: string;
+  toEmail: string;
+  subject: string;
+  sentAt: string;
+}
+
+export const autoResponderApi = {
+  getConfig(): Promise<{ data: AutoResponder | null }> {
+    return apiFetch<{ data: AutoResponder | null }>("/v1/auto-responder");
+  },
+
+  upsert(data: {
+    mode: AutoResponderMode;
+    subject: string;
+    htmlBody?: string;
+    textBody?: string;
+    schedule?: { startDate: string; endDate?: string; timezone: string };
+    rules?: {
+      respondToContacts: boolean;
+      respondToUnknown: boolean;
+      excludeDomains?: string[];
+      excludeLabels?: string[];
+      maxResponsesPerSender?: number;
+      aiSmartReply: boolean;
+    };
+  }): Promise<{ data: { id: string; mode: string; subject: string } }> {
+    return apiFetch<{ data: { id: string; mode: string; subject: string } }>(
+      "/v1/auto-responder",
+      { method: "PUT", body: JSON.stringify(data) },
+    );
+  },
+
+  activate(): Promise<{ data: { id: string; isActive: boolean } }> {
+    return apiFetch<{ data: { id: string; isActive: boolean } }>(
+      "/v1/auto-responder/activate",
+      { method: "POST" },
+    );
+  },
+
+  deactivate(): Promise<{ data: { id: string; isActive: boolean } }> {
+    return apiFetch<{ data: { id: string; isActive: boolean } }>(
+      "/v1/auto-responder/deactivate",
+      { method: "POST" },
+    );
+  },
+
+  getLog(params?: { limit?: number; cursor?: string }): Promise<{
+    data: AutoResponderLogEntry[];
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const query = qs.toString();
+    return apiFetch<{ data: AutoResponderLogEntry[] }>(
+      `/v1/auto-responder/log${query ? `?${query}` : ""}`,
+    );
+  },
+
+  preview(sampleEmailBody: string): Promise<{ reply: string }> {
+    return apiFetch<{ reply: string }>("/v1/auto-responder/preview", {
+      method: "POST",
+      body: JSON.stringify({ sampleEmailBody }),
+    });
   },
 };

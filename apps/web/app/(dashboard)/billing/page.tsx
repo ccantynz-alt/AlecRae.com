@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getApiBase } from "../../../lib/api-base";
+import { getAccessToken, refreshSession, redirectToLogin } from "../../../lib/auth-token";
 import {
   Box,
   Text,
@@ -129,13 +130,8 @@ const PLAN_META: PlanMeta[] = [
 
 const API_BASE = getApiBase();
 
-function getToken(): string {
-  if (typeof window === "undefined") return "";
-  return localStorage.getItem("alecrae_api_key") ?? "";
-}
-
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getToken();
+async function apiFetch<T>(path: string, options: RequestInit = {}, retried = false): Promise<T> {
+  const token = getAccessToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -144,6 +140,11 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
       ...(options.headers ?? {}),
     },
   });
+  if (res.status === 401 && !retried) {
+    const fresh = await refreshSession();
+    if (fresh) return apiFetch<T>(path, options, true);
+    redirectToLogin();
+  }
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as {
       error?: { message?: string };

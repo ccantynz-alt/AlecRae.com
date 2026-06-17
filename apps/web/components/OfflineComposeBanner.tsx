@@ -6,11 +6,10 @@ import { useAlecRaeReducedMotion } from "../lib/animations";
 
 export function OfflineComposeBanner(): React.ReactNode {
   const reduced = useAlecRaeReducedMotion();
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState<boolean | null>(null);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
     setIsOnline(navigator.onLine);
     const handleOnline = (): void => { setIsOnline(true); setDismissed(false); };
     const handleOffline = (): void => { setIsOnline(false); setDismissed(false); };
@@ -22,7 +21,7 @@ export function OfflineComposeBanner(): React.ReactNode {
     };
   }, []);
 
-  if (isOnline || dismissed) return null;
+  if (isOnline !== false || dismissed) return null;
 
   return (
     <AnimatePresence>
@@ -53,10 +52,9 @@ export function OfflineComposeBanner(): React.ReactNode {
 }
 
 export function useOnlineStatus(): boolean {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(true); // pessimistic client-only hook, not used in SSR
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
     setIsOnline(navigator.onLine);
     const handleOnline = (): void => setIsOnline(true);
     const handleOffline = (): void => setIsOnline(false);

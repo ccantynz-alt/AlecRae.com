@@ -27,6 +27,12 @@ import {
   type ImportJob,
   type ImportJobProgress,
 } from "@alecrae/db";
+import { parseEmail } from "@alecrae/email-parser";
+import {
+  storeReceivedEmail,
+  parsedToReceived,
+  splitMboxMessages,
+} from "../lib/received-email-store.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -229,7 +235,7 @@ importRouter.post(
 
     // Read file and start parsing
     const content = await file.text();
-    runWorker(job.id, () => startMboxImport(job.id, content));
+    runWorker(job.id, () => startMboxImport(job.id, auth.accountId, content));
 
     return c.json({
       data: {
@@ -262,12 +268,18 @@ importRouter.post(
       skipped: 0,
     };
 
-    // Process EML files (synchronously — small uploads)
+    // Process EML files (synchronously — small uploads). Each .eml is a raw
+    // RFC 5322 message: parse it and store it in the inbox (deduped).
     for (const file of files) {
       if (file instanceof File && file.name.endsWith(".eml")) {
         try {
-          // In production: parse EML with @alecrae/email-parser and store
-          progress.processed++;
+          const raw = await file.text();
+          const parsed = parseEmail(raw);
+          const { stored } = await storeReceivedEmail(
+            parsedToReceived(parsed, auth.accountId, "eml"),
+          );
+          if (stored) progress.processed++;
+          else progress.skipped++;
         } catch {
           progress.failed++;
         }
@@ -360,43 +372,61 @@ importRouter.get(
 
 // ─── Import Workers (simplified — production: BullMQ) ────────────────────────
 
+// Gmail/Outlook history backfill rides on the sync engine, whose message
+// PERSISTENCE is still a stub (see known issue: fetchAndStoreGmailMessage logs
+// instead of writing). Rather than fake-complete an import that stores nothing,
+// these fail honestly until the engine persists. File-based import (MBOX/EML)
+// is fully implemented below and is the supported path today.
+const PROVIDER_BACKFILL_UNAVAILABLE =
+  "Direct mailbox history import isn't available yet. File-based import (MBOX/EML) works today, " +
+  "and your connected account will sync going forward.";
+
 async function startGmailImport(
   jobId: string,
   _options: z.infer<typeof GmailImportSchema>,
 ): Promise<void> {
-  await updateJob(jobId, { status: "running" });
-  // In production: use the sync engine to batch-fetch all messages
-  // from the connected Gmail account via API, paginating through results.
-  // Each message gets stored in our DB + indexed for search.
-  await updateJob(jobId, { status: "completed", completedAt: new Date() });
+  await updateJob(jobId, {
+    status: "failed",
+    error: PROVIDER_BACKFILL_UNAVAILABLE,
+    completedAt: new Date(),
+  });
 }
 
 async function startOutlookImport(
   jobId: string,
   _options: z.infer<typeof OutlookImportSchema>,
 ): Promise<void> {
-  await updateJob(jobId, { status: "running" });
-  // Similar to Gmail: use Graph API delta queries to fetch all messages
-  await updateJob(jobId, { status: "completed", completedAt: new Date() });
+  await updateJob(jobId, {
+    status: "failed",
+    error: PROVIDER_BACKFILL_UNAVAILABLE,
+    completedAt: new Date(),
+  });
 }
 
-async function startMboxImport(jobId: string, content: string): Promise<void> {
+async function startMboxImport(
+  jobId: string,
+  accountId: string,
+  content: string,
+): Promise<void> {
   await updateJob(jobId, { status: "running" });
 
-  // Simple MBOX parser: messages are separated by lines starting with "From "
-  const messages = content.split(/^From /gm).filter(Boolean);
+  const rawMessages = splitMboxMessages(content);
   const progress: ImportJobProgress = {
-    total: messages.length,
+    total: rawMessages.length,
     processed: 0,
     failed: 0,
     skipped: 0,
   };
+  await updateJob(jobId, { progress });
 
-  for (const _msg of messages) {
+  for (const raw of rawMessages) {
     try {
-      // In production: parse each message with @alecrae/email-parser
-      // and store in DB + index for search
-      progress.processed++;
+      const parsed = parseEmail(raw);
+      const { stored } = await storeReceivedEmail(
+        parsedToReceived(parsed, accountId, "mbox"),
+      );
+      if (stored) progress.processed++;
+      else progress.skipped++; // already imported (deduped by Message-ID)
     } catch {
       progress.failed++;
     }

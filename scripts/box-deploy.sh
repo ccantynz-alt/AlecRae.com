@@ -54,6 +54,11 @@ bun run --cwd apps/web build
 step "5/6 restart services"
 sudo systemctl restart "$API_UNIT"
 sudo systemctl restart "$WEB_UNIT"
+# Restart MTA worker if it exists (optional — only present after mta-box-setup.md is followed)
+if systemctl is-enabled alecrae-mta &>/dev/null; then
+  sudo systemctl restart alecrae-mta
+  echo "alecrae-mta restarted"
+fi
 
 step "6/6 health checks"
 sleep 3

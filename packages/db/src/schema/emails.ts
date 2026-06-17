@@ -53,9 +53,13 @@ export const emails = pgTable(
     accountId: text("account_id")
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
-    domainId: text("domain_id")
-      .notNull()
-      .references(() => domains.id, { onDelete: "restrict" }),
+    // Nullable: mail synced/imported from a connected EXTERNAL account
+    // (Gmail/Outlook/MBOX/EML) is addressed to an external mailbox, not one of
+    // our hosted sending domains, so it has no domainId. Mail sent or received
+    // through a hosted domain still sets it.
+    domainId: text("domain_id").references(() => domains.id, {
+      onDelete: "restrict",
+    }),
 
     // Envelope
     messageId: text("message_id").notNull(),
@@ -85,6 +89,11 @@ export const emails = pgTable(
 
     // Status
     status: emailStatusEnum("status").notNull().default("queued"),
+
+    /** Provenance of the message. "outbound" for mail we send, "inbound" for
+     *  mail received via our MTA, or an import/sync source for connected
+     *  external accounts ("gmail"/"outlook"/"mbox"/"eml"). Null on legacy rows. */
+    source: text("source"),
 
     // Metadata
     tags: jsonb("tags").notNull().$type<string[]>().default([]),

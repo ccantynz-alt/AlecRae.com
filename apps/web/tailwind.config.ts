@@ -85,6 +85,7 @@ const config: Config = {
         "fade-in": "fadeIn 0.2s ease-out",
         "slide-up": "slideUp 0.3s ease-out",
         "slide-down": "slideDown 0.3s ease-out",
+        "slide": "indeterminateSlide 1.5s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -98,6 +99,12 @@ const config: Config = {
         slideDown: {
           "0%": { opacity: "0", transform: "translateY(-8px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        /** Indeterminate progress bar: a 40%-wide bar sweeps left-to-right. */
+        indeterminateSlide: {
+          "0%": { marginLeft: "-40%", width: "40%" },
+          "50%": { marginLeft: "60%", width: "40%" },
+          "100%": { marginLeft: "110%", width: "40%" },
         },
       },
     },

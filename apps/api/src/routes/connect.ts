@@ -48,10 +48,18 @@ const ImapConnectSchema = z.object({
 
 const connect = new Hono();
 
-// GET /v1/connect/gmail — Start Gmail OAuth
+// GET /v1/connect/gmail — Returns the Google OAuth consent URL.
+//
+// Returns JSON (not a redirect) so the web client can call it with an
+// authenticated fetch and then navigate. A top-level browser redirect to this
+// endpoint can't carry a Bearer header, so the previous redirect form always
+// 401'd. The signed `state` carries the user identity through to the public
+// callback, so no AlecRae token is ever placed in a URL. Scope is the
+// satisfiable `account:manage` (the old `accounts:write` was never granted to
+// any token, so the route always 403'd).
 connect.get(
   "/gmail",
-  requireScope("accounts:write"),
+  requireScope("account:manage"),
   async (c) => {
     const auth = c.get("auth");
     const state = await signState({
@@ -59,14 +67,14 @@ connect.get(
       provider: "gmail",
     });
 
-    return c.redirect(getGoogleAuthUrl(state));
+    return c.json({ data: { url: getGoogleAuthUrl(state) } });
   },
 );
 
-// GET /v1/connect/outlook — Start Outlook OAuth
+// GET /v1/connect/outlook — Returns the Microsoft OAuth consent URL (see /gmail).
 connect.get(
   "/outlook",
-  requireScope("accounts:write"),
+  requireScope("account:manage"),
   async (c) => {
     const auth = c.get("auth");
     const state = await signState({
@@ -74,7 +82,7 @@ connect.get(
       provider: "outlook",
     });
 
-    return c.redirect(getMicrosoftAuthUrl(state));
+    return c.json({ data: { url: getMicrosoftAuthUrl(state) } });
   },
 );
 

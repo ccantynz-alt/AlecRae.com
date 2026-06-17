@@ -618,40 +618,48 @@ async function handleSend(c: Context) {
     }
   }
 
-  await queue.add(
-    id,
-    {
-      email: {
-        id,
-        accountId: auth.accountId,
-        messageId,
-        from: input.from.email,
-        to: allRecipients,
-        rawMessage,
-        priority: 3 as const,
-        attempts: 0,
-        maxAttempts: 8,
-        scheduledAt: input.scheduledAt
-          ? new Date(input.scheduledAt)
-          : new Date(),
-        createdAt: now,
-        domain: senderDomain,
-        metadata: {
-          domainId: domainRecord.id,
-          tags: input.tags ?? [],
+  try {
+    await queue.add(
+      id,
+      {
+        email: {
+          id,
+          accountId: auth.accountId,
+          messageId,
+          from: input.from.email,
+          to: allRecipients,
+          rawMessage,
+          priority: 3 as const,
+          attempts: 0,
+          maxAttempts: 8,
+          scheduledAt: input.scheduledAt
+            ? new Date(input.scheduledAt)
+            : new Date(),
+          createdAt: now,
+          domain: senderDomain,
+          metadata: {
+            domainId: domainRecord.id,
+            tags: input.tags ?? [],
+          },
         },
+        addedAt: now.toISOString(),
       },
-      addedAt: now.toISOString(),
-    },
-    {
-      priority: 3,
-      attempts: 8,
-      backoff: { type: "exponential", delay: 60_000 },
-      removeOnComplete: true,
-      removeOnFail: false,
-      ...(delay !== undefined ? { delay } : {}),
-    },
-  );
+      {
+        priority: 3,
+        attempts: 8,
+        backoff: { type: "exponential", delay: 60_000 },
+        removeOnComplete: true,
+        removeOnFail: false,
+        ...(delay !== undefined ? { delay } : {}),
+      },
+    );
+  } catch (queueErr) {
+    console.error("[messages] Failed to enqueue email — Redis unavailable?", queueErr);
+    return c.json(
+      { error: "Email saved but delivery queue unavailable. The MTA worker may not be running. Check REDIS_URL and alecrae-mta service." },
+      503,
+    );
+  }
 
   // ── 6b. Record send against warm-up counter (fire-and-forget) ────
   warmupOrchestrator.recordSend(domainRecord.id).catch(() => { /* fire-and-forget */ });

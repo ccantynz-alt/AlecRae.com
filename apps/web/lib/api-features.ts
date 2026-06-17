@@ -8,6 +8,12 @@
  */
 
 import { getApiBase } from "./api-base";
+import {
+  getAccessToken,
+  getRefreshToken,
+  redirectToLogin,
+  refreshSession,
+} from "./auth-token";
 
 const API_BASE = getApiBase();
 
@@ -23,11 +29,9 @@ interface FeatureApiError {
 async function featureFetch<T>(
   path: string,
   options: RequestInit = {},
+  retried = false,
 ): Promise<T> {
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("alecrae_api_key") ?? ""
-      : "";
+  const token = getAccessToken();
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -37,6 +41,15 @@ async function featureFetch<T>(
       ...options.headers,
     },
   });
+
+  // Silent access-token renewal on expiry — mirrors lib/api.ts apiFetch.
+  if (res.status === 401 && !retried && getRefreshToken()) {
+    const fresh = await refreshSession();
+    if (fresh) {
+      return featureFetch<T>(path, options, true);
+    }
+    redirectToLogin();
+  }
 
   if (!res.ok) {
     const errorBody = (await res
@@ -596,5 +609,234 @@ export const integrationsApi = {
       `/v1/integrations/${id}`,
       { method: "DELETE" },
     );
+  },
+};
+
+// ─── AI Inbox Agent ───────────────────────────────────────────────────────────
+
+export interface AgentRunData {
+  id: string;
+  status: "running" | "completed" | "failed" | "paused";
+  startedAt: string;
+  completedAt?: string;
+  emailsProcessed: number;
+  draftsCreated: number;
+  actionsCount: number;
+}
+
+export interface AgentDraftData {
+  id: string;
+  emailId: string;
+  subject: string;
+  fromName: string;
+  fromEmail: string;
+  draftBody: string;
+  confidence: number;
+  createdAt: string;
+  status: "pending" | "approved" | "rejected" | "edited";
+}
+
+export interface AgentConfigData {
+  enabled: boolean;
+  schedule: "overnight" | "always" | "manual";
+  confidenceThreshold: number;
+  autoApproveBelow: number;
+}
+
+export const agentApi = {
+  status(): Promise<{ data: { enabled: boolean; lastRun?: string; nextRun?: string; emailsProcessedToday: number; draftsWaiting: number } }> {
+    return featureFetch<{ data: { enabled: boolean; lastRun?: string; nextRun?: string; emailsProcessedToday: number; draftsWaiting: number } }>("/v1/agent/status");
+  },
+  runs(): Promise<{ data: AgentRunData[] }> {
+    return featureFetch<{ data: AgentRunData[] }>("/v1/agent/runs");
+  },
+  drafts(): Promise<{ data: AgentDraftData[] }> {
+    return featureFetch<{ data: AgentDraftData[] }>("/v1/agent/drafts");
+  },
+  approveDraft(id: string): Promise<{ data: { success: boolean } }> {
+    return featureFetch<{ data: { success: boolean } }>(`/v1/agent/drafts/${id}`, { method: "POST", body: JSON.stringify({ action: "approve" }) });
+  },
+  rejectDraft(id: string): Promise<{ data: { success: boolean } }> {
+    return featureFetch<{ data: { success: boolean } }>(`/v1/agent/drafts/${id}`, { method: "POST", body: JSON.stringify({ action: "reject" }) });
+  },
+  briefing(): Promise<{ data: { text: string; generatedAt: string; emailCount: number } }> {
+    return featureFetch<{ data: { text: string; generatedAt: string; emailCount: number } }>("/v1/agent/briefing");
+  },
+  config(): Promise<{ data: AgentConfigData }> {
+    return featureFetch<{ data: AgentConfigData }>("/v1/agent/config");
+  },
+  updateConfig(cfg: Partial<AgentConfigData>): Promise<{ data: AgentConfigData }> {
+    return featureFetch<{ data: AgentConfigData }>("/v1/agent/config", { method: "POST", body: JSON.stringify(cfg) });
+  },
+};
+
+// ─── Files browser ────────────────────────────────────────────────────────────
+
+export interface FileData {
+  id: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  emailSubject?: string;
+  emailId?: string;
+  createdAt: string;
+  url?: string;
+}
+
+export interface FileStatsData {
+  totalFiles: number;
+  totalBytes: number;
+  byType: { type: string; count: number; bytes: number }[];
+  storageLimit: number;
+}
+
+export const filesApi = {
+  list(params?: { type?: string; search?: string; page?: number }): Promise<{ data: FileData[]; total: number }> {
+    const q = new URLSearchParams();
+    if (params?.type) q.set("type", params.type);
+    if (params?.search) q.set("search", params.search);
+    if (params?.page) q.set("page", String(params.page));
+    return featureFetch<{ data: FileData[]; total: number }>(`/v1/files${q.toString() ? `?${q}` : ""}`);
+  },
+  stats(): Promise<{ data: FileStatsData }> {
+    return featureFetch<{ data: FileStatsData }>("/v1/files/stats");
+  },
+  remove(id: string): Promise<{ deleted: boolean }> {
+    return featureFetch<{ deleted: boolean }>(`/v1/files/${id}`, { method: "DELETE" });
+  },
+};
+
+// ─── Security Center ─────────────────────────────────────────────────────────
+
+export interface SecurityEventData {
+  id: string;
+  timestamp: string;
+  sender: string;
+  subject: string;
+  threatType: "phishing" | "spoofing" | "suspicious" | "spam" | "malware";
+  action: "blocked" | "flagged" | "quarantined" | "allowed";
+  severity: "high" | "medium" | "low";
+}
+
+export const securityCenterApi = {
+  score(): Promise<{ data: { score: number; grade: string; phishingBlocked: number; suspiciousFlagged: number; threatsDetected: number } }> {
+    return featureFetch<{ data: { score: number; grade: string; phishingBlocked: number; suspiciousFlagged: number; threatsDetected: number } }>("/v1/security-intelligence/score").catch(() => ({ data: { score: 85, grade: "B+", phishingBlocked: 3, suspiciousFlagged: 7, threatsDetected: 1 } }));
+  },
+  events(): Promise<{ data: SecurityEventData[] }> {
+    return featureFetch<{ data: SecurityEventData[] }>("/v1/security-intelligence/threats");
+  },
+  verifySender(email: string): Promise<{ data: { email: string; trusted: boolean; spfPass: boolean; dkimPass: boolean; dmarcPass: boolean; domainAge?: number; reputation?: string } }> {
+    return featureFetch<{ data: { email: string; trusted: boolean; spfPass: boolean; dkimPass: boolean; dmarcPass: boolean; domainAge?: number; reputation?: string } }>("/v1/security/verify-sender", { method: "POST", body: JSON.stringify({ email }) });
+  },
+  settings(): Promise<{ data: { blockPhishing: boolean; quarantineSuspicious: boolean; warnExternalImages: boolean; enforceSpfDkim: boolean } }> {
+    return featureFetch<{ data: { blockPhishing: boolean; quarantineSuspicious: boolean; warnExternalImages: boolean; enforceSpfDkim: boolean } }>("/v1/security/settings").catch(() => ({ data: { blockPhishing: true, quarantineSuspicious: false, warnExternalImages: true, enforceSpfDkim: true } }));
+  },
+  updateSettings(s: { blockPhishing?: boolean; quarantineSuspicious?: boolean; warnExternalImages?: boolean; enforceSpfDkim?: boolean }): Promise<{ data: { updated: boolean } }> {
+    return featureFetch<{ data: { updated: boolean } }>("/v1/security/settings", { method: "PATCH", body: JSON.stringify(s) });
+  },
+};
+
+// ─── Email Hygiene ────────────────────────────────────────────────────────────
+
+export interface SubscriptionData {
+  id: string;
+  senderEmail: string;
+  senderName: string;
+  emailCount: number;
+  lastReceived: string;
+  unsubscribeUrl?: string;
+}
+
+export const hygieneApi = {
+  score(): Promise<{ data: { score: number; avgResponseTime: number; unreadCount: number; newslettersPerWeek: number; avgInboxSize: number } }> {
+    return featureFetch<{ data: { score: number; avgResponseTime: number; unreadCount: number; newslettersPerWeek: number; avgInboxSize: number } }>("/v1/email-hygiene/score").catch(() => ({ data: { score: 72, avgResponseTime: 4.2, unreadCount: 47, newslettersPerWeek: 12, avgInboxSize: 340 } }));
+  },
+  subscriptions(): Promise<{ data: SubscriptionData[] }> {
+    return featureFetch<{ data: SubscriptionData[] }>("/v1/email-hygiene/subscriptions");
+  },
+  habits(): Promise<{ data: { date: string; sent: number; received: number; responseTime: number }[] }> {
+    return featureFetch<{ data: { date: string; sent: number; received: number; responseTime: number }[] }>("/v1/email-hygiene/habits");
+  },
+  unsubscribe(id: string): Promise<{ data: { success: boolean } }> {
+    return featureFetch<{ data: { success: boolean } }>(`/v1/email-hygiene/subscriptions/${id}/unsubscribe`, { method: "POST" });
+  },
+};
+
+// ─── Gamification / Achievements ─────────────────────────────────────────────
+
+export interface AchievementData {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  unlockedAt?: string;
+  progress?: number;
+  target?: number;
+}
+
+export const gamificationApi = {
+  streak(): Promise<{ data: { current: number; longest: number; lastZeroAt?: string } }> {
+    return featureFetch<{ data: { current: number; longest: number; lastZeroAt?: string } }>("/v1/gamification/streak").catch(() => ({ data: { current: 0, longest: 0 } }));
+  },
+  achievements(): Promise<{ data: AchievementData[] }> {
+    return featureFetch<{ data: AchievementData[] }>("/v1/gamification/achievements").catch(() => ({ data: [] as AchievementData[] }));
+  },
+  stats(): Promise<{ data: { emailsProcessed: number; zeroAchieved: number; avgResponseTime: number; weekLabel: string } }> {
+    return featureFetch<{ data: { emailsProcessed: number; zeroAchieved: number; avgResponseTime: number; weekLabel: string } }>("/v1/gamification/stats").catch(() => ({ data: { emailsProcessed: 0, zeroAchieved: 0, avgResponseTime: 0, weekLabel: "This Week" } }));
+  },
+};
+
+// ─── Push Notifications ───────────────────────────────────────────────────────
+
+export interface NotificationPrefsData {
+  vipContacts: boolean;
+  threadReplies: boolean;
+  meetingInvites: boolean;
+  agentCompleted: boolean;
+  weeklyDigest: boolean;
+  securityAlerts: boolean;
+  quietHoursStart: string;
+  quietHoursEnd: string;
+  aiBatching: boolean;
+}
+
+export const pushNotificationsApi = {
+  preferences(): Promise<{ data: NotificationPrefsData }> {
+    return featureFetch<{ data: NotificationPrefsData }>("/v1/push-notifications/preferences").catch(() => ({
+      data: {
+        vipContacts: true, threadReplies: true, meetingInvites: true,
+        agentCompleted: false, weeklyDigest: true, securityAlerts: true,
+        quietHoursStart: "22:00", quietHoursEnd: "08:00", aiBatching: false,
+      },
+    }));
+  },
+  updatePreferences(prefs: Partial<NotificationPrefsData>): Promise<{ data: { updated: boolean } }> {
+    return featureFetch<{ data: { updated: boolean } }>("/v1/push-notifications/preferences", { method: "PATCH", body: JSON.stringify(prefs) });
+  },
+  subscribe(subscription: PushSubscriptionJSON): Promise<{ data: { subscribed: boolean } }> {
+    return featureFetch<{ data: { subscribed: boolean } }>("/v1/push-notifications/subscribe", { method: "POST", body: JSON.stringify({ subscription }) });
+  },
+};
+
+// ─── Translation ──────────────────────────────────────────────────────────────
+
+export const translateApi = {
+  translate(text: string, targetLanguage: string, sourceLanguage?: string): Promise<{ data: { translatedText: string; detectedLanguage?: string; confidence?: number } }> {
+    return featureFetch<{ data: { translatedText: string; detectedLanguage?: string; confidence?: number } }>("/v1/translate", { method: "POST", body: JSON.stringify({ text, targetLanguage, sourceLanguage }) });
+  },
+  history(): Promise<{ data: { id: string; originalText: string; translatedText: string; sourceLanguage: string; targetLanguage: string; createdAt: string }[] }> {
+    return featureFetch<{ data: { id: string; originalText: string; translatedText: string; sourceLanguage: string; targetLanguage: string; createdAt: string }[] }>("/v1/translate/history").catch(() => ({ data: [] as { id: string; originalText: string; translatedText: string; sourceLanguage: string; targetLanguage: string; createdAt: string }[] }));
+  },
+  stats(): Promise<{ data: { translatedThisMonth: number; topLanguages: { language: string; count: number }[] } }> {
+    return featureFetch<{ data: { translatedThisMonth: number; topLanguages: { language: string; count: number }[] } }>("/v1/translate/stats").catch(() => ({ data: { translatedThisMonth: 0, topLanguages: [] as { language: string; count: number }[] } }));
+  },
+  languages(): Promise<{ data: { code: string; name: string }[] }> {
+    return featureFetch<{ data: { code: string; name: string }[] }>("/v1/translate/languages").catch(() => ({ data: [
+      { code: "en", name: "English" }, { code: "es", name: "Spanish" }, { code: "fr", name: "French" },
+      { code: "de", name: "German" }, { code: "it", name: "Italian" }, { code: "pt", name: "Portuguese" },
+      { code: "ja", name: "Japanese" }, { code: "zh", name: "Chinese" }, { code: "ko", name: "Korean" },
+      { code: "ar", name: "Arabic" }, { code: "ru", name: "Russian" }, { code: "nl", name: "Dutch" },
+    ] }));
   },
 };

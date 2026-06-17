@@ -22,6 +22,13 @@
       "when": 1781177896919,
       "tag": "0002_goofy_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781328721917,
+      "tag": "0003_lucky_squirrel_girl",
+      "breakpoints": true
     }
   ]
 }
