@@ -164,7 +164,7 @@ export default function AnalyticsPage(): React.ReactNode {
             data={delivChart.length > 0 ? delivChart : [{ label: "—", value: 0 }]}
             chartType="area"
             height={220}
-            formatValue={(v) => `${v}%`}
+            formatValue={(v: number) => `${v}%`}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
@@ -174,7 +174,7 @@ export default function AnalyticsPage(): React.ReactNode {
             data={hourlyChart.length > 0 ? hourlyChart : [{ label: "—", value: 0 }]}
             chartType="bar"
             height={220}
-            formatValue={(v) => v.toLocaleString()}
+            formatValue={(v: number) => v.toLocaleString()}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
@@ -184,7 +184,7 @@ export default function AnalyticsPage(): React.ReactNode {
             data={volumeChart.length > 0 ? volumeChart : [{ label: "—", value: 0 }]}
             chartType="bar"
             height={220}
-            formatValue={(v) => v.toLocaleString()}
+            formatValue={(v: number) => v.toLocaleString()}
           />
         </motion.div>
         <motion.div variants={itemVariants}>
@@ -194,7 +194,7 @@ export default function AnalyticsPage(): React.ReactNode {
             data={delivChart.length > 0 ? delivChart.map((d) => ({ label: d.label, value: Math.max(0, 100 - d.value) })) : [{ label: "—", value: 0 }]}
             chartType="line"
             height={220}
-            formatValue={(v) => `${v}%`}
+            formatValue={(v: number) => `${v}%`}
           />
         </motion.div>
       </motion.div>

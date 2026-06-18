@@ -202,7 +202,7 @@ function AddDomainForm({
               variant="text"
               placeholder="mail.yourdomain.com"
               value={domain}
-              onChange={(e) => setDomain(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDomain(e.target.value)}
             />
           </Box>
           <Button

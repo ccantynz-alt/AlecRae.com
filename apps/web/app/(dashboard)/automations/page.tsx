@@ -209,8 +209,8 @@ function RulesSection(): React.ReactNode {
                 variant="text"
                 placeholder="e.g. Move emails from billing@ to the Finance folder"
                 value={instruction}
-                onChange={(e) => setInstruction(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInstruction(e.target.value)}
+                onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === "Enter") void handleCreateFromText();
                 }}
               />
@@ -466,7 +466,7 @@ function AutoResponderSection(): React.ReactNode {
               variant="text"
               placeholder="e.g. Out of office until June 20"
               value={subject}
-              onChange={(e) => setSubject(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSubject(e.target.value)}
             />
             <Box>
               <Text variant="body-sm" className="mb-1 font-medium text-content">
@@ -477,7 +477,7 @@ function AutoResponderSection(): React.ReactNode {
                 rows={5}
                 placeholder="I'm away until June 20 and will reply when I'm back."
                 value={textBody}
-                onChange={(e) => setTextBody(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setTextBody(e.target.value)}
                 aria-label="Reply message"
               />
             </Box>
@@ -872,7 +872,7 @@ function CreateWorkflowForm({
             variant="text"
             placeholder="e.g. Label invoices"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
           />
           <Box className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Box>
@@ -882,7 +882,7 @@ function CreateWorkflowForm({
               <select
                 className="w-full rounded-md border border-border bg-surface p-2.5 text-sm text-content focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 value={triggerType}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                   setTriggerType(e.target.value as (typeof TRIGGER_TYPES)[number])
                 }
                 aria-label="Trigger type"
@@ -899,7 +899,7 @@ function CreateWorkflowForm({
               variant="text"
               placeholder="e.g. billing@vendor.com"
               value={triggerFrom}
-              onChange={(e) => setTriggerFrom(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTriggerFrom(e.target.value)}
             />
           </Box>
           <Box className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -910,7 +910,7 @@ function CreateWorkflowForm({
               <select
                 className="w-full rounded-md border border-border bg-surface p-2.5 text-sm text-content focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 value={actionType}
-                onChange={(e) =>
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
                   setActionType(e.target.value as (typeof ACTION_TYPES)[number])
                 }
                 aria-label="Action type"
@@ -927,7 +927,7 @@ function CreateWorkflowForm({
               variant="text"
               placeholder='e.g. "Invoices" for label/move'
               value={actionValue}
-              onChange={(e) => setActionValue(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setActionValue(e.target.value)}
             />
           </Box>
           <Box className="flex items-center gap-3">

@@ -266,7 +266,7 @@ export default function ContactsPage(): React.ReactNode {
                   <Text variant="body-sm" className="font-medium text-content mb-2">Notes</Text>
                   <textarea
                     value={editNotes}
-                    onChange={(e) => setEditNotes(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditNotes(e.target.value)}
                     placeholder="Add notes about this contact..."
                     rows={4}
                     className="w-full resize-none rounded-lg border border-border bg-surface p-3 text-body-md text-content placeholder:text-content-tertiary focus:outline-none focus:ring-2 focus:ring-border-focus"

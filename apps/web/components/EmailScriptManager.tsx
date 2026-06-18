@@ -475,9 +475,9 @@ export default function EmailScriptManager(): React.ReactElement {
         saving={saving}
         testing={testing}
         testResult={testResult}
-        onSave={(data) => void handleSave(data)}
-        onTest={(data) => void handleTest(data)}
-        onToggle={(_active) => {
+        onSave={(data: ScriptData) => void handleSave(data)}
+        onTest={(data: ScriptData) => void handleTest(data)}
+        onToggle={(_active: boolean) => {
           if (selectedScript) {
             void handleToggle(selectedScript.id);
           }

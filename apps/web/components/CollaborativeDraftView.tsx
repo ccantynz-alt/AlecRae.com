@@ -182,7 +182,7 @@ export function CollaborativeDraftView({
             onInvite={handleInvite}
             onRemoveCollaborator={handleRemoveCollaborator}
             onLoadHistory={handleLoadHistory}
-            onError={(msg) => setError(msg)}
+            onError={(msg: string) => setError(msg)}
             onClose={() => setShowPanel(false)}
             loading={historyLoading}
           />

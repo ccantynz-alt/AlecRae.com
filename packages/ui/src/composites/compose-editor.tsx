@@ -44,11 +44,11 @@ export interface ComposeEditorProps extends HTMLAttributes<HTMLDivElement> {
   onSaveDraft?: () => void;
   onDiscard?: () => void;
   onApplySuggestion?: (suggestion: AISuggestion) => void;
+  /** Fires on every body keystroke — used to drive grammar checking. */
+  onBodyChange?: (text: string) => void;
   showAIPanel?: boolean;
   /** Callback to fetch AI calendar slot suggestions. When provided, enables B7 feature. */
   onRequestCalendarSlots?: CalendarSlotRequestFn;
-  /** Fired on every keystroke in the body — used for live grammar checking. */
-  onBodyChange?: (text: string) => void;
   className?: string;
 }
 
@@ -92,9 +92,9 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
     onSaveDraft,
     onDiscard,
     onApplySuggestion,
+    onBodyChange,
     showAIPanel = true,
     onRequestCalendarSlots,
-    onBodyChange,
     className = "",
     ...props
   },

@@ -175,7 +175,7 @@ function ApiKeysSection(): React.ReactNode {
               variant="text"
               placeholder="e.g. Production server"
               value={newName}
-              onChange={(e) => setNewName(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewName(e.target.value)}
             />
             <Box>
               <Text variant="body-sm" className="mb-1.5 font-medium text-content">
@@ -350,7 +350,7 @@ function WebhooksSection(): React.ReactNode {
               variant="text"
               placeholder="https://example.com/webhooks/alecrae"
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUrl(e.target.value)}
             />
             <Box>
               <Text variant="body-sm" className="mb-1.5 font-medium text-content">
@@ -620,14 +620,14 @@ function IntegrationsSection(): React.ReactNode {
               variant="text"
               placeholder="e.g. New email → Slack"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
             />
             <Input
               label="Webhook URL"
               variant="text"
               placeholder="https://hooks.zapier.com/..."
               value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWebhookUrl(e.target.value)}
             />
             {eventTypes.length > 0 && (
               <Box>

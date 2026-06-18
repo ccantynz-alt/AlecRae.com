@@ -12,7 +12,7 @@
  * Used in settings and as a standalone selector in the task extraction flow.
  */
 
-import type { ReactElement } from "react";
+import type { ReactElement, KeyboardEvent, MouseEvent } from "react";
 import { useState, useCallback, useEffect } from "react";
 import { Box, Text, Button, Card, CardContent } from "@alecrae/ui";
 import { taskApi, type TaskProviderData } from "../lib/api";
@@ -183,7 +183,7 @@ export function TaskProviderSelector({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={(e) => {
+                        onClick={(e: MouseEvent<HTMLButtonElement>) => {
                           e.stopPropagation();
                           // Navigate to provider settings
                           // This would open a configuration modal in production
@@ -205,7 +205,7 @@ export function TaskProviderSelector({
                       aria-checked={isSelected}
                       aria-label={`Select ${provider.displayName}`}
                       tabIndex={0}
-                      onKeyDown={(e) => {
+                      onKeyDown={(e: KeyboardEvent) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
                           handleSelect(provider.name);

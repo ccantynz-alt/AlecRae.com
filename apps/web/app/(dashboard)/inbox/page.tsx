@@ -742,6 +742,10 @@ export default function InboxPage(): React.ReactNode {
     );
   }
 
+  // Compute priority email count from the current email list (based on unread)
+  const priorityCount = filteredEmails.filter((e) => !e.read).length;
+  const openCommandPalette = useCommandPalette((s) => s.setOpen);
+
   return (
     <PageLayout header={searchHeader} fullWidth>
       <SyncStatusBar
@@ -752,6 +756,31 @@ export default function InboxPage(): React.ReactNode {
         error={sync.error}
         onSyncNow={() => void sync.syncNow()}
       />
+      {/* AI Intelligence Bar — compact h-8 bar showing triage status */}
+      <Box className="h-8 px-4 border-b border-border bg-surface-secondary flex items-center gap-3">
+        <Box className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" aria-hidden="true" />
+          <Text variant="caption" className="text-content font-medium">AI Triage: Active</Text>
+        </Box>
+        {priorityCount > 0 && (
+          <Box
+            className="px-2 py-0.5 rounded-full bg-brand-100 text-brand-700 text-[10px] font-semibold flex-shrink-0"
+            aria-label={`${priorityCount} unread emails`}
+          >
+            {priorityCount} unread
+          </Box>
+        )}
+        <Box className="flex-1" />
+        <button
+          type="button"
+          className="flex items-center gap-1 px-2 py-0.5 rounded border border-border text-content-tertiary hover:text-content hover:border-border-strong transition-colors text-[11px]"
+          onClick={() => openCommandPalette(true)}
+          aria-label="Open AI command palette"
+        >
+          <span>Ask AI</span>
+          <kbd className="font-mono text-[10px] text-content-tertiary">⌘K</kbd>
+        </button>
+      </Box>
       <Box className="flex flex-1 h-full">
         <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
           <AnimatePresence>
@@ -773,7 +802,7 @@ export default function InboxPage(): React.ReactNode {
             <input
               type="checkbox"
               checked={selectedIds.size > 0 && selectedIds.size === filteredEmails.length}
-              onChange={(e) => {
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 if (e.target.checked) {
                   setSelectedIds(new Set(filteredEmails.map((em) => em.id)));
                 } else {

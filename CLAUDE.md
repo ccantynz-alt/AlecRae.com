@@ -668,6 +668,7 @@ larger storage, unlimited accounts, dedicated support. Billing wiring pending
 | 48 | **`<Box as="option">` crashed Shared Inboxes + Workspace pages** — React enforces that `<option>` must be a native HTML element as direct child of `<select>`; wrapping in Box caused a runtime crash on both pages | HIGH | 2026-06-16 | FIXED 2026-06-16 — replaced all `<Box as="option">` with native `<option>` in shared-inboxes/page.tsx (delegation scope selector) and workspace/page.tsx (domain picker + invite role selector) |
 | 49 | **Automations page: "Missing required scope(s): rules:read"** — session JWTs for owner/admin only carried 8 scopes; 20 feature route groups (rules, workflows, auto-responder, contacts, calendar, tasks, smart-folders, mail-merge, chat, documents, delegation, ab-tests, scripts, voice) required scopes that no session token ever carried → blanket 403 on every feature tab | HIGH | 2026-06-16 | FIXED 2026-06-16 — added 20 missing scopes to `scopesForRole()` owner/admin branch in `apps/api/src/lib/jwt.ts`. Takes effect on next login (existing tokens not retroactively updated). |
 | 50 | **contacts, billing, voice pages bypassed silent token refresh** — each had its own `apiFetch` reading `localStorage` directly without the 401→refreshSession→retry logic from auth-token.ts, causing all three pages to stop working 15 min after login | MEDIUM | 2026-06-16 | FIXED 2026-06-16 — contacts/page + billing/page now import `getAccessToken()`/`refreshSession()`/`redirectToLogin()` from auth-token.ts and retry on 401; voice/page uses `getAccessToken()` instead of direct `localStorage.getItem` |
+| 51 | **~50% of backend still had no web UI** — 8 feature areas (AI Agent, Files, Security Center, Integrations, Email Hygiene, Gamification/Achievements, Push Notifications, Translation) had fully built backends but zero dashboard presence; sidebar had no tier badges; `featureFetch` calls in api-features.ts lacked explicit generic type params (TypeScript inferred `Promise<unknown>`) | HIGH | 2026-06-17 | FIXED 2026-06-17 (PR #83) — 8 new pages built with plan-gate enforcement; `PlanGate` component + `plan.ts` tier system added; sidebar reorganised into 9 named sections (Mail/AI Features/Tools/Automation/Team/Insights/Settings/Admin) with PRO/PERSONAL badges; all new `featureFetch` calls carry explicit `<T>` generics. Build: 70/70 static pages, 0 errors. |
 
 ---
 
@@ -817,9 +818,9 @@ legacy with no customers. Do not add domains to Vercel or propose CNAMEs back.
   surface exists in this repo).
 
 
-**Last updated:** 2026-06-16 10:20 UTC
+**Last updated:** 2026-06-17 00:15 UTC
 **Current phase:** Phase 1 — Beta Launch in Progress
-**Current focus:** Box is live at 149.28.119.158. All pages building clean (62/62). Critical crashes fixed: `<Box as="option">` on Shared Inboxes + Workspace; Automations 20-scope gap; contacts/billing/voice auth bypass. Three Craig tasks remaining: (1) sign out and sign back in to get fresh JWT with new scopes; (2) complete Resend domain verification; (3) add alecrae.com as domain + create craig@alecrae.com mailbox in Workspace page.
+**Current focus:** Dashboard overhaul complete (PR #83). 8 new plan-gated product pages added (AI Agent, Files, Security Center, Integrations, Hygiene, Achievements, Notifications, Translate). Sidebar reorganised into 9 sections with PRO/PERSONAL tier badges. Build: 70/70 static pages clean. Three Craig tasks remaining: (1) sign out and sign back in to get fresh JWT with new scopes; (2) complete Resend domain verification; (3) add alecrae.com as domain + create craig@alecrae.com mailbox in Workspace page.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.

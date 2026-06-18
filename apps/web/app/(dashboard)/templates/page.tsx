@@ -303,14 +303,14 @@ function CreateTemplateForm({
             variant="text"
             placeholder="e.g. Welcome Email"
             value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })}
           />
           <Input
             label="Subject Line"
             variant="text"
             placeholder="e.g. Welcome to {{company}}, {{name}}!"
             value={form.subject}
-            onChange={(e) => setForm({ ...form, subject: e.target.value })}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, subject: e.target.value })}
           />
           <Box>
             <Text variant="body-sm" className="mb-1 font-medium text-content">
@@ -321,7 +321,7 @@ function CreateTemplateForm({
               rows={6}
               placeholder={"<p>Hi {{name}},</p>\n<p>Welcome to {{company}}!</p>"}
               value={form.htmlBody}
-              onChange={(e) => setForm({ ...form, htmlBody: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm({ ...form, htmlBody: e.target.value })}
             />
           </Box>
           <Box>
@@ -333,7 +333,7 @@ function CreateTemplateForm({
               rows={4}
               placeholder={"Hi {{name}},\nWelcome to {{company}}!"}
               value={form.textBody}
-              onChange={(e) => setForm({ ...form, textBody: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm({ ...form, textBody: e.target.value })}
             />
           </Box>
 
@@ -581,13 +581,13 @@ function TemplateEditSection({
             label="Name"
             variant="text"
             value={editName}
-            onChange={(e) => setEditName(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)}
           />
           <Input
             label="Subject"
             variant="text"
             value={editSubject}
-            onChange={(e) => setEditSubject(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditSubject(e.target.value)}
           />
         </Box>
 
@@ -599,7 +599,7 @@ function TemplateEditSection({
             className="w-full rounded-md border border-border bg-surface p-3 font-mono text-sm text-content placeholder:text-content-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             rows={5}
             value={editHtml}
-            onChange={(e) => setEditHtml(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditHtml(e.target.value)}
           />
         </Box>
 
@@ -611,7 +611,7 @@ function TemplateEditSection({
             className="w-full rounded-md border border-border bg-surface p-3 font-mono text-sm text-content placeholder:text-content-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
             rows={3}
             value={editText}
-            onChange={(e) => setEditText(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditText(e.target.value)}
           />
         </Box>
 
@@ -772,7 +772,7 @@ function TemplatePreviewPanel({
                     variant="text"
                     placeholder={`Value for {{${v}}}`}
                     value={values[v] ?? ""}
-                    onChange={(e) =>
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                       setValues({ ...values, [v]: e.target.value })
                     }
                   />

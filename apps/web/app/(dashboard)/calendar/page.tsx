@@ -308,7 +308,7 @@ function CreateEventForm({
             variant="text"
             placeholder="e.g. Quarterly review"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
           />
           <Box className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Box>
@@ -319,7 +319,7 @@ function CreateEventForm({
                 type="datetime-local"
                 className="w-full rounded-md border border-border bg-surface p-2.5 text-sm text-content focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 value={start}
-                onChange={(e) => setStart(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setStart(e.target.value)}
                 aria-label="Event start"
               />
             </Box>
@@ -331,7 +331,7 @@ function CreateEventForm({
                 type="datetime-local"
                 className="w-full rounded-md border border-border bg-surface p-2.5 text-sm text-content focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
                 value={end}
-                onChange={(e) => setEnd(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEnd(e.target.value)}
                 aria-label="Event end"
               />
             </Box>
@@ -341,7 +341,7 @@ function CreateEventForm({
             variant="text"
             placeholder="e.g. Meeting Room 2 or video link"
             value={location}
-            onChange={(e) => setLocation(e.target.value)}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocation(e.target.value)}
           />
           <Box>
             <Text variant="body-sm" className="mb-1 font-medium text-content">
@@ -351,7 +351,7 @@ function CreateEventForm({
               className="w-full rounded-md border border-border bg-surface p-3 text-sm text-content placeholder:text-content-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
               rows={3}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
               aria-label="Event description"
             />
           </Box>
@@ -442,7 +442,7 @@ function FindTimeSection({
               variant="text"
               placeholder="alice@example.com, bob@example.com"
               value={emails}
-              onChange={(e) => setEmails(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmails(e.target.value)}
             />
           </Box>
           <Box className="w-32">
@@ -450,7 +450,7 @@ function FindTimeSection({
               label="Minutes"
               variant="text"
               value={duration}
-              onChange={(e) => setDuration(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDuration(e.target.value)}
             />
           </Box>
           <Button variant="secondary" size="sm" onClick={handleFind} disabled={searching}>
