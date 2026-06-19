@@ -24,6 +24,7 @@ import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
   getDatabase,
   importJobs,
+  connectedAccounts,
   type ImportJob,
   type ImportJobProgress,
 } from "@alecrae/db";
@@ -33,6 +34,11 @@ import {
   parsedToReceived,
   splitMboxMessages,
 } from "../lib/received-email-store.js";
+import {
+  syncGmailMessages,
+  syncOutlookMessages,
+  type EmailAccount,
+} from "../sync/engine.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -167,8 +173,7 @@ importRouter.post(
       skipped: 0,
     });
 
-    // Start import in background (production: BullMQ job)
-    runWorker(job.id, () => startGmailImport(job.id, input));
+    runWorker(job.id, () => startGmailImport(job.id, input, auth.accountId));
 
     return c.json({
       data: {
@@ -196,8 +201,7 @@ importRouter.post(
       skipped: 0,
     });
 
-    // Background import
-    runWorker(job.id, () => startOutlookImport(job.id, input));
+    runWorker(job.id, () => startOutlookImport(job.id, input, auth.accountId));
 
     return c.json({
       data: {
@@ -370,37 +374,144 @@ importRouter.get(
   },
 );
 
-// ─── Import Workers (simplified — production: BullMQ) ────────────────────────
+// ─── Import Workers ──────────────────────────────────────────────────────────
 
-// Gmail/Outlook history backfill rides on the sync engine, whose message
-// PERSISTENCE is still a stub (see known issue: fetchAndStoreGmailMessage logs
-// instead of writing). Rather than fake-complete an import that stores nothing,
-// these fail honestly until the engine persists. File-based import (MBOX/EML)
-// is fully implemented below and is the supported path today.
-const PROVIDER_BACKFILL_UNAVAILABLE =
-  "Direct mailbox history import isn't available yet. File-based import (MBOX/EML) works today, " +
-  "and your connected account will sync going forward.";
+async function loadConnectedAccount(
+  connectedAccountId: string,
+  ownerAccountId: string,
+): Promise<EmailAccount | null> {
+  const db = getDatabase();
+  const [row] = await db
+    .select()
+    .from(connectedAccounts)
+    .where(
+      and(
+        eq(connectedAccounts.id, connectedAccountId),
+        eq(connectedAccounts.accountId, ownerAccountId),
+      ),
+    )
+    .limit(1);
+
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    userId: row.accountId,
+    provider: row.provider,
+    email: row.email,
+    displayName: row.displayName ?? row.email,
+    ...(row.accessToken != null ? { accessToken: row.accessToken } : {}),
+    ...(row.refreshToken != null ? { refreshToken: row.refreshToken } : {}),
+    ...(row.tokenExpiresAt != null ? { tokenExpiresAt: row.tokenExpiresAt } : {}),
+    ...(row.syncCursor != null ? { syncState: row.syncCursor } : {}),
+    status: (row.status as "active" | "error" | "disconnected" | "syncing") ?? "active",
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 async function startGmailImport(
   jobId: string,
-  _options: z.infer<typeof GmailImportSchema>,
+  options: z.infer<typeof GmailImportSchema>,
+  ownerAccountId: string,
 ): Promise<void> {
-  await updateJob(jobId, {
-    status: "failed",
-    error: PROVIDER_BACKFILL_UNAVAILABLE,
-    completedAt: new Date(),
-  });
+  await updateJob(jobId, { status: "running" });
+
+  const account = await loadConnectedAccount(options.connectedAccountId, ownerAccountId);
+  if (!account) {
+    await updateJob(jobId, {
+      status: "failed",
+      error: "Connected Gmail account not found or does not belong to this account.",
+      completedAt: new Date(),
+    });
+    return;
+  }
+
+  if (account.provider !== "gmail") {
+    await updateJob(jobId, {
+      status: "failed",
+      error: `Account ${options.connectedAccountId} is not a Gmail account (provider: ${account.provider}).`,
+      completedAt: new Date(),
+    });
+    return;
+  }
+
+  const maxMessages = options.maxMessages ?? 500;
+  const result = await syncGmailMessages(account, maxMessages);
+
+  const progress: ImportJobProgress = {
+    total: result.messagesAdded + result.messagesUpdated + result.errors.length,
+    processed: result.messagesAdded + result.messagesUpdated,
+    failed: result.errors.length,
+    skipped: 0,
+  };
+
+  if (result.errors.length > 0 && progress.processed === 0) {
+    await updateJob(jobId, {
+      status: "failed",
+      error: result.errors.join("; "),
+      progress,
+      completedAt: new Date(),
+    });
+  } else {
+    await updateJob(jobId, {
+      status: "completed",
+      progress,
+      completedAt: new Date(),
+    });
+  }
 }
 
 async function startOutlookImport(
   jobId: string,
-  _options: z.infer<typeof OutlookImportSchema>,
+  options: z.infer<typeof OutlookImportSchema>,
+  ownerAccountId: string,
 ): Promise<void> {
-  await updateJob(jobId, {
-    status: "failed",
-    error: PROVIDER_BACKFILL_UNAVAILABLE,
-    completedAt: new Date(),
-  });
+  await updateJob(jobId, { status: "running" });
+
+  const account = await loadConnectedAccount(options.connectedAccountId, ownerAccountId);
+  if (!account) {
+    await updateJob(jobId, {
+      status: "failed",
+      error: "Connected Outlook account not found or does not belong to this account.",
+      completedAt: new Date(),
+    });
+    return;
+  }
+
+  if (account.provider !== "outlook") {
+    await updateJob(jobId, {
+      status: "failed",
+      error: `Account ${options.connectedAccountId} is not an Outlook account (provider: ${account.provider}).`,
+      completedAt: new Date(),
+    });
+    return;
+  }
+
+  const maxMessages = options.maxMessages ?? 500;
+  const result = await syncOutlookMessages(account, maxMessages);
+
+  const progress: ImportJobProgress = {
+    total: result.messagesAdded + result.messagesUpdated + result.errors.length,
+    processed: result.messagesAdded + result.messagesUpdated,
+    failed: result.errors.length,
+    skipped: 0,
+  };
+
+  if (result.errors.length > 0 && progress.processed === 0) {
+    await updateJob(jobId, {
+      status: "failed",
+      error: result.errors.join("; "),
+      progress,
+      completedAt: new Date(),
+    });
+  } else {
+    await updateJob(jobId, {
+      status: "completed",
+      progress,
+      completedAt: new Date(),
+    });
+  }
 }
 
 async function startMboxImport(

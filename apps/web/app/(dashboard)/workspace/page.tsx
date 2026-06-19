@@ -22,6 +22,7 @@ import type { Route } from "next";
 import { Box, Text, Button, Card, CardContent, Input } from "@alecrae/ui";
 import {
   authApi,
+  connectApi,
   domainsApi,
   mailboxesApi,
   organizationsApi,
@@ -33,6 +34,7 @@ import {
   type OrgInvitation,
   type OrgRole,
   type ImportJobSummary,
+  type ConnectedEmailAccount,
 } from "../../../lib/api";
 
 type Tab = "mailboxes" | "team" | "import";
@@ -612,6 +614,9 @@ function ImportSection(): ReactNode {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [fileOk, setFileOk] = useState<string | null>(null);
+  const [connectedAccounts, setConnectedAccounts] = useState<ConnectedEmailAccount[]>([]);
 
   const loadJobs = useCallback(() => {
     importApi
@@ -622,16 +627,17 @@ function ImportSection(): ReactNode {
 
   useEffect(() => {
     loadJobs();
+    connectApi.listAccounts().then((res) => setConnectedAccounts(res.data)).catch(() => {});
   }, [loadJobs]);
 
-  const onMbox = async (file: File): Promise<void> => {
+  const onProviderImport = async (account: ConnectedEmailAccount): Promise<void> => {
     setBusy(true);
     setError(null);
     setOk(null);
     try {
-      await importApi.mbox(file);
-      setOk(`Import of ${file.name} started — progress appears below.`);
-      // The MBOX worker runs in the background; give it a moment, then refresh.
+      const fn = account.provider === "gmail" ? importApi.gmail : importApi.outlook;
+      const res = await fn(account.id, 2000);
+      setOk(res.data.message ?? `Import started for ${account.email}.`);
       setTimeout(loadJobs, 1500);
     } catch (e) {
       setError(errMsg(e));
@@ -640,28 +646,81 @@ function ImportSection(): ReactNode {
     }
   };
 
-  const onEml = async (files: File[]): Promise<void> => {
+  const onMbox = async (file: File): Promise<void> => {
     setBusy(true);
-    setError(null);
-    setOk(null);
+    setFileError(null);
+    setFileOk(null);
     try {
-      const res = await importApi.eml(files);
-      const p = res.data.progress;
-      setOk(`Imported ${p.processed}, skipped ${p.skipped}, failed ${p.failed}.`);
-      loadJobs();
+      await importApi.mbox(file);
+      setFileOk(`Import of ${file.name} started — progress appears below.`);
+      setTimeout(loadJobs, 1500);
     } catch (e) {
-      setError(errMsg(e));
+      setFileError(errMsg(e));
     } finally {
       setBusy(false);
     }
   };
 
+  const onEml = async (files: File[]): Promise<void> => {
+    setBusy(true);
+    setFileError(null);
+    setFileOk(null);
+    try {
+      const res = await importApi.eml(files);
+      const p = res.data.progress;
+      setFileOk(`Imported ${p.processed}, skipped ${p.skipped}, failed ${p.failed}.`);
+      loadJobs();
+    } catch (e) {
+      setFileError(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const gmailOutlookAccounts = connectedAccounts.filter(
+    (a) => a.provider === "gmail" || a.provider === "outlook",
+  );
+
   return (
     <Box className="space-y-6">
+      {gmailOutlookAccounts.length > 0 && (
+        <Card>
+          <CardContent>
+            <Text variant="heading-sm" className="mb-2">
+              Import from connected accounts
+            </Text>
+            <Text variant="body-md" muted className="mb-4">
+              Backfill your history from Gmail or Outlook. Up to 2,000 recent messages will be imported.
+              Re-importing is safe — duplicates are skipped automatically.
+            </Text>
+            <Box className="space-y-2">
+              {gmailOutlookAccounts.map((account) => (
+                <Box key={account.id} className="flex items-center justify-between gap-3 p-3 rounded border border-border">
+                  <Box>
+                    <Text variant="body-sm" className="font-medium">{account.email}</Text>
+                    <Text variant="caption" muted className="capitalize">{account.provider}</Text>
+                  </Box>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void onProviderImport(account)}
+                  >
+                    Import now
+                  </Button>
+                </Box>
+              ))}
+            </Box>
+            {error && <Notice tone="error">{error}</Notice>}
+            {ok && <Notice tone="success">{ok}</Notice>}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent>
           <Text variant="heading-sm" className="mb-2">
-            Import your mail
+            Import from file
           </Text>
           <Text variant="body-md" muted className="mb-4">
             Bring in an existing mailbox export. Drop in an <Text as="span" variant="body-md" className="font-medium">.mbox</Text> file
@@ -708,8 +767,8 @@ function ImportSection(): ReactNode {
               />
             </Box>
           </Box>
-          {error && <Notice tone="error">{error}</Notice>}
-          {ok && <Notice tone="success">{ok}</Notice>}
+          {fileError && <Notice tone="error">{fileError}</Notice>}
+          {fileOk && <Notice tone="success">{fileOk}</Notice>}
         </CardContent>
       </Card>
 

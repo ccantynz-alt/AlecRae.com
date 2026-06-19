@@ -1,10 +1,19 @@
 # MTA Setup on the Production Box
 
-> **Last updated: 2026-06-15 22:00 UTC**
+> **Last updated: 2026-06-19 00:00 UTC**
 
-AlecRae's outbound email path: web UI → API (`POST /v1/messages/send`) → BullMQ (Redis) → **MTA worker** → Resend SMTP relay → recipient inbox.
+AlecRae's outbound email path: web UI → API (`POST /v1/messages/send`) → BullMQ (Redis) → **MTA worker** → delivery.
 
 The MTA worker (`services/mta`) must be running on the box as a systemd service. Without it, emails get queued in Redis but never consumed.
+
+**Two delivery modes — pick one:**
+
+| Mode | When to use | Env to set |
+|---|---|---|
+| **Direct port-25** | Port 25 is open on the box (now confirmed). Fastest path — no relay account needed. Requires PTR record. | _nothing_ (no `RELAY_PROVIDER`) |
+| **Resend relay** | More reliable for cold IPs; needs Resend account + domain verified | `RELAY_PROVIDER=smtp`, `SMTP_RELAY_HOST=smtp.resend.com`, `SMTP_RELAY_PORT=465`, `SMTP_RELAY_TLS=true`, `SMTP_RELAY_USERNAME=resend`, `SMTP_RELAY_PASSWORD=<api_key>` |
+
+For the quickest first send, use **direct port-25**: set a PTR record on `149.28.119.158` → `mail.alecrae.com` in the Vultr control panel, then start the MTA with no relay env set. DKIM keys for `alecrae.com` must be in the `domains` table (they're set during domain onboarding in the Workspace page).
 
 ---
 

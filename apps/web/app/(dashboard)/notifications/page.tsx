@@ -14,7 +14,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Box, Text, Button, Card, CardContent, CardHeader, PageLayout } from "@alecrae/ui";
-import { getAccessToken } from "../../../lib/auth-token";
+import { getAccessToken, refreshSession, redirectToLogin } from "../../../lib/auth-token";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,15 +56,22 @@ const NOTIFICATION_TYPE_ICONS: Record<string, string> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = getAccessToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
+  const doFetch = async (token: string | null) =>
+    fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token ?? ""}`,
+        "Content-Type": "application/json",
+        ...options?.headers,
+      },
+    });
+
+  let res = await doFetch(getAccessToken());
+  if (res.status === 401) {
+    const newToken = await refreshSession();
+    if (!newToken) { redirectToLogin(); throw new Error("Session expired"); }
+    res = await doFetch(newToken);
+  }
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json() as Promise<T>;
 }
