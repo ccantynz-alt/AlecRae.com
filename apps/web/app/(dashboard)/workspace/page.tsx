@@ -627,7 +627,7 @@ function ImportSection(): ReactNode {
 
   useEffect(() => {
     loadJobs();
-    connectApi.listAccounts().then((res) => setConnectedAccounts(res.data)).catch(() => {});
+    connectApi.listAccounts().then((res) => setConnectedAccounts(res.data)).catch(() => setConnectedAccounts([]));
   }, [loadJobs]);
 
   const onProviderImport = async (account: ConnectedEmailAccount): Promise<void> => {
