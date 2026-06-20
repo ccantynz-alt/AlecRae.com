@@ -49,6 +49,8 @@ fi
 bun run db:migrate
 
 step "4/6 build web app"
+NEXT_PUBLIC_COMMIT_SHA="$DEPLOYED_COMMIT" \
+NEXT_PUBLIC_BRANCH="$BRANCH" \
 bun run --cwd apps/web build
 
 step "5/6 restart services"
