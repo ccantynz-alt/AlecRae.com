@@ -58,6 +58,8 @@ export default function DomainsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewRecordsDomain, setViewRecordsDomain] = useState<ReturnType<typeof mapDomain> | null>(null);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
 
   const loadDomains = useCallback(async () => {
     try {
@@ -76,11 +78,28 @@ export default function DomainsPage() {
   }, [loadDomains]);
 
   const handleVerify = async (id: string) => {
+    setVerifyingId(id);
+    setVerifyResult(null);
     try {
-      await domainsApi.verify(id);
+      const res = await domainsApi.verify(id);
       await loadDomains();
+      const isVerified = res.data.status === "verified";
+      setVerifyResult({
+        id,
+        success: isVerified,
+        message: isVerified
+          ? "All DNS records verified — domain is active."
+          : "Some records are still pending. DNS changes can take up to 48 hours to propagate.",
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Verification failed");
+      setVerifyResult({
+        id,
+        success: false,
+        message: err instanceof Error ? err.message : "Verification check failed",
+      });
+    } finally {
+      setVerifyingId(null);
+      setTimeout(() => setVerifyResult(null), 6000);
     }
   };
 
@@ -138,19 +157,31 @@ export default function DomainsPage() {
       ) : (
         <Box className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {domains.map((d) => (
-            <DomainCard
-              key={d.id}
-              domain={d.domain}
-              verificationState={d.verificationState}
-              dnsRecords={d.dnsRecords}
-              spfVerified={d.spfVerified}
-              dkimVerified={d.dkimVerified}
-              dmarcVerified={d.dmarcVerified}
-              addedAt={d.addedAt}
-              onVerify={() => handleVerify(d.id)}
-              onRemove={() => handleRemove(d.id)}
-              onViewRecords={() => setViewRecordsDomain(d)}
-            />
+            <div key={d.id}>
+              <DomainCard
+                domain={d.domain}
+                verificationState={d.verificationState}
+                dnsRecords={d.dnsRecords}
+                spfVerified={d.spfVerified}
+                dkimVerified={d.dkimVerified}
+                dmarcVerified={d.dmarcVerified}
+                addedAt={d.addedAt}
+                onVerify={() => handleVerify(d.id)}
+                onRemove={() => handleRemove(d.id)}
+                onViewRecords={() => setViewRecordsDomain(d)}
+                verifying={verifyingId === d.id}
+              />
+              {verifyResult?.id === d.id && (
+                <div className={`mt-2 px-4 py-2.5 rounded-lg text-sm font-medium ${
+                  verifyResult.success
+                    ? "bg-green-50 text-green-800 border border-green-200"
+                    : "bg-amber-50 text-amber-800 border border-amber-200"
+                }`}>
+                  {verifyResult.success ? "✓ " : "⚠ "}
+                  {verifyResult.message}
+                </div>
+              )}
+            </div>
           ))}
         </Box>
       )}

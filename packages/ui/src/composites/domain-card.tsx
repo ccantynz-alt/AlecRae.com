@@ -26,6 +26,7 @@ export interface DomainCardProps extends HTMLAttributes<HTMLDivElement> {
   onVerify?: () => void;
   onRemove?: () => void;
   onViewRecords?: () => void;
+  verifying?: boolean;
   className?: string;
 }
 
@@ -48,6 +49,7 @@ export const DomainCard = forwardRef<HTMLDivElement, DomainCardProps>(function D
     onVerify,
     onRemove,
     onViewRecords,
+    verifying = false,
     className = "",
     ...props
   },
@@ -67,7 +69,7 @@ export const DomainCard = forwardRef<HTMLDivElement, DomainCardProps>(function D
           variant="caption"
           className={`px-2 py-1 rounded-full font-medium ${state.bg} ${state.text}`}
         >
-          {state.label}
+          {verifying ? "Checking..." : state.label}
         </Text>
       </Box>
 
@@ -106,15 +108,15 @@ export const DomainCard = forwardRef<HTMLDivElement, DomainCardProps>(function D
 
       <Box className="flex items-center gap-2 pt-4 border-t border-border">
         {verificationState !== "verified" && (
-          <Button variant="primary" size="sm" onClick={onVerify}>
-            Verify Now
+          <Button variant="primary" size="sm" onClick={onVerify} loading={verifying} disabled={verifying}>
+            {verifying ? "Checking..." : "Verify Now"}
           </Button>
         )}
         <Button variant="secondary" size="sm" onClick={onViewRecords}>
           View Records
         </Button>
         <Box className="flex-1" />
-        <Button variant="ghost" size="sm" onClick={onRemove}>
+        <Button variant="ghost" size="sm" onClick={onRemove} disabled={verifying}>
           Remove
         </Button>
       </Box>
