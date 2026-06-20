@@ -822,9 +822,9 @@ legacy with no customers. Do not add domains to Vercel or propose CNAMEs back.
   surface exists in this repo).
 
 
-**Last updated:** 2026-06-20 00:00 UTC
+**Last updated:** 2026-06-20 10:30 UTC
 **Current phase:** Phase 1 — Beta Launch in Progress
-**Current focus:** Vapron Type 2 migration spec added (`docs/infra/vapron-migration-type2.md`). `scripts/seed-vapron-templates.ts` created — seeds 10 Vapron platform email templates (verify-email, welcome, password-reset, magic-link, waitlist-confirm, subscription-created, payment-failed, deploy-success, deploy-failure, custom-domain-verified). PR #84 merged (go-live audit fixes: Gmail/Outlook import wired, sidebar 404s fixed, auth refresh on notifications+agent pages, eqeqeq lint fixes). Craig tasks outstanding: (1) run MTA setup runbook on box (`docs/infra/mta-box-setup.md`); (2) set PTR record 149.28.119.158 → mail.alecrae.com in Vultr; (3) run Vapron migration steps 4–7 to seed templates + register domain + set env on box.
+**Current focus:** Vapron Type 2 migration COMPLETE. `mail.vapron.ai` fully verified (SPF ✅ DKIM ✅ DMARC ✅ MX ✅ Return-Path ✅). 10 email templates seeded. Smoke test passed — message queued with real Message-ID `<104939663c341bf00d82f0c31d67b5c8@mail.vapron.ai>`. DNS fix shipped (PR #86): verifyDKIM now joins split TXT chunks so Porkbun's 255-char splits no longer break DKIM matching. Outstanding Craig tasks: (1) set PTR record 149.28.119.158 → mail.alecrae.com in Vultr; (2) confirm email arrives in Gmail inbox; (3) run MTA idempotency check (same message_id → no duplicate).
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
