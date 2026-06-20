@@ -24,10 +24,10 @@ methods light up at once.
 
 ## What's blocking login ❌
 
-1. **The API isn't deployed.** `https://api.alecrae.com` doesn't respond. The web app's
-   `NEXT_PUBLIC_API_URL` isn't set on Vercel, so the login page tries `localhost:3001`
-   — which is why every method shows "Can't reach the server right now."
-2. **No production database.** Login needs Neon Postgres (`docs/infra/neon-setup.md`).
+1. **The API isn't running on the box.** `https://api.alecrae.com` doesn't respond. The web app's
+   `NEXT_PUBLIC_API_URL` must be set in the box `.env`, so the login page reaches the right server.
+   See `docs/infra/morning-setup.md` for the full env setup.
+2. **No production database.** Login needs Postgres (`docs/infra/neon-setup.md` or local Postgres on the box).
 
 ---
 
@@ -65,9 +65,10 @@ Full list: `docs/infra/.env.production.template`.
 
 ## Step 4 — Tell the web app where the API lives
 
-1. vercel.com → AlecRae project → **Settings → Environment Variables**
-2. Add `NEXT_PUBLIC_API_URL` = `https://api.alecrae.com` (Production)
-3. **Redeploy** (Deployments → ⋯ → Redeploy) — `NEXT_PUBLIC_*` vars bake in at build time
+1. SSH to the box: `ssh root@149.28.119.158`
+2. Edit `/opt/alecrae/.env` and add/confirm: `NEXT_PUBLIC_API_URL=https://api.alecrae.com`
+3. Rebuild the web app and restart: `cd /opt/alecrae && bun run build:web && sudo systemctl restart alecrae-web`
+   (`NEXT_PUBLIC_*` vars bake in at build time — a rebuild is required after changing them)
 
 ## Step 5 — Test
 
@@ -93,4 +94,4 @@ then on, either method works, plus passkeys as a third fallback.
 
 ---
 
-_Last updated: 2026-06-10 08:05 UTC_
+_Last updated: 2026-06-20 14:00 UTC_

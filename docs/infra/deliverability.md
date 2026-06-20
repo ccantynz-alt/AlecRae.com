@@ -1,6 +1,6 @@
 # AlecRae Deliverability Runbook
 
-> Self-hosted MTA. New domain. New IP. Zero reputation.
+> Self-hosted MTA on the Vapron box (149.28.119.158). New domain. New IP. Zero reputation.
 > This document is the playbook. Follow it exactly.
 
 ---
@@ -13,7 +13,7 @@ A brand-new sending IP has zero reputation with Gmail, Outlook, Yahoo, and Apple
 
 ## Prerequisites checklist (must be done before any production send)
 
-- [ ] **SPF** published + passing — `v=spf1 ip4:<FLY_IP> -all`
+- [ ] **SPF** published + passing — `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all`
 - [ ] **DKIM** keypair generated on MTA, public key published in DNS, all outbound signed
 - [ ] **DMARC** published — start at `p=quarantine; pct=10;`
 - [ ] **PTR / rDNS** matches HELO hostname (`mx1.alecrae.com`)
@@ -114,8 +114,8 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 | DKIM fails on forwarded mail | Implement ARC (Authenticated Received Chain). **Wave 2 task.** |
 | From-domain mismatch with `DKIM d=` | Align the DKIM signing domain with the From: header domain. |
 | SPF > 10 DNS lookups | Flatten SPF includes into direct `ip4:` / `ip6:` mechanisms. |
-| PTR doesn't match HELO | Email Fly.io support to set the reverse DNS record. |
-| Shared IP neighbor blacklisted | Upgrade to Fly.io dedicated IP (paid tier). Prevents noisy neighbors entirely. |
+| PTR doesn't match HELO | Set reverse DNS in Vultr control panel: instance → Settings → IPv4 → rDNS → `mail.alecrae.com`. |
+| Shared IP neighbor blacklisted | N/A — the Vapron box has a dedicated static IP (`149.28.119.158`). No noisy neighbours. |
 
 ---
 
@@ -151,7 +151,7 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 
 ## Emergency protocol — first 30 minutes if blacklisted
 
-1. **PAUSE all outbound immediately** — `fly deploy` with kill switch enabled.
+1. **PAUSE all outbound immediately** — on the box: `sudo systemctl stop alecrae-mta`.
 2. **Identify the listing source** — mxtoolbox unified check.
 3. **Check recent sends for root cause:**
    - Compromised sending account?
@@ -169,4 +169,4 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 
 ---
 
-_Last updated: 2026-06-08 23:35 UTC_
+_Last updated: 2026-06-20 14:00 UTC_

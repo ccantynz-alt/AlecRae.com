@@ -6,7 +6,9 @@
 
 ## Summary
 
-"Go live" means: real email arrives at `@alecrae.com`, users can sign up at `mail.alecrae.com`, connect their Gmail/Outlook, pay via Stripe, and send mail that lands in inboxes (not spam). **Budget ~3 hours of active work today**, then **2–4 weeks of background IP warmup** before you push volume. Phase 3 (MTA rDNS request to Fly) and Phase 7 (warmup) are clock-time gated — everything else is keyboard time.
+"Go live" means: real email arrives at `@alecrae.com`, users can sign up at `mail.alecrae.com`, connect their Gmail/Outlook, pay via Stripe, and send mail that lands in inboxes (not spam). **Budget ~3 hours of active work today**, then **2–4 weeks of background IP warmup** before you push volume. Phase 3 (MTA setup on the Vapron box) and Phase 7 (warmup) are clock-time gated — everything else is keyboard time.
+
+> **Note:** This checklist was written before the production deployment settled on the dedicated Vapron box at `149.28.119.158`. Fly.io is no longer used. Phases 1–2 (account signups/data stores) and Phases 4–7 remain accurate. Phase 3 has been updated to reflect the box-based MTA. Phase 5 refers to Vercel for the web app env vars — the current deployment uses the box directly (see `docs/infra/morning-setup.md`).
 
 ---
 
@@ -32,11 +34,12 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 - **Action: Confirm `alecrae.com` is on Cloudflare and DNS is "Active".** You already own the domain — verify the nameservers point to Cloudflare.
 - Nothing to copy yet. DNS records go in Phase 4.
 
-### 2. Fly.io — MTA host
+### 2. Vultr — Production Box (MTA host)
 
-- URL: `https://fly.io/app/sign-up`
-- **Action: Sign up and add a credit card.** A card on file is required to allocate a dedicated static IPv4, which is required for email.
-- Copy: nothing yet. Install `flyctl` locally (`brew install flyctl` / `curl -L https://fly.io/install.sh | sh`).
+- The production box is already running at `149.28.119.158` (Vultr VPS).
+- **Action:** Confirm you have SSH access (`ssh root@149.28.119.158`). The MTA
+  runs as `alecrae-mta` systemd service — see `docs/infra/mta-box-setup.md`.
+- No new sign-up needed; box is provisioned.
 
 ### 3. Neon — Postgres
 
@@ -111,37 +114,45 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 ### 13. Record connection strings
 
-- **Action: Paste both connection strings into your password manager** next to the Phase 1 keys. You will use them in Phase 3 (Fly secrets) and Phase 5 (Vercel env).
+- **Action: Paste both connection strings into your password manager** next to the Phase 1 keys. You will use them in Phase 3 (box env vars) and Phase 5 (box `.env` file).
 
 **Phase 2 done when:** Neon shows tables exist, Upstash shows a ready database, both connection strings saved.
 
 ---
 
-## Phase 3 — MTA deploy (~40 min active + 1–3 business day wait on Fly support)
+## Phase 3 — MTA setup on the Vapron box (~30 min active + 1–3 day wait on PTR)
 
-> The MTA (Mail Transfer Agent) is the machine that actually sends and receives email. This phase has a clock-time wait, so **start it early in the day.**
+> The MTA (Mail Transfer Agent) is the machine that actually sends and receives email. This phase has a clock-time wait (PTR record), so **start it early in the day.**
 
-### 14. Deploy MTA to Fly.io
+### 14. Set up the MTA systemd service on the box
 
-- **Action: Follow [`fly-mta-deploy.md`](./fly-mta-deploy.md)** end-to-end — `fly launch`, `fly deploy`.
+- **Action: Follow [`mta-box-setup.md`](./mta-box-setup.md)** — Redis install, systemd unit file, env vars, smoke test.
+- The production box IP is `149.28.119.158`. Both `mx1.alecrae.com` and `mx2.alecrae.com` A records already point there.
 
-### 15. Allocate static IPv4
+### 15. Static IPv4
 
-- **Action: Run `fly ips allocate-v4` and write the IP down.** This IP will be the source of all outbound mail and the target of `mx1.alecrae.com` / `mx2.alecrae.com`.
+- The box already has a dedicated static IPv4: **`149.28.119.158`**. No allocation needed.
 
-### 16. Email Fly support for rDNS/PTR — DO THIS NOW, NOT LATER
+### 16. Set PTR / rDNS in Vultr — DO THIS NOW, NOT LATER
 
-- **Action: Email `support@fly.io`** using the template in [`fly-mta-deploy.md`](./fly-mta-deploy.md#rdns-request-template). Request a PTR record mapping your static IPv4 to `mx1.alecrae.com`. **Takes 1–3 business days.** Without it, Gmail and Outlook will reject or spam-bin every message we send.
+- **Action: In the Vultr control panel → your VPS instance → Settings → IPv4 → rDNS, set the PTR record to `mail.alecrae.com`.**
+- **Takes effect within minutes** (Vultr self-serve, no ticket required). Without it, Gmail and Outlook will reject or spam-bin every message we send.
 
-### 17. Set Fly secrets
+### 17. Set MTA env vars on the box
 
-- **Action: `fly secrets set KEY=value ...` for every variable** listed in the MTA section of [`env-audit.md`](./env-audit.md). Includes `DATABASE_URL`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `ANTHROPIC_API_KEY`, DKIM private key, etc.
+- **Action: Edit `/opt/alecrae/.env` on the box** and add the MTA variables listed in the MTA section of [`env-audit.md`](./env-audit.md). Includes `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `DKIM_PRIVATE_KEY`, `RELAY_PROVIDER` + `SMTP_RELAY_*` (for Resend relay), etc.
+- Then restart: `sudo systemctl restart alecrae-mta`
 
-### 18. Verify the deploy
+### 18. Verify the MTA
 
-- **Action: Run `fly logs` and confirm no errors. From another machine: `telnet <static-ip> 25` — you should see the SMTP banner** (`220 mx1.alecrae.com ESMTP ready`). If the banner does not appear, port 25 may be blocked — contact Fly support.
+- **Action: Check systemd status and logs:**
+  ```bash
+  sudo systemctl status alecrae-mta
+  sudo journalctl -u alecrae-mta -f --since "5 minutes ago"
+  ```
+- From another machine: `telnet 149.28.119.158 25` — you should see the SMTP banner (`220 mx1.alecrae.com ESMTP ready`). If port 25 is blocked, open a Vultr support ticket.
 
-**Phase 3 done when:** Fly logs are clean, SMTP banner is visible, Fly support has acknowledged the rDNS ticket.
+**Phase 3 done when:** `alecrae-mta` service is active, SMTP banner is visible, PTR is set in Vultr.
 
 ---
 
@@ -152,8 +163,8 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 ### 19. Paste non-MX records
 
 - **Action: In Cloudflare DNS, paste every record from [`dns-zone-alecrae.md`](./dns-zone-alecrae.md) EXCEPT the `MX` rows.** This includes:
-  - `A` and `CNAME` for `mail`, `api`, `admin`, `status`, `docs`
-  - `A` for `smtp`, `mx1`, `mx2` → Fly static IPv4 (proxy **disabled** — grey cloud)
+  - `A` for `mail`, `api`, `admin`, `status`, `docs` → `149.28.119.158` (proxy **disabled** — grey cloud)
+  - `A` for `smtp`, `mx1`, `mx2` → `149.28.119.158` (proxy **disabled** — grey cloud)
   - `TXT` SPF on apex
   - `TXT` DKIM on `default._domainkey`
   - `TXT` DMARC on `_dmarc`
@@ -175,15 +186,18 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 ## Phase 5 — App env + Stripe (~20 min)
 
-### 22. Set all env vars on Vercel (web app)
+### 22. Set all env vars on the box
 
-- URL: `https://vercel.com/dashboard` → project `alecrae` → Settings → Environment Variables
-- **Action: Paste every variable listed in the Web section of [`env-audit.md`](./env-audit.md)** into the Production environment. Redeploy after saving (Deployments → latest → Redeploy).
+- **Action: Edit `/opt/alecrae/.env` on the production box** and paste every variable listed in the Web and API sections of [`env-audit.md`](./env-audit.md). Restart services after saving:
+  ```bash
+  sudo systemctl restart alecrae-api alecrae-web
+  ```
+- Full env setup guide: `docs/infra/morning-setup.md`.
 
 ### 23. Configure Stripe webhook
 
 - URL: `https://dashboard.stripe.com/webhooks`
-- **Action: Add endpoint `https://api.alecrae.com/webhooks/stripe`.** Select events: `checkout.session.completed`, `customer.subscription.*`, `invoice.*`. Copy signing secret → `STRIPE_WEBHOOK_SECRET` → paste into Vercel env → redeploy.
+- **Action: Add endpoint `https://api.alecrae.com/webhooks/stripe`.** Select events: `checkout.session.completed`, `customer.subscription.*`, `invoice.*`. Copy signing secret → `STRIPE_WEBHOOK_SECRET` → add to `/opt/alecrae/.env` on the box → restart `alecrae-api`.
 
 ### 24. Configure Google OAuth redirect URI
 
@@ -195,7 +209,7 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 - URL: `https://portal.azure.com` → App registrations → AlecRae → Authentication
 - **Action: Add redirect URI `https://mail.alecrae.com/auth/microsoft/callback`** (type: Web). Save.
 
-**Phase 5 done when:** Vercel deploys green with all env vars, Stripe webhook shows "Enabled" with a signing secret, both OAuth redirect URIs saved.
+**Phase 5 done when:** API and web services restart cleanly on the box with all env vars, Stripe webhook shows "Enabled" with a signing secret, both OAuth redirect URIs saved.
 
 ---
 
@@ -207,7 +221,7 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 ### 27. Receive test mail
 
-- **Action: From your phone's Gmail app, send a message to `craig@alecrae.com`.** It should appear in the AlecRae inbox within 30 seconds. If it does not, check `fly logs` and `dig MX alecrae.com`.
+- **Action: From your phone's Gmail app, send a message to `craig@alecrae.com`.** It should appear in the AlecRae inbox within 30 seconds. If it does not, check box logs (`sudo journalctl -u alecrae-api -f`) and `dig MX alecrae.com`.
 
 ### 28. Send test mail
 
@@ -234,8 +248,8 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 | Problem | Contact |
 |---|---|
-| rDNS, port 25, IP reputation | `support@fly.io` |
-| DNS, Cloudflare Pages builds | Cloudflare dashboard → Help |
+| rDNS, port 25, IP reputation, VPS issues | Vultr support portal → support.vultr.com |
+| DNS issues | Cloudflare dashboard → Help |
 | Database connections, slow queries | `support@neon.tech` |
 | Redis errors | `support@upstash.com` |
 | Payments, webhooks, tax | Stripe dashboard → Help |
@@ -247,10 +261,10 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 ## First 72 hours — monitor these daily
 
 - **Google Postmaster Tools** — spam placement %, domain reputation, authentication pass rate
-- **`fly logs -a alecrae-mta`** — delivery failures, bounces, 4xx/5xx from receivers
+- **Box MTA logs:** `sudo journalctl -u alecrae-mta -f` — delivery failures, bounces, 4xx/5xx from receivers
 - **Neon console** — connection count, slow query log
 - **Stripe dashboard → Developers → Webhooks** — delivery success rate (should be 100%)
-- **Vercel → Deployments → Logs** — runtime errors on the web app
+- **Box web/API logs:** `sudo journalctl -u alecrae-web -f` / `sudo journalctl -u alecrae-api -f` — runtime errors
 
 ---
 
@@ -260,7 +274,7 @@ Do this **before** launch, not after a fire:
 
 - **Lower all DNS TTLs to 300 seconds** (5 min) in Cloudflare now. High TTLs trap you — 5 min TTLs mean you can reroute in minutes.
 - **Keep a backup MX provider warm** — Fastmail or Migadu (paid, not Google/Microsoft). If our MTA catches fire, flip MX to the backup, mail keeps flowing, we fix in peace.
-- **Document the rollback command** in `fly-mta-deploy.md`: `fly deploy --image registry.fly.io/alecrae-mta:<last-good-sha>`.
+- **Box rollback:** `cd /opt/alecrae && git log --oneline -10` → find the last good commit → `git checkout <sha>` → rebuild → restart services. See `docs/infra/box-deploy.md` for the full procedure.
 
 ---
 
@@ -268,13 +282,15 @@ Do this **before** launch, not after a fire:
 
 Referenced files:
 - [`dns-zone-alecrae.md`](./dns-zone-alecrae.md)
-- [`fly-mta-deploy.md`](./fly-mta-deploy.md)
+- [`mta-box-setup.md`](./mta-box-setup.md)
+- [`morning-setup.md`](./morning-setup.md)
 - [`neon-setup.md`](./neon-setup.md)
 - [`upstash-setup.md`](./upstash-setup.md)
 - [`env-audit.md`](./env-audit.md)
 - [`.env.production.template`](./.env.production.template)
 - [`deliverability.md`](./deliverability.md)
+- [`box-deploy.md`](./box-deploy.md)
 
 ---
 
-_Last updated: 2026-06-08 23:35 UTC_
+_Last updated: 2026-06-20 14:00 UTC_

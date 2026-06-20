@@ -82,17 +82,17 @@ customer types and the fully-qualified name.
 ### Notes on each record
 
 **MX → AlecRae inbound.** `mx1`/`mx2.alecrae.com` are A-records pointing at our
-Fly.io inbound IP(s); their PTR/rDNS must match (see §3). Priority 10 is tried
-first, 20 is the backup. Without these, nobody can deliver to
-`info@bookaride.co.nz`. (Source: `auto-config.ts` `MX_SERVERS`; production
-hostnames per `dns-zone-alecrae.md`.)
+production box at `149.28.119.158`; the PTR/rDNS must match the HELO hostname
+(see §3). Priority 10 is tried first, 20 is the backup. Without these, nobody
+can deliver to `info@bookaride.co.nz`. (Source: `auto-config.ts` `MX_SERVERS`;
+production hostnames per `dns-zone-alecrae.md`.)
 
 **SPF.** Authorises our sending infra to send *as* `bookaride.co.nz`.
 `include:amazonses.com` covers the **SES relay** path (recommended for a cold
-domain, §2); `include:_spf.alecrae.com` covers our own Fly outbound IP(s) (the
-direct-MX path and any future senders, so we never have to touch the customer's
-record again). Start with **`~all`** (soft-fail) for the first ~30 days, then
-tighten to **`-all`** once reports are clean — same ramp as `dns-zone-alecrae.md`.
+domain, §2); `include:_spf.alecrae.com` covers our own box IP (the direct-MX
+path and any future senders, so we never have to touch the customer's record
+again). Start with **`~all`** (soft-fail) for the first ~30 days, then tighten
+to **`-all`** once reports are clean — same ramp as `dns-zone-alecrae.md`.
 **Keep total SPF DNS lookups ≤ 10** (`auto-config.ts` `SPF_MAX_LOOKUPS`); two
 includes is fine.
 
@@ -155,16 +155,17 @@ of the box, so a zero-reputation domain isn't *also* sending from a
 zero-reputation IP. You still warm the *domain* (volume ramp in
 `deliverability.md`), but you skip the much harder IP-warmup-from-scratch.
 
-### Option B — Direct MX (our own Fly IPs)
+### Option B — Direct MX (our own box IP: 149.28.119.158)
 
 Leave `RELAY_PROVIDER` unset. The worker resolves each recipient's MX and
 delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 
 **What it requires:**
-- **Warmed, dedicated outbound IP(s)** on Fly with **PTR/rDNS matching
-  `mx1.alecrae.com`** (email Fly support — `fly-mta-deploy.md` rDNS template).
-- **Port 25 outbound open** from the host (many providers block it; Fly allows
-  it on request).
+- **Warmed box IP** (`149.28.119.158`) with **PTR/rDNS matching
+  `mx1.alecrae.com`** — set via the Vultr control panel (see
+  `docs/infra/mta-box-setup.md`).
+- **Port 25 outbound open** from the Vultr instance (may require a Vultr
+  support ticket to unblock).
 - Strict adherence to the **week-by-week warmup schedule** in
   `deliverability.md` — going fast on a cold IP gets you blocklisted.
 
@@ -173,8 +174,7 @@ delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 > **Brand-new domain, zero reputation → use SES relay (Option A).** Lean on SES's
 > warmed IPs while the *domain* earns reputation, keep the in-house
 > `d=bookaride.co.nz` DKIM for alignment, and only consider direct-MX (Option B)
-> once we have dedicated, warmed Fly IPs with confirmed PTR and a real volume
-> reason to leave SES.
+> once the box IP has a confirmed PTR record and a real volume reason to leave SES.
 
 ---
 
@@ -182,12 +182,13 @@ delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 
 ### Services
 - **`services/inbound`** running with the **SMTP receiver on :25** reachable from
-  the public internet, behind A records `mx1.alecrae.com` / `mx2.alecrae.com`,
-  with **PTR/rDNS** on the inbound IP matching the HELO hostname. (`index.ts`:
-  `SMTP_PORT`, `SMTP_HOSTNAME`.) The HTTP webhook on :8025 is the alternative
-  ingress (Cloudflare Email Workers POST raw MIME) if direct :25 isn't viable.
-- **`services/mta` worker** running and draining the outbound BullMQ queue
-  (`worker.ts`, queue `alecrae-outbound`). Requires **Redis** (`REDIS_URL`).
+  the public internet, behind A records `mx1.alecrae.com` / `mx2.alecrae.com`
+  (both pointing to `149.28.119.158`), with **PTR/rDNS** on the box IP matching
+  the HELO hostname. (`index.ts`: `SMTP_PORT`, `SMTP_HOSTNAME`.) The HTTP
+  webhook on :8025 is the alternative ingress if direct :25 isn't viable.
+- **`alecrae-mta` systemd service** running on the Vapron box and draining the
+  outbound BullMQ queue (`worker.ts`, queue `alecrae-outbound`). Requires
+  **Redis** on the box (`REDIS_URL`). See `docs/infra/mta-box-setup.md`.
 - **Postgres** reachable (`DATABASE_URL`) — both services persist there, and the
   `domains` row (with the DKIM key) is read by the MTA worker on every send.
 - If using SES relay: **`RELAY_PROVIDER=ses`** + SES reachable.
@@ -248,11 +249,12 @@ dig CNAME bounce.bookaride.co.nz +short              # → bounce.alecrae.com.
 
 ### B. PTR / rDNS (the silent killer)
 ```bash
-dig A mx1.alecrae.com +short                         # → <our inbound IP>
-dig -x <our inbound IP> +short                       # → mx1.alecrae.com.  (MUST match)
+dig A mx1.alecrae.com +short                         # → 149.28.119.158
+dig -x 149.28.119.158 +short                         # → mx1.alecrae.com.  (MUST match)
 ```
 If the PTR doesn't match the HELO hostname, Gmail/Outlook will spam-bin or
-reject. Fix via Fly support (`fly-mta-deploy.md` rDNS request template).
+reject. Fix via the Vultr control panel: instance → Settings → IPv4 → rDNS →
+set to `mail.alecrae.com`. See `docs/infra/mta-box-setup.md`.
 
 ### C. Receiving — send TO `info@bookaride.co.nz`
 1. From an external account (e.g. a personal Gmail) send a plain test to
@@ -301,12 +303,12 @@ Run `verifyDomainConfig(<domainId>)` (auto-config.ts) → expect `overall:
 - **Missing DKIM key row.** No `dkim_private_key` on the domain → unsigned mail →
   DMARC fail under `p=quarantine`/`p=reject`. The pre-flight is step §3 "Store
   the private key."
-- **Cold IP on direct MX.** Sending real volume from a fresh Fly IP with no
-  warmup = blocklisted in hours. Use SES relay for a new domain, or follow the
+- **Cold IP on direct MX.** Sending real volume from the box IP with no warmup
+  = blocklisted in hours. Use SES relay for a new domain, or follow the
   `deliverability.md` warmup schedule to the letter.
-- **Port 25 blocked by the host.** Many cloud providers block outbound :25 by
-  default. Direct MX delivery silently fails/defers. Confirm Fly has :25 open,
-  or use the relay.
+- **Port 25 blocked by Vultr.** Vultr may block outbound :25 by default.
+  Direct MX delivery silently fails/defers. Open a Vultr support ticket to
+  unblock, or use the SES relay in the interim.
 - **SES still in sandbox.** Sends only to verified recipients, 200/day. Request
   production access first.
 - **SPF `-all` too early, or > 10 lookups.** Going strict on day 1 before every
@@ -381,4 +383,4 @@ VwIDAQAB
 
 ---
 
-_Last updated: 2026-06-11 11:21 UTC_
+_Last updated: 2026-06-20 14:00 UTC_
