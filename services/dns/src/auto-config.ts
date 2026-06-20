@@ -504,8 +504,12 @@ async function verifyDKIM(
     };
   }
 
-  const dkimRecords = txtRecords.filter((r) => r.startsWith("v=DKIM1"));
-  if (dkimRecords.length === 0) {
+  // Some DNS providers (e.g. Porkbun) return long TXT records as multiple
+  // 255-char entries instead of a single multi-string record. Join all entries
+  // so the full DKIM key is assembled before matching.
+  const joined = txtRecords.join("");
+  const dkimIdx = joined.indexOf("v=DKIM1");
+  if (dkimIdx === -1) {
     return {
       verified: false,
       expected: `v=DKIM1 record at ${dkimHost}`,
@@ -514,17 +518,10 @@ async function verifyDKIM(
     };
   }
 
+  const publishedRecord = joined.substring(dkimIdx);
+
   // If we have the stored public key, verify the published key matches
   if (expectedKeyBase64) {
-    const publishedRecord = dkimRecords[0];
-    if (!publishedRecord) {
-      return {
-        verified: false,
-        expected: `v=DKIM1 with matching public key`,
-        found: null,
-        error: "No DKIM record found",
-      };
-    }
     const pMatch = publishedRecord.match(/p=([A-Za-z0-9+/=]+)/);
     const publishedKey = pMatch ? pMatch[1] : null;
 
@@ -549,7 +546,7 @@ async function verifyDKIM(
   return {
     verified: true,
     expected: `v=DKIM1 record at ${dkimHost}`,
-    found: dkimRecords[0] ?? null,
+    found: publishedRecord,
     error: null,
   };
 }

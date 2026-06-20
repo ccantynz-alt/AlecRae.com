@@ -1,6 +1,6 @@
 # AlecRae Migration Spec — Type 2
 
-> **Last updated: 2026-06-20 00:00 UTC**
+> **Last updated: 2026-06-20 10:00 UTC**
 
 > **Type 2 migration** = migrate a product from an external managed platform
 > (Vercel, Cloudflare, Mailgun, Resend) onto Vapron's own bare-metal stack.
@@ -247,19 +247,19 @@ journalctl -u vapron-api -n 20 | grep -i alecrae
 ## Step 8 — Smoke test
 
 ```sh
-curl -s -X POST https://api.alecrae.com/v1/send \
+curl -s -X POST https://api.alecrae.com/v1/messages/send \
   -H "Authorization: Bearer <api-key-from-step-4>" \
   -H "Content-Type: application/json" \
   -d '{
-    "from": "noreply@mail.vapron.ai",
-    "to": "craig@example.com",
+    "from": {"email": "noreply@mail.vapron.ai", "name": "Vapron"},
+    "to": [{"email": "ccantynz@gmail.com"}],
     "template_id": "vapron.verify-email",
-    "variables": { "firstName": "Craig", "verifyUrl": "https://vapron.ai/verify/test123" },
+    "variables": {"firstName": "Craig", "verifyUrl": "https://vapron.ai/verify/test123"},
     "message_id": "migration-smoke-test-001"
   }'
 ```
 
-Expected: `{"id":"...","status":"queued"}`
+Expected: `{"id":"...","messageId":"...","status":"queued"}`
 
 - Email should arrive in inbox within 60s
 - `journalctl -u vapron-api -n 50 | grep alecrae-webhook` should show `event=delivered message_id=migration-smoke-test-001`
