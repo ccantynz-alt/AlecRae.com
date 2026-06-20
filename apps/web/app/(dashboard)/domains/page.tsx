@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ChangeEvent } from "react";
 import {
   Box,
   Text,
@@ -12,7 +12,7 @@ import {
   DomainCard,
   type DnsRecord,
 } from "@alecrae/ui";
-import { domainsApi, type Domain } from "../../../lib/api";
+import { domainsApi, type Domain, type AutoConfigRecordResult } from "../../../lib/api";
 
 function mapDomain(d: Domain): {
   domain: string;
@@ -52,15 +52,17 @@ function mapDomain(d: Domain): {
   };
 }
 
-// ─── Provider-specific instructions ──────────────────────────────────────────
+// ─── Provider configuration ───────────────────────────────────────────────────
+
+type AutoProvider = "cloudflare" | "godaddy" | "porkbun";
 
 const DNS_PROVIDERS = [
-  { id: "cloudflare", label: "Cloudflare" },
-  { id: "godaddy", label: "GoDaddy" },
-  { id: "namecheap", label: "Namecheap" },
-  { id: "porkbun", label: "Porkbun" },
-  { id: "google", label: "Google Domains / Squarespace" },
-  { id: "other", label: "Other provider" },
+  { id: "cloudflare", label: "Cloudflare", autoConfig: true },
+  { id: "godaddy", label: "GoDaddy", autoConfig: true },
+  { id: "porkbun", label: "Porkbun", autoConfig: true },
+  { id: "namecheap", label: "Namecheap", autoConfig: false },
+  { id: "google", label: "Google Domains", autoConfig: false },
+  { id: "other", label: "Other", autoConfig: false },
 ] as const;
 
 type ProviderId = typeof DNS_PROVIDERS[number]["id"];
@@ -102,6 +104,28 @@ const PROVIDER_STEPS: Record<ProviderId, string[]> = {
     "Add each record below exactly as shown",
     "DNS changes can take up to 48 hours to propagate globally",
   ],
+};
+
+// Credential instructions for auto-config providers
+const AUTO_CONFIG_INSTRUCTIONS: Record<AutoProvider, { fields: { key: string; label: string; placeholder: string; hint?: string }[]; tokenHint: string }> = {
+  cloudflare: {
+    fields: [{ key: "apiToken", label: "API Token", placeholder: "Your Cloudflare API token", hint: "dash.cloudflare.com/profile/api-tokens → Create Token → Edit zone DNS" }],
+    tokenHint: "Token needs Zone:DNS:Edit permission. AlecRae uses it once and never stores it.",
+  },
+  godaddy: {
+    fields: [
+      { key: "apiKey", label: "API Key", placeholder: "Your GoDaddy API key" },
+      { key: "apiSecret", label: "API Secret", placeholder: "Your GoDaddy API secret", hint: "developer.godaddy.com/keys → Create New API Key" },
+    ],
+    tokenHint: "Select Production environment. AlecRae uses credentials once and never stores them.",
+  },
+  porkbun: {
+    fields: [
+      { key: "apiKey", label: "API Key", placeholder: "Your Porkbun API key" },
+      { key: "secretApiKey", label: "Secret API Key", placeholder: "Your Porkbun secret API key", hint: "porkbun.com → Account → API Access → enable API access" },
+    ],
+    tokenHint: "AlecRae uses credentials once and never stores them.",
+  },
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -395,6 +419,8 @@ AddDomainForm.displayName = "AddDomainForm";
 
 // ─── DNS Setup Wizard ─────────────────────────────────────────────────────────
 
+type AutoConfigState = "idle" | "loading" | "success" | "error";
+
 function DnsSetupWizard({
   domain,
   onClose,
@@ -408,8 +434,68 @@ function DnsSetupWizard({
 }) {
   const [provider, setProvider] = useState<ProviderId>("cloudflare");
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [credentials, setCredentials] = useState<Record<string, string>>({});
+  const [autoConfigState, setAutoConfigState] = useState<AutoConfigState>("idle");
+  const [autoConfigResults, setAutoConfigResults] = useState<AutoConfigRecordResult[]>([]);
+  const [autoConfigError, setAutoConfigError] = useState<string | null>(null);
+
   const steps = PROVIDER_STEPS[provider];
   const allVerified = domain.verificationState === "verified";
+  const selectedProvider = DNS_PROVIDERS.find((p) => p.id === provider);
+  const canAutoConfig = selectedProvider?.autoConfig === true;
+  const autoInstructions = canAutoConfig ? AUTO_CONFIG_INSTRUCTIONS[provider as AutoProvider] : null;
+
+  const handleProviderChange = (id: ProviderId) => {
+    setProvider(id);
+    setCredentials({});
+    setAutoConfigState("idle");
+    setAutoConfigResults([]);
+    setAutoConfigError(null);
+  };
+
+  const handleCredentialChange = (key: string, value: string) => {
+    setCredentials((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleAutoConfig = async () => {
+    if (!autoInstructions) return;
+    const missingField = autoInstructions.fields.find((f) => !credentials[f.key]?.trim());
+    if (missingField) {
+      setAutoConfigError(`Please enter your ${missingField.label}.`);
+      return;
+    }
+
+    setAutoConfigState("loading");
+    setAutoConfigError(null);
+
+    try {
+      let params: Parameters<typeof domainsApi.autoConfig>[1];
+      if (provider === "cloudflare") {
+        params = { provider: "cloudflare", apiToken: credentials["apiToken"] ?? "" };
+      } else if (provider === "godaddy") {
+        params = { provider: "godaddy", apiKey: credentials["apiKey"] ?? "", apiSecret: credentials["apiSecret"] ?? "" };
+      } else {
+        params = { provider: "porkbun", apiKey: credentials["apiKey"] ?? "", secretApiKey: credentials["secretApiKey"] ?? "" };
+      }
+
+      const res = await domainsApi.autoConfig(domain.id, params);
+      setAutoConfigResults(res.data.records);
+      setAutoConfigState(res.data.allConfigured ? "success" : "error");
+      if (!res.data.allConfigured) {
+        const failed = res.data.records.filter((r) => r.status === "failed");
+        setAutoConfigError(
+          failed.length > 0
+            ? `${failed.length} record(s) failed: ${failed.map((r) => r.error ?? r.name).join("; ")}`
+            : "Some records could not be configured. Please add them manually.",
+        );
+      }
+      // Refresh domain state after auto-config
+      await onVerify();
+    } catch (err) {
+      setAutoConfigState("error");
+      setAutoConfigError(err instanceof Error ? err.message : "Auto-configuration failed. Please try manually.");
+    }
+  };
 
   const copyToClipboard = async (text: string, index: number) => {
     try {
@@ -428,6 +514,10 @@ function DnsSetupWizard({
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
+
+  const credentialsFilled = autoInstructions
+    ? autoInstructions.fields.every((f) => credentials[f.key]?.trim())
+    : false;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -483,7 +573,7 @@ function DnsSetupWizard({
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => setProvider(p.id)}
+                      onClick={() => handleProviderChange(p.id)}
                       className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
                         provider === p.id
                           ? "bg-brand-600 text-white border-brand-600"
@@ -496,10 +586,119 @@ function DnsSetupWizard({
                 </div>
               </div>
 
+              {/* Auto-configure section (Cloudflare / GoDaddy / Porkbun) */}
+              {canAutoConfig && autoInstructions && (
+                <div className="rounded-xl border border-brand-200 bg-brand-50 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-brand-600 text-base">&#9889;</span>
+                    <p className="text-sm font-semibold text-brand-900">
+                      Auto-configure (recommended)
+                    </p>
+                    <span className="ml-auto text-xs bg-brand-100 text-brand-700 font-medium px-2 py-0.5 rounded-full">
+                      No copy-pasting
+                    </span>
+                  </div>
+                  <p className="text-xs text-brand-800">
+                    AlecRae will add all DNS records to {selectedProvider?.label} automatically.
+                    Your credentials are used once and never stored.
+                  </p>
+
+                  {/* Credential fields */}
+                  {autoConfigState !== "success" && (
+                    <div className="space-y-2">
+                      {autoInstructions.fields.map((field) => (
+                        <div key={field.key}>
+                          <label className="block text-xs font-medium text-brand-900 mb-1">
+                            {field.label}
+                            {field.hint && (
+                              <span className="ml-1.5 font-normal text-brand-600">— {field.hint}</span>
+                            )}
+                          </label>
+                          <input
+                            type="password"
+                            placeholder={field.placeholder}
+                            value={credentials[field.key] ?? ""}
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => handleCredentialChange(field.key, e.target.value)}
+                            className="w-full px-3 py-2 text-sm rounded-lg border border-brand-200 bg-white text-content placeholder-content-secondary focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                        </div>
+                      ))}
+                      <p className="text-xs text-brand-700 italic">{autoInstructions.tokenHint}</p>
+                    </div>
+                  )}
+
+                  {/* Auto-config results */}
+                  {autoConfigResults.length > 0 && (
+                    <div className="space-y-1.5 mt-1">
+                      {autoConfigResults.map((r, i) => (
+                        <div
+                          key={i}
+                          className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${
+                            r.status === "failed"
+                              ? "bg-red-50 text-red-800 border border-red-200"
+                              : "bg-green-50 text-green-800 border border-green-200"
+                          }`}
+                        >
+                          <span className="font-mono font-bold">{r.type}</span>
+                          <span className="flex-1 truncate text-content-secondary">{r.name}</span>
+                          {r.status === "created" && <span className="font-medium text-green-700">&#10003; Added</span>}
+                          {r.status === "updated" && <span className="font-medium text-green-700">&#10003; Updated</span>}
+                          {r.status === "existed" && <span className="font-medium text-green-600">Already set</span>}
+                          {r.status === "failed" && <span className="font-medium text-red-700">&#10005; Failed</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Error message */}
+                  {autoConfigError && (
+                    <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      {autoConfigError}
+                    </p>
+                  )}
+
+                  {/* Configure button */}
+                  {autoConfigState !== "success" && (
+                    <button
+                      type="button"
+                      onClick={handleAutoConfig}
+                      disabled={autoConfigState === "loading" || !credentialsFilled}
+                      className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+                        autoConfigState === "loading" || !credentialsFilled
+                          ? "bg-brand-200 text-brand-400 cursor-not-allowed"
+                          : "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800"
+                      }`}
+                    >
+                      {autoConfigState === "loading"
+                        ? "Configuring DNS records..."
+                        : "Configure Automatically →"}
+                    </button>
+                  )}
+
+                  {autoConfigState === "success" && (
+                    <div className="flex items-center gap-2 text-sm font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2.5">
+                      <span>&#10003;</span>
+                      <span>All DNS records added successfully!</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Divider between auto and manual */}
+              {canAutoConfig && (
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-content-secondary">or configure manually</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+              )}
+
               {/* Step-by-step instructions */}
               <div className="bg-surface-secondary rounded-lg p-4">
                 <p className="text-xs font-semibold text-content-secondary uppercase tracking-wide mb-3">
-                  How to add these records on {DNS_PROVIDERS.find((p) => p.id === provider)?.label}
+                  How to add these records on {selectedProvider?.label}
                 </p>
                 <ol className="space-y-1.5">
                   {steps.map((step, i) => (

@@ -673,6 +673,8 @@ larger storage, unlimited accounts, dedicated support. Billing wiring pending
 | 53 | **Sidebar 404s** — `/delegation` (no page; is a tab inside `/shared-inboxes`) and `/developer` (page at `/settings/developer`) both 404'd when clicked | MEDIUM | 2026-06-19 | FIXED 2026-06-19 — layout.tsx hrefs corrected. |
 | 54 | **notifications/page and agent/page used local apiFetch with no 401 retry** — same class as #50; sessions broke silently after 15 min on these two pages | MEDIUM | 2026-06-19 | FIXED 2026-06-19 — both pages now use `refreshSession()` → retry pattern from auth-token.ts. |
 | 55 | **alecrae-mta systemd service not running on box** — port 25 is now open; MTA can deliver directly (no relay) OR via Resend. Service must be created via `docs/infra/mta-box-setup.md`. Also: PTR record for 149.28.119.158 not yet set → cold-start deliverability risk | HIGH | 2026-06-19 | OPEN — Craig must run runbook + set PTR in Vultr control panel. Runbook updated to document both direct + relay modes. |
+| 56 | **Domains "Verify Now" button had zero visual feedback** — button fired silently with no spinner, no loading state, no result; users couldn't tell if anything happened | MEDIUM | 2026-06-20 | FIXED 2026-06-20 (PR #87) — button shows spinner + "Checking..." label while running; domain card badge changes to "Checking..."; inline green/amber result message appears for 6s after completion. `DomainCard` gains `verifying` prop. |
+| 57 | **Domain DNS setup was developer-only** — after adding a domain users saw a raw records list with no guidance; non-technical users had no idea what to do or where in their DNS panel to go | HIGH | 2026-06-20 | FIXED 2026-06-20 (PR #87) — replaced with a guided DNS setup wizard: provider picker (Cloudflare/GoDaddy/Namecheap/Porkbun/Google Domains/Other) with numbered step-by-step instructions per provider; auto-polls pending domains every 30s so no manual "Verify Now" needed; wizard opens automatically after adding a domain; next step is Cloudflare API integration for fully automatic record creation. |
 
 ---
 
@@ -822,7 +824,7 @@ legacy with no customers. Do not add domains to Vercel or propose CNAMEs back.
   surface exists in this repo).
 
 
-**Last updated:** 2026-06-20 10:30 UTC
+**Last updated:** 2026-06-20 12:00 UTC
 **Current phase:** Phase 1 — Beta Launch in Progress
 **Current focus:** Vapron Type 2 migration COMPLETE. `mail.vapron.ai` fully verified (SPF ✅ DKIM ✅ DMARC ✅ MX ✅ Return-Path ✅). 10 email templates seeded. Smoke test passed — message queued with real Message-ID `<104939663c341bf00d82f0c31d67b5c8@mail.vapron.ai>`. DNS fix shipped (PR #86): verifyDKIM now joins split TXT chunks so Porkbun's 255-char splits no longer break DKIM matching. Outstanding Craig tasks: (1) set PTR record 149.28.119.158 → mail.alecrae.com in Vultr; (2) confirm email arrives in Gmail inbox; (3) run MTA idempotency check (same message_id → no duplicate).
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
