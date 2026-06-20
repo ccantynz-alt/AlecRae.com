@@ -157,7 +157,8 @@ const VAPRON_TEMPLATES: Template[] = [
 ];
 
 async function seedTemplates() {
-  console.warn(`Seeding ${VAPRON_TEMPLATES.length} Vapron email templates for account ${ACCOUNT_ID}...`);
+  const maskedId = `${ACCOUNT_ID.slice(0, 8)}…`;
+  console.warn(`Seeding ${VAPRON_TEMPLATES.length} Vapron email templates for account ${maskedId}`);
 
   for (const tpl of VAPRON_TEMPLATES) {
     const id = randomUUID();
