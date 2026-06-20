@@ -402,7 +402,7 @@ export default function AiTriagePage() {
                         <div className="flex items-center gap-4 text-xs text-content-secondary">
                           <span>{rule.totalApplied} applied</span>
                           {rule.totalCorrected > 0 && <span>{rule.totalCorrected} corrected</span>}
-                          {rule.accuracy != null && (
+                          {rule.accuracy !== null && rule.accuracy !== undefined && (
                             <span>{Math.round(rule.accuracy * 100)}% accuracy</span>
                           )}
                           <span>Created {new Date(rule.createdAt).toLocaleDateString()}</span>
