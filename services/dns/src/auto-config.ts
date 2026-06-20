@@ -509,8 +509,7 @@ async function verifyDKIM(
   // so the full DKIM key is assembled before matching.
   const joined = txtRecords.join("");
   const dkimIdx = joined.indexOf("v=DKIM1");
-  const dkimRecords = dkimIdx !== -1 ? [joined.substring(dkimIdx)] : [];
-  if (dkimRecords.length === 0) {
+  if (dkimIdx === -1) {
     return {
       verified: false,
       expected: `v=DKIM1 record at ${dkimHost}`,
@@ -519,7 +518,7 @@ async function verifyDKIM(
     };
   }
 
-  const publishedRecord = dkimRecords[0]!;
+  const publishedRecord = joined.substring(dkimIdx);
 
   // If we have the stored public key, verify the published key matches
   if (expectedKeyBase64) {
