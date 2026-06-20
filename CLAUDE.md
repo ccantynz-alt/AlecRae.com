@@ -822,9 +822,9 @@ legacy with no customers. Do not add domains to Vercel or propose CNAMEs back.
   surface exists in this repo).
 
 
-**Last updated:** 2026-06-19 10:00 UTC
+**Last updated:** 2026-06-20 00:00 UTC
 **Current phase:** Phase 1 — Beta Launch in Progress
-**Current focus:** Full go-live audit + fixes. Gmail/Outlook history backfill now WORKS (stubs replaced with real sync engine calls). Scope bug fixed (`accounts:write/read` → `account:manage/read` in connect.ts). Dashboard sidebar 404s fixed (Delegation → /shared-inboxes, Developer → /settings/developer). Gmail/Outlook import UI added to Workspace → Import tab. Auth token refresh wired into notifications + agent pages. Port 25 open — MTA can deliver direct OR via Resend relay; Craig must run `docs/infra/mta-box-setup.md` to start `alecrae-mta` systemd service. Craig tasks: (1) run MTA setup runbook on box; (2) set PTR record 149.28.119.158 → mail.alecrae.com in Vultr (for direct delivery) OR verify alecrae.com in Resend (for relay); (3) sign in to get fresh JWT with new scopes.
+**Current focus:** Vapron Type 2 migration spec added (`docs/infra/vapron-migration-type2.md`). `scripts/seed-vapron-templates.ts` created — seeds 10 Vapron platform email templates (verify-email, welcome, password-reset, magic-link, waitlist-confirm, subscription-created, payment-failed, deploy-success, deploy-failure, custom-domain-verified). PR #84 merged (go-live audit fixes: Gmail/Outlook import wired, sidebar 404s fixed, auth refresh on notifications+agent pages, eqeqeq lint fixes). Craig tasks outstanding: (1) run MTA setup runbook on box (`docs/infra/mta-box-setup.md`); (2) set PTR record 149.28.119.158 → mail.alecrae.com in Vultr; (3) run Vapron migration steps 4–7 to seed templates + register domain + set env on box.
 **Build completion:** TIER 1-4 (36/36) + 7 bonus + 31 advanced (S10/10 + A7/7 + B8/8 + C6/10) + 20 expansion (Tier 5) + 9 platform (Tier 6) + 6 intelligence (Tier 7) + 6 deep AI (Tier 8)
 
 **Next review:** Before any major architectural change, before any production deployment, at the start of every session.
