@@ -1,17 +1,19 @@
 /**
  * Domains Route — Domain Management, DNS Auto-Configuration & Verification
  *
- * POST   /v1/domains              — Register a new sending domain (auto-generates DNS records)
- * GET    /v1/domains              — List all domains for the account
- * GET    /v1/domains/:id          — Get domain details + DNS records
- * POST   /v1/domains/:id/verify   — Trigger DNS verification check
- * GET    /v1/domains/:id/dns      — Get required DNS records for the domain
- * GET    /v1/domains/:id/health   — Get domain health report
- * POST   /v1/domains/:id/rotate-dkim — Rotate DKIM keys (24h dual signing overlap)
- * DELETE /v1/domains/:id          — Remove a domain
+ * POST   /v1/domains                    — Register a new sending domain
+ * GET    /v1/domains                    — List all domains for the account
+ * GET    /v1/domains/:id                — Get domain details + DNS records
+ * POST   /v1/domains/:id/verify         — Trigger DNS verification check
+ * POST   /v1/domains/:id/dns-autoconfig — Auto-push DNS records to Cloudflare/GoDaddy/Porkbun
+ * GET    /v1/domains/:id/dns            — Get required DNS records for the domain
+ * GET    /v1/domains/:id/health         — Get domain health report
+ * POST   /v1/domains/:id/rotate-dkim   — Rotate DKIM keys (24h dual signing overlap)
+ * DELETE /v1/domains/:id               — Remove a domain
  */
 
 import { Hono } from "hono";
+import { z } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
@@ -29,6 +31,10 @@ import {
   rotateDkimKey,
 } from "@alecrae/dns";
 import { warmup } from "./warmup.js";
+import { configureCloudflare } from "../lib/dns-providers/cloudflare.js";
+import { configureGodaddy } from "../lib/dns-providers/godaddy.js";
+import { configurePorkbun } from "../lib/dns-providers/porkbun.js";
+import { inferApexDomain } from "../lib/dns-providers/types.js";
 
 // ─── Route handler ──────────────────────────────────────────────────────────
 
@@ -507,6 +513,130 @@ domains.delete(
     await db.delete(domainsTable).where(eq(domainsTable.id, id));
 
     return c.json({ deleted: true, id });
+  },
+);
+
+// ─── POST /v1/domains/:id/dns-autoconfig ────────────────────────────────────
+
+const DnsAutoConfigSchema = z.discriminatedUnion("provider", [
+  z.object({
+    provider: z.literal("cloudflare"),
+    apiToken: z.string().min(1, "Cloudflare API token is required"),
+  }),
+  z.object({
+    provider: z.literal("godaddy"),
+    apiKey: z.string().min(1, "GoDaddy API key is required"),
+    apiSecret: z.string().min(1, "GoDaddy API secret is required"),
+    apexDomain: z.string().optional(),
+  }),
+  z.object({
+    provider: z.literal("porkbun"),
+    apiKey: z.string().min(1, "Porkbun API key is required"),
+    secretApiKey: z.string().min(1, "Porkbun secret API key is required"),
+    apexDomain: z.string().optional(),
+  }),
+]);
+
+domains.post(
+  "/:id/dns-autoconfig",
+  requireScope("domains:manage"),
+  validateBody(DnsAutoConfigSchema),
+  async (c) => {
+    const id = c.req.param("id");
+    const auth = c.get("auth");
+    const body = getValidatedBody<z.infer<typeof DnsAutoConfigSchema>>(c);
+    const db = getDatabase();
+
+    // Verify ownership
+    const [domain] = await db
+      .select()
+      .from(domainsTable)
+      .where(and(eq(domainsTable.id, id), eq(domainsTable.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!domain) {
+      return c.json(
+        { error: { type: "not_found", message: "Domain not found", code: "domain_not_found" } },
+        404,
+      );
+    }
+
+    // Load all DNS records for this domain
+    const records = await db
+      .select()
+      .from(dnsRecordsTable)
+      .where(eq(dnsRecordsTable.domainId, id));
+
+    if (!records.length) {
+      return c.json(
+        {
+          error: {
+            type: "bad_request",
+            message: "No DNS records found for this domain",
+            code: "no_dns_records",
+          },
+        },
+        400,
+      );
+    }
+
+    const autoConfigRecords = records.map((r) => ({
+      type: r.type,
+      name: r.name,
+      value: r.value,
+      priority: r.priority,
+    }));
+
+    let result;
+    switch (body.provider) {
+      case "cloudflare":
+        result = await configureCloudflare(body.apiToken, autoConfigRecords);
+        break;
+      case "godaddy": {
+        const apex = body.apexDomain ?? inferApexDomain(domain.domain);
+        result = await configureGodaddy(body.apiKey, body.apiSecret, apex, autoConfigRecords);
+        break;
+      }
+      case "porkbun": {
+        const apex = body.apexDomain ?? inferApexDomain(domain.domain);
+        result = await configurePorkbun(body.apiKey, body.secretApiKey, apex, autoConfigRecords);
+        break;
+      }
+    }
+
+    // If provider-level error (e.g. zone not found), return 422
+    if (!result.success && !result.records.length && result.error) {
+      return c.json(
+        {
+          error: {
+            type: "provider_error",
+            message: result.error,
+            code: "autoconfig_failed",
+          },
+        },
+        422,
+      );
+    }
+
+    // Trigger verification if all records were created/updated
+    let verification = null;
+    if (result.success) {
+      try {
+        verification = await verifyDomainConfig(id);
+      } catch {
+        // DNS may not have propagated yet — non-fatal
+      }
+    }
+
+    return c.json({
+      data: {
+        provider: body.provider,
+        domain: domain.domain,
+        records: result.records,
+        allConfigured: result.success,
+        verification,
+      },
+    });
   },
 );
 

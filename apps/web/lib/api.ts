@@ -851,6 +851,21 @@ export const messagesApi = {
 
 // ─── Domains ───────────────────────────────────────────────────────────────
 
+export interface AutoConfigRecordResult {
+  type: string;
+  name: string;
+  status: "created" | "updated" | "existed" | "failed";
+  error?: string;
+}
+
+export interface AutoConfigResponse {
+  provider: string;
+  domain: string;
+  records: AutoConfigRecordResult[];
+  allConfigured: boolean;
+  verification: { overall: string } | null;
+}
+
 export const domainsApi = {
   add(domain: string) {
     return apiFetch<{ data: Domain }>("/v1/domains", {
@@ -870,6 +885,19 @@ export const domainsApi = {
   verify(id: string) {
     return apiFetch<{ data: Domain }>(`/v1/domains/${id}/verify`, {
       method: "POST",
+    });
+  },
+
+  autoConfig(
+    id: string,
+    params:
+      | { provider: "cloudflare"; apiToken: string }
+      | { provider: "godaddy"; apiKey: string; apiSecret: string; apexDomain?: string }
+      | { provider: "porkbun"; apiKey: string; secretApiKey: string; apexDomain?: string },
+  ) {
+    return apiFetch<{ data: AutoConfigResponse }>(`/v1/domains/${id}/dns-autoconfig`, {
+      method: "POST",
+      body: JSON.stringify(params),
     });
   },
 
