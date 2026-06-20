@@ -2,7 +2,7 @@
 
 > Source of truth for production env vars across web, api, mta, admin, and mobile.
 > Pairs with `.env.production.template` in this same directory.
-_Last updated: 2026-06-08 23:35 UTC_
+_Last updated: 2026-06-20 14:00 UTC_
 
 ---
 
@@ -28,12 +28,12 @@ _Last updated: 2026-06-08 23:35 UTC_
 | `LOG_LEVEL` | pino log verbosity | Literal | `info` | web, api, mta |
 | `PORT` | HTTP listener port | Literal / platform-assigned | `3000` (web), `3001` (api) | web, api |
 
-## Database — Neon
+## Database — Neon (or local Postgres on the Vapron box)
 
 | Var | Purpose | Where to get | Example | Services |
 |---|---|---|---|---|
-| `DATABASE_URL` | Pooled connection (pgbouncer) for serverless workloads | Neon console → Connection Details → Pooled | `postgres://user:pwd@ep-xyz-pooler.neon.tech/alecrae?sslmode=require` | api, mta, admin |
-| `DIRECT_URL` | Direct connection for migrations + long-lived TX | Neon console → Connection Details → Direct | `postgres://user:pwd@ep-xyz.neon.tech/alecrae?sslmode=require` | api (migrations only) |
+| `DATABASE_URL` | Pooled connection (pgbouncer) for serverless workloads, or local Postgres on box | Neon console → Connection Details → Pooled; or `postgresql://alecrae:<pwd>@localhost:5432/alecrae` on the box | `postgres://user:pwd@ep-xyz-pooler.neon.tech/alecrae?sslmode=require` | api, mta, admin |
+| `DIRECT_URL` | Direct connection for migrations + long-lived TX | Neon console → Connection Details → Direct; or same local URL on box | `postgres://user:pwd@ep-xyz.neon.tech/alecrae?sslmode=require` | api (migrations only) |
 
 ## Cache / Queue — Upstash Redis
 
@@ -100,20 +100,20 @@ _Last updated: 2026-06-08 23:35 UTC_
 | `ABUSE_EMAIL` | Abuse contact (RFC 2142) | Literal | `abuse@alecrae.com` | mta |
 | `DMARC_EMAIL` | DMARC aggregate report receiver | Literal | `dmarc@alecrae.com` | mta |
 
-## Storage — Cloudflare R2
+## Storage — Cloudflare R2 (or Vapron Object Storage)
 
 | Var | Purpose | Where to get | Example | Services |
 |---|---|---|---|---|
-| `R2_ACCESS_KEY_ID` | R2 S3-compatible access key | dash.cloudflare.com → R2 → Manage API Tokens | `<key>` | api |
-| `R2_SECRET_ACCESS_KEY` | R2 S3-compatible secret | Same | `<secret>` | api |
-| `R2_BUCKET` | Bucket name | CF R2 → bucket overview | `alecrae-attachments` | api |
-| `R2_ENDPOINT` | Account-specific S3 endpoint | CF R2 → bucket → S3 API | `https://<account-id>.r2.cloudflarestorage.com` | api |
+| `R2_ACCESS_KEY_ID` | R2/S3-compatible access key | dash.cloudflare.com → R2 → Manage API Tokens; or Vapron dashboard | `<key>` | api |
+| `R2_SECRET_ACCESS_KEY` | R2/S3-compatible secret | Same | `<secret>` | api |
+| `R2_BUCKET` | Bucket name | CF R2 → bucket overview; or Vapron bucket name | `alecrae-attachments` | api |
+| `R2_ENDPOINT` | Account-specific S3 endpoint | CF R2 → bucket → S3 API; or Vapron storage endpoint | `https://<account-id>.r2.cloudflarestorage.com` | api |
 
 ## Search — Meilisearch
 
 | Var | Purpose | Where to get | Example | Services |
 |---|---|---|---|---|
-| `MEILI_HOST` | Meilisearch URL | Self-hosted (Fly.io) or Meili Cloud | `https://search.alecrae.com` | api |
+| `MEILI_HOST` | Meilisearch URL | Self-hosted on the Vapron box or Meili Cloud | `https://search.alecrae.com` | api |
 | `MEILI_MASTER_KEY` | Admin key for indexing | Meili deploy config | `<key>` | api |
 
 ## Observability
@@ -137,7 +137,7 @@ _Last updated: 2026-06-08 23:35 UTC_
 
 | Var | Purpose | Where to get | Example | Services |
 |---|---|---|---|---|
-| `COLLAB_WS_URL` | Yjs collab WebSocket URL — OPTIONAL (defaults to `wss://collab.alecrae.com`) | Fly.io app URL | `wss://collab.alecrae.com` | api |
+| `COLLAB_WS_URL` | Yjs collab WebSocket URL — OPTIONAL (defaults to `wss://collab.alecrae.com`) | Vapron box or external collab host URL | `wss://collab.alecrae.com` | api |
 | `COLLAB_HTTP_URL` | Yjs collab HTTP URL — OPTIONAL | Same | `https://collab.alecrae.com` | api |
 | `COLLAB_JWT_SECRET` | Collab-scoped JWT secret — OPTIONAL (falls back to `JWT_SECRET`) | `openssl rand -base64 64` | `<secret>` | api |
 | `JWT_ISSUER` | JWT `iss` claim — OPTIONAL (defaults `alecrae`) | Literal | `alecrae` | api |
@@ -178,18 +178,16 @@ The following are PEM blocks with embedded newlines. Shell escaping will silentl
 - `SAML_CERT`
 - `SAML_PRIVATE_KEY`
 
-**Fly.io:**
-```
-fly secrets set DKIM_PRIVATE_KEY="$(cat dkim.private)" -a alecrae-mta
-fly secrets set JWT_PRIVATE_KEY="$(cat jwt.private)" -a alecrae-api
+**Vapron box (production — edit `.env` directly):**
+```bash
+# SSH to the box, then:
+nano /opt/alecrae/.env
+# Paste the full PEM block including -----BEGIN/END----- lines.
+# nano preserves newlines. After saving, restart the service:
+sudo systemctl restart alecrae-api   # or alecrae-mta
 ```
 
-**Vercel:** paste into the "Secret" input as a whole (preserves newlines). Do NOT use `vercel env add` with piped input unless you verify the newlines survived with `vercel env pull`.
-
-**Cloudflare Pages/Workers:**
-```
-wrangler secret put DKIM_PRIVATE_KEY < dkim.private
-```
+**CI / GitHub Actions secrets:** paste the full PEM into the secret value field in the GitHub UI (Settings → Secrets → New repository secret). GitHub preserves newlines in secret values.
 
 ### Domain-coupled vars — change in lockstep
 

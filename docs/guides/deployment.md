@@ -1,159 +1,166 @@
 # Deployment Guide
 
-This guide covers deploying AlecRae to production using Docker and Kubernetes.
+Production deployment target is the **dedicated Vapron box at `149.28.119.158`**.
+Kubernetes, Docker Compose, and Cloudflare Pages are not used. All services run
+as systemd units managed by `vapron-bun-gateway` (custom Bun reverse proxy on
+ports 80/443 with TLS via Caddy on-demand certs).
 
-## Build Docker Images
+---
 
-Each service has its own Dockerfile. Build all images from the repository root:
+## Production Stack
 
-```bash
-# Build all service images
-docker build -f infrastructure/docker/Dockerfile.web -t alecrae/web:latest .
-docker build -f infrastructure/docker/Dockerfile.api -t alecrae/api:latest .
-docker build -f infrastructure/docker/Dockerfile.mta -t alecrae/mta:latest .
-docker build -f infrastructure/docker/Dockerfile.inbound -t alecrae/inbound:latest .
-docker build -f infrastructure/docker/Dockerfile.ai-engine -t alecrae/ai-engine:latest .
-docker build -f infrastructure/docker/Dockerfile.dns -t alecrae/dns:latest .
-docker build -f infrastructure/docker/Dockerfile.jmap -t alecrae/jmap:latest .
-docker build -f infrastructure/docker/Dockerfile.reputation -t alecrae/reputation:latest .
-docker build -f infrastructure/docker/Dockerfile.sentinel -t alecrae/sentinel:latest .
+| Service | systemd unit | Port | Managed by |
+|---|---|---|---|
+| API (`apps/api`) | `alecrae-api` | 4100 | systemd + vapron-bun-gateway |
+| Web app (`apps/web`) | `alecrae-web` | 4200 | systemd + vapron-bun-gateway |
+| MTA outbound | `alecrae-mta` | — (queue consumer) | systemd |
+| Redis | `redis-server` | 6379 | apt / systemd |
+| Postgres | `postgresql` | 5432 | apt / systemd (or Neon cloud) |
 
-# Or build all at once with the helper script
-./infrastructure/scripts/build-all.sh
-```
+---
 
-## Push to Container Registry
+## Deploy to the Box
 
-Tag and push images to your container registry:
+### One-command deploy (scripted)
 
 ```bash
-# Example using a private registry
-REGISTRY=registry.example.com/alecrae
-TAG=$(git rev-parse --short HEAD)
-
-for SERVICE in web api mta inbound ai-engine dns jmap reputation sentinel; do
-  docker tag alecrae/$SERVICE:latest $REGISTRY/$SERVICE:$TAG
-  docker push $REGISTRY/$SERVICE:$TAG
-done
+# SSH to box then run:
+cd /opt/alecrae && bash scripts/box-deploy.sh
 ```
 
-## Kubernetes Deployment
+The script: pulls latest main, installs deps, runs DB migrations, builds the
+web app, and restarts all services with health checks. See
+`docs/infra/box-deploy.md` for the full runbook and manual steps.
 
-### Prerequisites
+### GitHub Actions (one-tap from iPad)
 
-- A Kubernetes cluster (v1.28+)
-- `kubectl` configured to access the cluster
-- Helm (v3+) for managing releases
-- Secrets configured in the cluster (see Environment Variables below)
+Trigger the **"Deploy to Box"** workflow from the GitHub Actions tab. Requires
+these repository secrets to be set:
+- `BOX_SSH_KEY` — private key for the box
+- `BOX_HOST` — `149.28.119.158`
+- `BOX_USER` — `root` (or your operator username)
+- `BOX_REPO_PATH` — `/opt/alecrae`
 
-### Deploy with Kubernetes Manifests
+---
 
-```bash
-# Create the namespace
-kubectl create namespace alecrae
+## Environment Variables
 
-# Apply secrets (see Environment Variables section)
-kubectl apply -f infrastructure/kubernetes/secrets.yaml -n alecrae
+All env vars are stored in `/opt/alecrae/.env` on the box.
+Full inventory: `docs/infra/env-audit.md`.
+Quick-start env setup: `docs/infra/morning-setup.md`.
 
-# Apply all manifests
-kubectl apply -f infrastructure/kubernetes/ -n alecrae
-```
-
-### Deploy with Pulumi
-
-```bash
-cd infrastructure/pulumi
-bun install
-pulumi up --stack production
-```
-
-## Environment Variables for Production
-
-Configure the following environment variables via Kubernetes secrets or your secrets manager:
-
-### Required
+### Required for API boot (hard-fail without these)
 
 | Variable | Description |
-|----------|-------------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_URL` | Redis connection string |
-| `ANTHROPIC_API_KEY` | Claude API key for AI features |
-| `APP_URL` | Public URL of the web app |
-| `API_URL` | Public URL of the API gateway |
-| `SESSION_SECRET` | Secret for session encryption (min 32 chars) |
-| `DKIM_PRIVATE_KEY` | Default DKIM signing key |
-| `S3_ENDPOINT` | S3-compatible storage endpoint |
-| `S3_ACCESS_KEY` | S3 access key |
-| `S3_SECRET_KEY` | S3 secret key |
-| `S3_BUCKET` | S3 bucket name |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string (local or Neon) |
+| `JWT_SECRET` | ≥32-char secret for session JWT signing |
+| `WEBAUTHN_RP_ID` | `alecrae.com` |
+| `WEBAUTHN_ORIGIN` | `https://mail.alecrae.com` |
 
-### Optional
+### Required per-feature (warn-only, feature disabled when absent)
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `CLICKHOUSE_URL` | ClickHouse connection string | `http://localhost:8123` |
-| `MEILISEARCH_URL` | Meilisearch endpoint | `http://localhost:7700` |
-| `MEILISEARCH_API_KEY` | Meilisearch master key | none |
-| `SMTP_PORT` | Inbound SMTP listener port | `25` |
-| `JMAP_PORT` | JMAP server port | `443` |
-| `LOG_LEVEL` | Logging level | `info` |
-| `NODE_ENV` | Environment mode | `production` |
+| Variable | Description |
+|---|---|
+| `REDIS_URL` | Redis connection (rate limiting + BullMQ queues) |
+| `ANTHROPIC_API_KEY` | Claude API for AI features |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Gmail OAuth |
+| `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | Outlook OAuth |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Billing |
+| `RELAY_PROVIDER` + `SMTP_RELAY_*` | Email relay (Resend/SES) |
+| `DKIM_PRIVATE_KEY` | DKIM signing for outbound mail |
 
-## Database Migration in Production
+---
 
-Run migrations as a Kubernetes Job before deploying new application pods:
+## Database Migrations
+
+Run on the box before restarting services after any schema change:
 
 ```bash
-# Run migrations via a Job
-kubectl apply -f infrastructure/kubernetes/migration-job.yaml -n alecrae
-
-# Watch the job status
-kubectl wait --for=condition=complete job/db-migrate -n alecrae --timeout=120s
-
-# Check migration logs
-kubectl logs job/db-migrate -n alecrae
+cd /opt/alecrae && bun run db:migrate
 ```
 
-Alternatively, run migrations directly:
-
-```bash
-DATABASE_URL=postgresql://user:pass@host:5432/alecrae bun run db:migrate
-```
-
-Always back up the database before running migrations in production:
+Always back up before a destructive migration:
 
 ```bash
 pg_dump -Fc $DATABASE_URL > backup_$(date +%Y%m%d_%H%M%S).dump
 ```
 
-## Health Checks and Monitoring
+---
 
-### Health Check Endpoints
+## Health Checks
 
-Each service exposes health check endpoints:
+```bash
+# API liveness
+curl https://api.alecrae.com/health
 
-- `GET /health` - Basic liveness check (returns 200 if the process is running)
-- `GET /health/ready` - Readiness check (returns 200 when the service can accept traffic)
+# API deep check (DB + Redis)
+curl https://api.alecrae.com/v1/health
 
-Configure Kubernetes probes:
+# Web app version
+curl https://mail.alecrae.com/api/version
 
-```yaml
-livenessProbe:
-  httpGet:
-    path: /health
-    port: 4000
-  initialDelaySeconds: 10
-  periodSeconds: 15
-
-readinessProbe:
-  httpGet:
-    path: /health/ready
-    port: 4000
-  initialDelaySeconds: 5
-  periodSeconds: 10
+# Directly on box (bypasses vapron-bun-gateway)
+curl http://localhost:4100/health
+curl http://localhost:4200/api/version
 ```
 
-### Monitoring
+---
+
+## Service Management
+
+```bash
+# Status
+sudo systemctl status alecrae-api alecrae-web alecrae-mta
+
+# Restart all
+sudo systemctl restart alecrae-api alecrae-web
+if systemctl is-enabled alecrae-mta 2>/dev/null; then sudo systemctl restart alecrae-mta; fi
+
+# Logs (live tail)
+sudo journalctl -u alecrae-api -f --since "5 minutes ago"
+sudo journalctl -u alecrae-web -f --since "5 minutes ago"
+sudo journalctl -u alecrae-mta -f --since "5 minutes ago"
+```
+
+---
+
+## Rollback
+
+```bash
+# Find the last good commit
+cd /opt/alecrae && git log --oneline -10
+
+# Roll back to a specific commit
+git checkout <sha>
+bun install
+bun run db:migrate     # only if there are new migrations to apply (usually skip for rollback)
+bun run build:web
+sudo systemctl restart alecrae-api alecrae-web
+```
+
+For MTA rollback, stop the service first to drain the queue gracefully:
+```bash
+sudo systemctl stop alecrae-mta
+# fix the issue, then:
+sudo systemctl start alecrae-mta
+```
+
+---
+
+## DNS
+
+All subdomains point to `149.28.119.158` as DNS-only (grey cloud) A records in
+Cloudflare. See `docs/infra/dns-zone-alecrae.md` for the full zone.
+
+Key records:
+- `mail.alecrae.com` → web app
+- `api.alecrae.com` → API
+- `mx1.alecrae.com` / `mx2.alecrae.com` → inbound SMTP
+
+---
+
+## Monitoring
 
 AlecRae uses OpenTelemetry for observability. Configure the collector endpoint:
 
@@ -162,128 +169,29 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 OTEL_SERVICE_NAME=alecrae-api
 ```
 
-Grafana dashboards are provided in `infrastructure/kubernetes/monitoring/`:
+Grafana dashboards (when configured) cover:
+- **Email Pipeline** — send queue depth, delivery rates, bounce rates
+- **API Performance** — request latency, error rates, throughput
+- **AI Engine** — classification latency, token usage
+- **Infrastructure** — CPU, memory, disk, network on the box
 
-- **Email Pipeline** - Send queue depth, delivery rates, bounce rates
-- **API Performance** - Request latency, error rates, throughput
-- **AI Engine** - Classification latency, model accuracy, token usage
-- **Infrastructure** - CPU, memory, disk, network across all pods
-
-### Alerting
-
-Alerting rules are defined in `infrastructure/kubernetes/monitoring/alerts.yaml`. Key alerts:
-
-- Send queue depth exceeds threshold
-- Bounce rate exceeds 5%
-- API p99 latency exceeds 500ms
-- AI classification latency exceeds 1s
-- Disk usage exceeds 80%
-- Pod restart count exceeds threshold
-
-## Rollback Procedures
-
-### Application Rollback
-
-Roll back to the previous deployment:
-
-```bash
-# Rollback a specific deployment
-kubectl rollout undo deployment/alecrae-api -n alecrae
-
-# Rollback to a specific revision
-kubectl rollout undo deployment/alecrae-api -n alecrae --to-revision=3
-
-# Check rollout status
-kubectl rollout status deployment/alecrae-api -n alecrae
-```
-
-### Database Rollback
-
-If a migration needs to be reverted:
-
-1. Restore from the pre-migration backup:
-   ```bash
-   pg_restore -d $DATABASE_URL backup_20260403_120000.dump
-   ```
-2. Deploy the previous application version that matches the restored schema.
-
-### Pulumi Rollback
-
-```bash
-cd infrastructure/pulumi
-pulumi stack history
-pulumi up --target-version <version-number>
-```
-
-## SSL/TLS Certificate Management
-
-### Automated Certificates with cert-manager
-
-AlecRae uses cert-manager for automatic TLS certificate provisioning via Let's Encrypt:
-
-```bash
-# Install cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/latest/download/cert-manager.yaml
-
-# Apply the ClusterIssuer for Let's Encrypt
-kubectl apply -f infrastructure/kubernetes/cert-manager/cluster-issuer.yaml
-```
-
-The ClusterIssuer is configured in `infrastructure/kubernetes/cert-manager/cluster-issuer.yaml`:
-
-```yaml
-apiVersion: cert-manager.io/v1
-kind: ClusterIssuer
-metadata:
-  name: letsencrypt-prod
-spec:
-  acme:
-    server: https://acme-v02.api.letsencrypt.org/directory
-    email: ops@alecrae.dev
-    privateKeySecretRef:
-      name: letsencrypt-prod
-    solvers:
-      - http01:
-          ingress:
-            class: nginx
-```
-
-### SMTP TLS
-
-The MTA service requires a TLS certificate for STARTTLS and implicit TLS on port 465:
-
-```bash
-# Generate or provide the SMTP TLS certificate
-kubectl create secret tls alecrae-smtp-tls \
-  --cert=path/to/smtp.crt \
-  --key=path/to/smtp.key \
-  -n alecrae
-```
-
-### Certificate Rotation
-
-Certificates managed by cert-manager are automatically rotated before expiry. For manually managed certificates:
-
-1. Update the Kubernetes secret with the new certificate.
-2. Restart the affected pods:
-   ```bash
-   kubectl rollout restart deployment/alecrae-mta -n alecrae
-   ```
+---
 
 ## Production Checklist
 
 Before going live, verify:
 
-- [ ] All environment variables are set and secrets are configured
-- [ ] Database migrations have been applied successfully
-- [ ] DNS records (MX, SPF, DKIM, DMARC) are configured for all domains
-- [ ] TLS certificates are provisioned for web, API, and SMTP
-- [ ] Health check endpoints are responding
-- [ ] Monitoring dashboards and alerts are configured
-- [ ] Backup strategy is in place and tested
-- [ ] Rate limiting is configured on public endpoints
-- [ ] IP warm-up plan is prepared for new sending IPs
+- [ ] All environment variables set in `/opt/alecrae/.env`
+- [ ] Database migrations applied (`bun run db:migrate`)
+- [ ] DNS records correct (`docs/infra/dns-zone-alecrae.md`)
+- [ ] TLS certs provisioned by Caddy (first request auto-issues via Let's Encrypt)
+- [ ] `GET https://api.alecrae.com/health` returns `{"status":"ok"}`
+- [ ] `GET https://mail.alecrae.com/login` loads without errors
+- [ ] MTA service running (`sudo systemctl status alecrae-mta`)
+- [ ] PTR / rDNS set in Vultr (`mail.alecrae.com` for `149.28.119.158`)
+- [ ] IP warmup plan prepared (`docs/infra/deliverability.md`)
+- [ ] Craig has authorised the deployment (Boss Rule)
 
 ---
 
-_Last updated: 2026-06-08 23:35 UTC_
+_Last updated: 2026-06-20 14:00 UTC_

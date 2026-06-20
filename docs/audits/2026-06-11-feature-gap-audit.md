@@ -152,9 +152,9 @@ Acceptable: realtime WebSocket registry, rate-limit Redis fallback.
 - `apps/desktop` is a real Electron wrapper (tray, notifications,
   auto-update, mailto deep links).
 - `apps/status`, `apps/changelog`, `apps/docs` deployable.
-- All 12 `services/*` are real implementations, not scaffolds (MTA has full
-  Fly.io config; collab is a working Yjs CRDT server; sentinel/inbound
-  pipeline is wired end-to-end).
+- All 12 `services/*` are real implementations, not scaffolds (MTA is a full
+  implementation running via systemd on the Vapron box; collab is a working
+  Yjs CRDT server; sentinel/inbound pipeline is wired end-to-end).
 - `packages/db`: comprehensive schema; migrations baseline + drift CI guard.
 - CI is comprehensive and blocking.
 
@@ -197,4 +197,4 @@ standards burn-down) and the unwired components listed in CLAUDE.md issue #27.
 
 ---
 
-_Last updated: 2026-06-11 11:46 UTC_
+_Last updated: 2026-06-20 14:00 UTC_

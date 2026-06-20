@@ -71,13 +71,17 @@ dlq_records, scheduling_links + calendar_events columns).
 
 ## 5. Domain cutover (Craig — Boss Rule #4)
 
-- Point `api.alecrae.com` at the Vapron app (CNAME per Vapron dashboard).
+- All traffic is currently served by the Vapron box at `149.28.119.158` via
+  `vapron-bun-gateway`. `api.alecrae.com` and `mail.alecrae.com` A records
+  already point to the box.
 - The web client already targets `https://api.alecrae.com` in production
-  (`apps/web/lib/api-base.ts`), so no web redeploy is needed for the API move.
-- **Web app hosting:** stays on Vercel until Vapron's Next.js hosting story is
-  confirmed against the live API — `quickDeploy` is verified for the
-  one-app-from-root API only. When Vapron hosting for the web app is
-  confirmed, repeat steps 2–3 for it and move `mail.alecrae.com`.
+  (`apps/web/lib/api-base.ts`).
+- **Note:** This runbook was written before the box deployment was finalised.
+  The current production deployment is the dedicated box (systemd services
+  `alecrae-api` + `alecrae-web`), not a Vapron `quickDeploy` app. The
+  `deploy:vapron` command and `aiDeploy.quickDeploy` path remain available
+  if a future Vapron-native hosting migration is needed — Craig must
+  authorise that move.
 
 ## 6. Verify
 
@@ -90,10 +94,12 @@ Then real login (passkey + Google) and `GET /v1/messages` from the web app.
 
 ## 7. Decommission interim pieces (after a clean week)
 
-- Vercel API-adjacent envs; keep web hosting until step 5's web move.
-- Remove `ENABLE_VERCEL_DEPLOY` path from `standalone-deploy.yml` once the
-  web app is on Vapron (Boss Rule: Craig signs off).
+- Remove any lingering Vercel-related env vars and the `ENABLE_VERCEL_DEPLOY`
+  path from `standalone-deploy.yml` (Boss Rule: Craig signs off).
+- Vercel is fully removed as a deployment target. The Vercel GitHub App
+  should be uninstalled from repo settings to prevent failed deployments on
+  every push (see `docs/infra/morning-setup.md` Section 4).
 
 ---
 
-_Last updated: 2026-06-11 12:10 UTC_
+_Last updated: 2026-06-20 14:00 UTC_

@@ -1,6 +1,6 @@
 # Morning Setup — Get AlecRae Live Today
 
-> **Last updated: 2026-06-15 22:00 UTC**
+> **Last updated: 2026-06-20 14:00 UTC**
 
 This is the single document you follow on the box. Every command is copy-pasteable. No options — one path, start to finish.
 
@@ -166,16 +166,16 @@ Go to **https://dash.cloudflare.com** → click `alecrae.com` → **DNS** → **
 
 ### Fix the apex A record
 
-Find the existing `A` record for `alecrae.com` (if still pointing at Vercel, change it). Click **Edit**:
+Find the existing `A` record for `alecrae.com` (update if it still points anywhere other than the box). Click **Edit**:
 - Type: `A`
 - Name: `@`
 - IPv4 address: `149.28.119.158`
 - Proxy status: **DNS only** (grey cloud — NOT orange)
 - Click **Save**
 
-### Fix www.alecrae.com (remove Vercel CNAME)
+### Fix www.alecrae.com
 
-Find the `CNAME` for `www` pointing to `cname.vercel-dns.com`. Delete it, then add:
+If a `CNAME` for `www` exists pointing anywhere other than the box, delete it, then add:
 - Type: `A`
 - Name: `www`
 - IPv4 address: `149.28.119.158`
@@ -235,9 +235,9 @@ If you haven't already:
 
 ---
 
-## Section 4: Uninstall Vercel GitHub App
+## Section 4: Uninstall Vercel GitHub App (if not done already)
 
-This stops Vercel from trying to deploy on every push (and failing because Vercel is no longer the host).
+This stops Vercel from trying to deploy on every push (Vercel is no longer the host — the Vapron box is).
 
 1. Go to **https://github.com/ccantynz-alt/AlecRae.com**
 2. Click **Settings** → left sidebar → **Integrations** → **GitHub Apps**
@@ -247,6 +247,8 @@ This stops Vercel from trying to deploy on every push (and failing because Verce
 Alternatively, from vercel.com:
 1. Go to **https://vercel.com** → your project
 2. **Settings** → **General** → scroll to bottom → **Delete Project** → confirm
+
+If already done, skip this section.
 
 ---
 

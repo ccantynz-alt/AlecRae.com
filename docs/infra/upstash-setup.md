@@ -17,10 +17,10 @@ Follow top to bottom. Every step is a URL to click or a command to paste. Values
 1. Console → **Redis** → **Create Database**
 2. Name: `alecrae-prod`
 3. Type: **Regional** (NOT Global)
-   - Regional = lowest latency to MTA on Fly.io
+   - Regional = lowest latency to the Vapron production box and Neon
    - Global costs more and we don't need multi-region writes
 4. Primary region: **us-east-1 (N. Virginia)**
-   - Matches Fly.io `iad` and Neon `us-east-2` — all three sit in the same east-coast cluster
+   - Closest to the Vultr box region and Neon `us-east-2` — all three sit in the same east-coast cluster
 5. Click **Create**
 
 ---
@@ -53,7 +53,7 @@ Save both in 1Password.
 
 ## 5. Environment variables
 
-Paste into your local `.env` and into Vercel / Cloudflare Pages project settings:
+Paste into your local `.env` and into the production box's `/opt/alecrae/.env`:
 
 ```
 UPSTASH_REDIS_REST_URL=<paste-url-here>
@@ -161,4 +161,4 @@ Ping Craig before approving any auto-upgrade — infra spend is a Boss-Rule item
 
 ---
 
-_Last updated: 2026-06-08 23:35 UTC_
+_Last updated: 2026-06-20 14:00 UTC_

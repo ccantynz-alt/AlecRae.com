@@ -31,7 +31,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, gte } from "drizzle-orm";
+import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { requireScope } from "../middleware/auth.js";
@@ -1039,6 +1039,66 @@ agent.get("/config", requireScope("agent:read"), async (c) => {
   }
 
   return c.json({ data: config });
+});
+
+// ─── GET /v1/agent/status — Combined status + today's activity ───────────
+
+agent.get("/status", requireScope("agent:read"), async (c) => {
+  const auth = c.get("auth");
+  const db = getDatabase();
+
+  // Fetch config + today's runs in parallel
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [[config], todayRuns] = await Promise.all([
+    db
+      .select()
+      .from(agentConfigs)
+      .where(eq(agentConfigs.accountId, auth.accountId))
+      .limit(1),
+    db
+      .select({
+        totalProcessed: agentRuns.totalProcessed,
+        durationMs: agentRuns.durationMs,
+      })
+      .from(agentRuns)
+      .where(
+        and(
+          eq(agentRuns.accountId, auth.accountId),
+          gte(agentRuns.startedAt, todayStart),
+        ),
+      ),
+  ]);
+
+  const processedToday = todayRuns.reduce(
+    (sum, r) => sum + (r.totalProcessed ?? 0),
+    0,
+  );
+  // Estimate 30 seconds of manual triage time per email
+  const timeSavedMinutes = Math.round((processedToday * 30) / 60);
+
+  const defaults = {
+    enabled: false,
+    schedule: null as string | null,
+    morningHour: 8,
+    maxEmailsPerRun: 200,
+    minDraftConfidence: 0.5,
+  };
+
+  const cfg = config ?? defaults;
+
+  return c.json({
+    data: {
+      enabled: cfg.enabled,
+      schedule: cfg.schedule,
+      morningHour: cfg.morningHour,
+      maxEmailsPerRun: cfg.maxEmailsPerRun,
+      confidenceThreshold: cfg.minDraftConfidence,
+      processedToday,
+      timeSavedMinutes,
+    },
+  });
 });
 
 // ─── GET /v1/agent/runs — List recent runs ────────────────────────────────

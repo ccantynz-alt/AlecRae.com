@@ -32,7 +32,7 @@
 
 ## 2. Why everything is grey cloud now
 
-In the original architecture, web records (mail, admin, api) were going to Cloudflare Pages/Workers (orange cloud = proxied). That architecture was superseded by the dedicated box deployment. Now:
+In the original architecture, web records (mail, admin, api) were planned for Cloudflare Pages/Workers (orange cloud = proxied). That architecture was superseded by the dedicated Vapron box deployment. Now:
 
 - All traffic goes to `149.28.119.158`
 - Caddy handles TLS at the box level (Let's Encrypt via on-demand cert API)
@@ -129,4 +129,4 @@ dig A mx1.alecrae.com +short
 
 ---
 
-_Last updated: 2026-06-15 23:35 UTC_
+_Last updated: 2026-06-20 14:00 UTC_

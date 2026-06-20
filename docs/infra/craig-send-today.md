@@ -2,7 +2,7 @@
 
 > **Goal:** Have you sending real support email **from `support@alecrae.com`** within ~24 hours of starting, with full DKIM/SPF/DMARC, near-zero spam-folder risk, and reputation building from day one.
 >
-> **What this skips:** Standing up the self-hosted Fly.io MTA. That's the right destination — but for the first 60–90 days you should relay through Amazon SES so you inherit pre-warmed IP reputation while `alecrae.com` builds its own domain reputation in parallel. When the domain is trusted and the MTA is hardened, you flip `RELAY_PROVIDER=direct` and you're independent.
+> **What this skips:** Sending directly from the Vapron box IP (`149.28.119.158`) on port 25. That's the right destination — but for the first 60–90 days you should relay through Amazon SES so you inherit pre-warmed IP reputation while `alecrae.com` builds its own domain reputation in parallel. When the domain is trusted and the MTA is hardened, you flip `RELAY_PROVIDER=` to direct (unset) and you're independent.
 >
 > **What this is NOT:** A bypass of the rules. Every message still gets DKIM-signed by AlecRae, every recipient still goes through suppression-list checks, DMARC still aligns. The only difference is the IPs that hit Gmail's edge are AWS's — which is exactly how Hey, Front, and Superhuman launched.
 
@@ -164,14 +164,22 @@ You do not need to do anything for these — `services/reputation` is already wi
 
 ---
 
-## Step 7 — Graduating to self-hosted MTA (Day ~90)
+## Step 7 — Graduating to self-hosted MTA on the Vapron box (Day ~90)
 
 Once Postmaster Tools shows:
 - Domain reputation: **High** for 30+ consecutive days
 - Spam rate: under **0.05%** sustained
 - Authentication: 100% pass rate
 
-…you're ready to shift outbound from SES relay to AlecRae's own MTA on Fly.io. Process is documented in [`fly-mta-deploy.md`](./fly-mta-deploy.md). The shift is graceful: half the volume goes to Fly, half stays on SES, for two weeks while Fly's IP earns its own reputation. After 30 days at 100% Fly, SES is fallback only.
+…you're ready to shift outbound from SES relay to AlecRae's own MTA running
+on the Vapron box (`149.28.119.158`). The process is documented in
+[`mta-box-setup.md`](./mta-box-setup.md). The shift is graceful: in the box
+`.env`, set `RELAY_PROVIDER=` to empty/unset to enable direct MX delivery,
+while keeping `RELAY_PROVIDER=smtp` (Resend/SES) as the fallback in the
+relay client — half the volume goes direct, half stays on SES, for two weeks
+while the box IP earns its own reputation. After 30 days at 100% direct, SES
+is fallback only. Requires the Vultr PTR record to be set first
+(`mail.alecrae.com` for `149.28.119.158`).
 
 That's the architecture: training wheels for 90 days, independence after.
 
@@ -188,12 +196,12 @@ That's the architecture: training wheels for 90 days, independence after.
 7. Send your first support email.
 8. Read the warmup rules once. Follow them. Don't send a newsletter for 90 days.
 
-After 90 days: graduate to Fly.io self-hosted MTA. Until then: trust the training wheels. SES is doing exactly what we'd build ourselves, with reputation we'd otherwise have to spend a year earning.
+After 90 days: graduate to the self-hosted MTA on the Vapron box (direct MX delivery). Until then: trust the training wheels. SES is doing exactly what we'd build ourselves, with reputation we'd otherwise have to spend a year earning.
 
 ---
 
-*Pinned 2026-05-08. Update this file after Day 90 graduation, or if SES region/identity changes.*
+*Pinned 2026-05-08. Update this file after Day 90 graduation to direct MX on the Vapron box, or if SES region/identity changes.*
 
 ---
 
-_Last updated: 2026-06-08 23:35 UTC_
+_Last updated: 2026-06-20 14:00 UTC_
