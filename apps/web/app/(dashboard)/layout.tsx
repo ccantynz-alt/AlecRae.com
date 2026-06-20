@@ -87,6 +87,7 @@ const BASE_SECTIONS: NavSection[] = [
     title: "AI Features",
     entries: [
       { id: "agent", label: "AI Agent", href: "/agent", planBadge: "pro" },
+      { id: "ai-triage", label: "AI Triage", href: "/ai-triage", planBadge: "personal" },
       { id: "voice", label: "Voice", href: "/voice", planBadge: "personal" },
       { id: "translate", label: "Translation", href: "/translate", planBadge: "personal" },
       { id: "achievements", label: "Achievements", href: "/achievements" },

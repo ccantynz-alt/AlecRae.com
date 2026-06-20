@@ -8,7 +8,7 @@
 
 "Go live" means: real email arrives at `@alecrae.com`, users can sign up at `mail.alecrae.com`, connect their Gmail/Outlook, pay via Stripe, and send mail that lands in inboxes (not spam). **Budget ~3 hours of active work today**, then **2–4 weeks of background IP warmup** before you push volume. Phase 3 (MTA setup on the Vapron box) and Phase 7 (warmup) are clock-time gated — everything else is keyboard time.
 
-> **Note:** This checklist was written before the production deployment settled on the dedicated Vapron box at `149.28.119.158`. Fly.io is no longer used. Phases 1–2 (account signups/data stores) and Phases 4–7 remain accurate. Phase 3 has been updated to reflect the box-based MTA. Phase 5 refers to Vercel for the web app env vars — the current deployment uses the box directly (see `docs/infra/morning-setup.md`).
+> **Note:** This checklist was written before the production deployment settled on the dedicated Vapron box at `149.28.119.158`. Fly.io is no longer used. Phases 1–2 (account signups/data stores) and Phases 4–7 remain accurate. Phase 3 has been updated to reflect the box-based MTA. Phase 5 has been updated to use the box `.env` file instead of Vercel. For the complete, current go-live procedure see `docs/infra/morning-setup.md`.
 
 ---
 

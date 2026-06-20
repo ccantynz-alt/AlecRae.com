@@ -196,7 +196,7 @@ That's the architecture: training wheels for 90 days, independence after.
 7. Send your first support email.
 8. Read the warmup rules once. Follow them. Don't send a newsletter for 90 days.
 
-After 90 days: graduate to Fly.io self-hosted MTA. Until then: trust the training wheels. SES is doing exactly what we'd build ourselves, with reputation we'd otherwise have to spend a year earning.
+After 90 days: graduate to the self-hosted MTA on the Vapron box (direct MX delivery). Until then: trust the training wheels. SES is doing exactly what we'd build ourselves, with reputation we'd otherwise have to spend a year earning.
 
 ---
 

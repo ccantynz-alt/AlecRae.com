@@ -24,7 +24,7 @@ export const FEATURE_PLANS: Record<string, PlanTier> = {
   email_query: "pro",
   knowledge_graph: "pro",
   sentiment_timeline: "pro",
-  ai_categorization: "pro",
+  ai_categorization: "personal",
   productivity_analytics: "pro",
   semantic_search: "pro",
   context_intelligence: "pro",

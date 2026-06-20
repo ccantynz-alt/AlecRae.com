@@ -18,7 +18,7 @@ Follow top to bottom. Every step is a URL to click or a command to paste. Values
 2. Project name: `alecrae-prod`
 3. Postgres version: **16** (latest stable)
 4. Region: **US East (Ohio) — aws-us-east-2**
-   - This matches Fly.io `iad` so MTA latency stays low.
+   - Close to the Vultr production box region and Neon `us-east-2`, keeping DB latency low.
 5. Click **Create Project**
 
 ---
@@ -60,7 +60,7 @@ Save both somewhere safe (1Password). You'll paste them in step 5.
 
 ## 5. Environment variables
 
-Paste into your local `.env` and into Vercel / Cloudflare Pages project settings:
+Paste into your local `.env` and into the production box's `/opt/alecrae/.env`:
 
 ```
 DATABASE_URL=<paste-pooled-connection-string-here>
@@ -145,7 +145,7 @@ Neon branches are like git branches for your database. Use one for staging.
 3. Parent: `main`
 4. Click **Create Branch**
 5. Copy the branch's pooled + direct connection strings the same way you did in step 4
-6. Set them as `DATABASE_URL` / `DIRECT_URL` in the staging environment (Vercel preview, etc.)
+6. Set them as `DATABASE_URL` / `DIRECT_URL` in the staging environment (staging box or local dev)
 
 Branches copy data at creation time and are free on the free tier (up to 10).
 
@@ -173,13 +173,13 @@ Neon suspends compute after 5 minutes of inactivity (free tier default). First r
 
 **Keep the MTA warm:**
 
-The MTA on Fly.io holds a long-lived connection via the Neon pooler. As long as the pooler sees traffic, the compute stays awake. If MTA traffic is sparse:
+The MTA on the Vapron box holds a long-lived connection via the Neon pooler. As long as the pooler sees traffic, the compute stays awake. If MTA traffic is sparse:
 
 1. Dashboard → **Settings** → **Compute**
 2. Set **Suspend compute after** to a higher value (or disable on paid plans)
-3. OR run a tiny heartbeat job on Fly.io that does `SELECT 1` every 60s
+3. OR add a heartbeat script on the box that runs `SELECT 1` every 60s (a simple cron job is sufficient)
 
-The pooler endpoint (`-pooler` in the host) handles connection multiplexing so scale-to-zero behaves well with serverless + long-lived clients side by side.
+The pooler endpoint (`-pooler` in the host) handles connection multiplexing so scale-to-zero behaves well with long-lived clients.
 
 ---
 
@@ -203,4 +203,4 @@ Ping Craig before moving to any paid tier — infra spend is a Boss-Rule item.
 
 ---
 
-_Last updated: 2026-06-08 23:35 UTC_
+_Last updated: 2026-06-20 14:00 UTC_
