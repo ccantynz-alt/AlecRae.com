@@ -23,7 +23,7 @@ import type {
   PaginationParams,
   PaginatedResponse,
 } from "../types.js";
-import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists, templates } from "@alecrae/db";
+import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
 import { checkQuota, incrementQuota } from "../lib/quota.js";
 import { indexEmail, searchEmails } from "@alecrae/shared";
@@ -304,6 +304,96 @@ async function handleSend(c: Context) {
   const id = generateId();
   const senderDomain = domainOf(input.from.email);
   const messageId = generateMessageId(senderDomain);
+
+  // ── 0c. Connected account fast-path ──────────────────────────────
+  // If the sender address belongs to a connected Gmail or Outlook account,
+  // route through the provider API. Domain verification, warmup, and
+  // suppression checks don't apply — the provider owns deliverability.
+  const [connectedAcct] = await db
+    .select({ id: connectedAccounts.id, provider: connectedAccounts.provider, accessToken: connectedAccounts.accessToken })
+    .from(connectedAccounts)
+    .where(and(
+      eq(sql`lower(${connectedAccounts.email})`, input.from.email.toLowerCase()),
+      eq(connectedAccounts.accountId, auth.accountId),
+    ))
+    .limit(1);
+
+  if (connectedAcct?.accessToken) {
+    if (connectedAcct.provider === "imap") {
+      return c.json(
+        { error: { type: "configuration_error", message: `IMAP account "${input.from.email}" does not support outbound sending via this API. Use the SMTP credentials configured on the account instead.`, code: "imap_send_not_supported" } },
+        422,
+      );
+    }
+
+    let providerMessageId: string | undefined;
+
+    if (connectedAcct.provider === "gmail") {
+      const rawMsg = buildRawMessage(input, messageId, id);
+      const raw = Buffer.from(rawMsg).toString("base64url");
+      const gmailRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${connectedAcct.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ raw }),
+      });
+      if (!gmailRes.ok) {
+        const errBody = await gmailRes.json().catch(() => ({})) as { error?: { message?: string } };
+        return c.json(
+          { error: "PROVIDER_SEND_FAILED", provider: "gmail", message: errBody.error?.message ?? "Gmail API send failed" },
+          502,
+        );
+      }
+      const gmailBody = await gmailRes.json() as { id?: string };
+      providerMessageId = gmailBody.id;
+    } else if (connectedAcct.provider === "outlook") {
+      const outlookRes = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${connectedAcct.accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: {
+            subject: resolvedSubject,
+            body: { contentType: input.html ? "HTML" : "Text", content: input.html ?? input.text ?? "" },
+            toRecipients: input.to.map((r) => ({ emailAddress: { address: r.email, ...(r.name ? { name: r.name } : {}) } })),
+            ...(input.cc?.length ? { ccRecipients: input.cc.map((r) => ({ emailAddress: { address: r.email, ...(r.name ? { name: r.name } : {}) } })) } : {}),
+          },
+          saveToSentItems: true,
+        }),
+      });
+      if (!outlookRes.ok) {
+        const errBody = await outlookRes.json().catch(() => ({})) as { error?: { message?: string } };
+        return c.json(
+          { error: "PROVIDER_SEND_FAILED", provider: "outlook", message: errBody.error?.message ?? "Outlook API send failed" },
+          502,
+        );
+      }
+    }
+
+    const now = new Date();
+    await db.insert(emails).values({
+      id,
+      accountId: auth.accountId,
+      domainId: null,
+      messageId: providerMessageId ?? messageId,
+      fromAddress: input.from.email,
+      fromName: input.from.name ?? null,
+      toAddresses: input.to.map((r) => ({ address: r.email, ...(r.name !== undefined ? { name: r.name } : {}) })),
+      ccAddresses: input.cc ? input.cc.map((r) => ({ address: r.email, ...(r.name !== undefined ? { name: r.name } : {}) })) : null,
+      bccAddresses: input.bcc ? input.bcc.map((r) => ({ address: r.email, ...(r.name !== undefined ? { name: r.name } : {}) })) : null,
+      replyToAddress: input.replyTo?.email ?? null,
+      replyToName: input.replyTo?.name ?? null,
+      subject: resolvedSubject,
+      textBody: input.text ?? null,
+      htmlBody: input.html ?? null,
+      status: "sent",
+      source: connectedAcct.provider,
+      tags: input.tags ?? [],
+      createdAt: now,
+      updatedAt: now,
+      sentAt: now,
+    });
+
+    return c.json({ id, messageId: providerMessageId ?? messageId, status: "sent" as const }, 202);
+  }
 
   // ── 1. Resolve the sender domain in our database ──────────────────
   const [domainRecord] = await db
