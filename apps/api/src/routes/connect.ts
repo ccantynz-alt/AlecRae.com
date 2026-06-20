@@ -219,7 +219,7 @@ connect.get(
 // POST /v1/connect/imap — Connect generic IMAP account
 connect.post(
   "/imap",
-  requireScope("accounts:write"),
+  requireScope("account:manage"),
   validateBody(ImapConnectSchema),
   async (c) => {
     const input = getValidatedBody<z.infer<typeof ImapConnectSchema>>(c);
@@ -282,7 +282,7 @@ connect.post(
 // GET /v1/connect/accounts — List connected accounts
 connect.get(
   "/accounts",
-  requireScope("accounts:read"),
+  requireScope("account:read"),
   async (c) => {
     const auth = c.get("auth");
     const db = getDatabase();
@@ -313,7 +313,7 @@ connect.get(
 // DELETE /v1/connect/accounts/:id — Disconnect an account
 connect.delete(
   "/accounts/:id",
-  requireScope("accounts:write"),
+  requireScope("account:manage"),
   async (c) => {
     const id = c.req.param("id");
     const auth = c.get("auth");
@@ -339,7 +339,7 @@ connect.delete(
 // POST /v1/connect/accounts/:id/sync — Trigger manual sync
 connect.post(
   "/accounts/:id/sync",
-  requireScope("accounts:write"),
+  requireScope("account:manage"),
   async (c) => {
     const id = c.req.param("id");
     const auth = c.get("auth");

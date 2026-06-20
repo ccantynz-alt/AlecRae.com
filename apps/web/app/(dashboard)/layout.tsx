@@ -140,7 +140,7 @@ const BASE_SECTIONS: NavSection[] = [
     entries: [
       { id: "chat", label: "Team Chat", href: "/chat", planBadge: "team" },
       { id: "shared-inboxes", label: "Shared Inboxes", href: "/shared-inboxes", planBadge: "team" },
-      { id: "delegation", label: "Delegation", href: "/delegation", planBadge: "team" },
+      { id: "delegation", label: "Delegation", href: "/shared-inboxes", planBadge: "team" },
     ],
   },
 ];
@@ -148,7 +148,7 @@ const BASE_SECTIONS: NavSection[] = [
 const SETTINGS_ENTRIES: NavEntry[] = [
   { id: "settings", label: "Settings", href: "/settings" },
   { id: "billing", label: "Billing", href: "/billing" },
-  { id: "developer", label: "Developer", href: "/developer" },
+  { id: "developer", label: "Developer", href: "/settings/developer" },
 ];
 
 const ADMIN_ENTRIES: NavEntry[] = [

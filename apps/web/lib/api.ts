@@ -752,6 +752,18 @@ export const importApi = {
     for (const f of files) fd.append("files", f);
     return uploadFetch("/v1/import/eml", fd);
   },
+  gmail(connectedAccountId: string, maxMessages?: number): Promise<{ data: { jobId: string; status: string; message: string } }> {
+    return apiFetch("/v1/import/gmail", {
+      method: "POST",
+      body: JSON.stringify({ connectedAccountId, ...(maxMessages ? { maxMessages } : {}) }),
+    });
+  },
+  outlook(connectedAccountId: string, maxMessages?: number): Promise<{ data: { jobId: string; status: string; message: string } }> {
+    return apiFetch("/v1/import/outlook", {
+      method: "POST",
+      body: JSON.stringify({ connectedAccountId, ...(maxMessages ? { maxMessages } : {}) }),
+    });
+  },
   jobs(): Promise<{ data: ImportJobSummary[] }> {
     return apiFetch("/v1/import/jobs");
   },
