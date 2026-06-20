@@ -309,14 +309,19 @@ async function handleSend(c: Context) {
   // If the sender address belongs to a connected Gmail or Outlook account,
   // route through the provider API. Domain verification, warmup, and
   // suppression checks don't apply — the provider owns deliverability.
-  const [connectedAcct] = await db
-    .select({ id: connectedAccounts.id, provider: connectedAccounts.provider, accessToken: connectedAccounts.accessToken })
-    .from(connectedAccounts)
-    .where(and(
-      eq(sql`lower(${connectedAccounts.email})`, input.from.email.toLowerCase()),
-      eq(connectedAccounts.accountId, auth.accountId),
-    ))
-    .limit(1);
+  let connectedAcct: { id: string; provider: string; accessToken: string | null } | undefined;
+  try {
+    [connectedAcct] = await db
+      .select({ id: connectedAccounts.id, provider: connectedAccounts.provider, accessToken: connectedAccounts.accessToken })
+      .from(connectedAccounts)
+      .where(and(
+        eq(connectedAccounts.email, input.from.email.toLowerCase()),
+        eq(connectedAccounts.accountId, auth.accountId),
+      ))
+      .limit(1);
+  } catch {
+    // Degrade gracefully — fall through to domain-based MTA send
+  }
 
   if (connectedAcct?.accessToken) {
     if (connectedAcct.provider === "imap") {

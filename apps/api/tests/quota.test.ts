@@ -78,6 +78,8 @@ vi.mock("@alecrae/db", () => ({
   },
   accounts: { id: "id", emailsSentThisPeriod: "emails_sent_this_period", updatedAt: "updated_at" },
   suppressionLists: { email: "email", domainId: "domain_id", reason: "reason" },
+  connectedAccounts: { id: "id", email: "email", accountId: "account_id", provider: "provider", accessToken: "access_token" },
+  templates: { id: "id", name: "name", accountId: "account_id", subject: "subject", htmlBody: "html_body", textBody: "text_body", variables: "variables" },
 }));
 
 // Mock BullMQ
