@@ -53,14 +53,145 @@ If any box is unchecked, do not send production mail. No exceptions.
 
 ### Google Postmaster Tools — `postmaster.google.com`
 1. Add domain `alecrae.com`.
-2. Verify via TXT record at the root.
-3. Watch: spam rate, IP reputation, domain reputation, authentication, encryption, delivery errors.
-4. Check **daily for the first 30 days**, then weekly.
+2. Verify via TXT record at the root — value comes from `buildVerificationTxtRecord()` in
+   `services/reputation/src/postmaster/index.ts` once `GOOGLE_POSTMASTER_VERIFICATION_TOKEN` is set.
+3. Create a service account (Postmaster Tools uses OAuth2, not the verification token, for API
+   reads), grant it read access to the domain in the Postmaster Tools UI, and put the full key
+   JSON in `GOOGLE_POSTMASTER_SERVICE_ACCOUNT_JSON`.
+4. Watch: spam rate, IP reputation, domain reputation, authentication, encryption, delivery errors.
+5. **Automated as of 2026-07-01** — see "Automated monitoring" below. Still worth an eyeball
+   check on the dashboard **daily for the first 30 days**, then weekly.
 
 ### Microsoft SNDS (Smart Network Data Services) — `sendersupport.olc.protection.outlook.com/snds/`
 1. Request access for your IP range.
 2. IP-based only (not domain-based).
 3. Watch: RCPT commands, DATA commands, spam trap hits, complaint rate.
+4. Provision an "Automated Data Access" token in the SNDS portal, set it as `SNDS_ACCESS_TOKEN`.
+   **Caveat:** SNDS has no publicly documented API schema — `services/reputation/src/snds/index.ts`
+   is a best-effort parser. Treat the first live poll as a test, not a production signal, and
+   re-verify the parser against the real response before trusting it in an incident.
+5. **Automated as of 2026-07-01** — see "Automated monitoring" below.
+
+---
+
+## Automated monitoring — systemd timers
+
+Three periodic jobs, added 2026-07-01, wire external reputation/compliance signals into the
+warm-up orchestrator's hard-pause path automatically — no one has to be watching a dashboard for
+sending to stop when Google or Microsoft says stop. All three post to Slack via `SLACK_WEBHOOK_URL`,
+tagged `[REPUTATION]` or `[COMPLIANCE]` so they can share one channel unambiguously.
+
+| Job | Source | Cadence | On failure |
+|---|---|---|---|
+| `alecrae-postmaster` | Google Postmaster Tools v1 (`domainReputation`: HIGH/MEDIUM/LOW/BAD) | 6h | LOW → pause this domain. BAD → pause everything. |
+| `alecrae-postmaster-compliance` | Google Postmaster Tools v2 (`getComplianceStatus` — SPF/DKIM/DMARC/unsubscribe pass-fail) | 24h (changes slowly) | Any failing row → Slack warning with remediation. Does not pause sending on its own — compliance failures degrade deliverability gradually, they don't need the same hair-trigger as a live reputation crash. |
+| `alecrae-snds` | Microsoft SNDS (GREEN/YELLOW/RED per IP) | 24h | RED → pause everything (shared IP — see caveat below). |
+
+**Why BAD/RED pauses *everything*, not just one domain:** AlecRae does not yet provision dedicated
+IPs per domain (Layer 5 gap, tracked separately). Every domain shares the box's outbound IP, so a
+reputation crash on that IP threatens every domain sending from it, not just the one that
+happened to trigger the alert.
+
+Install on the box (adjust `User=` to match `alecrae-mta`'s convention):
+
+```bash
+sudo tee /etc/systemd/system/alecrae-postmaster.service > /dev/null <<'EOF'
+[Unit]
+Description=AlecRae Postmaster Tools v1 reputation check
+After=network.target
+
+[Service]
+Type=oneshot
+User=deploy
+WorkingDirectory=/opt/alecrae
+EnvironmentFile=/opt/alecrae/.env
+ExecStart=/root/.bun/bin/bun run /opt/alecrae/services/reputation/src/postmaster/index.ts
+StandardOutput=journal
+StandardError=journal
+EOF
+
+sudo tee /etc/systemd/system/alecrae-postmaster.timer > /dev/null <<'EOF'
+[Unit]
+Description=Run alecrae-postmaster every 6 hours
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo tee /etc/systemd/system/alecrae-postmaster-compliance.service > /dev/null <<'EOF'
+[Unit]
+Description=AlecRae Postmaster Tools v2 bulk-sender compliance check
+After=network.target
+
+[Service]
+Type=oneshot
+User=deploy
+WorkingDirectory=/opt/alecrae
+EnvironmentFile=/opt/alecrae/.env
+ExecStart=/root/.bun/bin/bun run /opt/alecrae/services/reputation/src/postmaster/compliance.ts
+StandardOutput=journal
+StandardError=journal
+EOF
+
+sudo tee /etc/systemd/system/alecrae-postmaster-compliance.timer > /dev/null <<'EOF'
+[Unit]
+Description=Run alecrae-postmaster-compliance every 24 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=24h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo tee /etc/systemd/system/alecrae-snds.service > /dev/null <<'EOF'
+[Unit]
+Description=AlecRae Microsoft SNDS reputation check
+After=network.target
+
+[Service]
+Type=oneshot
+User=deploy
+WorkingDirectory=/opt/alecrae
+EnvironmentFile=/opt/alecrae/.env
+ExecStart=/root/.bun/bin/bun run /opt/alecrae/services/reputation/src/snds/index.ts
+StandardOutput=journal
+StandardError=journal
+EOF
+
+sudo tee /etc/systemd/system/alecrae-snds.timer > /dev/null <<'EOF'
+[Unit]
+Description=Run alecrae-snds every 24 hours
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=24h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now alecrae-postmaster.timer alecrae-postmaster-compliance.timer alecrae-snds.timer
+systemctl list-timers | grep alecrae
+```
+
+Run a check manually at any time (useful right after setting the env vars, before waiting for the
+timer): `bun run /opt/alecrae/services/reputation/src/postmaster/index.ts` (or `compliance.ts` /
+`services/reputation/src/snds/index.ts`).
+
+**Not yet done:** none of this has been exercised against live Google/Microsoft credentials — no
+service account or SNDS token existed at write time. Treat the first real poll of each job as a
+test. If Postmaster Tools v2 returns 403, check the OAuth scope first (`postmaster` vs
+`postmaster.readonly` — see `services/reputation/src/postmaster/auth.ts`).
 
 ### Microsoft JMRP (Junk Mail Reporting Program) — `olcsupport.office.com`
 1. Enroll for JMRP.
@@ -169,4 +300,4 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 
 ---
 
-_Last updated: 2026-06-20 14:00 UTC_
+_Last updated: 2026-07-01 01:10 UTC_

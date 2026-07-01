@@ -50,6 +50,62 @@ export {
   ReputationEngine,
 } from "./scoring/engine.js";
 
+// Reputation Alerting — shared Slack + hard-pause path
+export {
+  postSlackAlert,
+  pauseWarmupForDomain,
+  pauseAllActiveWarmups,
+  type ReputationAlertLevel,
+  type ReputationAlert,
+} from "./alerts/slack.js";
+
+// Google Postmaster Tools — v1 reputation scale
+export {
+  buildVerificationTxtRecord,
+  fetchLatestTrafficStats,
+  normalizeReputationCategory,
+  alertLevelForReputation,
+  checkDomainReputation,
+  pollAllDomains,
+  type DomainVerificationRecord,
+  type GoogleTrafficStats,
+  type GoogleIpReputationEntry,
+  type GoogleDeliveryError,
+  type NormalizedReputation,
+  type PostmasterCheckOutcome,
+} from "./postmaster/index.js";
+
+// Google Postmaster Tools — v2 bulk-sender compliance
+export {
+  fetchComplianceStatus,
+  parseComplianceFailures,
+  checkDomainCompliance,
+  pollAllDomainsCompliance,
+  type ComplianceState,
+  type ComplianceRequirement,
+  type ComplianceStatusResponse,
+  type ComplianceFailure,
+  type ComplianceCheckOutcome,
+} from "./postmaster/compliance.js";
+
+// Google Postmaster Tools — shared auth
+export {
+  getAccessToken as getPostmasterAccessToken,
+  POSTMASTER_SCOPES,
+  monitoredDomainsFromEnv,
+} from "./postmaster/auth.js";
+
+// Microsoft SNDS
+export {
+  fetchSndsData,
+  parseSndsResponse,
+  alertLevelForSndsColor,
+  checkSndsReputation,
+  type SndsColor,
+  type SndsIpStatus,
+  type SndsCheckOutcome,
+} from "./snds/index.js";
+
 // Types
 export type {
   IspProvider,
