@@ -16,6 +16,8 @@ import {
   getValidatedBody,
 } from "../middleware/validator.js";
 import { getDatabase, emails, meetingProviderConnections } from "@alecrae/db";
+import { encryptContent, decryptContent, sha256 } from "@alecrae/crypto";
+import type { EncryptedPayload } from "@alecrae/crypto";
 import { detectMeetingFromThread } from "@alecrae/ai-engine/meetings/transcript-linker";
 import {
   fetchTranscript,
@@ -33,11 +35,41 @@ import type {
 
 // ─── Provider connection storage (DB-backed via meetingProviderConnections) ───
 //
-// Tokens are stored as-is in the `access_token_encrypted` column.  In
-// production they MUST be encrypted with AES-256-GCM before being persisted
-// (the column name signals the intent).  For now the route stores the raw
-// token so the flow is functional end-to-end; a dedicated encryption helper
-// should be wired in before launch.
+// Tokens are stored AES-256-GCM encrypted in the `access_token_encrypted`
+// column (via encryptToken/decryptToken below), keyed off JWT_SECRET.
+
+/**
+ * Derive the 32-byte AES-256 key from JWT_SECRET. Reusing JWT_SECRET avoids
+ * introducing a second secret to provision/rotate; a dedicated
+ * MEETING_TOKEN_KEY can replace this later without changing the storage
+ * format (only the key derivation).
+ */
+function getTokenEncryptionKey(): Buffer {
+  const secret = process.env["JWT_SECRET"];
+  if (!secret || secret.length < 32) {
+    throw new Error(
+      "[meeting-link] JWT_SECRET must be set (>= 32 characters) to encrypt provider tokens.",
+    );
+  }
+  return sha256(secret);
+}
+
+function encryptToken(token: string): string {
+  const result = encryptContent(Buffer.from(token, "utf8"), getTokenEncryptionKey());
+  if (!result.ok) {
+    throw result.error;
+  }
+  return JSON.stringify(result.value);
+}
+
+function decryptToken(stored: string): string {
+  const payload = JSON.parse(stored) as EncryptedPayload;
+  const result = decryptContent(payload, getTokenEncryptionKey());
+  if (!result.ok) {
+    throw result.error;
+  }
+  return result.value.toString("utf8");
+}
 
 async function buildProvidersFor(accountId: string): Promise<TranscriptProvider[]> {
   const db = getDatabase();
@@ -48,9 +80,7 @@ async function buildProvidersFor(accountId: string): Promise<TranscriptProvider[
 
   const providers: TranscriptProvider[] = [];
   for (const row of rows) {
-    // `accessTokenEncrypted` holds the raw token until the encryption layer
-    // is wired in — see TODO above.
-    const token = row.accessTokenEncrypted;
+    const token = decryptToken(row.accessTokenEncrypted);
     switch (row.provider) {
       case "zoom":
         providers.push(new ZoomTranscriptProvider({ accessToken: token }));
@@ -296,8 +326,7 @@ meetingLink.post(
       id: rowId,
       accountId: auth.accountId,
       provider: input.provider,
-      // TODO: encrypt with AES-256-GCM before storing in production
-      accessTokenEncrypted: input.accessToken,
+      accessTokenEncrypted: encryptToken(input.accessToken),
       connectedAt,
       updatedAt: connectedAt,
     });
