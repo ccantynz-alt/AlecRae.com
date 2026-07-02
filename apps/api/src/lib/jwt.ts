@@ -180,6 +180,8 @@ function scopesForRole(role: string | undefined): string {
         "scripts:write",
         "voice:read",
         "voice:write",
+        "admin:read",
+        "admin:write",
       ].join(" ");
     case "viewer":
       return ["messages:read", "account:read", "analytics:read"].join(" ");
