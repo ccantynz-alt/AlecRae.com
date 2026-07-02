@@ -144,6 +144,7 @@ import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware 
 import { startAutoIndexer, stopAutoIndexer } from "@alecrae/ai-engine/embeddings/auto-indexer";
 import { processDLQ } from "./lib/dlq-processor.js";
 import { reconcileStorageUsage } from "./lib/storage-quota.js";
+import { processExpiredGrace } from "./lib/billing.js";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -876,6 +877,15 @@ const storageReconcileInterval = setInterval(() => {
   });
 }, 7 * 24 * 60 * 60 * 1000);
 storageReconcileInterval.unref();
+
+// Sweep for past-due accounts whose grace window has expired and downgrade them
+// to free. Runs daily — the window is typically 7 days so once-per-day is plenty.
+const graceExpiryInterval = setInterval(() => {
+  processExpiredGrace().catch((err) => {
+    console.warn("[api] Grace expiry sweep error:", err);
+  });
+}, 24 * 60 * 60 * 1000);
+graceExpiryInterval.unref();
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 
