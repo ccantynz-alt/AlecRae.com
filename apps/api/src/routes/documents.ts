@@ -539,7 +539,7 @@ documentsRouter.post(
   },
 );
 
-// POST /v1/documents/:id/export — Export (placeholder)
+// POST /v1/documents/:id/export — Export as markdown, html, or pdf
 documentsRouter.post(
   "/:id/export",
   requireScope("messages:read"),
@@ -569,22 +569,60 @@ documentsRouter.post(
       );
     }
 
-    // Placeholder export — in production this would generate the actual file
-    const mimeTypes: Record<string, string> = {
-      pdf: "application/pdf",
-      html: "text/html",
-      markdown: "text/markdown",
-    };
+    const safeTitle = doc.title.replace(/[^a-zA-Z0-9\s_-]/g, "").trim() || "document";
 
-    return c.json({
-      data: {
-        documentId: id,
-        format: input.format,
-        mimeType: mimeTypes[input.format],
-        downloadUrl: `https://storage.alecrae.com/exports/${id}.${input.format}?token=${generateId()}`,
-        expiresIn: 3600,
+    if (input.format === "markdown") {
+      const md = `# ${doc.title}\n\n${doc.content}`;
+      return new Response(md, {
+        headers: {
+          "Content-Type": "text/markdown; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${safeTitle}.md"`,
+        },
+      });
+    }
+
+    if (input.format === "html") {
+      const escaped = doc.content
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      const escapedTitle = doc.title.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${escapedTitle}</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:800px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#222}
+  h1{border-bottom:2px solid #e5e7eb;padding-bottom:.5rem}
+  pre{white-space:pre-wrap;word-break:break-word}
+</style>
+</head>
+<body>
+<h1>${escapedTitle}</h1>
+<pre>${escaped}</pre>
+</body>
+</html>`;
+      return new Response(html, {
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${safeTitle}.html"`,
+        },
+      });
+    }
+
+    // pdf: requires a server-side PDF rendering library (pdfkit, Puppeteer, etc.)
+    // not yet installed — return 501 until the library is added.
+    return c.json(
+      {
+        error: {
+          type: "not_implemented",
+          message: "PDF export requires a server-side rendering library which has not yet been installed. Use HTML or Markdown export in the meantime.",
+          code: "pdf_export_unavailable",
+        },
       },
-    });
+      501,
+    );
   },
 );
 
