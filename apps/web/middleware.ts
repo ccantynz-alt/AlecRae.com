@@ -4,6 +4,7 @@ const PUBLIC_PATHS = new Set([
   "/",
   "/login",
   "/register",
+  "/forgot-password",
   // Google sign-in lands here with the session token in the URL fragment; the
   // client reads it and stores the session. Must be public, or the SSR guard
   // bounces to /login before the token can ever be read (the fragment is
@@ -13,6 +14,7 @@ const PUBLIC_PATHS = new Set([
   "/terms",
   "/cookies",
   "/dpa",
+  "/dpa/sign",
   "/sla",
   "/dmca",
   "/acceptable-use",
