@@ -96,6 +96,77 @@ async function sha256(input: string): Promise<Uint8Array> {
 }
 
 /**
+ * Verify the ECDSA/RSA assertion signature from a WebAuthn login response.
+ * Signed data = authenticatorData || SHA-256(clientDataJSON).
+ * Tries EC P-256 (alg -7) first, then RSA-PKCS1-v1_5 (alg -257).
+ */
+async function verifyAssertionSignature(
+  publicKeyB64: string,
+  authenticatorDataB64: string,
+  clientDataJSONB64: string,
+  signatureB64: string,
+): Promise<boolean> {
+  // crypto.subtle requires concrete ArrayBuffer, not ArrayBufferLike
+  const toAB = (u8: Uint8Array): ArrayBuffer =>
+    u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer;
+
+  const authDataBytes = base64UrlToBuffer(authenticatorDataB64);
+  const clientDataBytes = base64UrlToBuffer(clientDataJSONB64);
+  const clientDataHash = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", toAB(clientDataBytes)),
+  );
+
+  const signedData = new Uint8Array(authDataBytes.length + clientDataHash.length);
+  signedData.set(authDataBytes, 0);
+  signedData.set(clientDataHash, authDataBytes.length);
+
+  const signatureBytes = base64UrlToBuffer(signatureB64);
+  const publicKeyBytes = base64UrlToBuffer(publicKeyB64);
+
+  // Try ECDSA with P-256 curve (most common passkey algorithm, alg = -7)
+  try {
+    const ecKey = await crypto.subtle.importKey(
+      "spki",
+      toAB(publicKeyBytes),
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["verify"],
+    );
+    const valid = await crypto.subtle.verify(
+      { name: "ECDSA", hash: "SHA-256" },
+      ecKey,
+      toAB(signatureBytes),
+      toAB(signedData),
+    );
+    if (valid) return true;
+  } catch {
+    // Key is not EC P-256 — fall through to RSA
+  }
+
+  // Try RSA-PKCS1-v1_5 (alg = -257)
+  try {
+    const rsaKey = await crypto.subtle.importKey(
+      "spki",
+      toAB(publicKeyBytes),
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    const valid = await crypto.subtle.verify(
+      { name: "RSASSA-PKCS1-v1_5" },
+      rsaKey,
+      toAB(signatureBytes),
+      toAB(signedData),
+    );
+    if (valid) return true;
+  } catch {
+    // Key is not RSA either — treat as invalid
+  }
+
+  return false;
+}
+
+/**
  * Compare two Uint8Arrays for equality.
  */
 function uint8ArraysEqual(a: Uint8Array, b: Uint8Array): boolean {
@@ -786,6 +857,26 @@ passkeyRouter.post(
             type: "authentication_error",
             message: "Possible credential cloning detected",
             code: "sign_count_mismatch",
+          },
+        },
+        401,
+      );
+    }
+
+    // Verify the assertion signature cryptographically
+    const signatureValid = await verifyAssertionSignature(
+      passkeyRecord.publicKey,
+      input.credential.response.authenticatorData,
+      input.credential.response.clientDataJSON,
+      input.credential.response.signature,
+    );
+    if (!signatureValid) {
+      return c.json(
+        {
+          error: {
+            type: "authentication_error",
+            message: "Signature verification failed",
+            code: "invalid_signature",
           },
         },
         401,
