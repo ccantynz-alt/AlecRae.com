@@ -26,6 +26,7 @@ import {
   getValidatedQuery,
 } from "../middleware/validator.js";
 import { getDatabase, documents, documentFolders, documentVersions } from "@alecrae/db";
+import { aiComplete, AiError } from "../lib/ai.js";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -519,23 +520,52 @@ documentsRouter.post(
       );
     }
 
-    // Placeholder AI responses by action type
-    const placeholders: Record<string, string> = {
-      summarize: `Summary of "${doc.title}": This document contains ${countWords(doc.content)} words. AI summarization will be powered by Claude when connected.`,
-      expand: `Expanded version of "${doc.title}": The content has been expanded with additional context and detail. AI expansion will be powered by Claude when connected.`,
-      rewrite: `Rewritten version of "${doc.title}": The content has been rewritten for clarity and impact. AI rewriting will be powered by Claude when connected.`,
-      translate: `Translated version of "${doc.title}" to ${input.targetLanguage ?? "English"}: Translation will be powered by Claude when connected.`,
-      proofread: `Proofread version of "${doc.title}": No issues found. AI proofreading will be powered by Claude when connected.`,
+    const systemPrompts: Record<string, string> = {
+      summarize: "You are a document assistant. Summarize the provided document content concisely, preserving key points and structure. Return only the summary.",
+      expand: "You are a document assistant. Expand the provided document content with additional context, examples, and detail while preserving the original intent. Return only the expanded content.",
+      rewrite: "You are a document assistant. Rewrite the provided document content for improved clarity, flow, and impact. Preserve the meaning but improve the writing quality. Return only the rewritten content.",
+      translate: `You are a document assistant. Translate the provided document content to ${input.targetLanguage ?? "English"}. Return only the translated content.`,
+      proofread: "You are a document assistant. Proofread the provided document content. Fix grammar, spelling, punctuation, and style issues. Return only the corrected content with a brief summary of changes made at the end, separated by '---'.",
     };
 
-    return c.json({
-      data: {
-        documentId: id,
-        action: input.action,
-        result: placeholders[input.action] ?? "AI processing complete.",
-        targetLanguage: input.targetLanguage ?? null,
-      },
-    });
+    const systemPrompt = systemPrompts[input.action] ?? "You are a document assistant. Process the provided document content as requested.";
+
+    try {
+      const aiResult = await aiComplete({
+        system: systemPrompt,
+        messages: [
+          {
+            role: "user",
+            content: `Document title: ${doc.title}\n\nContent:\n${doc.content}`,
+          },
+        ],
+        maxTokens: 4096,
+      });
+
+      return c.json({
+        data: {
+          documentId: id,
+          action: input.action,
+          result: aiResult.text,
+          targetLanguage: input.targetLanguage ?? null,
+          provider: aiResult.provider,
+        },
+      });
+    } catch (err) {
+      if (err instanceof AiError) {
+        return c.json(
+          {
+            error: {
+              type: "ai_error",
+              message: err.message,
+              code: err.code,
+            },
+          },
+          503,
+        );
+      }
+      throw err;
+    }
   },
 );
 
