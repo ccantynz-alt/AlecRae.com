@@ -637,8 +637,11 @@ export interface UsageInfo {
 }
 
 /**
- * Check whether the account has exceeded their plan's monthly email limit.
- * Returns `true` if the account may still send, `false` if over the limit.
+ * Check usage info for display (billing page, usage endpoint).
+ * NOT used for enforcement — real-time enforcement goes through checkQuota()
+ * in lib/quota.ts which uses the Redis counter kept in sync by the messages
+ * route. This function reads accounts.emailsSentThisPeriod which diverges
+ * from the Redis counter and is kept only for billing-period reset logic.
  */
 export async function checkUsageLimit(
   accountId: string,

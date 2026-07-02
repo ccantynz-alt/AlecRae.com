@@ -8,12 +8,17 @@
  */
 
 import { createMiddleware } from "hono/factory";
-import { checkUsageLimit, PLANS } from "../lib/billing.js";
+import { PLANS } from "../lib/billing.js";
 import type { PlanId } from "../lib/billing.js";
+import { checkQuota } from "../lib/quota.js";
 
 /**
  * Middleware that enforces email sending limits based on the account's plan.
  * Should be applied to email-sending routes (e.g., POST /v1/messages/send).
+ *
+ * Uses the Redis-backed checkQuota() as the single source of truth for the
+ * sent count. billing.ts had a parallel counter (accounts.emailsSentThisPeriod)
+ * that was never incremented by the messages route, causing divergence.
  *
  * If the account is over its limit, it returns a 429 response with details
  * about the current usage, the plan limit, and available upgrade options.
@@ -28,11 +33,11 @@ export const usageEnforcement = createMiddleware(async (c, next) => {
   }
 
   try {
-    const { allowed, usage } = await checkUsageLimit(auth.accountId);
+    const quota = await checkQuota(auth.accountId);
 
-    if (!allowed) {
+    if (!quota.allowed) {
       // Determine upgrade options
-      const currentPlan = usage.planTier as PlanId;
+      const currentPlan = quota.plan as PlanId;
       const planOrder: PlanId[] = [
         "free",
         "starter",
@@ -47,18 +52,23 @@ export const usageEnforcement = createMiddleware(async (c, next) => {
           emailsPerMonth: PLANS[id].emailsPerMonth,
         }));
 
+      const percentUsed =
+        quota.limit > 0
+          ? Math.round((quota.sent / quota.limit) * 10000) / 100
+          : 0;
+
       return c.json(
         {
           error: {
             type: "rate_limit_exceeded",
-            message: `Monthly email limit exceeded. Your ${usage.planTier} plan allows ${usage.emailsLimit.toLocaleString()} emails per month. You have sent ${usage.emailsSent.toLocaleString()}.`,
+            message: `Monthly email limit exceeded. Your ${quota.plan} plan allows ${quota.limit.toLocaleString()} emails per month. You have sent ${quota.sent.toLocaleString()}.`,
             code: "usage_limit_exceeded",
             details: {
-              emailsSent: usage.emailsSent,
-              emailsLimit: usage.emailsLimit,
-              percentUsed: usage.percentUsed,
-              planTier: usage.planTier,
-              periodStartedAt: usage.periodStartedAt,
+              emailsSent: quota.sent,
+              emailsLimit: quota.limit,
+              percentUsed,
+              planTier: quota.plan,
+              periodStartedAt: quota.resetsAt,
               upgradePlans:
                 upgradePlans.length > 0 ? upgradePlans : undefined,
               upgradeUrl: "/v1/billing/checkout",
