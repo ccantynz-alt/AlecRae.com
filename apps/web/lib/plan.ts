@@ -2,6 +2,21 @@
 
 export type PlanTier = "free" | "personal" | "pro" | "team" | "enterprise";
 
+// The API/DB uses different tier names than the frontend. This maps DB values
+// to frontend PlanTier values so isPlanAtLeast() doesn't return -1 for paying customers.
+const API_TIER_MAP: Record<string, PlanTier> = {
+  free: "free",
+  starter: "personal",
+  professional: "pro",
+  team: "team",
+  enterprise: "enterprise",
+};
+
+export function normalizeApiPlanTier(apiTier: string | undefined | null): PlanTier {
+  if (!apiTier) return "free";
+  return API_TIER_MAP[apiTier] ?? "free";
+}
+
 const TIER_ORDER: PlanTier[] = ["free", "personal", "pro", "team", "enterprise"];
 
 export function isPlanAtLeast(userPlan: PlanTier, required: PlanTier): boolean {

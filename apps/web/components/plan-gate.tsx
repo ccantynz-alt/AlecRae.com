@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { isPlanAtLeast, type PlanTier, PLAN_LABELS } from "../lib/plan";
+import { isPlanAtLeast, normalizeApiPlanTier, type PlanTier, PLAN_LABELS } from "../lib/plan";
 import { getAccessToken } from "../lib/auth-token";
 
 interface PlanGateProps {
@@ -23,7 +23,7 @@ export function PlanGate({ feature: _feature, required, children, showUpgrade = 
         });
         if (res.ok) {
           const data = await res.json() as { planTier?: string };
-          setPlan((data.planTier ?? "free") as PlanTier);
+          setPlan(normalizeApiPlanTier(data.planTier));
         } else {
           setPlan("free");
         }
