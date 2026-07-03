@@ -235,13 +235,10 @@ account.delete("/", requireScope("messages:read"), async (c) => {
     );
   }
 
-  const [user] = await db
-    .select({ role: users.role })
-    .from(users)
-    .where(eq(users.id, auth.userId))
-    .limit(1);
-
-  if (user?.role !== "owner") {
+  // Role in the ACTIVE workspace (auth.role, from the token) — not the
+  // identity's home-account role, which can differ once a user belongs to
+  // more than one workspace.
+  if (auth.role !== "owner") {
     return c.json(
       { error: { type: "forbidden", message: "Only account owners can delete accounts", code: "not_owner" } },
       403,

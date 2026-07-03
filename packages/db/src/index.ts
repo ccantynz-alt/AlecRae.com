@@ -379,6 +379,16 @@ export {
   refreshTokensRelations,
 } from "./schema/refresh-tokens.js";
 
+// Schema - Workspace Members (multi-workspace: one login, several accounts)
+export {
+  workspaceMembers,
+  workspaceMembersRelations,
+} from "./schema/workspace-members.js";
+export type {
+  WorkspaceMember,
+  NewWorkspaceMember,
+} from "./schema/workspace-members.js";
+
 // Schema - Smart Folders / Saved Searches
 export {
   smartFolders,

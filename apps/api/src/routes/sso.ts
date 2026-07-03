@@ -18,6 +18,7 @@ import { eq } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { getDatabase, users, accounts as _accounts, ssoConfigs as ssoConfigsTable } from "@alecrae/db";
 import { verifySamlSignature } from "../lib/saml-verify.js";
+import { upsertWorkspaceMembership } from "../lib/workspace-membership.js";
 
 const sso = new Hono();
 
@@ -476,6 +477,16 @@ sso.post("/acs", validateBody(SsoAcsSchema), async (c) => {
     userRole = "member";
 
     // Create the user via SSO (no password)
+    const ssoMemberPermissions = {
+      sendEmail: true,
+      readEmail: true,
+      manageDomains: false,
+      manageApiKeys: false,
+      manageWebhooks: false,
+      viewAnalytics: true,
+      manageAccount: false,
+      manageTeamMembers: false,
+    };
     await db.insert(users).values({
       id: userId,
       accountId,
@@ -484,16 +495,14 @@ sso.post("/acs", validateBody(SsoAcsSchema), async (c) => {
       passwordHash: null,
       role: "member",
       emailVerified: true, // SSO-verified
-      permissions: {
-        sendEmail: true,
-        readEmail: true,
-        manageDomains: false,
-        manageApiKeys: false,
-        manageWebhooks: false,
-        viewAnalytics: true,
-        manageAccount: false,
-        manageTeamMembers: false,
-      },
+      permissions: ssoMemberPermissions,
+    });
+
+    await upsertWorkspaceMembership({
+      userId,
+      accountId,
+      role: "member",
+      permissions: ssoMemberPermissions,
     });
   }
 

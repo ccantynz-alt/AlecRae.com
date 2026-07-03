@@ -12,6 +12,7 @@ import { z } from "zod";
 import { eq, and, lt } from "drizzle-orm";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { issueTokenPair } from "../lib/jwt.js";
+import { upsertWorkspaceMembership, getWorkspaceRole } from "../lib/workspace-membership.js";
 import {
   getDatabase,
   users,
@@ -540,6 +541,17 @@ passkeyRouter.post(
       emailsSentThisPeriod: 0,
     });
 
+    const ownerPermissions = {
+      sendEmail: true,
+      readEmail: true,
+      manageDomains: true,
+      manageApiKeys: true,
+      manageWebhooks: true,
+      viewAnalytics: true,
+      manageAccount: true,
+      manageTeamMembers: true,
+    };
+
     // Create user (no password — passkey only)
     await db.insert(users).values({
       id: userId,
@@ -549,16 +561,14 @@ passkeyRouter.post(
       passwordHash: null,
       role: "owner",
       emailVerified: false,
-      permissions: {
-        sendEmail: true,
-        readEmail: true,
-        manageDomains: true,
-        manageApiKeys: true,
-        manageWebhooks: true,
-        viewAnalytics: true,
-        manageAccount: true,
-        manageTeamMembers: true,
-      },
+      permissions: ownerPermissions,
+    });
+
+    await upsertWorkspaceMembership({
+      userId,
+      accountId,
+      role: "owner",
+      permissions: ownerPermissions,
     });
 
     // Store the passkey credential
@@ -935,11 +945,24 @@ passkeyRouter.post(
       // fall through
     }
 
+    // Role in the home workspace comes from workspace_members — self-heals
+    // for rows that predate that table.
+    let role = await getWorkspaceRole(user.id, user.accountId);
+    if (!role) {
+      role = user.role;
+      await upsertWorkspaceMembership({
+        userId: user.id,
+        accountId: user.accountId,
+        role: user.role,
+        permissions: user.permissions,
+      });
+    }
+
     const tokenPair = await issueTokenPair({
       sub: user.accountId,
       userId: user.id,
       email: user.email,
-      role: user.role,
+      role,
       tier,
     });
 

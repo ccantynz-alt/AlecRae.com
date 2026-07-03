@@ -135,6 +135,7 @@ import { contextIntelligenceRouter } from "./routes/context-intelligence.js";
 import { productivityAnalyticsRouter } from "./routes/productivity-analytics.js";
 import { knowledgeGraphRouter } from "./routes/knowledge-graph.js";
 import { organizationsRouter } from "./routes/organizations.js";
+import { workspacesRouter } from "./routes/workspaces.js";
 import { dpaRouter } from "./routes/dpa.js";
 import { closeConnection } from "@alecrae/db";
 import { closeIdempotencyRedis } from "./middleware/idempotency.js";
@@ -233,6 +234,9 @@ app.route("/v1/uptime", uptime);
 
 // Auth endpoints: strict IP rate limiting (10 req/min), no API key auth
 app.use("/v1/auth/*", authRateLimit);
+// switch-workspace mints a new session for a DIFFERENT workspace — requires
+// the caller to already hold a valid session for their current one.
+app.use("/v1/auth/switch-workspace", authMiddleware, writeRateLimit);
 app.route("/v1/auth", auth);
 app.route("/v1/auth/passkey", passkeyRouter);
 
@@ -754,6 +758,11 @@ app.use("/v1/organizations/*", authMiddleware, writeRateLimit);
 app.use("/v1/organizations", authMiddleware, writeRateLimit);
 // Organizations + Team Management + Audit Log
 app.route("/v1/organizations", organizationsRouter);
+
+// Workspaces — multi-workspace: one login, several separate businesses
+app.use("/v1/workspaces", authMiddleware, writeRateLimit);
+app.use("/v1/workspaces/*", authMiddleware, writeRateLimit);
+app.route("/v1/workspaces", workspacesRouter);
 
 // DPA self-serve signing: read-level for queries, write-level for signing
 app.use("/v1/dpa/current", authMiddleware, readRateLimit);
