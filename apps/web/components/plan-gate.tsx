@@ -22,8 +22,8 @@ export function PlanGate({ feature: _feature, required, children, showUpgrade = 
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
-          const data = await res.json() as { planTier?: string };
-          setPlan(normalizeApiPlanTier(data.planTier));
+          const body = await res.json() as { data?: { planTier?: string } };
+          setPlan(normalizeApiPlanTier(body.data?.planTier));
         } else {
           setPlan("free");
         }

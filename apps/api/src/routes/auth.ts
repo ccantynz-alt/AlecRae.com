@@ -653,8 +653,16 @@ auth.get("/me", async (c) => {
   const role = await getWorkspaceRole(user.id, session.accountId);
   if (!role) return c.json(unauthenticatedResponse(), 401);
 
+  // planTier was never returned here, so the frontend's PlanGate always fell
+  // back to "free" regardless of the account's actual plan.
+  const [account] = await db
+    .select({ planTier: accounts.planTier })
+    .from(accounts)
+    .where(eq(accounts.id, session.accountId))
+    .limit(1);
+
   return c.json({
-    data: { ...user, accountId: session.accountId, role },
+    data: { ...user, accountId: session.accountId, role, planTier: account?.planTier ?? "free" },
   });
 });
 

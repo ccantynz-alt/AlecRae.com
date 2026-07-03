@@ -12,7 +12,7 @@ const CF_API = "https://api.cloudflare.com/client/v4";
 interface CfResponse<T> {
   success: boolean;
   result: T;
-  errors: Array<{ code: number; message: string }>;
+  errors: { code: number; message: string }[];
 }
 
 interface CfZone {
@@ -53,8 +53,9 @@ async function findZoneId(token: string, domain: string): Promise<string | null>
       token,
       `/zones?name=${encodeURIComponent(candidate)}&status=active`,
     );
-    if (data.success && data.result?.length > 0) {
-      return data.result[0].id;
+    const zone = data.result?.[0];
+    if (data.success && zone) {
+      return zone.id;
     }
   }
   return null;
@@ -86,10 +87,10 @@ async function upsertRecord(
     ttl: 1, // auto
     proxied: false,
   };
-  if (record.priority != null) payload.priority = record.priority;
+  if (record.priority !== undefined && record.priority !== null) payload.priority = record.priority;
 
-  if (existing.result?.length > 0) {
-    const hit = existing.result[0];
+  const hit = existing.result?.[0];
+  if (hit) {
     if (hit.content === record.value && !hit.proxied) {
       return { type: record.type, name: record.name, status: "existed" };
     }
@@ -133,7 +134,11 @@ export async function configureCloudflare(
   }
 
   // Derive zone from the first record (all records share the same zone)
-  const zoneId = await findZoneId(apiToken, records[0].name);
+  const firstRecord = records[0];
+  if (!firstRecord) {
+    return { success: false, records: [], error: "No DNS records to configure" };
+  }
+  const zoneId = await findZoneId(apiToken, firstRecord.name);
   if (!zoneId) {
     return {
       success: false,

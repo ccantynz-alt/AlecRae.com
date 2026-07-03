@@ -31,7 +31,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { eq, and, desc, gte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { requireScope } from "../middleware/auth.js";
