@@ -81,10 +81,10 @@ export async function configurePorkbun(
           name: relName,
           content: rec.value,
           ttl: "600",
-          ...(rec.priority != null ? { prio: String(rec.priority) } : {}),
+          ...(rec.priority !== undefined && rec.priority !== null ? { prio: String(rec.priority) } : {}),
         });
         if (editRes.status !== "SUCCESS") {
-          return { type: rec.type, name: rec.name, status: "failed", error: editRes.message };
+          return { type: rec.type, name: rec.name, status: "failed", error: editRes.message ?? "Update failed" };
         }
         return { type: rec.type, name: rec.name, status: "updated" };
       }
@@ -94,10 +94,10 @@ export async function configurePorkbun(
         name: relName,
         content: rec.value,
         ttl: "600",
-        ...(rec.priority != null ? { prio: String(rec.priority) } : {}),
+        ...(rec.priority !== undefined && rec.priority !== null ? { prio: String(rec.priority) } : {}),
       });
       if (createRes.status !== "SUCCESS") {
-        return { type: rec.type, name: rec.name, status: "failed", error: createRes.message };
+        return { type: rec.type, name: rec.name, status: "failed", error: createRes.message ?? "Create failed" };
       }
       return { type: rec.type, name: rec.name, status: "created" };
     }),

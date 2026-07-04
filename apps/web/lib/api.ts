@@ -381,6 +381,24 @@ export const authApi = {
 
     return data.data;
   },
+
+  /**
+   * Switch the active workspace. Mints a fresh token pair scoped to
+   * `accountId` (the caller must already be a member) and stores it,
+   * replacing the current session.
+   */
+  async switchWorkspace(accountId: string): Promise<{ accountId: string; role: string }> {
+    const data = await apiFetch<{
+      data: { token: string; refreshToken: string; accountId: string; role: string };
+    }>("/v1/auth/switch-workspace", {
+      method: "POST",
+      body: JSON.stringify({ accountId }),
+    });
+
+    setSession(data.data.token, data.data.refreshToken);
+
+    return { accountId: data.data.accountId, role: data.data.role };
+  },
 };
 
 // ─── Core fetch wrapper ────────────────────────────────────────────────────
@@ -696,6 +714,34 @@ export const organizationsApi = {
     return apiFetch(`/v1/organizations/members/${encodeURIComponent(userId)}`, {
       method: "DELETE",
     });
+  },
+};
+
+// ─── Workspaces (one login, several separate businesses) ─────────────────────
+
+export interface Workspace {
+  accountId: string;
+  name: string;
+  slug: string | null;
+  role: OrgRole | "owner";
+  planTier: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export const workspacesApi = {
+  list(): Promise<{ data: Workspace[] }> {
+    return apiFetch("/v1/workspaces");
+  },
+  create(payload: { name: string; slug?: string }): Promise<{ data: Workspace }> {
+    return apiFetch("/v1/workspaces", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  /** Switch the active workspace — see authApi.switchWorkspace for the token swap. */
+  switchTo(accountId: string): Promise<{ accountId: string; role: string }> {
+    return authApi.switchWorkspace(accountId);
   },
 };
 

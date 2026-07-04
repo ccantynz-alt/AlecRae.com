@@ -377,7 +377,7 @@ export default function AiTriagePage() {
               </Card>
             ) : (
               rules.map((rule) => (
-                <Card key={rule.id} className={!rule.isActive ? "opacity-60" : undefined}>
+                <Card key={rule.id} className={!rule.isActive ? "opacity-60" : ""}>
                   <CardContent>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">

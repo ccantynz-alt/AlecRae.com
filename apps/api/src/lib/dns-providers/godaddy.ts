@@ -52,7 +52,7 @@ export async function configureGodaddy(
         {
           data: rec.value,
           ttl: 600,
-          ...(rec.priority != null ? { priority: rec.priority } : {}),
+          ...(rec.priority !== undefined && rec.priority !== null ? { priority: rec.priority } : {}),
         },
       ];
 

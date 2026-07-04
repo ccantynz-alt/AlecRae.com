@@ -445,16 +445,21 @@ function TeamSection(): ReactNode {
 
   if (!orgChecked) return <Notice tone="info">Loading…</Notice>;
 
-  // No org yet → create one.
+  // This workspace has no branding profile yet → create one. To work in a
+  // DIFFERENT workspace entirely (a separate business, its own mailboxes and
+  // team), use the workspace switcher in the sidebar instead — this form
+  // only sets up the currently active one.
   if (!org) {
     return (
       <Card>
         <CardContent>
           <Text variant="heading-sm" className="mb-2">
-            Create your organization
+            Set up this workspace's team
           </Text>
           <Text variant="body-md" muted className="mb-4">
-            An organization lets you invite teammates, assign roles, and manage shared settings.
+            Give this workspace a name so you can invite teammates, assign roles, and manage shared
+            settings. Need a separate workspace entirely — a different business, its own mailboxes and
+            team? Use the workspace switcher in the sidebar to create one.
           </Text>
           <Box className="flex flex-wrap items-end gap-3">
             <Box className="flex-1 min-w-[12rem]">

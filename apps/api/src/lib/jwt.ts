@@ -10,6 +10,7 @@
 import * as jose from "jose";
 import { eq, and, isNull } from "drizzle-orm";
 import { getDatabase, refreshTokens, users, accounts } from "@alecrae/db";
+import { getWorkspaceRole } from "./workspace-membership.js";
 
 // ─── Key management ──────────────────────────────────────────────────────────
 
@@ -233,7 +234,9 @@ export interface TokenPair {
 
 /**
  * Issue a new access + refresh token pair.
- * Stores the hashed refresh token in the DB.
+ * Stores the hashed refresh token in the DB, scoped to `payload.sub`
+ * (the active workspace/accountId) so that rotating it later stays in that
+ * same workspace rather than reverting to the identity's home account.
  */
 export async function issueTokenPair(payload: TokenPayload): Promise<TokenPair> {
   const accessToken = await createAccessToken(payload);
@@ -247,6 +250,7 @@ export async function issueTokenPair(payload: TokenPayload): Promise<TokenPair> 
   await db.insert(refreshTokens).values({
     id: generateId(),
     userId: payload.userId,
+    accountId: payload.sub,
     tokenHash,
     family,
     expiresAt,
@@ -257,6 +261,28 @@ export async function issueTokenPair(payload: TokenPayload): Promise<TokenPair> 
     refreshToken: refreshTokenValue,
     expiresIn: 900, // 15 minutes
   };
+}
+
+/**
+ * Mint a token pair for a specific (userId, accountId) workspace membership.
+ * Callers (e.g. the workspace-switch endpoint) are responsible for verifying
+ * the identity actually holds a `workspace_members` row for that account —
+ * this function trusts whatever role/tier it's handed.
+ */
+export async function issueWorkspaceTokenPair(params: {
+  userId: string;
+  accountId: string;
+  email: string;
+  role: string;
+  tier?: string;
+}): Promise<TokenPair> {
+  return issueTokenPair({
+    sub: params.accountId,
+    userId: params.userId,
+    email: params.email,
+    role: params.role,
+    ...(params.tier !== undefined ? { tier: params.tier } : {}),
+  });
 }
 
 /**
@@ -325,13 +351,26 @@ export async function rotateRefreshToken(oldRefreshToken: string): Promise<Token
     throw new TokenError("user_not_found", "User associated with token not found");
   }
 
+  // The workspace this refresh token is scoped to — NOT necessarily the
+  // identity's home account. Falls back to the home account for rows
+  // issued before `accountId` existed on refresh_tokens.
+  const activeAccountId = record.accountId ?? user.accountId;
+
+  // Role in the ACTIVE workspace, not the identity's home role — these
+  // differ once a user belongs to more than one workspace. Every legitimate
+  // membership (home or joined) has a workspace_members row — no fallback.
+  const role = await getWorkspaceRole(user.id, activeAccountId);
+  if (!role) {
+    throw new TokenError("membership_revoked", "No longer a member of this workspace");
+  }
+
   // Look up account tier
   let tier = "starter";
   try {
     const [account] = await db
       .select({ planTier: accounts.planTier })
       .from(accounts)
-      .where(eq(accounts.id, user.accountId))
+      .where(eq(accounts.id, activeAccountId))
       .limit(1);
     if (account) tier = account.planTier ?? "free";
   } catch {
@@ -340,10 +379,10 @@ export async function rotateRefreshToken(oldRefreshToken: string): Promise<Token
 
   // Issue new pair in the same family
   const accessToken = await createAccessToken({
-    sub: user.accountId,
+    sub: activeAccountId,
     userId: user.id,
     email: user.email,
-    role: user.role,
+    role,
     tier,
   });
 
@@ -354,6 +393,7 @@ export async function rotateRefreshToken(oldRefreshToken: string): Promise<Token
   await db.insert(refreshTokens).values({
     id: generateId(),
     userId: record.userId,
+    accountId: activeAccountId,
     tokenHash: newTokenHash,
     family: record.family, // same family for theft detection chain
     expiresAt,

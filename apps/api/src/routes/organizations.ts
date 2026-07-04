@@ -1,13 +1,19 @@
 /**
  * Organizations + Team Management + Audit Log + SSO Config Routes
  *
- * POST   /                           — Create an organization
- * GET    /                           — Get organization for current account
+ * All endpoints here operate on the ACTIVE workspace (`auth.accountId`, from
+ * the current token) — see apps/api/src/lib/workspace-membership.ts for how
+ * membership/role is resolved once an identity belongs to more than one
+ * workspace. Creating additional workspaces is `/v1/workspaces`; switching
+ * between them is `POST /v1/auth/switch-workspace`.
+ *
+ * POST   /                           — Create an organization (branding profile)
+ * GET    /                           — Get organization(s) for the active workspace
  * PUT    /                           — Update organization
  *
- * GET    /members                    — List all users in the account
- * PUT    /members/:userId/role       — Change a user's role
- * DELETE /members/:userId            — Remove user from account
+ * GET    /members                    — List all members of the active workspace
+ * PUT    /members/:userId/role       — Change a member's role in this workspace
+ * DELETE /members/:userId            — Remove a member's access to this workspace
  *
  * POST   /invitations                — Invite user by email
  * GET    /invitations                — List pending invitations
@@ -37,7 +43,13 @@ import {
   auditLogs,
   ssoConfigs,
   users,
+  workspaceMembers,
 } from "@alecrae/db";
+import {
+  upsertWorkspaceMembership,
+  getWorkspaceRole,
+  removeWorkspaceMembership,
+} from "../lib/workspace-membership.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -392,7 +404,7 @@ organizationsRouter.put(
 
 // ─── Team Member Management ───────────────────────────────────────────────────
 
-// GET /members — List all users in the account
+// GET /members — List every member of the ACTIVE workspace
 organizationsRouter.get(
   "/members",
   requireScope("account:read"),
@@ -405,15 +417,16 @@ organizationsRouter.get(
         id: users.id,
         email: users.email,
         name: users.name,
-        role: users.role,
+        role: workspaceMembers.role,
         avatarUrl: users.avatarUrl,
         emailVerified: users.emailVerified,
         lastLoginAt: users.lastLoginAt,
-        createdAt: users.createdAt,
+        createdAt: workspaceMembers.createdAt,
       })
-      .from(users)
-      .where(eq(users.accountId, auth.accountId))
-      .orderBy(desc(users.createdAt));
+      .from(workspaceMembers)
+      .innerJoin(users, eq(workspaceMembers.userId, users.id))
+      .where(eq(workspaceMembers.accountId, auth.accountId))
+      .orderBy(desc(workspaceMembers.createdAt));
 
     return c.json({
       data: members.map((m) => ({
@@ -430,7 +443,7 @@ organizationsRouter.get(
   },
 );
 
-// PUT /members/:userId/role — Change a user's role
+// PUT /members/:userId/role — Change a member's role in the ACTIVE workspace
 organizationsRouter.put(
   "/members/:userId/role",
   requireScope("account:manage"),
@@ -443,28 +456,14 @@ organizationsRouter.put(
     const accountId = auth.accountId;
     const userId = auth.userId ?? auth.accountId;
 
-    // Find the target user
-    const [targetUser] = await db
-      .select({
-        id: users.id,
-        role: users.role,
-        accountId: users.accountId,
-      })
-      .from(users)
-      .where(
-        and(
-          eq(users.id, targetUserId),
-          eq(users.accountId, accountId),
-        ),
-      )
-      .limit(1);
+    const targetRole = await getWorkspaceRole(targetUserId, accountId);
 
-    if (!targetUser) {
+    if (!targetRole) {
       return c.json(
         {
           error: {
             type: "not_found",
-            message: "User not found in this account",
+            message: "User not found in this workspace",
             code: "user_not_found",
           },
         },
@@ -473,7 +472,7 @@ organizationsRouter.put(
     }
 
     // Cannot change the owner's role
-    if (targetUser.role === "owner") {
+    if (targetRole === "owner") {
       return c.json(
         {
           error: {
@@ -488,10 +487,11 @@ organizationsRouter.put(
 
     const now = new Date();
 
-    await db
-      .update(users)
-      .set({ role: input.role, updatedAt: now })
-      .where(eq(users.id, targetUserId));
+    await upsertWorkspaceMembership({
+      userId: targetUserId,
+      accountId,
+      role: input.role,
+    });
 
     await logAudit(db, {
       accountId,
@@ -499,7 +499,7 @@ organizationsRouter.put(
       action: "member.role_changed",
       resourceType: "user",
       resourceId: targetUserId,
-      metadata: { previousRole: targetUser.role, newRole: input.role },
+      metadata: { previousRole: targetRole, newRole: input.role },
       ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? undefined,
       userAgent: c.req.header("user-agent") ?? undefined,
     });
@@ -514,7 +514,9 @@ organizationsRouter.put(
   },
 );
 
-// DELETE /members/:userId — Remove user from account
+// DELETE /members/:userId — Remove a member's access to the ACTIVE workspace.
+// This revokes their `workspace_members` row for THIS account only — their
+// identity and any other workspace they belong to are untouched.
 organizationsRouter.delete(
   "/members/:userId",
   requireScope("account:manage"),
@@ -525,29 +527,14 @@ organizationsRouter.delete(
     const accountId = auth.accountId;
     const userId = auth.userId ?? auth.accountId;
 
-    // Find the target user
-    const [targetUser] = await db
-      .select({
-        id: users.id,
-        role: users.role,
-        email: users.email,
-        accountId: users.accountId,
-      })
-      .from(users)
-      .where(
-        and(
-          eq(users.id, targetUserId),
-          eq(users.accountId, accountId),
-        ),
-      )
-      .limit(1);
+    const targetRole = await getWorkspaceRole(targetUserId, accountId);
 
-    if (!targetUser) {
+    if (!targetRole) {
       return c.json(
         {
           error: {
             type: "not_found",
-            message: "User not found in this account",
+            message: "User not found in this workspace",
             code: "user_not_found",
           },
         },
@@ -556,7 +543,7 @@ organizationsRouter.delete(
     }
 
     // Cannot remove the owner
-    if (targetUser.role === "owner") {
+    if (targetRole === "owner") {
       return c.json(
         {
           error: {
@@ -569,14 +556,13 @@ organizationsRouter.delete(
       );
     }
 
-    await db
-      .delete(users)
-      .where(
-        and(
-          eq(users.id, targetUserId),
-          eq(users.accountId, accountId),
-        ),
-      );
+    const [targetUser] = await db
+      .select({ email: users.email })
+      .from(users)
+      .where(eq(users.id, targetUserId))
+      .limit(1);
+
+    await removeWorkspaceMembership(targetUserId, accountId);
 
     await logAudit(db, {
       accountId,
@@ -584,7 +570,7 @@ organizationsRouter.delete(
       action: "member.removed",
       resourceType: "user",
       resourceId: targetUserId,
-      metadata: { email: targetUser.email, role: targetUser.role },
+      metadata: { email: targetUser?.email, role: targetRole },
       ipAddress: c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? undefined,
       userAgent: c.req.header("user-agent") ?? undefined,
     });
@@ -638,16 +624,18 @@ organizationsRouter.post(
       );
     }
 
-    // Check if user is already a member
+    // Check if user is already a member of this workspace
     const [existingUser] = await db
       .select({ id: users.id })
       .from(users)
-      .where(
+      .innerJoin(
+        workspaceMembers,
         and(
-          eq(users.accountId, accountId),
-          eq(users.email, input.email),
+          eq(workspaceMembers.userId, users.id),
+          eq(workspaceMembers.accountId, accountId),
         ),
       )
+      .where(eq(users.email, input.email))
       .limit(1);
 
     if (existingUser) {
@@ -867,7 +855,7 @@ organizationsRouter.post("/invitations/:token/accept", async (c) => {
     );
   }
 
-  // Check if user already exists with this email
+  // Check if an identity already exists with this email
   const [existingUser] = await db
     .select({ id: users.id })
     .from(users)
@@ -876,20 +864,25 @@ organizationsRouter.post("/invitations/:token/accept", async (c) => {
 
   const now = new Date();
   let newUserId: string;
+  const memberPermissions = {
+    sendEmail: true,
+    readEmail: true,
+    manageDomains: false,
+    manageApiKeys: false,
+    manageWebhooks: false,
+    viewAnalytics: true,
+    manageAccount: false,
+    manageTeamMembers: false,
+  };
 
   if (existingUser) {
-    // User already exists — link them to this account
+    // Identity already exists — grant them membership in THIS workspace
+    // without touching their home account or any other workspace they
+    // already belong to (an identity can belong to more than one).
     newUserId = existingUser.id;
-    await db
-      .update(users)
-      .set({
-        accountId: invitation.accountId,
-        role: invitation.role ?? "member",
-        updatedAt: now,
-      })
-      .where(eq(users.id, existingUser.id));
   } else {
-    // Create new user
+    // Create a brand-new identity, home-scoped to this invitation's account
+    // (their "home" workspace default — see workspace-membership.ts).
     newUserId = generateId();
     const emailName = invitation.email.split("@")[0] ?? "User";
 
@@ -901,20 +894,18 @@ organizationsRouter.post("/invitations/:token/accept", async (c) => {
       passwordHash: null,
       role: invitation.role ?? "member",
       emailVerified: true, // Invitation acceptance verifies the email
-      permissions: {
-        sendEmail: true,
-        readEmail: true,
-        manageDomains: false,
-        manageApiKeys: false,
-        manageWebhooks: false,
-        viewAnalytics: true,
-        manageAccount: false,
-        manageTeamMembers: false,
-      },
+      permissions: memberPermissions,
       createdAt: now,
       updatedAt: now,
     });
   }
+
+  await upsertWorkspaceMembership({
+    userId: newUserId,
+    accountId: invitation.accountId,
+    role: invitation.role ?? "member",
+    permissions: memberPermissions,
+  });
 
   // Mark invitation as accepted
   await db

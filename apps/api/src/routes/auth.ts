@@ -15,11 +15,13 @@ import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { getDatabase, users, accounts } from "@alecrae/db";
 import {
   issueTokenPair,
+  issueWorkspaceTokenPair,
   rotateRefreshToken,
   revokeAllUserTokens,
   verifyAccessToken,
   TokenError,
 } from "../lib/jwt.js";
+import { upsertWorkspaceMembership, getWorkspaceRole } from "../lib/workspace-membership.js";
 import {
   getGoogleSignInUrl,
   exchangeGoogleSignInCode,
@@ -165,11 +167,25 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
     // fall through
   }
 
+  // Role in the identity's home workspace comes from workspace_members —
+  // self-heals (and falls back to the legacy users.role) for any row that
+  // predates that table.
+  let role = await getWorkspaceRole(user.id, user.accountId);
+  if (!role) {
+    role = user.role;
+    await upsertWorkspaceMembership({
+      userId: user.id,
+      accountId: user.accountId,
+      role: user.role,
+      permissions: user.permissions,
+    });
+  }
+
   const tokenPair = await issueTokenPair({
     sub: user.accountId,
     userId: user.id,
     email: user.email,
-    role: user.role,
+    role,
     tier,
   });
 
@@ -182,7 +198,7 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        role,
         accountId: user.accountId,
       },
     },
@@ -227,6 +243,17 @@ auth.post("/register", validateBody(RegisterSchema), async (c) => {
     emailsSentThisPeriod: 0,
   });
 
+  const ownerPermissions = {
+    sendEmail: true,
+    readEmail: true,
+    manageDomains: true,
+    manageApiKeys: true,
+    manageWebhooks: true,
+    viewAnalytics: true,
+    manageAccount: true,
+    manageTeamMembers: true,
+  };
+
   // Create user
   await db.insert(users).values({
     id: userId,
@@ -236,16 +263,14 @@ auth.post("/register", validateBody(RegisterSchema), async (c) => {
     passwordHash,
     role: "owner",
     emailVerified: false,
-    permissions: {
-      sendEmail: true,
-      readEmail: true,
-      manageDomains: true,
-      manageApiKeys: true,
-      manageWebhooks: true,
-      viewAnalytics: true,
-      manageAccount: true,
-      manageTeamMembers: true,
-    },
+    permissions: ownerPermissions,
+  });
+
+  await upsertWorkspaceMembership({
+    userId,
+    accountId,
+    role: "owner",
+    permissions: ownerPermissions,
   });
 
   maybeSendWelcomeEmail(input.email.toLowerCase(), input.name);
@@ -331,7 +356,6 @@ auth.get("/callback/google", async (c) => {
     if (existing) {
       userId = existing.id;
       accountId = existing.accountId;
-      role = existing.role;
 
       const updates: Record<string, unknown> = { lastLoginAt: new Date() };
       if (!existing.avatarUrl && profile.picture) updates.avatarUrl = profile.picture;
@@ -347,6 +371,21 @@ auth.get("/callback/google", async (c) => {
       // Owner accounts are pinned to full access — upgrade a pre-existing
       // free/paid account in place if this email is on the allowlist.
       tier = await reconcileOwnerPlan(existing.accountId, profile.email, tier);
+
+      // Role in the home workspace comes from workspace_members — self-heals
+      // for rows that predate that table.
+      const existingMembershipRole = await getWorkspaceRole(userId, accountId);
+      if (existingMembershipRole) {
+        role = existingMembershipRole;
+      } else {
+        role = existing.role;
+        await upsertWorkspaceMembership({
+          userId,
+          accountId,
+          role: existing.role,
+          permissions: existing.permissions,
+        });
+      }
     } else {
       accountId = generateId();
       userId = generateId();
@@ -373,6 +412,13 @@ auth.get("/callback/google", async (c) => {
         avatarUrl: profile.picture,
         permissions: { ...OWNER_PERMISSIONS },
         lastLoginAt: new Date(),
+      });
+
+      await upsertWorkspaceMembership({
+        userId,
+        accountId,
+        role: "owner",
+        permissions: { ...OWNER_PERMISSIONS },
       });
 
       maybeSendWelcomeEmail(profile.email, profile.name);
@@ -434,6 +480,75 @@ auth.post("/refresh", validateBody(RefreshSchema), async (c) => {
       401,
     );
   }
+});
+
+const SwitchWorkspaceSchema = z.object({
+  accountId: z.string().min(1),
+});
+
+// POST /v1/auth/switch-workspace — mint a fresh token pair scoped to another
+// workspace the caller is a member of. Requires an existing valid session
+// (authMiddleware, mounted in server.ts) — the target accountId's role comes
+// strictly from workspace_members, never trusted from the request body.
+auth.post("/switch-workspace", validateBody(SwitchWorkspaceSchema), async (c) => {
+  const authCtx = c.get("auth");
+  if (!authCtx?.userId) {
+    return c.json(unauthenticatedResponse(), 401);
+  }
+
+  const input = getValidatedBody<z.infer<typeof SwitchWorkspaceSchema>>(c);
+  const db = getDatabase();
+
+  const role = await getWorkspaceRole(authCtx.userId, input.accountId);
+  if (!role) {
+    return c.json(
+      {
+        error: {
+          type: "authorization_error",
+          message: "You are not a member of this workspace",
+          code: "not_a_member",
+        },
+      },
+      403,
+    );
+  }
+
+  const [user] = await db
+    .select({ email: users.email })
+    .from(users)
+    .where(eq(users.id, authCtx.userId))
+    .limit(1);
+  if (!user) return c.json(unauthenticatedResponse(), 401);
+
+  let tier = "free";
+  try {
+    const [account] = await db
+      .select({ planTier: accounts.planTier })
+      .from(accounts)
+      .where(eq(accounts.id, input.accountId))
+      .limit(1);
+    if (account) tier = account.planTier ?? "free";
+  } catch {
+    // fall through
+  }
+
+  const tokenPair = await issueWorkspaceTokenPair({
+    userId: authCtx.userId,
+    accountId: input.accountId,
+    email: user.email,
+    role,
+    tier,
+  });
+
+  return c.json({
+    data: {
+      token: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
+      expiresIn: tokenPair.expiresIn,
+      accountId: input.accountId,
+      role,
+    },
+  });
 });
 
 // POST /v1/auth/logout — Revoke all refresh tokens for the authenticated user
@@ -531,7 +646,24 @@ auth.get("/me", async (c) => {
 
   if (!user) return c.json(unauthenticatedResponse(), 401);
 
-  return c.json({ data: user });
+  // Report the ACTIVE workspace (from the token), not the identity's home
+  // account — these differ once a user belongs to more than one workspace.
+  // Role comes from that workspace's membership row — every legitimate
+  // membership (home or joined) has one, no fallback.
+  const role = await getWorkspaceRole(user.id, session.accountId);
+  if (!role) return c.json(unauthenticatedResponse(), 401);
+
+  // planTier was never returned here, so the frontend's PlanGate always fell
+  // back to "free" regardless of the account's actual plan.
+  const [account] = await db
+    .select({ planTier: accounts.planTier })
+    .from(accounts)
+    .where(eq(accounts.id, session.accountId))
+    .limit(1);
+
+  return c.json({
+    data: { ...user, accountId: session.accountId, role, planTier: account?.planTier ?? "free" },
+  });
 });
 
 // PATCH /v1/auth/me — Update the authenticated user's profile

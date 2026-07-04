@@ -16,6 +16,7 @@ import { CommandPalette } from "../../components/CommandPalette";
 import { OfflineBadge } from "../../components/SyncStatusBar";
 import { InstallPrompt } from "../../components/InstallPrompt";
 import { PlanBadge } from "../../components/plan-gate";
+import { WorkspaceSwitcher } from "../../components/WorkspaceSwitcher";
 import type { PlanTier } from "../../lib/plan";
 
 // ─── SVG icon path data (Heroicons outline 24px) ─────────────────────────────
@@ -223,28 +224,31 @@ export default function DashboardLayout({
       .slice(0, 2) || "U";
 
   const brand = (
-    <Box className={`flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
-      {/* Wordmark hidden when collapsed so the toggle button stays visible */}
-      {!collapsed && (
+    <Box className="space-y-2">
+      <Box className={`flex items-center ${collapsed ? "justify-center" : "justify-between"}`}>
+        {/* Wordmark hidden when collapsed so the toggle button stays visible */}
+        {!collapsed && (
+          <Box
+            as="span"
+            className="text-3xl leading-none text-content select-none"
+            style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
+          >
+            AlecRae
+          </Box>
+        )}
         <Box
-          as="span"
-          className="text-3xl leading-none text-content select-none"
-          style={{ fontFamily: "var(--font-italianno), cursive", fontWeight: 400 }}
+          as="button"
+          className="flex-shrink-0 text-content-tertiary hover:text-content transition-colors"
+          onClick={() => setCollapsed((prev) => !prev)}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar (⌘\\)" : "Collapse sidebar (⌘\\)"}
         >
-          AlecRae
+          <Text as="span" variant="body-sm">
+            {collapsed ? "❯" : "❮"}
+          </Text>
         </Box>
-      )}
-      <Box
-        as="button"
-        className="flex-shrink-0 text-content-tertiary hover:text-content transition-colors"
-        onClick={() => setCollapsed((prev) => !prev)}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        title={collapsed ? "Expand sidebar (⌘\\)" : "Collapse sidebar (⌘\\)"}
-      >
-        <Text as="span" variant="body-sm">
-          {collapsed ? "❯" : "❮"}
-        </Text>
       </Box>
+      <WorkspaceSwitcher collapsed={collapsed} />
     </Box>
   );
 

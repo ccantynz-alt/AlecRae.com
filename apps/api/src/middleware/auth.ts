@@ -24,6 +24,13 @@ export interface AuthContext {
   tier: PlanTier;
   scopes: string[];
   userId?: string;
+  /**
+   * Role in the ACTIVE workspace (`accountId` above) — not necessarily the
+   * identity's home-account role, which can differ once a user belongs to
+   * more than one workspace. Only set for bearer/session tokens; API keys
+   * carry scopes directly and have no per-workspace role concept.
+   */
+  role?: string;
 }
 
 declare module "hono" {
@@ -207,6 +214,7 @@ async function validateBearerToken(
     const payload = await verifyAccessToken(token);
 
     const userId = payload.userId as string | undefined;
+    const role = payload.role as string | undefined;
     return {
       accountId: payload.sub as string,
       keyId: (payload.jti as string) ?? `oauth_${Date.now()}`,
@@ -217,6 +225,7 @@ async function validateBearerToken(
         "account:manage",
       ],
       ...(userId !== undefined ? { userId } : {}),
+      ...(role !== undefined ? { role } : {}),
     };
   } catch {
     // SECURITY: a failed signature verification means the token is invalid.
