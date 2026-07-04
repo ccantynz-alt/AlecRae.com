@@ -27,23 +27,23 @@ interface AgentRun {
   id: string;
   startedAt: string;
   status: "completed" | "running" | "failed";
-  emailsProcessed: number;
-  draftsCreated: number;
+  totalProcessed: number | null;
+  stats: { draftsCreated?: number } | null;
 }
 
 interface AgentDraft {
   id: string;
   subject: string;
-  to: string;
+  to: string[];
   body: string;
   confidence: number;
   emailId: string;
 }
 
 interface AgentBriefing {
-  summary: string;
-  generatedAt: string;
-  highlights: string[];
+  briefingMarkdown: string | null;
+  startedAt: string;
+  pendingDraftCount: number;
 }
 
 // ─── API helper ───────────────────────────────────────────────────────────────
@@ -234,7 +234,7 @@ function DraftsTable({ drafts, onAction, actingId }: DraftsTableProps): React.Re
                     </Box>
                   </Box>
                   <Text variant="body-sm" className="mt-0.5 text-content-subtle">
-                    To: {draft.to}
+                    To: {Array.isArray(draft.to) ? draft.to.join(", ") : draft.to}
                   </Text>
                   {isExpanded && (
                     <Box className="mt-3 rounded-md border border-border bg-surface-raised p-3">
@@ -324,9 +324,10 @@ function RunsTimeline({ runs }: { runs: AgentRun[] }): React.ReactNode {
                     {formatTime(run.startedAt)}
                   </Text>
                   <Text variant="caption" className="text-content-subtle">
-                    {run.emailsProcessed} email{run.emailsProcessed !== 1 ? "s" : ""} processed
-                    {" · "}
-                    {run.draftsCreated} draft{run.draftsCreated !== 1 ? "s" : ""} created
+                    {run.totalProcessed ?? 0} email{(run.totalProcessed ?? 0) !== 1 ? "s" : ""} processed
+                    {(run.stats?.draftsCreated ?? 0) > 0 && (
+                      <> · {run.stats?.draftsCreated} draft{(run.stats?.draftsCreated ?? 0) !== 1 ? "s" : ""} created</>
+                    )}
                   </Text>
                 </Box>
                 {statusChip(run.status)}
@@ -364,28 +365,18 @@ function MorningBriefingCard({ briefing }: { briefing: AgentBriefing | null }): 
         <Box className="flex items-center justify-between">
           <Text variant="heading-sm">Morning Briefing</Text>
           <Text variant="caption" className="text-content-subtle">
-            {formatDate(briefing.generatedAt)}
+            {formatDate(briefing.startedAt)}
           </Text>
         </Box>
       </CardHeader>
       <CardContent>
         <Text variant="body-md" className="text-content">
-          {briefing.summary}
+          {briefing.briefingMarkdown ?? "No briefing content available."}
         </Text>
-        {briefing.highlights.length > 0 && (
-          <Box as="ul" className="mt-4 space-y-1.5" role="list" aria-label="Key highlights">
-            {briefing.highlights.map((h, i) => (
-              <Box key={i} as="li" className="flex items-start gap-2">
-                <Box
-                  className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-600"
-                  aria-hidden="true"
-                />
-                <Text variant="body-sm" className="text-content">
-                  {h}
-                </Text>
-              </Box>
-            ))}
-          </Box>
+        {(briefing.pendingDraftCount ?? 0) > 0 && (
+          <Text variant="body-sm" className="mt-2 text-brand-700">
+            {briefing.pendingDraftCount} draft{briefing.pendingDraftCount !== 1 ? "s" : ""} awaiting your approval below.
+          </Text>
         )}
       </CardContent>
     </Card>
@@ -550,18 +541,18 @@ export default function AgentPage(): React.ReactNode {
   const loadAll = useCallback(async (): Promise<void> => {
     setError(null);
     await Promise.allSettled([
-      apiFetch<AgentStatus>("/v1/agent/status")
-        .then((d) => setStatus(d))
+      apiFetch<{ data: AgentStatus }>("/v1/agent/status")
+        .then((r) => setStatus(r.data))
         .catch((e: unknown) => setError(errMsg(e)))
         .finally(() => setLoadingStatus(false)),
-      apiFetch<AgentRun[]>("/v1/agent/runs")
-        .then((d) => setRuns(d))
+      apiFetch<{ data: AgentRun[] }>("/v1/agent/runs")
+        .then((r) => setRuns(r.data))
         .finally(() => setLoadingRuns(false)),
-      apiFetch<AgentDraft[]>("/v1/agent/drafts")
-        .then((d) => setDrafts(d))
+      apiFetch<{ data: { drafts: AgentDraft[] } }>("/v1/agent/drafts")
+        .then((r) => setDrafts(r.data.drafts))
         .finally(() => setLoadingDrafts(false)),
-      apiFetch<AgentBriefing>("/v1/agent/briefing")
-        .then((d) => setBriefing(d))
+      apiFetch<{ data: AgentBriefing }>("/v1/agent/briefing")
+        .then((r) => setBriefing(r.data))
         .catch(() => setBriefing(null))
         .finally(() => setLoadingBriefing(false)),
     ]);
@@ -576,12 +567,12 @@ export default function AgentPage(): React.ReactNode {
     setTogglingAgent(true);
     try {
       const next = !status.enabled;
-      await apiFetch<AgentStatus>("/v1/agent/config", {
-        method: "POST",
+      await apiFetch<{ data: AgentStatus }>("/v1/agent/config", {
+        method: "PUT",
         body: JSON.stringify({
           enabled: next,
           schedule: status.schedule,
-          confidenceThreshold: status.confidenceThreshold,
+          minDraftConfidence: status.confidenceThreshold,
         }),
       });
       setStatus((prev) => (prev ? { ...prev, enabled: next } : prev));
@@ -595,10 +586,7 @@ export default function AgentPage(): React.ReactNode {
   const handleDraftAction = async (id: string, action: "approve" | "reject"): Promise<void> => {
     setActingDraftId(id);
     try {
-      await apiFetch<unknown>(`/v1/agent/drafts/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ action }),
-      });
+      await apiFetch<unknown>(`/v1/agent/drafts/${id}/${action}`, { method: "POST" });
       setDrafts((prev) => prev.filter((d) => d.id !== id));
     } catch (e: unknown) {
       setError(errMsg(e));
@@ -614,11 +602,15 @@ export default function AgentPage(): React.ReactNode {
   }): Promise<void> => {
     setSavingConfig(true);
     try {
-      const updated = await apiFetch<AgentStatus>("/v1/agent/config", {
-        method: "POST",
-        body: JSON.stringify(config),
+      const updated = await apiFetch<{ data: AgentStatus }>("/v1/agent/config", {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled: config.enabled,
+          schedule: config.schedule,
+          minDraftConfidence: config.confidenceThreshold,
+        }),
       });
-      setStatus(updated);
+      setStatus(updated.data);
     } catch (e: unknown) {
       setError(errMsg(e));
     } finally {

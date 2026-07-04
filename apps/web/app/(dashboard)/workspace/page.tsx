@@ -176,11 +176,11 @@ function MailboxesSection(): ReactNode {
     load();
   }, [load]);
 
-  // Include domains that are currently verified OR mid-recheck ("verifying") OR
-  // were previously verified (verifiedAt set) — the API enforces the real check.
-  const verifiedDomains = (domains ?? []).filter(
-    (d) => d.status === "verified" || d.status === "verifying" || d.verifiedAt != null,
-  );
+  // Only include domains whose current status is "verified". A domain that was
+  // once verified but later failed re-verification (verifiedAt set, status ≠ "verified")
+  // should NOT be allowed to provision mailboxes — the API enforces this too, but
+  // guard it here so the UI doesn't present a broken option.
+  const verifiedDomains = (domains ?? []).filter((d) => d.status === "verified");
 
   // Default the domain picker to the first verified domain once loaded.
   useEffect(() => {

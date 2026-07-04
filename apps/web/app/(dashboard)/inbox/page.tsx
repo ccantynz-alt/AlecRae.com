@@ -39,8 +39,11 @@ import {
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  // Compare calendar dates (not raw ms) to avoid midnight boundary errors
+  // where an email 2 minutes ago at 11:59 PM yesterday would show as "today".
+  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((todayOnly.getTime() - dateOnly.getTime()) / (1000 * 60 * 60 * 24));
 
   if (diffDays === 0) {
     return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -196,6 +199,10 @@ export default function InboxPage(): React.ReactNode {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [snoozePickerOpen, setSnoozePickerOpen] = useState(false);
   const snoozeTargetRef = useRef<string | null>(null);
+  // Mirrors selectedEmailId for use inside fetchEmails (empty-deps useCallback)
+  // without adding selectedEmailId as a dep (which would cause refetch on every click).
+  const selectedEmailIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => { selectedEmailIdRef.current = selectedEmailId; }, [selectedEmailId]);
 
   const sync = useSyncEngine();
   // Must be called here (unconditionally) — not after the early-return guards
@@ -238,10 +245,13 @@ export default function InboxPage(): React.ReactNode {
     }
     setSelectedIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
     const undoId = `archive-${id}-${Date.now()}`;
+    // Restore to the top of the list. Sorting by the formatted `timestamp`
+    // display string ('Yesterday', 'Mon', etc.) is not reliably sortable, so
+    // we just prepend the restored item which keeps it visible and accessible.
     addUndoAction(undoId, "Conversation archived", () => {
       setEmailItems((prev) => {
         if (prev.some((e) => e.id === item.id)) return prev;
-        return [...prev, item].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        return [item, ...prev];
       });
     });
     messagesApi.archive(id).catch(() => { /* no-op */ });
@@ -260,7 +270,7 @@ export default function InboxPage(): React.ReactNode {
     addUndoAction(undoId, "Conversation deleted", () => {
       setEmailItems((prev) => {
         if (prev.some((e) => e.id === item.id)) return prev;
-        return [...prev, item].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        return [item, ...prev];
       });
     });
     messagesApi.delete(id).catch(() => { /* no-op */ });
@@ -551,7 +561,7 @@ export default function InboxPage(): React.ReactNode {
             hasAttachments: c.hasAttachments,
           }));
           setEmailItems(cachedItems);
-          if (cachedItems.length > 0 && !selectedEmailId) {
+          if (cachedItems.length > 0 && !selectedEmailIdRef.current) {
             setSelectedEmailId(cachedItems[0]?.id ?? "");
           }
           setLoading(false);
@@ -570,7 +580,7 @@ export default function InboxPage(): React.ReactNode {
       setNewsletterMap(nlMap);
       setEmailItems(items);
       const first = items[0];
-      if (first && !selectedEmailId) {
+      if (first && !selectedEmailIdRef.current) {
         setSelectedEmailId(first.id);
       }
 
@@ -670,7 +680,7 @@ export default function InboxPage(): React.ReactNode {
           }));
           setEmailItems(items);
         } catch (err) {
-          console.error("Search failed:", err);
+          setError(err instanceof Error ? err.message : "Search failed");
         } finally {
           setSearching(false);
         }
@@ -678,6 +688,10 @@ export default function InboxPage(): React.ReactNode {
     },
     [fetchEmails],
   );
+
+  useEffect(() => () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+  }, []);
 
   const searchHeader = (
     <Box className="flex items-center gap-4 w-full">

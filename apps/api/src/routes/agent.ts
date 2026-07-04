@@ -328,7 +328,7 @@ function getAgent(): InboxAgent {
         {
           email: {
             id: jobId,
-            accountId: draft.to[0] ?? "unknown",
+            accountId: draft.accountId ?? draft.to[0] ?? "unknown",
             messageId: `<${jobId}@alecrae.com>`,
             from: "agent-draft",
             to: draft.to,
@@ -628,6 +628,11 @@ agent.get("/drafts", requireScope("agent:read"), async (c) => {
           ),
         ];
 
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(agentDrafts)
+    .where(and(...conditions));
+
   const drafts = await db
     .select()
     .from(agentDrafts)
@@ -661,7 +666,7 @@ agent.get("/drafts", requireScope("agent:read"), async (c) => {
         createdAt: d.createdAt,
         updatedAt: d.updatedAt,
       })),
-      total: drafts.length,
+      total: countRow?.count ?? drafts.length,
       limit,
       offset,
     },
@@ -1344,32 +1349,34 @@ agent.post(
 
     const now = new Date();
     const approvedIds: string[] = [];
+    const queuedIds: string[] = [];
+    const failedIds: string[] = [];
 
     for (const draftId of input.draftIds) {
       const [draft] = await db
-        .select({ id: agentDrafts.id, status: agentDrafts.status })
+        .select()
         .from(agentDrafts)
         .where(
           and(
             eq(agentDrafts.id, draftId),
             eq(agentDrafts.runId, id),
+            eq(agentDrafts.accountId, auth.accountId),
           ),
         )
         .limit(1);
 
-      if (
-        draft &&
-        (draft.status === "pending" || draft.status === "edited")
-      ) {
+      if (draft && (draft.status === "pending" || draft.status === "edited")) {
         await db
           .update(agentDrafts)
-          .set({
-            status: "approved",
-            approvedAt: now,
-            updatedAt: now,
-          })
+          .set({ status: "approved", approvedAt: now, updatedAt: now })
           .where(eq(agentDrafts.id, draftId));
         approvedIds.push(draftId);
+        try {
+          await enqueueAgentDraftForSend(draft);
+          queuedIds.push(draftId);
+        } catch {
+          failedIds.push(draftId);
+        }
       }
     }
 
@@ -1377,7 +1384,10 @@ agent.post(
       data: {
         runId: id,
         approvedCount: approvedIds.length,
+        queuedCount: queuedIds.length,
+        failedCount: failedIds.length,
         approvedIds,
+        message: `Approved ${approvedIds.length} draft(s); ${queuedIds.length} queued for send.`,
       },
     });
   },

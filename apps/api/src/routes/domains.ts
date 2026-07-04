@@ -35,6 +35,7 @@ import { configureCloudflare } from "../lib/dns-providers/cloudflare.js";
 import { configureGodaddy } from "../lib/dns-providers/godaddy.js";
 import { configurePorkbun } from "../lib/dns-providers/porkbun.js";
 import { inferApexDomain } from "../lib/dns-providers/types.js";
+import type { AutoConfigResult } from "../lib/dns-providers/types.js";
 
 // ─── Route handler ──────────────────────────────────────────────────────────
 
@@ -50,7 +51,10 @@ domains.post(
     const auth = c.get("auth");
     const db = getDatabase();
 
-    // Check if domain is already registered (globally unique)
+    // Check if domain is already registered (globally unique).
+    // We do NOT filter by accountId here — domains are unique across all tenants.
+    // Return the same error regardless of which account owns it to avoid leaking
+    // whether a given domain is registered by another user.
     const [existing] = await db
       .select({ id: domainsTable.id })
       .from(domainsTable)
@@ -587,30 +591,40 @@ domains.post(
       priority: r.priority,
     }));
 
-    let result;
+    // Always derive the apex from the registered domain — never trust user-supplied
+    // apexDomain, which could point to a third-party zone the caller controls.
+    const apex = inferApexDomain(domain.domain);
+
+    let result: AutoConfigResult;
     switch (body.provider) {
       case "cloudflare":
         result = await configureCloudflare(body.apiToken, autoConfigRecords);
         break;
-      case "godaddy": {
-        const apex = body.apexDomain ?? inferApexDomain(domain.domain);
+      case "godaddy":
         result = await configureGodaddy(body.apiKey, body.apiSecret, apex, autoConfigRecords);
         break;
-      }
-      case "porkbun": {
-        const apex = body.apexDomain ?? inferApexDomain(domain.domain);
+      case "porkbun":
         result = await configurePorkbun(body.apiKey, body.secretApiKey, apex, autoConfigRecords);
         break;
+      default: {
+        const _exhaustive: never = body;
+        void _exhaustive;
+        return c.json(
+          { error: { type: "bad_request", message: "Unknown DNS provider", code: "unknown_provider" } },
+          400,
+        );
       }
     }
 
-    // If provider-level error (e.g. zone not found), return 422
+    // If provider-level error (e.g. zone not found), return 422.
+    // Sanitize the error message — provider responses may contain API keys or
+    // internal zone IDs that must not be forwarded to the client.
     if (!result.success && !result.records.length && result.error) {
       return c.json(
         {
           error: {
             type: "provider_error",
-            message: result.error,
+            message: "DNS provider returned an error. Check your API credentials and that the domain is in your account.",
             code: "autoconfig_failed",
           },
         },
@@ -618,15 +632,10 @@ domains.post(
       );
     }
 
-    // Trigger verification if all records were created/updated
-    let verification = null;
-    if (result.success) {
-      try {
-        verification = await verifyDomainConfig(id);
-      } catch {
-        // DNS may not have propagated yet — non-fatal
-      }
-    }
+    // Do NOT auto-trigger verifyDomainConfig immediately after writing DNS records —
+    // DNS propagation takes seconds to minutes. Running it now would mark a
+    // previously-verified domain as unverified. The client should poll
+    // POST /v1/domains/:id/verify after propagation.
 
     return c.json({
       data: {
@@ -634,7 +643,6 @@ domains.post(
         domain: domain.domain,
         records: result.records,
         allConfigured: result.success,
-        verification,
       },
     });
   },

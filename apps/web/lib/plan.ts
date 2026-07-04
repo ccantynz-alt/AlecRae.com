@@ -1,6 +1,13 @@
 "use client";
 
-export type PlanTier = "free" | "personal" | "pro" | "team" | "enterprise";
+export type PlanTier =
+  | "free"
+  | "personal"
+  | "pro"
+  | "team"
+  | "business"
+  | "business_plus"
+  | "enterprise";
 
 // The API/DB uses different tier names than the frontend. This maps DB values
 // to frontend PlanTier values so isPlanAtLeast() doesn't return -1 for paying customers.
@@ -9,6 +16,8 @@ const API_TIER_MAP: Record<string, PlanTier> = {
   starter: "personal",
   professional: "pro",
   team: "team",
+  business: "business",
+  business_plus: "business_plus",
   enterprise: "enterprise",
 };
 
@@ -17,10 +26,23 @@ export function normalizeApiPlanTier(apiTier: string | undefined | null): PlanTi
   return API_TIER_MAP[apiTier] ?? "free";
 }
 
-const TIER_ORDER: PlanTier[] = ["free", "personal", "pro", "team", "enterprise"];
+const TIER_ORDER: PlanTier[] = [
+  "free",
+  "personal",
+  "pro",
+  "team",
+  "business",
+  "business_plus",
+  "enterprise",
+];
 
-export function isPlanAtLeast(userPlan: PlanTier, required: PlanTier): boolean {
-  return TIER_ORDER.indexOf(userPlan) >= TIER_ORDER.indexOf(required);
+export function isPlanAtLeast(
+  userPlan: PlanTier | undefined | null,
+  required: PlanTier,
+): boolean {
+  const idx = TIER_ORDER.indexOf(userPlan as PlanTier);
+  if (idx === -1) return false; // unknown or missing plan → deny
+  return idx >= TIER_ORDER.indexOf(required);
 }
 
 export const PLAN_LABELS: Record<PlanTier, string> = {
@@ -28,6 +50,8 @@ export const PLAN_LABELS: Record<PlanTier, string> = {
   personal: "Personal",
   pro: "Pro",
   team: "Team",
+  business: "Business",
+  business_plus: "Business Plus",
   enterprise: "Enterprise",
 };
 
@@ -39,7 +63,7 @@ export const FEATURE_PLANS: Record<string, PlanTier> = {
   email_query: "pro",
   knowledge_graph: "pro",
   sentiment_timeline: "pro",
-  ai_categorization: "personal",
+  ai_categorization: "pro", // batch Claude calls → cost risk; Personal tier too low
   productivity_analytics: "pro",
   semantic_search: "pro",
   context_intelligence: "pro",

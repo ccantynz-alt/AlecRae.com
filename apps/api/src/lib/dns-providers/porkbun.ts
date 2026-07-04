@@ -44,6 +44,9 @@ async function pbFetch(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ apikey: apiKey, secretapikey: secretApiKey, ...extra }),
   });
+  if (!res.headers.get("content-type")?.includes("application/json")) {
+    return { status: "ERROR", message: `Unexpected response from Porkbun (HTTP ${res.status})` };
+  }
   return res.json() as Promise<PbResponse>;
 }
 
@@ -54,7 +57,7 @@ export async function configurePorkbun(
   records: AutoConfigRecord[],
 ): Promise<AutoConfigResult> {
   // Retrieve existing records once
-  const existing = await pbFetch(apiKey, secretApiKey, `/dns/retrieve/${apexDomain}`);
+  const existing = await pbFetch(apiKey, secretApiKey, `/dns/retrieve/${encodeURIComponent(apexDomain)}`);
   if (existing.status !== "SUCCESS") {
     return {
       success: false,
@@ -76,7 +79,7 @@ export async function configurePorkbun(
         if (found.content === rec.value) {
           return { type: rec.type, name: rec.name, status: "existed" };
         }
-        const editRes = await pbFetch(apiKey, secretApiKey, `/dns/edit/${apexDomain}/${found.id}`, {
+        const editRes = await pbFetch(apiKey, secretApiKey, `/dns/edit/${encodeURIComponent(apexDomain)}/${found.id}`, {
           type: rec.type,
           name: relName,
           content: rec.value,
@@ -89,7 +92,7 @@ export async function configurePorkbun(
         return { type: rec.type, name: rec.name, status: "updated" };
       }
 
-      const createRes = await pbFetch(apiKey, secretApiKey, `/dns/create/${apexDomain}`, {
+      const createRes = await pbFetch(apiKey, secretApiKey, `/dns/create/${encodeURIComponent(apexDomain)}`, {
         type: rec.type,
         name: relName,
         content: rec.value,

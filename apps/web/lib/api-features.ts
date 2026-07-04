@@ -654,10 +654,10 @@ export const agentApi = {
     return featureFetch<{ data: AgentDraftData[] }>("/v1/agent/drafts");
   },
   approveDraft(id: string): Promise<{ data: { success: boolean } }> {
-    return featureFetch<{ data: { success: boolean } }>(`/v1/agent/drafts/${id}`, { method: "POST", body: JSON.stringify({ action: "approve" }) });
+    return featureFetch<{ data: { success: boolean } }>(`/v1/agent/drafts/${id}/approve`, { method: "POST" });
   },
   rejectDraft(id: string): Promise<{ data: { success: boolean } }> {
-    return featureFetch<{ data: { success: boolean } }>(`/v1/agent/drafts/${id}`, { method: "POST", body: JSON.stringify({ action: "reject" }) });
+    return featureFetch<{ data: { success: boolean } }>(`/v1/agent/drafts/${id}/reject`, { method: "POST" });
   },
   briefing(): Promise<{ data: { text: string; generatedAt: string; emailCount: number } }> {
     return featureFetch<{ data: { text: string; generatedAt: string; emailCount: number } }>("/v1/agent/briefing");
@@ -666,7 +666,7 @@ export const agentApi = {
     return featureFetch<{ data: AgentConfigData }>("/v1/agent/config");
   },
   updateConfig(cfg: Partial<AgentConfigData>): Promise<{ data: AgentConfigData }> {
-    return featureFetch<{ data: AgentConfigData }>("/v1/agent/config", { method: "POST", body: JSON.stringify(cfg) });
+    return featureFetch<{ data: AgentConfigData }>("/v1/agent/config", { method: "PUT", body: JSON.stringify(cfg) });
   },
 };
 

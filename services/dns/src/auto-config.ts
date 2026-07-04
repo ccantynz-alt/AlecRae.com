@@ -504,12 +504,14 @@ async function verifyDKIM(
     };
   }
 
-  // Some DNS providers (e.g. Porkbun) return long TXT records as multiple
-  // 255-char entries instead of a single multi-string record. Join all entries
-  // so the full DKIM key is assembled before matching.
-  const joined = txtRecords.join("");
-  const dkimIdx = joined.indexOf("v=DKIM1");
-  if (dkimIdx === -1) {
+  // safeResolve joins the 255-char chunks within a single TXT record, so each
+  // element of txtRecords is one fully-assembled DNS TXT record. Find the one
+  // that carries the DKIM declaration by searching each record individually —
+  // never join all records together (that would silently merge unrelated TXT
+  // entries and produce a false match if any non-DKIM record contains "v=DKIM1"
+  // as a substring, causing the p= regex to capture extra base64 characters).
+  const dkimRecordIdx = txtRecords.findIndex((r) => r.includes("v=DKIM1"));
+  if (dkimRecordIdx === -1) {
     return {
       verified: false,
       expected: `v=DKIM1 record at ${dkimHost}`,
@@ -518,7 +520,14 @@ async function verifyDKIM(
     };
   }
 
-  const publishedRecord = joined.substring(dkimIdx);
+  // Some providers (e.g. Porkbun) split a single DKIM record across multiple
+  // separate TXT entries. Collect the header record plus any immediately
+  // following pure-base64 continuation chunks (no RFC tag prefix).
+  const continuations = txtRecords
+    .slice(dkimRecordIdx + 1)
+    .filter((r) => /^[A-Za-z0-9+/=]+$/.test(r.trim()) && !r.includes("="));
+
+  const publishedRecord = txtRecords[dkimRecordIdx] + continuations.join("");
 
   // If we have the stored public key, verify the published key matches
   if (expectedKeyBase64) {
@@ -708,12 +717,22 @@ export async function checkDomainHealth(
   // Run full verification
   const verification = await verifyDomainConfig(domainId);
 
-  // Check DKIM key age
+  // Check DKIM key age.
+  // Use the date embedded in the DKIM selector (format: alecrae{YYYYMM}) which
+  // is updated on every rotation — more accurate than createdAt, which never
+  // changes after the domain is first registered.
   let dkimKeyAge: number | null = null;
   let dkimRotationNeeded = false;
 
-  if (domainRecord.createdAt) {
-    const ageMs = Date.now() - domainRecord.createdAt.getTime();
+  const selectorDateMatch = domainRecord.dkimSelector
+    ? /(\d{4})(\d{2})$/.exec(domainRecord.dkimSelector)
+    : null;
+  const dkimAgeSource = selectorDateMatch
+    ? new Date(parseInt(selectorDateMatch[1]), parseInt(selectorDateMatch[2]) - 1, 1)
+    : domainRecord.createdAt;
+
+  if (dkimAgeSource) {
+    const ageMs = Date.now() - dkimAgeSource.getTime();
     dkimKeyAge = Math.floor(ageMs / (1000 * 60 * 60 * 24));
     dkimRotationNeeded = dkimKeyAge > DKIM_ROTATION_DAYS;
   }

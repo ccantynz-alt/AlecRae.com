@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Box, Text, Button, Card, CardContent, PageLayout } from "@alecrae/ui";
 import { PlanGate } from "../../../components/plan-gate";
 import { getAccessToken, refreshSession, redirectToLogin } from "../../../lib/auth-token";
@@ -91,6 +91,7 @@ export default function AiTriagePage() {
   const [creatingRule, setCreatingRule] = useState(false);
   const [newRuleName, setNewRuleName] = useState("");
   const [newRuleLabel, setNewRuleLabel] = useState("work");
+  const batchRunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -110,13 +111,27 @@ export default function AiTriagePage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useEffect(() => () => {
+    if (batchRunTimerRef.current) clearTimeout(batchRunTimerRef.current);
+  }, []);
+
   const handleRunBatch = async () => {
     setRunning(true);
     setRunMessage(null);
     try {
-      await apiFetch<unknown>("/v1/ai/categorize/batch", { method: "POST", body: JSON.stringify({ limit: 100 }) });
+      // Fetch up to 100 email IDs first — the batch endpoint requires them explicitly
+      const listRes = await apiFetch<{ data: { id: string }[] }>("/v1/messages?limit=100");
+      const emailIds = listRes.data.map((m) => m.id);
+      if (emailIds.length === 0) {
+        setRunMessage("No emails to categorize.");
+        return;
+      }
+      await apiFetch<unknown>("/v1/ai/categorize/categorize/batch", {
+        method: "POST",
+        body: JSON.stringify({ emailIds }),
+      });
       setRunMessage("Categorization started — refreshing stats in 5 seconds...");
-      setTimeout(() => { loadData(); setRunMessage(null); }, 5000);
+      batchRunTimerRef.current = setTimeout(() => { loadData(); setRunMessage(null); }, 5000);
     } catch (err) {
       setRunMessage(err instanceof Error ? err.message : "Failed to run categorization");
     } finally {
@@ -160,8 +175,8 @@ export default function AiTriagePage() {
       setRules((prev) => [res.data, ...prev]);
       setNewRuleName("");
       setCreatingRule(false);
-    } catch {
-      // non-critical
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create rule");
     }
   };
 

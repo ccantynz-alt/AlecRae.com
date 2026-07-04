@@ -41,6 +41,13 @@ async function cfFetch<T>(
       ...options.headers,
     },
   });
+  if (!res.headers.get("content-type")?.includes("application/json")) {
+    return {
+      success: false,
+      result: [] as unknown as T,
+      errors: [{ code: res.status, message: `Unexpected response from Cloudflare (HTTP ${res.status})` }],
+    };
+  }
   return res.json() as Promise<CfResponse<T>>;
 }
 

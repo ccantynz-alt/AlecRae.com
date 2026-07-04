@@ -140,6 +140,7 @@ export default function DomainsPage() {
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<{ id: string; success: boolean; message: string } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const verifyResultTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadDomains = useCallback(async () => {
     try {
@@ -160,9 +161,14 @@ export default function DomainsPage() {
     loadDomains();
   }, [loadDomains]);
 
+  useEffect(() => () => {
+    if (verifyResultTimerRef.current) clearTimeout(verifyResultTimerRef.current);
+  }, []);
+
   // Auto-poll pending domains every 30s so users don't have to click Verify Now
   useEffect(() => {
-    const hasPending = domains.some((d) => d.verificationState !== "verified");
+    const TERMINAL = new Set(["verified", "failed", "expired"]);
+    const hasPending = domains.some((d) => !TERMINAL.has(d.verificationState));
     if (!hasPending) {
       if (pollRef.current) clearInterval(pollRef.current);
       pollRef.current = null;
@@ -173,7 +179,7 @@ export default function DomainsPage() {
 
     pollRef.current = setInterval(async () => {
       const fresh = await loadDomains();
-      if (fresh && fresh.every((d) => d.verificationState === "verified")) {
+      if (fresh && fresh.every((d) => TERMINAL.has(d.verificationState))) {
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
       }
@@ -207,7 +213,8 @@ export default function DomainsPage() {
       });
     } finally {
       setVerifyingId(null);
-      setTimeout(() => setVerifyResult(null), 6000);
+      if (verifyResultTimerRef.current) clearTimeout(verifyResultTimerRef.current);
+      verifyResultTimerRef.current = setTimeout(() => setVerifyResult(null), 6000);
     }
   };
 
@@ -220,13 +227,13 @@ export default function DomainsPage() {
     }
   };
 
-  const handleDomainAdded = useCallback(async () => {
+  const handleDomainAdded = useCallback(async (newDomainId: string) => {
     setShowAddForm(false);
     const fresh = await loadDomains();
-    // Open setup wizard for the most recently added pending domain
     if (fresh) {
-      const newest = fresh.find((d) => d.verificationState !== "verified");
-      if (newest) setSetupDomain(newest);
+      // Find the exact domain that was just added by its ID
+      const added = fresh.find((d) => d.id === newDomainId);
+      if (added) setSetupDomain(added);
     }
   }, [loadDomains]);
 
@@ -350,7 +357,7 @@ function AddDomainForm({
   onAdded,
 }: {
   onClose: () => void;
-  onAdded: () => void;
+  onAdded: (newDomainId: string) => void;
 }) {
   const [domain, setDomain] = useState("");
   const [adding, setAdding] = useState(false);
@@ -362,8 +369,8 @@ function AddDomainForm({
     setError(null);
 
     try {
-      await domainsApi.add(domain.trim());
-      onAdded();
+      const res = await domainsApi.add(domain.trim());
+      onAdded(res.data.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add domain");
     } finally {
