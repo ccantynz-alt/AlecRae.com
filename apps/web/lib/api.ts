@@ -74,6 +74,8 @@ export interface Domain {
   id: string;
   domain: string;
   status: string;
+  isActive?: boolean;
+  verifiedAt?: string | null;
   spfVerified: boolean;
   dkimVerified: boolean;
   dmarcVerified: boolean;

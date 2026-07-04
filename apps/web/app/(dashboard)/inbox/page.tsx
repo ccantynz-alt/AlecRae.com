@@ -198,6 +198,9 @@ export default function InboxPage(): React.ReactNode {
   const snoozeTargetRef = useRef<string | null>(null);
 
   const sync = useSyncEngine();
+  // Must be called here (unconditionally) — not after the early-return guards
+  // below, which would violate React's Rules of Hooks and trigger the error boundary.
+  const openCommandPalette = useCommandPalette((s) => s.setOpen);
 
   const filteredEmails = useMemo(() => emailItems.filter((e) => {
     if (filter === "unread") return !e.read;
@@ -744,7 +747,6 @@ export default function InboxPage(): React.ReactNode {
 
   // Compute priority email count from the current email list (based on unread)
   const priorityCount = filteredEmails.filter((e) => !e.read).length;
-  const openCommandPalette = useCommandPalette((s) => s.setOpen);
 
   return (
     <PageLayout header={searchHeader} fullWidth>

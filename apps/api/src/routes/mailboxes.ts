@@ -129,6 +129,7 @@ mailboxes.post(
     return c.json(
       {
         id,
+        accountId: auth.accountId,
         address: input.address,
         localPart,
         domainId: domainRecord.id,
