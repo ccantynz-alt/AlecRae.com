@@ -22,6 +22,8 @@
     "preflight": "bun run scripts/preflight.ts",
     "docs:check": "bun run scripts/check-docs.ts",
     "docs:fix": "bun run scripts/check-docs.ts --fix",
+    "audit:routes": "bun run scripts/audit-route-coverage.ts",
+    "audit:routes:check": "bun run scripts/audit-route-coverage.ts --check-regression",
     "db:migrate": "bun run packages/db/src/migrate.ts",
     "db:seed": "bun run packages/db/src/seed.ts",
     "db:generate": "bun run --cwd packages/db db:generate",

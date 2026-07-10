@@ -159,6 +159,47 @@ jobs:
       - name: Check schema/migration drift
         run: bun run db:check-drift
 
+  route-coverage:
+    name: Route Coverage (new routes must be UI-wired)
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so we can diff added route files against base
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-22-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            bun-${{ runner.os }}-22-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Regenerates docs/audits/route-coverage.md (informational — always
+      # runs) and fails only if a brand-new route file (added vs. the PR
+      # base / previous commit on main) has zero UI references anywhere in
+      # apps/web, apps/mobile, or apps/desktop. Pre-existing unwired routes
+      # never fail this job — see scripts/audit-route-coverage.ts.
+      - name: Check new routes are UI-wired
+        run: bun run audit:routes:check
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+
   bundle-size:
     name: Bundle Size Gate
     needs: lint

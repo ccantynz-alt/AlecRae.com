@@ -20,7 +20,6 @@
 
 # Frontend applications
 /apps/web/ @alecrae/frontend
-/apps/admin/ @alecrae/frontend
 /packages/ui/ @alecrae/frontend
 
 # Infrastructure and CI/CD

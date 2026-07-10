@@ -28,7 +28,6 @@ COPY turbo.json ./
 # Copy all package.json files for workspace resolution
 COPY apps/web/package.json ./apps/web/
 COPY apps/api/package.json ./apps/api/
-COPY apps/admin/package.json ./apps/admin/
 COPY services/mta/package.json ./services/mta/
 COPY services/sentinel/package.json ./services/sentinel/
 COPY services/inbound/package.json ./services/inbound/

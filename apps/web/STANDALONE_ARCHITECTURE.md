@@ -8,7 +8,7 @@ AlecRae is an AI-native email client. Standalone product. 35K+ lines of TypeScri
 |-----|------|------|
 | Web inbox | apps/web | Next.js 15, App Router, RSC |
 | API server | apps/api | Hono + Bun |
-| Admin dashboard | apps/admin | Next.js 15 |
+| Admin dashboard | apps/web/app/(dashboard)/admin | Next.js 15 (role-gated console, not a separate app) |
 | Desktop | apps/desktop | Electron |
 | Mobile | apps/mobile | React Native + Expo |
 | Docs | apps/docs | Next.js 15 |

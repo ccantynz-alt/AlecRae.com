@@ -47,7 +47,6 @@ yarn-error.log*
 
 # Other services + apps — MTA image stays lean
 apps/web
-apps/admin
 apps/api
 apps/mobile
 apps/desktop

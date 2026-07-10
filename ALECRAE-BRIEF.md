@@ -221,7 +221,7 @@
 |-----|------|------|--------|
 | Web app (landing + inbox) | apps/web | Next.js 15 | Production-ready |
 | API server | apps/api | Hono + Bun | Production-ready |
-| Admin dashboard | apps/admin | Next.js 15 | Production-ready |
+| Admin dashboard | apps/web/app/(dashboard)/admin | Next.js 15 (role-gated console, not a separate app) | Production-ready |
 | Desktop app | apps/desktop | Electron | Polished |
 | Mobile app | apps/mobile | React Native + Expo | Polished |
 | API docs site | apps/docs | Next.js 15 | Production-ready |
