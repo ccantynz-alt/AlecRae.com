@@ -18,17 +18,30 @@ should be read as "do this next" until that decision changes.
 
 ## 1. Infra status
 
-### 1.1 Outage discovered 2026-07-10
+### 1.1 Outage 2026-07-07 → 2026-07-11 — RESOLVED
 
-`alecrae.com`, `mail.alecrae.com`, and `status.alecrae.com` were all found
-returning **HTTP 503** simultaneously during this session (confirmed via
-direct fetch, not just a report). All three route through the same
-`vapron-bun-gateway` on one box to two local ports (4100 api, 4200 web) per
-`docs/infra/box-deploy.md` — a single-box, single-point-of-failure
-architecture where one gateway/box problem takes every subdomain down at
-once. Root cause not yet confirmed (blocked on box access — see below).
-**No postmortem written yet** — per CLAUDE.md's Emergency Protocol, one
-should land in `docs/postmortems/` once root cause is confirmed.
+`alecrae.com`, `mail.alecrae.com`, and `status.alecrae.com` were found
+returning **HTTP 503**. The box's own `fleet-check.sh` journal shows the
+outage started by 2026-07-07 09:25 UTC. Root cause was three stacked
+failures on the Jarvis box (66.42.121.161): (1) when Coolify/Traefik took
+over ports 80/443, **no Traefik route for alecrae was ever created** — all
+requests hit the default 503 catch-all, so the site was down even while
+the services ran; (2) `alecrae-api`/`alecrae-web` were then **stopped and
+disabled** on Jul 7; (3) both services **bound to 127.0.0.1** (set in
+`/opt/alecrae/.env`, which overrides the systemd unit's `HOST=` because
+Bun auto-loads `.env`), unreachable from the proxy container regardless.
+
+**Fixed 2026-07-11:** services enabled + started; append-only
+`/data/coolify/proxy/dynamic/alecrae.yaml` route added (web/mail/www →
+`10.0.1.1:4200`, api → `10.0.1.1:4100`, same pattern as the working
+gatetest services); bind changed to `0.0.0.0` in `.env` + unit files; two
+ufw allows added for the proxy network only (4100/4200 stay publicly
+firewalled). All four domains verified 200 externally.
+`status.alecrae.com` remains 503 — no status app is deployed on 161 and no
+route exists for it (known, low priority). **Postmortem still owed** to
+`docs/postmortems/` per CLAUDE.md's Emergency Protocol; the durable lesson
+is §1.7 (no staging, single box, and nothing alerting on the fleet-check
+503s for three days).
 
 ### 1.2 Box migration (149.28.119.158 → 66.42.121.161 "Jarvis")
 
@@ -37,17 +50,14 @@ alecrae.com** — `docs/infra/box-deploy.md` (last updated 2026-06-15) is
 stale and still describes 149.28.119.158 as production; it needs a rewrite
 once box access and the outage are sorted.
 
-### 1.3 Box access (in progress, 2026-07-10)
+### 1.3 Box access — RESOLVED 2026-07-11
 
-No previously-working SSH credential was on hand for Jarvis this session.
-Tailscale was installed on the operator's machine and joined to the
-existing tailnet (both `jarvis` and `vapron-158` are visible peers), but as
-of this update Jarvis does not yet advertise Tailscale SSH capability —
-`sudo tailscale set --ssh` needs to be run **on Jarvis itself** (console/
-provider access, not the client machine) before Tailscale SSH can be used
-in place of key-based auth. Once working, save the confirmed method
-(alias, key, or Tailscale hostname) as a persistent memory entry so future
-sessions don't have to rediscover it.
+`ssh root@jarvis` now works from the operator's machine via **Tailscale
+SSH** (identity-based over the tailnet, no key management): Tailscale was
+installed locally and joined to the tailnet, and `tailscale set --ssh` was
+run on Jarvis to enable the SSH server there. No SSH keys involved. If it
+ever breaks, check `tailscale status` locally first, then whether Tailscale
+SSH is still enabled on the box.
 
 ### 1.4 systemd services
 
