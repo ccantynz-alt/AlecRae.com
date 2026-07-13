@@ -3,7 +3,7 @@
 > Self-hosted MTA on the **dedicated mail box — the "158" box (149.28.119.158**, `ssh root@vapron-158` via Tailscale, peer 100.89.227.39). Jarvis (66.42.121.161) keeps web/api compute only. New domain. Partially-warmed IP.
 > This document is the playbook. Follow it exactly.
 >
-> **State as of 2026-07-13:** Craig decided (Option A, `docs/infra/multi-platform-mail-plan.md` §4) that 158 stays as the mail box — the live SPF and the PTR (`149.28.119.158` → `mail.alecrae.com`, ✅ already set) authorize it, so that deliverability groundwork is kept, not redone. The MTA is NOT yet running on any box. ⚠ Still pending, awaiting Craig's Cloudflare execution: mx1/mx2 A records + `_spf.alecrae.com` TXT (both targeting 149.28.119.158) and grey-clouding `mail.alecrae.com`.
+> **State as of 2026-07-13:** Craig decided (Option A, `docs/infra/multi-platform-mail-plan.md` §4) that 158 stays as the mail box. ✅ Mail DNS executed 2026-07-13 (verified resolving live): mx1/mx2/smtp A records → 149.28.119.158 (grey), MX 10/20, `_spf.alecrae.com` TXT, `bounce.alecrae.com` CNAME → smtp.alecrae.com. **The MTA's HELO/PTR sending identity is `smtp.alecrae.com`** (`MTA_HOSTNAME=smtp.alecrae.com`); `mail.alecrae.com` stays Cloudflare-proxied (webmail on Jarvis, not a mail record). ⚠ One item pending: the Vultr PTR for 149.28.119.158 still reads `mail.alecrae.com` and must be **changed to `smtp.alecrae.com`**. The MTA is NOT yet running on any box.
 
 ---
 
@@ -15,10 +15,10 @@ A brand-new sending IP has zero reputation with Gmail, Outlook, Yahoo, and Apple
 
 ## Prerequisites checklist (must be done before any production send)
 
-- [ ] **SPF** published + passing — target: `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all` (✅ the live `spf.alecrae.com` already authorizes the 158 mail-box IP; ⚠ the `_spf.alecrae.com` TXT — target `v=spf1 ip4:149.28.119.158 ~all`, used by customer-domain includes — is still pending Craig's Cloudflare execution; see `multi-platform-mail-plan.md`)
+- [ ] **SPF** published + passing — target: `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all` (✅ the live `spf.alecrae.com` already authorizes the 158 mail-box IP; ✅ the `_spf.alecrae.com` TXT — `v=spf1 ip4:149.28.119.158 ~all`, used by customer-domain includes — is **LIVE**, applied 2026-07-13)
 - [ ] **DKIM** keypair generated on MTA, public key published in DNS, all outbound signed
 - [ ] **DMARC** published — start at `p=quarantine; pct=10;`
-- [ ] **PTR / rDNS** matches HELO hostname — ✅ already set: `149.28.119.158` (the 158 mail box) reverse-resolves to `mail.alecrae.com` (verify: `dig -x 149.28.119.158 +short`); ensure the MTA HELO hostname aligns
+- [ ] **PTR / rDNS** matches HELO hostname — ⚠ **pending change**: the HELO identity is **`smtp.alecrae.com`** (`MTA_HOSTNAME=smtp.alecrae.com`), but the PTR on `149.28.119.158` currently reads `mail.alecrae.com` — Craig must change it to `smtp.alecrae.com` in the Vultr panel. Verify AFTER the change: `nslookup 149.28.119.158` / `dig -x 149.28.119.158 +short` should return `smtp.alecrae.com.`
 - [ ] **MTA-STS** live + policy served at `https://mta-sts.alecrae.com/.well-known/mta-sts.txt`
 - [ ] **TLS-RPT** published (`_smtp._tls.alecrae.com` TXT record)
 - [ ] **TLS 1.2+** only — no SSL v3, no TLS 1.0, no TLS 1.1
@@ -247,7 +247,7 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 | DKIM fails on forwarded mail | Implement ARC (Authenticated Received Chain). **Wave 2 task.** |
 | From-domain mismatch with `DKIM d=` | Align the DKIM signing domain with the From: header domain. |
 | SPF > 10 DNS lookups | Flatten SPF includes into direct `ip4:` / `ip6:` mechanisms. |
-| PTR doesn't match HELO | rDNS is managed in the Vultr control panel: 158 instance → Settings → IPv4 → rDNS. ✅ Already set: `149.28.119.158` → `mail.alecrae.com`. |
+| PTR doesn't match HELO | rDNS is managed in the Vultr control panel: 158 instance → Settings → IPv4 → rDNS. ⚠ Currently `149.28.119.158` → `mail.alecrae.com` (wrong hostname) — must be changed to `smtp.alecrae.com` to match the HELO identity (`MTA_HOSTNAME=smtp.alecrae.com`). |
 | Shared IP neighbor blacklisted | N/A — the 158 mail box has a dedicated static IP (`149.28.119.158`) used only for mail. No noisy neighbours. |
 
 ---
@@ -302,4 +302,4 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 
 ---
 
-_Last updated: 2026-07-13 03:05 UTC_
+_Last updated: 2026-07-13 10:15 UTC_

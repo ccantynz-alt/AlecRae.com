@@ -85,21 +85,21 @@ customer types and the fully-qualified name.
 **dedicated mail box — the "158" box at `149.28.119.158`** (Craig's 2026-07-13
 decision, Option A in `docs/infra/multi-platform-mail-plan.md` §4; Jarvis
 `66.42.121.161` keeps web/api compute only) — and the PTR/rDNS must match the
-HELO hostname (see §3). The PTR on `149.28.119.158` → `mail.alecrae.com` is
-**already set**, and the live SPF already authorizes the 158 IP. ⚠ **Still
-pending:** as of 2026-07-13 the mx1/mx2 A records do **not exist** in
-AlecRae's own DNS yet — they target `149.28.119.158` and await Craig's
-Cloudflare execution. Priority 10 is tried first, 20 is the backup. Without
-these, nobody can deliver to `info@bookaride.co.nz`. (Source: `auto-config.ts`
-`MX_SERVERS`; production hostnames per `dns-zone-alecrae.md`.)
+HELO hostname (see §3). ✅ **The mx1/mx2 A records are LIVE** (applied
+2026-07-13, verified resolving), and the live SPF already authorizes the 158
+IP. ⚠ **Still pending:** the PTR on `149.28.119.158` currently reads
+`mail.alecrae.com` and must be **changed to `smtp.alecrae.com`** in the Vultr
+panel (the outbound HELO identity). Priority 10 is tried first, 20 is the
+backup. Without these, nobody can deliver to `info@bookaride.co.nz`. (Source:
+`auto-config.ts` `MX_SERVERS`; production hostnames per `dns-zone-alecrae.md`.)
 
 **SPF.** Authorises our sending infra to send *as* `bookaride.co.nz`.
 `include:amazonses.com` covers the **SES relay** path (recommended for a cold
 domain, §2); `include:_spf.alecrae.com` covers our own mail-box IP (the
 direct-MX path and any future senders, so we never have to touch the
-customer's record again). ⚠ Note: the `_spf.alecrae.com` TXT itself doesn't
-exist yet — target value `v=spf1 ip4:149.28.119.158 ~all` (the 158 mail box),
-awaiting Craig's Cloudflare execution. Start with **`~all`** (soft-fail) for the first ~30 days, then tighten
+customer's record again). ✅ The `_spf.alecrae.com` TXT is **LIVE** (applied
+2026-07-13): `v=spf1 ip4:149.28.119.158 ~all` (the 158 mail box).
+Start with **`~all`** (soft-fail) for the first ~30 days, then tighten
 to **`-all`** once reports are clean — same ramp as `dns-zone-alecrae.md`.
 **Keep total SPF DNS lookups ≤ 10** (`auto-config.ts` `SPF_MAX_LOOKUPS`); two
 includes is fine.
@@ -170,9 +170,11 @@ delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 
 **What it requires:**
 - **Warmed mail-box IP** (`149.28.119.158`, the 158 box) with matching
-  **PTR/rDNS** — ✅ already in place: the PTR on `149.28.119.158` reads
-  `mail.alecrae.com` (a key reason Option A kept 158 as the mail box; see
-  `docs/infra/mta-box-setup.md` and `multi-platform-mail-plan.md`).
+  **PTR/rDNS** — ⚠ pending change: the PTR currently reads `mail.alecrae.com`,
+  but the HELO identity is **`smtp.alecrae.com`** (`MTA_HOSTNAME=smtp.alecrae.com`,
+  A record live since 2026-07-13) — Craig must change the PTR to
+  `smtp.alecrae.com` in the Vultr panel (see `docs/infra/mta-box-setup.md` and
+  `multi-platform-mail-plan.md`).
 - **Port 25 outbound open** from the Vultr instance — ✅ already
   Vultr-unblocked on 158. (Inbound 25 on 158 is still closed; it's opened via
   ufw + the inbound service in mail-plan Phase 2, and isn't needed for
@@ -185,8 +187,8 @@ delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 > **Brand-new domain, zero reputation → use SES relay (Option A).** Lean on SES's
 > warmed IPs while the *domain* earns reputation, keep the in-house
 > `d=bookaride.co.nz` DKIM for alignment, and only consider direct-MX (Option B)
-> once there's a real volume reason to leave SES (the 158 mail box's PTR is
-> already confirmed).
+> once there's a real volume reason to leave SES (and the 158 mail box's PTR has
+> been changed to `smtp.alecrae.com`).
 
 ---
 
@@ -195,11 +197,11 @@ delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 ### Services
 - **`services/inbound`** running with the **SMTP receiver on :25** reachable from
   the public internet, behind A records `mx1.alecrae.com` / `mx2.alecrae.com`
-  (both pointing to the **158 mail box, `149.28.119.158`** — ⚠ these A records
-  don't exist in DNS yet; they target 149.28.119.158 per the 2026-07-13 Option A
-  decision and await Craig's Cloudflare execution, see
-  `multi-platform-mail-plan.md`), with **PTR/rDNS** on the box IP matching the
-  HELO hostname (✅ the 158 PTR → `mail.alecrae.com` is already set).
+  (both pointing to the **158 mail box, `149.28.119.158`** — ✅ LIVE, applied
+  2026-07-13 and verified resolving, see `multi-platform-mail-plan.md`), with
+  **PTR/rDNS** on the box IP matching the sending HELO hostname (⚠ the 158 PTR
+  currently reads `mail.alecrae.com` — pending change to `smtp.alecrae.com`
+  in the Vultr panel).
   (`index.ts`: `SMTP_PORT`, `SMTP_HOSTNAME`.) The HTTP webhook on :8025 is the
   alternative ingress if direct :25 isn't viable.
   **As of 2026-07-13 inbound is NOT running on any box**, and inbound port 25
@@ -219,7 +221,7 @@ delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 |---|---|---|
 | `DATABASE_URL` | inbound + mta | Neon connection string |
 | `REDIS_URL` | mta worker | Upstash/Redis URL (queue `alecrae-outbound`) |
-| `MTA_HOSTNAME` | mta worker (EHLO, direct-MX) | `mx1.alecrae.com` |
+| `MTA_HOSTNAME` | mta worker (EHLO, direct-MX) | `smtp.alecrae.com` (the outbound HELO/PTR identity — code default `mail.alecrae.com` is wrong for production) |
 | `SMTP_HOSTNAME` | inbound receiver (HELO/PTR) | `mx1.alecrae.com` |
 | `SMTP_PORT` | inbound receiver | `25` |
 | `HTTP_PORT` | inbound webhook | `8025` |
@@ -270,17 +272,19 @@ dig CNAME bounce.bookaride.co.nz +short              # → bounce.alecrae.com.
 
 ### B. PTR / rDNS (the silent killer)
 ```bash
-dig A mx1.alecrae.com +short                         # → 149.28.119.158  (target — record ⚠ pending)
-dig -x 149.28.119.158 +short                         # → mail.alecrae.com.  (✅ already set)
+dig A mx1.alecrae.com +short                         # → 149.28.119.158  (✅ LIVE — applied 2026-07-13)
+dig A smtp.alecrae.com +short                        # → 149.28.119.158  (✅ LIVE — applied 2026-07-13)
+dig -x 149.28.119.158 +short                         # → smtp.alecrae.com.  (⚠ target — currently returns mail.alecrae.com)
 ```
-**Current reality (2026-07-13):** the PTR check passes — `149.28.119.158`
-already reverse-resolves to `mail.alecrae.com` (set on the 158 mail box; kept
-by the Option A decision). The A-record check does ⚠ not pass yet —
-`mx1.alecrae.com` has no A record; it targets `149.28.119.158` and awaits
-Craig's Cloudflare execution. See `docs/infra/multi-platform-mail-plan.md`.
-If the PTR ever stops matching the HELO hostname, Gmail/Outlook will spam-bin
-or reject — it's managed in the Vultr control panel: 158 instance → Settings →
-IPv4 → rDNS. See `docs/infra/mta-box-setup.md`.
+**Current reality (2026-07-13):** the A-record checks pass — `mx1`/`mx2`/
+`smtp.alecrae.com` resolve to `149.28.119.158` (applied 2026-07-13). The PTR
+check does ⚠ not pass yet — `149.28.119.158` currently reverse-resolves to
+`mail.alecrae.com`, but the outbound HELO identity is **`smtp.alecrae.com`**,
+so the PTR must be changed to `smtp.alecrae.com`. See
+`docs/infra/multi-platform-mail-plan.md`. If the PTR doesn't match the HELO
+hostname, Gmail/Outlook will spam-bin or reject — it's managed in the Vultr
+control panel: 158 instance → Settings → IPv4 → rDNS. See
+`docs/infra/mta-box-setup.md`.
 
 ### C. Receiving — send TO `info@bookaride.co.nz`
 1. From an external account (e.g. a personal Gmail) send a plain test to
@@ -319,8 +323,9 @@ Run `verifyDomainConfig(<domainId>)` (auto-config.ts) → expect `overall:
 ## 5. Gotchas — it WILL land in spam if…
 
 - **No PTR / rDNS, or PTR ≠ HELO hostname.** Single most common cause of
-  hard spam-binning on the direct-MX path. `dig -x <ip>` must return
-  `mx1.alecrae.com`.
+  hard spam-binning on the direct-MX path. `dig -x <ip>` must return the
+  outbound HELO identity `smtp.alecrae.com` (⚠ currently returns
+  `mail.alecrae.com` — pending the Vultr change).
 - **No DMARC alignment.** SPF or DKIM can "pass" on a *different* domain and
   DMARC still fails because it's not *aligned* to the From: domain. Our in-house
   DKIM signs `d=bookaride.co.nz`, which aligns — but only if the `domains` row
@@ -409,4 +414,4 @@ VwIDAQAB
 
 ---
 
-_Last updated: 2026-07-13 03:05 UTC_
+_Last updated: 2026-07-13 10:15 UTC_

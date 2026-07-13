@@ -1,6 +1,6 @@
 # MTA Setup on the Mail Box (149.28.119.158)
 
-> **Last updated: 2026-07-13 03:05 UTC**
+> **Last updated: 2026-07-13 10:15 UTC**
 
 AlecRae's outbound email path: web UI → API (`POST /v1/messages/send`) → BullMQ (Redis) → **MTA worker** → delivery.
 
@@ -14,10 +14,12 @@ The MTA worker (`services/mta`) must be running on the **dedicated mail box — 
 
 | Mode | When to use | Env to set |
 |---|---|---|
-| **Direct port-25** | Outbound port 25 on the 158 mail box is already Vultr-unblocked. Fastest path — no relay account needed. Requires PTR record (already set on 158). | _nothing_ (no `RELAY_PROVIDER`) |
-| **Resend relay** | More reliable for cold IPs; needs Resend account + domain verified | `RELAY_PROVIDER=smtp`, `SMTP_RELAY_HOST=smtp.resend.com`, `SMTP_RELAY_PORT=465`, `SMTP_RELAY_TLS=true`, `SMTP_RELAY_USERNAME=resend`, `SMTP_RELAY_PASSWORD=<api_key>` |
+| **Direct port-25** | Outbound port 25 on the 158 mail box is already Vultr-unblocked. Fastest path — no relay account needed. Requires PTR = `smtp.alecrae.com` (⚠ PTR currently reads `mail.alecrae.com` — Craig must CHANGE it in the Vultr panel). | `MTA_HOSTNAME=smtp.alecrae.com` (no `RELAY_PROVIDER`) |
+| **Resend relay** | More reliable for cold IPs; needs Resend account + domain verified | `MTA_HOSTNAME=smtp.alecrae.com`, `RELAY_PROVIDER=smtp`, `SMTP_RELAY_HOST=smtp.resend.com`, `SMTP_RELAY_PORT=465`, `SMTP_RELAY_TLS=true`, `SMTP_RELAY_USERNAME=resend`, `SMTP_RELAY_PASSWORD=<api_key>` |
 
-For the quickest first send, use **direct port-25**: the PTR on `149.28.119.158` → `mail.alecrae.com` is **already set** (kept by Option A — no PTR churn), and the live SPF already authorizes the 158 IP, so just start the MTA with no relay env set. Inbound port 25 on 158 is currently closed — expected; it gets opened via ufw + the inbound service in mail-plan Phase 2 (outbound sending doesn't need it). ⚠ **Still pending** (records target `149.28.119.158`, awaiting Craig's Cloudflare execution — see `docs/infra/multi-platform-mail-plan.md`): mx1/mx2 A records, `_spf.alecrae.com` TXT, grey-clouding `mail.alecrae.com`. DKIM keys for `alecrae.com` must be in the `domains` table (they're set during domain onboarding in the Workspace page).
+> ⚠ **`MTA_HOSTNAME=smtp.alecrae.com` is REQUIRED in `/opt/alecrae/.env` on the mail box.** The code default is `mail.alecrae.com` (`services/mta/src/config.ts`) — **wrong for production**: `mail.alecrae.com` is the Cloudflare-proxied webmail app on Jarvis, not the MTA. The MTA's HELO/PTR sending identity is **`smtp.alecrae.com`** (A → 149.28.119.158, DNS-only, live since 2026-07-13).
+
+For the quickest first send, use **direct port-25**: the live SPF already authorizes the 158 IP, so start the MTA with `MTA_HOSTNAME=smtp.alecrae.com` and no relay env set. Inbound port 25 on 158 is currently closed — expected; it gets opened via ufw + the inbound service in mail-plan Phase 2 (outbound sending doesn't need it). ✅ **DNS prerequisites are now MET (Craig executed 2026-07-13, verified resolving live):** mx1/mx2/smtp A records → `149.28.119.158` (grey), MX 10/20, `_spf.alecrae.com` TXT, `bounce.alecrae.com` CNAME → `smtp.alecrae.com`. ⚠ **The one remaining DNS item is the PTR:** `149.28.119.158` currently reverse-resolves to `mail.alecrae.com` and must be **changed to `smtp.alecrae.com`** in the Vultr panel (158 instance → Settings → IPv4 → rDNS) for FCrDNS — until then the PTR is set-but-wrong-hostname. DKIM keys for `alecrae.com` must be in the `domains` table (they're set during domain onboarding in the Workspace page).
 
 ---
 
@@ -25,6 +27,7 @@ For the quickest first send, use **direct port-25**: the PTR on `149.28.119.158`
 
 - Mail box is live at `149.28.119.158` (`ssh root@vapron-158` via Tailscale, peer 100.89.227.39)
 - API (`alecrae-api`) is running on Jarvis (`66.42.121.161`) and shares the same `REDIS_URL` as the MTA (see the shared-queue note above)
+- `MTA_HOSTNAME=smtp.alecrae.com` is set in `/opt/alecrae/.env` on the mail box (the code default `mail.alecrae.com` is wrong for production — see the callout above)
 - Resend SMTP relay is configured in `/opt/alecrae/.env` on the mail box (if using relay mode)
 
 ---

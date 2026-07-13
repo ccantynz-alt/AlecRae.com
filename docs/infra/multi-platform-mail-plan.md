@@ -1,6 +1,6 @@
 # Multi-Platform Mail Architecture — The Plan
 
-Last updated: 2026-07-13 09:20 UTC
+Last updated: 2026-07-13 10:40 UTC
 
 > **Purpose:** One document that answers "how do all of Craig's platforms send and
 > receive mail through alecrae.com, and how does that fit with Vapron owning its
@@ -58,11 +58,11 @@ Think of AlecRae's mail stack as your own private Postmark + Google Workspace:
 |---|---|---|
 | B1 | **`mx1.alecrae.com` / `mx2.alecrae.com` have no A records** | The MX record for alecrae.com points at mx1, which doesn't resolve → **all inbound mail to alecrae.com fails** |
 | B2 | **`_spf.alecrae.com` TXT doesn't exist** | Every onboarded platform/customer domain is told to `include:_spf.alecrae.com` → SPF fails for all of them |
-| B3 | **Mail hostnames are Cloudflare-proxied (orange cloud)** | `mail.alecrae.com` etc. must be DNS-only (grey) for SMTP; Cloudflare only proxies HTTP |
+| B3 | ~~Mail hostnames Cloudflare-proxied~~ **REVISED then RESOLVED 2026-07-13:** `mail.alecrae.com` is the webmail app on Jarvis and correctly STAYS proxied. The SMTP identity is the separate `smtp.alecrae.com` (grey, → 158) — grey-clouding `mail` would have broken nothing but was unnecessary; pointing SMTP identity at it would have failed FCrDNS | ✅ resolved by design (smtp.alecrae.com added) |
 | B4 | **MTA worker not running anywhere** | Sends queue in Redis and never deliver (Known Issue #42/#55) |
 | B5 | **Inbound service not deployed anywhere** | No process listens on port 25 |
-| B6 | **SPF/PTR authorize the deprecated box** | `spf.alecrae.com` = `ip4:149.28.119.158`; PTR on 149 → mail.alecrae.com; PTR on Jarvis (161) is still generic choopa.net. Compute moved to 161 but mail identity didn't |
-| B7 | `smtp.alecrae.com` A record missing | Listed in docs, never created (needed only for authenticated submission later) |
+| B6 | **PTR on 158 says `mail.alecrae.com`** — but `mail.alecrae.com` forward-resolves to Cloudflare/Jarvis, so FCrDNS would fail once sending starts | ⚠ OPEN — Craig: change PTR in Vultr panel to `smtp.alecrae.com` (after the smtp A record, which now exists) |
+| B7 | ~~`smtp.alecrae.com` A record missing~~ | ✅ FIXED 2026-07-13 — A → 149.28.119.158, grey |
 
 ## 4. DECISION 1 — ✅ DECIDED 2026-07-13 (Craig): **Option A — 158 stays as the dedicated mail box**
 
@@ -84,8 +84,9 @@ Web/api stay on Jarvis (161); the MTA + inbound services run on 149, which becom
   groundwork you keep. Dedicated mail IP is industry practice: web deploys and
   other products on Jarvis can never hurt the sending IP's reputation.
 - **Against:** two boxes to pay for and maintain.
-- **DNS work:** only B1/B2/B3/B7 (add mx1/mx2/_spf records → 149, grey-cloud the
-  mail records). No SPF/PTR churn.
+- **DNS work:** only B1/B2/B7 (add mx1/mx2/smtp/_spf records → 158) + retarget
+  the bounce CNAME. Minimal SPF/PTR churn (PTR hostname changes to
+  smtp.alecrae.com, same box).
 
 ### Option B — consolidate everything on Jarvis (161)
 
@@ -101,24 +102,37 @@ after launch.
 
 ## 5. Execution plan (phased, in order)
 
-### Phase 0 — DNS fixes (Craig authorizes; ~15 min in Cloudflare)
-Option A is decided — all mail records target **149.28.119.158** ("158").
+### Phase 0 — DNS fixes — ✅ EXECUTED by Craig 2026-07-13 (verified live)
 
-1. `mx1.alecrae.com  A  149.28.119.158` — **grey cloud**
-2. `mx2.alecrae.com  A  149.28.119.158` — **grey cloud**
-3. `_spf.alecrae.com TXT "v=spf1 ip4:149.28.119.158 ~all"`
-4. Flip `mail.alecrae.com` to **grey cloud** (`alecrae.com`/`api.alecrae.com` can
-   stay proxied — they're HTTP-only; only hostnames used in SMTP/HELO/MX must be
-   DNS-only)
-5. (Optional now) `smtp.alecrae.com A 149.28.119.158` — grey
+The changeset was revised against the real Cloudflare zone before execution:
+`mail.alecrae.com` turned out to be the **webmail app** on Jarvis (proxied,
+serving 200) and stays that way; the MTA got its own identity instead.
+All applied 2026-07-13 and verified resolving via 1.1.1.1:
+
+1. ✅ `mx1.alecrae.com  A  149.28.119.158` — grey
+2. ✅ `mx2.alecrae.com  A  149.28.119.158` — grey
+3. ✅ `smtp.alecrae.com A  149.28.119.158` — grey (the MTA's HELO/PTR identity;
+   `MTA_HOSTNAME=smtp.alecrae.com` must be set in the MTA env — code default is
+   still mail.alecrae.com)
+4. ✅ `alecrae.com MX 20 mx2.alecrae.com` added (mx1 @ 10 already existed)
+5. ✅ `_spf.alecrae.com TXT "v=spf1 ip4:149.28.119.158 ~all"`
+6. ✅ `bounce.alecrae.com` CNAME retargeted `mail.alecrae.com` → `smtp.alecrae.com`
+7. ✅ `mail.alecrae.com` left proxied (webmail on Jarvis — correct)
+
+**Remaining Phase 0 item (Vultr panel, Craig):** change PTR for
+`149.28.119.158` from `mail.alecrae.com` → **`smtp.alecrae.com`** so FCrDNS
+holds (PTR → forward → same IP). Verify after: `nslookup 149.28.119.158` →
+smtp.alecrae.com and `nslookup smtp.alecrae.com` → 149.28.119.158.
 
 ### Phase 1 — outbound live
 1. On the mail box: follow `docs/infra/mta-box-setup.md` — install/verify Redis,
-   create `alecrae-mta` systemd unit, start it (HEALTH_PORT=8082).
+   create `alecrae-mta` systemd unit with `MTA_HOSTNAME=smtp.alecrae.com`,
+   start it (HEALTH_PORT=8082).
 2. Keep `RELAY_PROVIDER=smtp` (Resend) as training wheels for the first 30–60
    days; the MTA still DKIM-signs before relaying.
 3. Test: send from mail.alecrae.com UI → confirm arrival in a Gmail inbox, check
-   `Authentication-Results` shows SPF/DKIM/DMARC pass.
+   `Authentication-Results` shows SPF/DKIM/DMARC pass and the `Received:` header
+   shows `helo=smtp.alecrae.com`.
 4. Run the MTA idempotency check (same message_id → no duplicate).
 
 ### Phase 2 — inbound live (this is what makes "receive through alecrae.com" real)
@@ -202,7 +216,8 @@ standing-up (no production zones) is routine build work.
 
 ## 7. What needs Craig's explicit authorization (Boss Rule)
 
-- All Phase 0 DNS changes (Cloudflare) and any Vultr panel actions (PTR, port 25).
+- ~~All Phase 0 DNS changes (Cloudflare)~~ — **EXECUTED by Craig 2026-07-13.**
+- Vultr panel: PTR change for 149.28.119.158 → `smtp.alecrae.com` (last Phase 0 item).
 - ~~Decision 1 (mail box choice)~~ — **DECIDED 2026-07-13: Option A (keep 158).**
 - Keeping the 158 box funded (billing) — implied by Option A.
 

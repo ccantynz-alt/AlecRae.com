@@ -160,19 +160,20 @@ resolve via Cloudflare **proxied** (orange cloud) to the Jarvis box
 (`66.42.121.161`) and serve 200 OK. See `docs/infra/dns-zone-alecrae.md` for
 the full zone.
 
-**Mail DNS (Option A, decided 2026-07-13):** the mail box is
-`149.28.119.158` — the live SPF already authorizes it and its PTR
-(`mail.alecrae.com`) is already set. Still pending Craig's Cloudflare
-execution: `mx1`/`mx2`/`smtp.alecrae.com` A records → `149.28.119.158`, the
-`_spf.alecrae.com` TXT, and grey-clouding `mail.alecrae.com` — see
-`docs/infra/multi-platform-mail-plan.md`. Mail-related records must be
-DNS-only (grey cloud) when created — SMTP cannot go through Cloudflare's HTTP
-proxy.
+**Mail DNS (Option A — EXECUTED 2026-07-13, verified live):** the mail box is
+`149.28.119.158`. `mx1`/`mx2`/`smtp.alecrae.com` A records (grey), MX 10+20,
+`_spf.alecrae.com` TXT, and the `bounce` → `smtp` CNAME are all live.
+`mail.alecrae.com` stays **proxied** — it's the webmail app on Jarvis, not a
+mail record; the MTA's HELO/PTR identity is `smtp.alecrae.com`
+(`MTA_HOSTNAME=smtp.alecrae.com`). Remaining: PTR for `149.28.119.158` must
+change `mail.alecrae.com` → `smtp.alecrae.com` (Vultr panel, Craig) — see
+`docs/infra/multi-platform-mail-plan.md`.
 
 Key records:
-- `mail.alecrae.com` → web app
+- `mail.alecrae.com` → web app (proxied, Jarvis)
 - `api.alecrae.com` → API
-- `mx1.alecrae.com` / `mx2.alecrae.com` → inbound SMTP on the mail box, `149.28.119.158` (⚠ A records pending, see mail plan)
+- `mx1.alecrae.com` / `mx2.alecrae.com` → inbound SMTP on the mail box, `149.28.119.158` (live, grey)
+- `smtp.alecrae.com` → MTA sending identity, `149.28.119.158` (live, grey)
 
 ---
 

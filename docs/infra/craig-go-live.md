@@ -8,7 +8,7 @@
 
 "Go live" means: real email arrives at `@alecrae.com`, users can sign up at `mail.alecrae.com`, connect their Gmail/Outlook, pay via Stripe, and send mail that lands in inboxes (not spam). **Budget ~3 hours of active work today**, then **2–4 weeks of background IP warmup** before you push volume. Phase 3 (MTA setup on the box) and Phase 7 (warmup) are clock-time gated — everything else is keyboard time.
 
-> **Note (updated 2026-07-13):** Production **compute** (web/api) is the **Jarvis box at `66.42.121.161`** (`ssh root@jarvis` via Tailscale). **Mail** is separate: Craig decided 2026-07-13 (**Option A**, `docs/infra/multi-platform-mail-plan.md` §4) that the **"158" box at `149.28.119.158`** (old Vapron box, `ssh root@vapron-158` via Tailscale) is the **dedicated mail box** — it keeps the existing SPF authorization and the PTR (`149.28.119.158` → `mail.alecrae.com`, **already set**). Remaining mail DNS (mx1/mx2 A records, `_spf.alecrae.com` TXT, grey-clouding `mail.alecrae.com`) targets **149.28.119.158** and awaits Craig's Cloudflare execution. The MTA is not yet running on the mail box. Fly.io is no longer used. Phases 1–2 (account signups/data stores) remain accurate. For the complete, current go-live procedure see `docs/infra/morning-setup.md`.
+> **Note (updated 2026-07-13):** Production **compute** (web/api) is the **Jarvis box at `66.42.121.161`** (`ssh root@jarvis` via Tailscale). **Mail** is separate: Craig decided 2026-07-13 (**Option A**, `docs/infra/multi-platform-mail-plan.md` §4) that the **"158" box at `149.28.119.158`** (old Vapron box, `ssh root@vapron-158` via Tailscale) is the **dedicated mail box**. ✅ **Mail DNS executed 2026-07-13 (verified resolving live):** mx1/mx2/smtp A records → 149.28.119.158 (grey), MX 10/20, `_spf.alecrae.com` TXT, `bounce.alecrae.com` CNAME → smtp.alecrae.com. **`smtp.alecrae.com` is the MTA's HELO/PTR sending identity** — set `MTA_HOSTNAME=smtp.alecrae.com` on the mail box. `mail.alecrae.com` stays Cloudflare-proxied — it's the webmail app on Jarvis, not a mail record. ⚠ **One DNS item remains:** the PTR for 149.28.119.158 still reads `mail.alecrae.com` and must be **changed to `smtp.alecrae.com`** in the Vultr panel. The MTA is not yet running on the mail box. Fly.io is no longer used. Phases 1–2 (account signups/data stores) remain accurate. For the complete, current go-live procedure see `docs/infra/morning-setup.md`.
 
 ---
 
@@ -130,25 +130,25 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 > The MTA (Mail Transfer Agent) is the machine that actually sends and receives email. It runs on the dedicated mail box at **`149.28.119.158`** (Craig's 2026-07-13 decision — Option A, `multi-platform-mail-plan.md` §4).
 >
-> **Mail DNS state (2026-07-13):** the live SPF and the PTR already authorize the 158 box — that groundwork is **kept, not redone**. Still ⚠ pending (target `149.28.119.158`, awaiting Craig's Cloudflare execution): `mx1`/`mx2.alecrae.com` A records, `_spf.alecrae.com` TXT, and grey-clouding `mail.alecrae.com`.
+> **Mail DNS state (2026-07-13):** ✅ Cloudflare records are LIVE (Craig executed 2026-07-13): `mx1`/`mx2`/`smtp.alecrae.com` A records → `149.28.119.158` (grey), MX 10/20, `_spf.alecrae.com` TXT, `bounce.alecrae.com` CNAME → `smtp.alecrae.com`. `mail.alecrae.com` stays proxied (webmail on Jarvis — not a mail record). ⚠ Remaining: change the Vultr PTR for `149.28.119.158` from `mail.alecrae.com` to **`smtp.alecrae.com`** (step 16).
 
 ### 14. Set up the MTA systemd service on the mail box
 
 - **Action: On the 158 mail box (`ssh root@vapron-158`), follow [`mta-box-setup.md`](./mta-box-setup.md)** — Redis install, systemd unit file, env vars, smoke test. Note the 158 box runs `vapron-bun-gateway` on 80/443 (the Coolify/Traefik port-collision warning applies to Jarvis, not 158); the MTA health port defaults to `8082` and must not collide.
-- The mail box IP is `149.28.119.158`. The `mx1.alecrae.com` and `mx2.alecrae.com` A records must be created to point there, grey-clouded (⚠ pending — awaiting Craig's Cloudflare execution; see `multi-platform-mail-plan.md`).
+- The mail box IP is `149.28.119.158`. The `mx1.alecrae.com` and `mx2.alecrae.com` A records point there, grey-clouded (✅ LIVE — applied 2026-07-13).
 
 ### 15. Static IPv4
 
 - The mail box already has a dedicated static IPv4: **`149.28.119.158`**. No allocation needed.
 
-### 16. PTR / rDNS in Vultr — ALREADY SET ✅
+### 16. PTR / rDNS in Vultr — ⚠ MUST BE CHANGED
 
-- The PTR record for `149.28.119.158` → `mail.alecrae.com` is **already set** (one of the reasons Option A keeps the 158 box for mail — no PTR churn, no reputation reset).
-- **Action: Verify only:** `dig -x 149.28.119.158 +short` should return `mail.alecrae.com.`. Without a matching PTR, Gmail and Outlook reject or spam-bin every message — but this one is done.
+- The PTR record for `149.28.119.158` currently reads `mail.alecrae.com` — **wrong hostname**. The MTA's HELO/PTR sending identity is **`smtp.alecrae.com`** (A record live since 2026-07-13), so the PTR must match it for FCrDNS.
+- **Action: In the Vultr panel (158 instance → Settings → IPv4 → rDNS), change the PTR to `smtp.alecrae.com`.** Then verify: `dig -x 149.28.119.158 +short` should return `smtp.alecrae.com.`. Without a PTR that matches the HELO hostname, Gmail and Outlook reject or spam-bin every message.
 
 ### 17. Set MTA env vars on the mail box
 
-- **Action: Edit `/opt/alecrae/.env` on the 158 mail box** and add the MTA variables listed in the MTA section of [`env-audit.md`](./env-audit.md). Includes `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `DKIM_PRIVATE_KEY`, `RELAY_PROVIDER` + `SMTP_RELAY_*` (for Resend relay), etc.
+- **Action: Edit `/opt/alecrae/.env` on the 158 mail box** and add the MTA variables listed in the MTA section of [`env-audit.md`](./env-audit.md). Includes **`MTA_HOSTNAME=smtp.alecrae.com`** (required — the code default `mail.alecrae.com` is wrong for production), `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `DKIM_PRIVATE_KEY`, `RELAY_PROVIDER` + `SMTP_RELAY_*` (for Resend relay), etc.
 - Then restart: `sudo systemctl restart alecrae-mta`
 
 ### 18. Verify the MTA
@@ -160,7 +160,7 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
   ```
 - Port 25 on 158: **outbound** is already Vultr-unblocked (sending works). **Inbound** 25 is currently closed — expected; it gets opened later via ufw + the `alecrae-inbound` service (mail plan Phase 2). So `telnet 149.28.119.158 25` from outside will NOT show a banner until Phase 2 — that's not a fault.
 
-**Phase 3 done when:** `alecrae-mta` service is active on the 158 mail box and outbound test sends succeed (PTR was already set).
+**Phase 3 done when:** `alecrae-mta` service is active on the 158 mail box, the PTR has been changed to `smtp.alecrae.com` (step 16), and outbound test sends succeed.
 
 ---
 
@@ -170,9 +170,9 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 ### 19. Paste non-MX records
 
-- **Action: In Cloudflare DNS, paste every record from [`dns-zone-alecrae.md`](./dns-zone-alecrae.md) EXCEPT the `MX` rows.** ⚠ The mail records are decided (Option A, 2026-07-13 — they target the 158 mail box) but still awaiting Craig's Cloudflare execution — see `multi-platform-mail-plan.md`. Target state:
-  - `A` for `mail`, `api` → `66.42.121.161` (Jarvis, compute — already live; `api` can stay Cloudflare-proxied, but `mail` must be flipped to **grey cloud** since it's used in SMTP/HELO — ⚠ pending)
-  - `A` for `smtp`, `mx1`, `mx2` → `149.28.119.158` (the 158 mail box; proxy **disabled** — grey cloud; do not proxy mail records — ⚠ pending)
+- **Action: In Cloudflare DNS, paste every record from [`dns-zone-alecrae.md`](./dns-zone-alecrae.md) EXCEPT the `MX` rows.** ✅ The mail records were applied 2026-07-13 (verified resolving live) — see `multi-platform-mail-plan.md`. Live state:
+  - `A` for `mail`, `api` → `66.42.121.161` (Jarvis, compute — live, both Cloudflare-proxied; `mail.alecrae.com` is the webmail app, NOT a mail/HELO record — the HELO identity is `smtp.alecrae.com`)
+  - `A` for `smtp`, `mx1`, `mx2` → `149.28.119.158` (the 158 mail box; proxy **disabled** — grey cloud; do not proxy mail records — ✅ live 2026-07-13)
   - `TXT` SPF on apex
   - `TXT` DKIM on `default._domainkey`
   - `TXT` DMARC on `_dmarc`
@@ -183,10 +183,10 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 - **Action: For every record, run the corresponding `dig` command from [`dns-zone-alecrae.md`](./dns-zone-alecrae.md)** and confirm the answer matches. Do not proceed until all pass.
 
-### 21. Paste MX records — the point of no return
+### 21. Paste MX records — the point of no return — ✅ DONE 2026-07-13
 
-- **Action: Only after MTA verified (Phase 3 step 18) AND all non-MX records verified (step 20), paste the two MX rows** from [`dns-zone-alecrae.md`](./dns-zone-alecrae.md). `mx1.alecrae.com` priority 10, `mx2.alecrae.com` priority 20.
-- Propagation: 5–60 minutes. Use `dig MX alecrae.com` until it returns the new values.
+- The two MX rows are **live**: `mx1.alecrae.com` priority 10, `mx2.alecrae.com` priority 20 (applied 2026-07-13, verified resolving).
+- Note: inbound port 25 on 158 is still closed until the `alecrae-inbound` service + ufw open it (mail-plan Phase 2), so inbound delivery isn't consuming yet — verify with `dig MX alecrae.com +short`.
 
 **Phase 4 done when:** `dig MX alecrae.com` shows `mx1` and `mx2`, and a test connection reaches the 158 mail box's SMTP banner — which requires the `alecrae-inbound` service + inbound port 25 opened via ufw on 158 first (mail plan Phase 2; real delivery is Phase 6).
 
@@ -301,4 +301,4 @@ Referenced files:
 
 ---
 
-_Last updated: 2026-07-13 03:05 UTC_
+_Last updated: 2026-07-13 10:15 UTC_

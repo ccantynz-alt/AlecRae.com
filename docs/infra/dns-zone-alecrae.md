@@ -6,31 +6,35 @@
 
 > **Current deployment (verified 2026-07-13):** Production compute is the Jarvis box at `66.42.121.161` (NOT Fly.io or Cloudflare Pages). Coolify/Traefik owns 80/443 on Jarvis (route file `/data/coolify/proxy/dynamic/alecrae.yaml`). `alecrae.com`, `mail.alecrae.com`, and `api.alecrae.com` resolve via Cloudflare **proxied** and serve 200 OK.
 >
-> ✅ **DECIDED 2026-07-13 (Craig, Option A):** the `149.28.119.158` box stays as the **dedicated mail box** — see `docs/infra/multi-platform-mail-plan.md` §4. This keeps the existing deliverability groundwork: the live SPF (`spf.alecrae.com` TXT) already authorizes 149, the PTR on 149 → `mail.alecrae.com` is **already set**, and outbound port 25 on 149 is already unblocked by Vultr (inbound 25 is currently closed — opened via ufw + the inbound service in mail plan Phase 2).
+> ✅ **DECIDED 2026-07-13 (Craig, Option A):** the `149.28.119.158` box stays as the **dedicated mail box** — see `docs/infra/multi-platform-mail-plan.md` §4. This keeps the existing deliverability groundwork: the live SPF (`spf.alecrae.com` TXT) already authorizes 149, and outbound port 25 on 149 is already unblocked by Vultr (inbound 25 is currently closed — opened via ufw + the inbound service in mail plan Phase 2).
 >
-> ⚠ **Still pending (awaiting Craig's Cloudflare execution):** `mx1`/`mx2`/`smtp.alecrae.com` A records and the `_spf.alecrae.com` TXT do **not exist** in DNS yet (target: `149.28.119.158`), `mail.alecrae.com` must be flipped to grey cloud, and the MTA/inbound services are not running yet. The tables below show the **TARGET** state.
+> ✅ **EXECUTED 2026-07-13 (Craig, verified resolving live):** `mx1`/`mx2`/`smtp.alecrae.com` A records → `149.28.119.158` (DNS-only/grey), MX 10 `mx1` + MX 20 `mx2`, `_spf.alecrae.com` TXT, and `bounce.alecrae.com` CNAME → `smtp.alecrae.com` (grey) are all **LIVE**. **`smtp.alecrae.com` is the MTA's HELO/PTR sending identity** — set `MTA_HOSTNAME=smtp.alecrae.com` on the mail box (the code default `mail.alecrae.com` in `services/mta/src/config.ts` is wrong for production). `mail.alecrae.com` stays Cloudflare-**proxied** — it is the webmail web app on Jarvis, **NOT a mail record** (no grey-cloud flip needed).
+>
+> ⚠ **Still pending (one item, Craig, Vultr panel):** the PTR for `149.28.119.158` is still `mail.alecrae.com` — it must be **changed to `smtp.alecrae.com`** for FCrDNS (PTR must match the HELO identity). The MTA/inbound services are also not running yet.
 
 ---
 
-## 1. Summary Table — TARGET State (web = Jarvis 66.42.121.161, mail = 149.28.119.158)
+## 1. Summary Table — LIVE State (web = Jarvis 66.42.121.161, mail = 149.28.119.158)
 
-> ⚠ **Mail rows are a pending DNS change** — Option A is decided (mail records target `149.28.119.158`); the records below await Craig's Cloudflare execution — see `docs/infra/multi-platform-mail-plan.md`. Web rows (`@`, `www`, `mail`, `api`) are live today, Cloudflare-proxied.
+> ✅ **Mail rows applied 2026-07-13 (Craig, verified resolving live)** — mx1/mx2/smtp A records, both MX rows, `_spf` TXT, and the `bounce` CNAME are LIVE, all DNS-only (grey). Web rows (`@`, `www`, `mail`, `api`) remain live, Cloudflare-proxied. Only the Vultr PTR change remains (see §6).
 
 | Name | Type | Value | TTL | Proxied? | Purpose |
 |---|---|---|---|---|---|
 | `@` | A | `66.42.121.161` | Auto | Yes (live) | Landing page (alecrae.com) |
 | `www` | A | `66.42.121.161` | Auto | Yes (live) | www redirect to apex |
-| `mail` | A | `66.42.121.161` | Auto | Yes (live) | Web app (mail.alecrae.com) — must flip to grey cloud, ⚠ pending |
+| `mail` | A | `66.42.121.161` | Auto | Yes (live) | Webmail web app (mail.alecrae.com) on Jarvis — proxied, correct as-is; **NOT a mail record** (the MTA identity is `smtp.alecrae.com`) |
 | `api` | A | `66.42.121.161` | Auto | Yes (live) | API (api.alecrae.com) |
-| `mx1` | A | `149.28.119.158` | Auto | **No** | Primary MX host — ⚠ pending |
-| `mx2` | A | `149.28.119.158` | Auto | **No** | Backup MX host — ⚠ pending |
-| `smtp` | A | `149.28.119.158` | Auto | **No** | Outbound SMTP — ⚠ pending |
-| `@` | MX | `mx1.alecrae.com` (priority 10) | Auto | N/A | Primary mail — ⚠ pending |
-| `@` | MX | `mx2.alecrae.com` (priority 20) | Auto | N/A | Backup mail — ⚠ pending |
+| `mx1` | A | `149.28.119.158` | Auto | **No** | Primary MX host — ✅ LIVE (applied 2026-07-13) |
+| `mx2` | A | `149.28.119.158` | Auto | **No** | Backup MX host — ✅ LIVE (applied 2026-07-13) |
+| `smtp` | A | `149.28.119.158` | Auto | **No** | Outbound SMTP — the MTA's HELO/PTR sending identity (`MTA_HOSTNAME=smtp.alecrae.com`) — ✅ LIVE (applied 2026-07-13) |
+| `@` | MX | `mx1.alecrae.com` (priority 10) | Auto | N/A | Primary mail — ✅ LIVE (applied 2026-07-13) |
+| `@` | MX | `mx2.alecrae.com` (priority 20) | Auto | N/A | Backup mail — ✅ LIVE (applied 2026-07-13) |
 | `@` | TXT (SPF) | `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all` | Auto | N/A | SPF for alecrae.com — live SPF already authorizes 149 (Option A: no IP churn) |
-| `_spf` | TXT | `v=spf1 ip4:149.28.119.158 ~all` | Auto | N/A | SPF for customer domains — ⚠ pending (does not exist yet) |
+| `_spf` | TXT | `v=spf1 ip4:149.28.119.158 ~all` | Auto | N/A | SPF for customer domains — ✅ LIVE (applied 2026-07-13) |
+| `bounce` | CNAME | `smtp.alecrae.com` | Auto | **No** | Return-path/bounce host — ✅ LIVE (applied 2026-07-13) |
 | `resend._domainkey` | TXT | *(from Resend dashboard)* | Auto | N/A | DKIM via Resend |
 | `_dmarc` | TXT | `v=DMARC1; p=quarantine; pct=10; rua=mailto:dmarc@alecrae.com; ruf=mailto:dmarc@alecrae.com; adkim=s; aspf=s` | Auto | N/A | DMARC (soft start) |
+| *(Vultr, not Cloudflare)* | PTR | `149.28.119.158` → `smtp.alecrae.com` | — | — | ⚠ **pending** — currently returns `mail.alecrae.com`; Craig must change it to `smtp.alecrae.com` in the Vultr panel for FCrDNS |
 
 > **Note:** Mail-related records must be DNS-only (grey cloud) — SMTP cannot go through Cloudflare's HTTP proxy. Web records are currently Cloudflare-proxied (orange), with Coolify/Traefik terminating on the box behind Cloudflare.
 
@@ -40,20 +44,20 @@
 
 - Web traffic goes to the Jarvis box at `66.42.121.161`, via Cloudflare's proxy (orange cloud) — this is the current, verified-working state (all three web hostnames serve 200)
 - On the Jarvis box, Coolify/Traefik owns 80/443 and routes by hostname to the correct service (route file `/data/coolify/proxy/dynamic/alecrae.yaml`)
-- Mail records (mx1/mx2/smtp, and `mail.alecrae.com` as the SMTP/HELO identity) point at the **mail box `149.28.119.158`** and **must** be grey cloud (SMTP can't go through Cloudflare's HTTP proxy) — the grey-cloud flip for `mail.alecrae.com` is part of the pending changes in `docs/infra/multi-platform-mail-plan.md` (Option A decided; awaiting Craig's Cloudflare execution)
+- Mail records (mx1/mx2/smtp, plus the `bounce` CNAME) point at the **mail box `149.28.119.158`** and are grey cloud (SMTP can't go through Cloudflare's HTTP proxy) — ✅ applied and live 2026-07-13. The SMTP/HELO identity is **`smtp.alecrae.com`**, NOT `mail.alecrae.com` — `mail.alecrae.com` is the proxied webmail app on Jarvis and stays orange
 
 ---
 
 ## 3. SPF for alecrae.com and customer domains
 
-> ✅ **Option A decided (2026-07-13):** the mail box is `149.28.119.158`, and the SPF currently published (`spf.alecrae.com` TXT) **already authorizes 149** — no IP churn needed. Still pending: `_spf.alecrae.com` does not exist yet (target value below, per `docs/infra/multi-platform-mail-plan.md`; awaiting Craig's Cloudflare execution).
+> ✅ **Option A decided (2026-07-13):** the mail box is `149.28.119.158`, and the SPF currently published (`spf.alecrae.com` TXT) **already authorizes 149** — no IP churn needed. ✅ `_spf.alecrae.com` (`v=spf1 ip4:149.28.119.158 ~all`) is now **LIVE** — applied 2026-07-13.
 
 Two SPF records are required:
 
 1. **`@` (alecrae.com itself):** `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all`
    - Authorises the mail box IP (outbound port 25 on 149 is already unblocked by Vultr) and Resend's relay IPs (current relay)
 
-2. **`_spf` (_spf.alecrae.com):** `v=spf1 ip4:149.28.119.158 ~all`
+2. **`_spf` (_spf.alecrae.com):** `v=spf1 ip4:149.28.119.158 ~all` — ✅ LIVE (applied 2026-07-13)
    - When a customer adds their domain through AlecRae Workspace, the DNS auto-config service tells them to add `include:_spf.alecrae.com` to their SPF. This record is what that include resolves to.
    - Without this record, customer domain SPF validation fails for all their mail.
 
@@ -94,17 +98,17 @@ v=DMARC1; p=quarantine; pct=10; rua=mailto:dmarc@alecrae.com; ruf=mailto:dmarc@a
 Run from any terminal after DNS propagates (usually 1-5 minutes on Cloudflare):
 
 ```bash
-# MX records (target — pending, see multi-platform-mail-plan.md)
+# MX records (✅ LIVE — applied 2026-07-13)
 dig MX alecrae.com +short
-# Expected (target): 10 mx1.alecrae.com. and 20 mx2.alecrae.com.
+# Expected: 10 mx1.alecrae.com. and 20 mx2.alecrae.com.
 
 # SPF for alecrae.com (live SPF already authorizes 149)
 dig TXT alecrae.com +short | grep spf
-# Expected (target): v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all
+# Expected: v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all
 
-# SPF for customer domains (target — does not exist yet)
+# SPF for customer domains (✅ LIVE — applied 2026-07-13)
 dig TXT _spf.alecrae.com +short
-# Expected (target): v=spf1 ip4:149.28.119.158 ~all
+# Expected: v=spf1 ip4:149.28.119.158 ~all
 
 # DKIM (Resend)
 dig TXT resend._domainkey.alecrae.com +short
@@ -114,13 +118,15 @@ dig TXT resend._domainkey.alecrae.com +short
 dig TXT _dmarc.alecrae.com +short
 # Expected: v=DMARC1; p=quarantine; ...
 
-# MX host resolves to the mail box IP (target — record does not exist yet)
+# MX + outbound SMTP hosts resolve to the mail box IP (✅ LIVE — applied 2026-07-13)
 dig A mx1.alecrae.com +short
-# Expected (target): 149.28.119.158
+dig A smtp.alecrae.com +short
+# Expected: 149.28.119.158
 
-# PTR / rDNS on the mail box (ALREADY SET)
+# PTR / rDNS on the mail box (⚠ PENDING — Craig must change it in the Vultr panel)
 dig -x 149.28.119.158 +short
-# Expected: mail.alecrae.com.
+# Currently returns: mail.alecrae.com. (wrong hostname)
+# Expected AFTER the Vultr change: smtp.alecrae.com. (must match the MTA HELO identity)
 ```
 
 ---
@@ -137,4 +143,4 @@ dig -x 149.28.119.158 +short
 
 ---
 
-_Last updated: 2026-07-13 12:05 UTC_
+_Last updated: 2026-07-13 10:15 UTC_

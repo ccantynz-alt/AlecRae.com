@@ -171,14 +171,14 @@ sudo systemctl restart alecrae-api
 
 Go to **https://dash.cloudflare.com** → click `alecrae.com` → **DNS** → **Records**.
 
-> **Current state (verified 2026-07-13):** `alecrae.com`, `mail.alecrae.com`, and
-> `api.alecrae.com` resolve via Cloudflare **proxied** (orange cloud) to the Jarvis
-> box and serve 200 OK — the web side is done. **Mail decision made (Option A,
-> 2026-07-13):** the 158 box (`149.28.119.158`) stays as the dedicated mail box, so
-> the mail records below target `149.28.119.158`. The live SPF already authorizes
-> 149 and the PTR on 149 → `mail.alecrae.com` is already set; the still-missing
-> records (mx1/mx2 A, `_spf` TXT, grey-clouding `mail.alecrae.com`) await Craig's
-> Cloudflare execution — see `docs/infra/multi-platform-mail-plan.md`.
+> **Current state (2026-07-13): Section 3 is DONE.** The web side serves 200 via
+> Cloudflare proxy to Jarvis, and Craig executed the mail changeset the same day
+> (verified live): `mx1`/`mx2`/`smtp.alecrae.com` A → `149.28.119.158` (grey),
+> MX 10+20, `_spf.alecrae.com` TXT, `bounce` CNAME → `smtp`. NB:
+> `mail.alecrae.com` stays **proxied** — it's the webmail app, not a mail
+> record; the MTA identity is `smtp.alecrae.com` (`MTA_HOSTNAME`). One item
+> remains: change the PTR for `149.28.119.158` from `mail.alecrae.com` to
+> `smtp.alecrae.com` (Vultr panel) — see `docs/infra/multi-platform-mail-plan.md`.
 
 ### Fix the apex A record
 
