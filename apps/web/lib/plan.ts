@@ -62,6 +62,7 @@ export const FEATURE_PLANS: Record<string, PlanTier> = {
   video_meetings: "pro",
   email_query: "pro",
   knowledge_graph: "pro",
+  programs: "pro", // programmable email — sandboxed code execution, cost/security profile like ai_agent
   sentiment_timeline: "pro",
   ai_categorization: "pro", // batch Claude calls → cost risk; Personal tier too low
   productivity_analytics: "pro",

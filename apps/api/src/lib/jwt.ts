@@ -143,6 +143,8 @@ function scopesForRole(role: string | undefined): string {
   // session token carried it before 2026-07-13 (same class as issue #49).
   // contacts:read/write are baseline because contacts + Personal-tier
   // enrichment must work for member roles, not just owner/admin.
+  // grammar:read is baseline because compose grammar-check AND spellcheck both
+  // gate on it — without it those features 403 for every session (issue #49 class).
   const base = [
     "messages:send",
     "messages:read",
@@ -151,6 +153,7 @@ function scopesForRole(role: string | undefined): string {
     "account:read",
     "contacts:read",
     "contacts:write",
+    "grammar:read",
   ];
   switch (role) {
     case "owner":

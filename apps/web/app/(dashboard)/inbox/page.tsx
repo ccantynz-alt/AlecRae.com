@@ -9,7 +9,6 @@ import {
   Button,
   Input,
   PageLayout,
-  EmailList,
   EmailViewer,
   type EmailListItem,
   type EmailMessage,
@@ -22,7 +21,10 @@ import { NewsletterSummaryPreview } from "../../../components/NewsletterSummaryP
 import { EmailExplainerPanel } from "../../../components/EmailExplainerPanel";
 import { QuickReply } from "../../../components/QuickReply";
 import { UndoToastManager, type UndoAction } from "../../../components/UndoToast";
-import { BatchActionBar } from "../../../components/BatchActionBar";
+import { InboxBulkToolbar } from "../../../components/inbox-bulk-toolbar";
+import { InboxLabelsManager } from "../../../components/inbox-labels-manager";
+import { InboxSelectableList } from "../../../components/inbox-selectable-list";
+import { bulkActionsApi, threadMutesApi } from "../../../lib/api-inbox-power";
 import { SnoozePicker } from "../../../components/SnoozePicker";
 import { SyncStatusBar } from "../../../components/SyncStatusBar";
 import { EmailListSkeleton } from "../../../components/AnimatedSkeleton";
@@ -197,6 +199,10 @@ export default function InboxPage(): React.ReactNode {
   const [userEmail, setUserEmail] = useState("");
   const [undoActions, setUndoActions] = useState<UndoAction[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Inbox power features: bulk request in flight, labels manager, muted threads.
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [labelsManagerOpen, setLabelsManagerOpen] = useState(false);
+  const [mutedThreadIds, setMutedThreadIds] = useState<Set<string>>(new Set());
   const [snoozePickerOpen, setSnoozePickerOpen] = useState(false);
   const snoozeTargetRef = useRef<string | null>(null);
   // Mirrors selectedEmailId for use inside fetchEmails (empty-deps useCallback)
@@ -296,7 +302,7 @@ export default function InboxPage(): React.ReactNode {
     snoozeApi.snooze(id, until.toISOString()).catch(() => { /* no-op */ });
   }, [emailItems, selectedEmailId, addUndoAction]);
 
-  const _toggleSelect = useCallback((id: string) => {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -304,6 +310,47 @@ export default function InboxPage(): React.ReactNode {
       return next;
     });
   }, []);
+
+  // ─── Muted threads ─────────────────────────────────────────────────────────
+
+  const loadMutedThreads = useCallback(async (): Promise<void> => {
+    try {
+      const res = await threadMutesApi.listMuted();
+      setMutedThreadIds(new Set(res.data.map((m) => m.threadId)));
+    } catch {
+      // Non-fatal: mute badges just won't show.
+    }
+  }, []);
+
+  const muteSelected = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    // Optimistic: mark muted immediately, roll back per-id on failure.
+    setMutedThreadIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+    setSelectedIds(new Set());
+    const undoId = `mute-${Date.now()}`;
+    addUndoAction(undoId, `${ids.length} thread${ids.length === 1 ? "" : "s"} muted`, () => {
+      setMutedThreadIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) next.delete(id);
+        return next;
+      });
+      for (const id of ids) threadMutesApi.unmute(id).catch(() => { /* no-op */ });
+    });
+    for (const id of ids) {
+      threadMutesApi.mute(id).catch(() => {
+        setMutedThreadIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      });
+    }
+  }, [selectedIds, addUndoAction]);
 
   const batchArchive = useCallback(() => {
     const ids = Array.from(selectedIds);
@@ -322,8 +369,20 @@ export default function InboxPage(): React.ReactNode {
         return [...prev, ...restored].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       });
     });
-    for (const id of ids) messagesApi.archive(id).catch(() => { /* no-op */ });
-  }, [selectedIds, emailItems, selectedEmailId, addUndoAction]);
+    setBulkBusy(true);
+    bulkActionsApi
+      .run("archive", ids)
+      .catch(() => {
+        // Rollback: restore the removed items.
+        setEmailItems((prev) => {
+          const existing = new Set(prev.map((e) => e.id));
+          const restored = items.filter((i) => !existing.has(i.id));
+          return [...prev, ...restored].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        });
+        removeUndoAction(undoId);
+      })
+      .finally(() => setBulkBusy(false));
+  }, [selectedIds, emailItems, selectedEmailId, addUndoAction, removeUndoAction]);
 
   const batchDelete = useCallback(() => {
     const ids = Array.from(selectedIds);
@@ -342,25 +401,65 @@ export default function InboxPage(): React.ReactNode {
         return [...prev, ...restored].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       });
     });
-    for (const id of ids) messagesApi.delete(id).catch(() => { /* no-op */ });
-  }, [selectedIds, emailItems, selectedEmailId, addUndoAction]);
+    setBulkBusy(true);
+    bulkActionsApi
+      .run("delete", ids)
+      .catch(() => {
+        setEmailItems((prev) => {
+          const existing = new Set(prev.map((e) => e.id));
+          const restored = items.filter((i) => !existing.has(i.id));
+          return [...prev, ...restored].sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        });
+        removeUndoAction(undoId);
+      })
+      .finally(() => setBulkBusy(false));
+  }, [selectedIds, emailItems, selectedEmailId, addUndoAction, removeUndoAction]);
 
   const batchMarkRead = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const prevRead = new Map(emailItems.map((e) => [e.id, e.read]));
     setEmailItems((prev) => prev.map((e) => selectedIds.has(e.id) ? { ...e, read: true } : e));
     setSelectedIds(new Set());
-  }, [selectedIds]);
+    setBulkBusy(true);
+    bulkActionsApi
+      .run("read", ids)
+      .catch(() => {
+        // Rollback read flags to their prior value.
+        setEmailItems((prev) => prev.map((e) => ids.includes(e.id) ? { ...e, read: prevRead.get(e.id) ?? e.read } : e));
+      })
+      .finally(() => setBulkBusy(false));
+  }, [selectedIds, emailItems]);
 
   const batchMarkUnread = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const prevRead = new Map(emailItems.map((e) => [e.id, e.read]));
     setEmailItems((prev) => prev.map((e) => selectedIds.has(e.id) ? { ...e, read: false } : e));
     setSelectedIds(new Set());
-  }, [selectedIds]);
+    setBulkBusy(true);
+    bulkActionsApi
+      .run("unread", ids)
+      .catch(() => {
+        setEmailItems((prev) => prev.map((e) => ids.includes(e.id) ? { ...e, read: prevRead.get(e.id) ?? e.read } : e));
+      })
+      .finally(() => setBulkBusy(false));
+  }, [selectedIds, emailItems]);
 
   const batchStar = useCallback(() => {
     const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const prevStarred = new Map(emailItems.map((e) => [e.id, e.starred]));
     setEmailItems((prev) => prev.map((e) => selectedIds.has(e.id) ? { ...e, starred: true } : e));
     setSelectedIds(new Set());
-    for (const id of ids) messagesApi.star(id, true).catch(() => { /* no-op */ });
-  }, [selectedIds]);
+    setBulkBusy(true);
+    bulkActionsApi
+      .run("star", ids)
+      .catch(() => {
+        setEmailItems((prev) => prev.map((e) => ids.includes(e.id) ? { ...e, starred: prevStarred.get(e.id) ?? e.starred } : e));
+      })
+      .finally(() => setBulkBusy(false));
+  }, [selectedIds, emailItems]);
 
   // ─── AI reply + summarize ──────────────────────────────────────────────────
 
@@ -625,8 +724,9 @@ export default function InboxPage(): React.ReactNode {
 
   useEffect(() => {
     fetchEmails();
+    void loadMutedThreads();
     authApi.me().then((res) => setUserEmail(res.data.email)).catch(() => { /* non-fatal */ });
-  }, [fetchEmails]);
+  }, [fetchEmails, loadMutedThreads]);
 
   useEffect(() => {
     if (selectedEmailId) {
@@ -801,7 +901,7 @@ export default function InboxPage(): React.ReactNode {
         <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
           <AnimatePresence>
             {selectedIds.size > 0 && (
-              <BatchActionBar
+              <InboxBulkToolbar
                 selectedCount={selectedIds.size}
                 totalCount={filteredEmails.length}
                 onSelectAll={() => setSelectedIds(new Set(filteredEmails.map((e) => e.id)))}
@@ -811,6 +911,9 @@ export default function InboxPage(): React.ReactNode {
                 onMarkRead={batchMarkRead}
                 onMarkUnread={batchMarkUnread}
                 onStar={batchStar}
+                onMute={muteSelected}
+                onLabel={() => setLabelsManagerOpen(true)}
+                busy={bulkBusy}
               />
             )}
           </AnimatePresence>
@@ -875,11 +978,14 @@ export default function InboxPage(): React.ReactNode {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.15 }}
               >
-                <EmailList
+                <InboxSelectableList
                   emails={filteredEmails}
-                  {...(selectedEmailId !== undefined ? { selectedId: selectedEmailId } : {})}
+                  selectedId={selectedEmailId}
+                  checkedIds={selectedIds}
+                  mutedIds={mutedThreadIds}
                   onSelect={handleSelect}
                   onStar={handleStar}
+                  onToggleCheck={toggleSelect}
                 />
               </motion.div>
             )}
@@ -1084,6 +1190,23 @@ export default function InboxPage(): React.ReactNode {
         actions={undoActions}
         onExpire={removeUndoAction}
         onDismiss={removeUndoAction}
+      />
+
+      {/* Labels manager — create/list/delete + apply to the current selection */}
+      <InboxLabelsManager
+        open={labelsManagerOpen}
+        onClose={() => setLabelsManagerOpen(false)}
+        selectedEmailIds={Array.from(selectedIds)}
+        onApplied={(labelName, count) => {
+          setLabelsManagerOpen(false);
+          setSelectedIds(new Set());
+          const undoId = `label-${Date.now()}`;
+          addUndoAction(
+            undoId,
+            `Labeled ${count} email${count === 1 ? "" : "s"} "${labelName}"`,
+            () => { /* apply persists immediately; no client-side undo */ },
+          );
+        }}
       />
 
       {/* Snooze picker */}

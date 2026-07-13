@@ -18,6 +18,9 @@ import {
   ContactRemindersPanel,
   ContactInsightsPanel,
 } from "../../../components/contact-intelligence";
+import { ContactGroupsPanel } from "../../../components/contact-groups-panel";
+
+type ContactsView = "contacts" | "groups";
 
 const API_BASE = getApiBase();
 
@@ -75,6 +78,7 @@ function ContactAvatar({ name, avatarUrl }: { name: string; avatarUrl: string | 
 
 export default function ContactsPage(): React.ReactNode {
   const reduced = useAlecRaeReducedMotion();
+  const [view, setView] = useState<ContactsView>("contacts");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +148,52 @@ export default function ContactsPage(): React.ReactNode {
 
   return (
     <PageLayout title="Contacts" fullWidth>
-      <Box className="flex flex-1 h-full">
+      <Box className="flex flex-col flex-1 h-full min-h-0">
+        <Box
+          className="flex items-center gap-1 px-3 py-2 border-b border-border flex-shrink-0"
+          role="tablist"
+          aria-label="Contacts views"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "contacts"}
+            onClick={() => setView("contacts")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              view === "contacts"
+                ? "bg-brand-50 text-brand-700"
+                : "text-content-secondary hover:bg-surface-secondary"
+            }`}
+          >
+            Contacts
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={view === "groups"}
+            onClick={() => setView("groups")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              view === "groups"
+                ? "bg-brand-50 text-brand-700"
+                : "text-content-secondary hover:bg-surface-secondary"
+            }`}
+          >
+            Groups
+          </button>
+        </Box>
+
+        {view === "groups" ? (
+          <Box
+            className="flex-1 min-h-0 overflow-y-auto p-6"
+            role="tabpanel"
+            aria-label="Contact groups"
+          >
+            <Box className="max-w-2xl mx-auto">
+              <ContactGroupsPanel contacts={contacts} />
+            </Box>
+          </Box>
+        ) : (
+          <Box className="flex flex-1 min-h-0" role="tabpanel" aria-label="Contacts">
         <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
           <Box className="p-3 border-b border-border">
             <Input
@@ -320,6 +369,8 @@ export default function ContactsPage(): React.ReactNode {
             )}
           </AnimatePresence>
         </Box>
+          </Box>
+        )}
       </Box>
     </PageLayout>
   );

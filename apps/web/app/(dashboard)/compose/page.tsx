@@ -9,6 +9,10 @@ import { RecipientAutocomplete } from "../../../components/RecipientAutocomplete
 import { SendTimePanel } from "../../../components/SendTimePanel";
 import { AnimatedCompose } from "../../../components/AnimatedCompose";
 import { OfflineComposeBanner } from "../../../components/OfflineComposeBanner";
+import { ComposeSpellcheckPanel } from "../../../components/compose-spellcheck-panel";
+import { ComposeAssistPanel, type AssistSlot } from "../../../components/compose-assist-panel";
+import { ComposeRecallPanel } from "../../../components/compose-recall-panel";
+import { PlanGate } from "../../../components/plan-gate";
 import {
   composeEnter,
   fadeInUp,
@@ -57,10 +61,19 @@ function ComposePage(): React.ReactNode {
   // autocomplete fields live at page level and their picks are merged in.
   const [contactsTo, setContactsTo] = useState("");
   const [contactsCc, setContactsCc] = useState("");
+  // Live body text (HTML) tracked from the editor, used to drive spellcheck +
+  // compose-assist. `editorKey` remounts the editor to push corrected/inserted
+  // body text back in without touching the editor's internal wiring.
+  const [bodyDraft, setBodyDraft] = useState("");
+  const [editorKey, setEditorKey] = useState(0);
+  // Id of the most recently sent email — enables the recall panel.
+  const [lastSentEmailId, setLastSentEmailId] = useState<string | null>(null);
   const grammarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCheckedRef = useRef("");
 
   const _checkGrammar = useCallback((text: string) => {
+    // Track the live body for the spellcheck + compose-assist panels.
+    setBodyDraft(text);
     const plainText = text.replace(/<[^>]*>/g, "").trim();
     if (!plainText || plainText.length < 20 || plainText === lastCheckedRef.current) return;
 
@@ -143,6 +156,51 @@ function ComposePage(): React.ReactNode {
     [],
   );
 
+  // Push a new body value into the editor by remounting it with fresh initialBody.
+  const applyBody = useCallback((next: string) => {
+    setBodyDraft(next);
+    lastCheckedRef.current = "";
+    setEditorKey((k) => k + 1);
+  }, []);
+
+  // Spellcheck panel works on plain text; convert its corrected plain text back
+  // to the editor body (which is plain text in this editor).
+  const handleSpellcheckCorrection = useCallback(
+    (correctedPlainText: string) => {
+      applyBody(correctedPlainText);
+    },
+    [applyBody],
+  );
+
+  // Compose-assist: fetch candidate slots via the page's existing calendar flow,
+  // adapting the SlotOption shape to the AssistSlot shape the panel expects.
+  const handleAssistRequestSlots = useCallback(
+    async (text: string): Promise<readonly AssistSlot[]> => {
+      const res = await calendarApi.suggestSlots({
+        text,
+        ...(recipientForPrediction ? { recipientEmail: recipientForPrediction } : {}),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      return res.data.slots.map((s) => ({
+        start: s.start,
+        end: s.end,
+        formattedRange: s.formattedRange,
+        durationMinutes: s.durationMinutes,
+        score: s.score,
+        reasoning: s.reasoning,
+      }));
+    },
+    [recipientForPrediction],
+  );
+
+  // Compose-assist: insert formatted slot content at the end of the draft body.
+  const handleAssistInsert = useCallback(
+    (content: string) => {
+      applyBody(`${bodyDraft}${bodyDraft ? "\n\n" : ""}${content}`);
+    },
+    [applyBody, bodyDraft],
+  );
+
   const handleSend = async (data: ComposeData) => {
     if (sending) return;
     setSending(true);
@@ -174,6 +232,7 @@ function ComposePage(): React.ReactNode {
       const ccList = mergeRecipientLists(data.cc, contactsCc).map((e) => ({ email: e }));
       if (ccList.length > 0) sendPayload.cc = ccList;
       const result = await messagesApi.send(sendPayload);
+      setLastSentEmailId(result.id);
       setStatus(`Email queued successfully (ID: ${result.id})`);
     } catch (err) {
       setStatus(`Error: ${err instanceof Error ? err.message : "Failed to send"}`);
@@ -335,11 +394,12 @@ function ComposePage(): React.ReactNode {
           animate="animate"
         >
           <ComposeEditor
+            key={editorKey}
             from={userEmail}
             to={replyTo}
             cc={mode === "replyAll" ? replyCc : ""}
             subject={initialSubject}
-            body={initialBody}
+            body={editorKey === 0 ? initialBody : bodyDraft}
             suggestions={suggestions}
             showAIPanel={suggestions.length > 0}
             onSend={handleSend}
@@ -358,6 +418,29 @@ function ComposePage(): React.ReactNode {
             className="flex-1"
           />
         </motion.div>
+
+        {/* Compose power tools — AI assist + spellcheck (personal tier) */}
+        <Box className="mt-4 space-y-3">
+          <PlanGate feature="grammar_full" required="personal" showUpgrade={false}>
+            <ComposeAssistPanel
+              text={bodyDraft}
+              onRequestSlots={handleAssistRequestSlots}
+              onInsert={handleAssistInsert}
+            />
+          </PlanGate>
+          <PlanGate feature="grammar_full" required="personal" showUpgrade={false}>
+            <ComposeSpellcheckPanel
+              text={bodyDraft.replace(/<[^>]*>/g, "")}
+              onApplyCorrection={handleSpellcheckCorrection}
+            />
+          </PlanGate>
+          {/* Email recall — only available once a message has been sent */}
+          {lastSentEmailId && (
+            <PlanGate feature="email_recall" required="personal">
+              <ComposeRecallPanel emailId={lastSentEmailId} />
+            </PlanGate>
+          )}
+        </Box>
       </AnimatedCompose>
     </PageLayout>
   );
