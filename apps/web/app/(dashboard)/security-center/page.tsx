@@ -3,16 +3,40 @@
 /**
  * AlecRae — Security Center
  *
- * Security score, event log, trust settings, and on-demand sender reputation.
+ * Security score, event log, trust settings, on-demand sender reputation,
+ * and the full Security Intelligence suite (threat detection, policies,
+ * audit log, sender reputation intelligence).
  *
- * API:
+ * API (Overview tab):
  *   GET  /v1/security                    → score + stats + trustSettings
  *   GET  /v1/security/events             → recent events[]
  *   POST /v1/security/verify-sender      → sender reputation check
  *   PATCH /v1/security/settings          → update trust settings
+ *
+ * API (Security Intelligence tabs — see components/security-intelligence-panels.tsx):
+ *   POST   /v1/security-intelligence/scan
+ *   POST   /v1/security-intelligence/scan/batch
+ *   GET    /v1/security-intelligence/threats
+ *   GET    /v1/security-intelligence/threats/:emailId
+ *   POST   /v1/security-intelligence/threats/:id/action
+ *   GET    /v1/security-intelligence/policies
+ *   POST   /v1/security-intelligence/policies
+ *   DELETE /v1/security-intelligence/policies/:id
+ *   GET    /v1/security-intelligence/audit-log
+ *   GET    /v1/security-intelligence/dashboard
+ *   GET    /v1/security-intelligence/sender-reputation/:email
+ *   POST   /v1/security-intelligence/report-phishing
  */
 
-import { useState, useEffect, useCallback, type FormEvent, type ReactNode } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type FormEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import {
   Box,
   Text,
@@ -24,6 +48,12 @@ import {
   PageLayout,
 } from "@alecrae/ui";
 import { getAccessToken } from "../../../lib/auth-token";
+import {
+  ThreatIntelligencePanel,
+  PoliciesPanel,
+  AuditLogPanel,
+  SenderReputationPanel,
+} from "../../../components/security-intelligence-panels";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -530,9 +560,85 @@ function SenderVerificationCard(): ReactNode {
 }
 SenderVerificationCard.displayName = "SenderVerificationCard";
 
+// ─── Tabs ──────────────────────────────────────────────────────────────────────
+
+type TabId = "overview" | "threats" | "policies" | "audit-log" | "reputation";
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "threats", label: "Threat Intelligence" },
+  { id: "policies", label: "Policies" },
+  { id: "audit-log", label: "Audit Log" },
+  { id: "reputation", label: "Sender Reputation" },
+];
+
+function TabBar({
+  active,
+  onChange,
+}: {
+  active: TabId;
+  onChange: (tab: TabId) => void;
+}): ReactNode {
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>): void {
+    const currentIndex = TABS.findIndex((t) => t.id === active);
+    let nextIndex: number | null = null;
+    if (e.key === "ArrowRight") nextIndex = (currentIndex + 1) % TABS.length;
+    else if (e.key === "ArrowLeft") nextIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+    else if (e.key === "Home") nextIndex = 0;
+    else if (e.key === "End") nextIndex = TABS.length - 1;
+    if (nextIndex === null) return;
+    e.preventDefault();
+    const nextTab = TABS[nextIndex];
+    if (!nextTab) return;
+    onChange(nextTab.id);
+    tabRefs.current[nextIndex]?.focus();
+  }
+
+  return (
+    <Box
+      role="tablist"
+      aria-label="Security Center sections"
+      className="flex gap-1 overflow-x-auto border-b border-border"
+      onKeyDown={handleKeyDown}
+    >
+      {TABS.map((tab, i) => {
+        const selected = tab.id === active;
+        return (
+          <Box
+            key={tab.id}
+            as="button"
+            type="button"
+            role="tab"
+            id={`security-tab-${tab.id}`}
+            aria-selected={selected}
+            aria-controls={`security-panel-${tab.id}`}
+            tabIndex={selected ? 0 : -1}
+            ref={(el: HTMLButtonElement | null) => {
+              tabRefs.current[i] = el;
+            }}
+            onClick={() => onChange(tab.id)}
+            className={[
+              "whitespace-nowrap px-4 py-2.5 text-sm font-medium -mb-px border-b-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 rounded-t-md",
+              selected
+                ? "border-brand-600 text-brand-700"
+                : "border-transparent text-content-subtle hover:text-content hover:border-border",
+            ].join(" ")}
+          >
+            {tab.label}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+TabBar.displayName = "TabBar";
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
 export default function SecurityPage(): ReactNode {
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [overview, setOverview] = useState<SecurityOverview | null>(null);
   const [loadingOverview, setLoadingOverview] = useState(true);
   const [overviewError, setOverviewError] = useState<string | null>(null);
@@ -599,34 +705,85 @@ export default function SecurityPage(): ReactNode {
       description="Monitor threats, manage trust settings, and verify senders."
     >
       <Box className="space-y-6">
-        {/* Overview / score */}
-        {loadingOverview && (
-          <Box className="h-36 animate-pulse rounded-xl bg-surface-raised border border-border" />
-        )}
-        {!loadingOverview && overviewError && (
-          <ErrorBanner message={overviewError} onRetry={() => void loadOverview()} />
-        )}
-        {!loadingOverview && overview && <ScoreCard overview={overview} />}
+        <TabBar active={activeTab} onChange={setActiveTab} />
 
-        {/* Events */}
-        <EventsTable
-          events={events}
-          loading={loadingEvents}
-          error={eventsError}
-          onRetry={() => void loadEvents()}
-        />
+        {activeTab === "overview" && (
+          <Box
+            role="tabpanel"
+            id="security-panel-overview"
+            aria-labelledby="security-tab-overview"
+            className="space-y-6"
+          >
+            {/* Overview / score */}
+            {loadingOverview && (
+              <Box className="h-36 animate-pulse rounded-xl bg-surface-raised border border-border" />
+            )}
+            {!loadingOverview && overviewError && (
+              <ErrorBanner message={overviewError} onRetry={() => void loadOverview()} />
+            )}
+            {!loadingOverview && overview && <ScoreCard overview={overview} />}
 
-        {/* Trust settings — only when overview loaded */}
-        {!loadingOverview && overview && (
-          <TrustSettingsCard
-            settings={overview.trustSettings}
-            onChange={(key, value) => void handleToggle(key, value)}
-            saving={savingSettings}
-          />
+            {/* Events */}
+            <EventsTable
+              events={events}
+              loading={loadingEvents}
+              error={eventsError}
+              onRetry={() => void loadEvents()}
+            />
+
+            {/* Trust settings — only when overview loaded */}
+            {!loadingOverview && overview && (
+              <TrustSettingsCard
+                settings={overview.trustSettings}
+                onChange={(key, value) => void handleToggle(key, value)}
+                saving={savingSettings}
+              />
+            )}
+
+            {/* Sender verification */}
+            <SenderVerificationCard />
+          </Box>
         )}
 
-        {/* Sender verification */}
-        <SenderVerificationCard />
+        {activeTab === "threats" && (
+          <Box
+            role="tabpanel"
+            id="security-panel-threats"
+            aria-labelledby="security-tab-threats"
+          >
+            <ThreatIntelligencePanel />
+          </Box>
+        )}
+
+        {activeTab === "policies" && (
+          <Box
+            role="tabpanel"
+            id="security-panel-policies"
+            aria-labelledby="security-tab-policies"
+          >
+            <PoliciesPanel />
+          </Box>
+        )}
+
+        {activeTab === "audit-log" && (
+          <Box
+            role="tabpanel"
+            id="security-panel-audit-log"
+            aria-labelledby="security-tab-audit-log"
+          >
+            <AuditLogPanel />
+          </Box>
+        )}
+
+        {activeTab === "reputation" && (
+          <Box
+            role="tabpanel"
+            id="security-panel-reputation"
+            aria-labelledby="security-tab-reputation"
+          >
+            <SenderReputationPanel />
+          </Box>
+        )}
       </Box>
     </PageLayout>
   );

@@ -10,6 +10,8 @@ import {
 import { motion } from "motion/react";
 import { analyticsApi, heatmapApi, type OverviewStats } from "../../../lib/api";
 import { InboxHeatmapView } from "../../../components/InboxHeatmapView";
+import { AnalyticsDashboardPanel } from "../../../components/analytics-dashboard-panel";
+import { PlanGate } from "../../../components/plan-gate";
 import {
   staggerGrid,
   fadeInUp,
@@ -209,6 +211,20 @@ export default function AnalyticsPage(): React.ReactNode {
         aria-label="Inbox heatmap and email habits"
       >
         <InboxHeatmapView />
+      </motion.div>
+
+      {/* Advanced analytics dashboard — snapshot trends, engagement, goals */}
+      <motion.div
+        className="mt-8"
+        variants={itemVariants}
+        initial="initial"
+        animate="animate"
+        role="region"
+        aria-label="Advanced analytics dashboard"
+      >
+        <PlanGate feature="productivity_analytics" required="pro">
+          <AnalyticsDashboardPanel />
+        </PlanGate>
       </motion.div>
     </PageLayout>
   );

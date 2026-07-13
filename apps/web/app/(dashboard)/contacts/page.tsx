@@ -11,6 +11,13 @@ import {
 } from "../../../lib/animations";
 import { getApiBase } from "../../../lib/api-base";
 import { getAccessToken, refreshSession, redirectToLogin } from "../../../lib/auth-token";
+import { PlanGate } from "../../../components/plan-gate";
+import {
+  ContactEnrichmentCard,
+  ContactInteractionsTimeline,
+  ContactRemindersPanel,
+  ContactInsightsPanel,
+} from "../../../components/contact-intelligence";
 
 const API_BASE = getApiBase();
 
@@ -75,6 +82,11 @@ export default function ContactsPage(): React.ReactNode {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  // Bumped when interactions/reminders change so the AI insights panel refetches.
+  const [intelRefresh, setIntelRefresh] = useState(0);
+  const handleIntelChanged = useCallback((): void => {
+    setIntelRefresh((n) => n + 1);
+  }, []);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchContacts = useCallback(async (query?: string) => {
@@ -284,6 +296,16 @@ export default function ContactsPage(): React.ReactNode {
                     </PressableScale>
                   </Box>
                 </Box>
+
+                <Box className="mb-6">
+                  <PlanGate feature="contact_enrichment" required="personal">
+                    <ContactEnrichmentCard contactId={selected.id} />
+                  </PlanGate>
+                </Box>
+
+                <ContactInsightsPanel contactId={selected.id} refreshKey={intelRefresh} />
+                <ContactInteractionsTimeline contactId={selected.id} onChanged={handleIntelChanged} />
+                <ContactRemindersPanel contactId={selected.id} onChanged={handleIntelChanged} />
               </motion.div>
             ) : (
               <motion.div

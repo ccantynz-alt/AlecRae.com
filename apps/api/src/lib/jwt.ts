@@ -138,7 +138,20 @@ const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
  * separately gated by `requireAdmin` (role-based), which this does NOT widen.
  */
 function scopesForRole(role: string | undefined): string {
-  const base = ["messages:send", "messages:read", "account:manage", "account:read"];
+  // messages:write covers CRM-style writes (contacts-extended interactions/
+  // reminders, analytics-dashboard snapshots/goals) — routes gate on it but no
+  // session token carried it before 2026-07-13 (same class as issue #49).
+  // contacts:read/write are baseline because contacts + Personal-tier
+  // enrichment must work for member roles, not just owner/admin.
+  const base = [
+    "messages:send",
+    "messages:read",
+    "messages:write",
+    "account:manage",
+    "account:read",
+    "contacts:read",
+    "contacts:write",
+  ];
   switch (role) {
     case "owner":
     case "admin":

@@ -2462,14 +2462,14 @@ export const delegationsApi = {
   /** List delegations I created (as delegator). */
   listAsOwner(): Promise<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }> {
     return apiFetch<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }>(
-      "/v1/delegations?role=delegator",
+      "/v1/delegation?role=delegator",
     );
   },
 
   /** List delegations where I am the delegate. */
   listAsDelegate(): Promise<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }> {
     return apiFetch<{ data: EmailDelegation[]; cursor: string | null; hasMore: boolean }>(
-      "/v1/delegations?role=delegate",
+      "/v1/delegation?role=delegate",
     );
   },
 
@@ -2481,7 +2481,7 @@ export const delegationsApi = {
     permissions: DelegationPermissions;
     expiresAt?: string | null;
   }): Promise<{ data: EmailDelegation }> {
-    return apiFetch<{ data: EmailDelegation }>("/v1/delegations", {
+    return apiFetch<{ data: EmailDelegation }>("/v1/delegation", {
       method: "POST",
       body: JSON.stringify(payload),
     });
@@ -2490,7 +2490,7 @@ export const delegationsApi = {
   /** Revoke (delete) a delegation by ID. */
   revoke(id: string): Promise<{ deleted: boolean; id: string }> {
     return apiFetch<{ deleted: boolean; id: string }>(
-      `/v1/delegations/${encodeURIComponent(id)}`,
+      `/v1/delegation/${encodeURIComponent(id)}`,
       { method: "DELETE" },
     );
   },
