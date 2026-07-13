@@ -536,7 +536,7 @@ All planned feature tiers are **code-complete**: Tiers 1–8 (36 core + 20 expan
 | 62 | MTA `/metrics` returns placeholder 404 instead of OTel export (`services/mta/src/health.ts:207`) | LOW | 2026-07-01 | OPEN |
 | 66 | **main failed typecheck for 9 days** (2026-07-04 → 07-13) — 3 errors introduced by audit commit 0947895: plan-gate.tsx `PlanBadge` missing business/business_plus tiers, dns auto-config.ts unchecked regex captures, agent.ts missing `sql` import + phantom `draft.accountId`. | HIGH | 2026-07-13 | FIXED 2026-07-13 (all three) — **follow-up OPEN:** CI should have blocked this; verify the typecheck gate in ci.yml actually runs/fails on pushes to main |
 | 67 | Sidebar "Delegation" item links to `/shared-inboxes` (label/page mismatch); delegation route only 33% wired | MEDIUM | 2026-07-13 | OPEN |
-| 68 | **Mail-blocking DNS gaps:** `mx1`/`mx2.alecrae.com` have no A records (inbound mail cannot resolve), `_spf.alecrae.com` missing (every onboarded domain's SPF fails), `mail.alecrae.com` Cloudflare-proxied (must be DNS-only for SMTP), SPF/PTR still authorize deprecated box 149 while compute is on Jarvis 161 | HIGH | 2026-07-13 | OPEN — fix list + Craig decision in `docs/infra/multi-platform-mail-plan.md` |
+| 68 | **Mail-blocking DNS gaps:** `mx1`/`mx2.alecrae.com` have no A records (inbound mail cannot resolve), `_spf.alecrae.com` missing (every onboarded domain's SPF fails), `mail.alecrae.com` Cloudflare-proxied (must be DNS-only for SMTP), SPF/PTR still authorize the old "158" box (149.28.119.158) while compute is on Jarvis 161 | HIGH | 2026-07-13 | OPEN — fix list + Craig decision in `docs/infra/multi-platform-mail-plan.md` |
 | 69 | 14 orphaned web components never imported by any page: CollaborativeDraftView, SpatialInboxView, MeetingTranscriptPanel, EmailQueryConsole, VoiceCloneManager, SignatureManager, TaskProviderSelector, EmailScriptManager, NewsletterSummaryPreview, FocusModeEmailCard, DragToSnooze, LocalAIStatusIndicator, + SwipeableEmailRow (mobile-only), others per audit | MEDIUM | 2026-07-13 | OPEN — wire or delete per DEVOPS_TRACKER §3 roadmap |
 | 70 | No `email.received` webhook event — external platforms can't programmatically react to inbound mail (needed for the multi-platform mail story) | MEDIUM | 2026-07-13 | OPEN — mail plan Phase 4 |
 | 71 | `status.alecrae.com` returns 503 — no status app deployed on Jarvis, no Traefik route | LOW | 2026-07-10 | OPEN |
@@ -555,7 +555,7 @@ All planned feature tiers are **code-complete**: Tiers 1–8 (36 core + 20 expan
 
 > Completed items 1–10 + 18–19 of the old list are in the archive. Current list (2026-07-13):
 
-1. **Craig: Decision 1 in `docs/infra/multi-platform-mail-plan.md`** — where the mail engine runs (recommendation: keep 149 as a dedicated mail box). 30 seconds to decide; unblocks everything below.
+1. **Craig: Decision 1 in `docs/infra/multi-platform-mail-plan.md`** — where the mail engine runs (recommendation: keep the old "158" box, 149.28.119.158, as a dedicated mail box). 30 seconds to decide; unblocks everything below.
 2. **Craig: Phase 0 DNS fixes** — mx1/mx2 A records, `_spf.alecrae.com` TXT, grey-cloud `mail.alecrae.com` (~15 min in Cloudflare; exact records in the mail plan).
 3. **Phase 1: bring up `alecrae-mta`** on the mail box (`docs/infra/mta-box-setup.md`), test send → Gmail inbox with SPF/DKIM/DMARC pass, run the idempotency check.
 4. **Phase 2: deploy the inbound service** (port 25 listener) + test receiving into a provisioned mailbox.

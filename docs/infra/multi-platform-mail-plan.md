@@ -66,7 +66,7 @@ Think of AlecRae's mail stack as your own private Postmark + Google Workspace:
 
 ## 4. DECISION 1 (Craig): where does the mail engine run?
 
-### Option A — keep 149.28.119.158 as a dedicated mail box (**recommended**)
+### Option A — keep 149.28.119.158 (the "158" box, old Vapron box) as a dedicated mail box (**recommended**)
 
 Web/api stay on Jarvis (161); the MTA + inbound services run on 149, which becomes
 "the mail box" instead of being decommissioned.
