@@ -797,10 +797,16 @@ productivityAnalyticsRouter.get(
   requireScope("analytics:read"),
   async (c) => {
     const db = getDatabase();
+    const auth = c.get("auth");
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
+    // SECURITY: scope to the caller's own account only. This table is keyed by
+    // accountId (the tenant), so grouping across accounts leaked every tenant's
+    // volumes + account IDs to any pro user. A real cross-member team
+    // leaderboard needs a per-user tracking dimension that doesn't exist yet;
+    // until then this is a single-row (own-account) result, never cross-tenant.
     const rows = await db
       .select({
         accountId: emailTimeTracking.accountId,
@@ -809,7 +815,7 @@ productivityAnalyticsRouter.get(
         avgSeconds: sql<number>`coalesce(avg(${emailTimeTracking.durationSeconds}), 0)`,
       })
       .from(emailTimeTracking)
-      .where(gte(emailTimeTracking.startedAt, sevenDaysAgo))
+      .where(and(eq(emailTimeTracking.accountId, auth.accountId), gte(emailTimeTracking.startedAt, sevenDaysAgo)))
       .groupBy(emailTimeTracking.accountId)
       .orderBy(sql`count(*) desc`)
       .limit(50);

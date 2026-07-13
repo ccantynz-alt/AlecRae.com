@@ -3,15 +3,24 @@
 /**
  * AlecRae — Email Hygiene Dashboard
  *
- * Hygiene score, habit stats, subscription tracker, inbox cleanup suggestions,
- * and goals with progress bars.
+ * Productivity score, habit trends, subscription tracker + AI audit, inbox
+ * cleanup, response-time + volume analytics, top senders, and productivity
+ * goals with progress bars.
  *
- * API:
- *   GET  /v1/email-hygiene/score           → score + stats
- *   GET  /v1/email-hygiene/subscriptions   → subscription[]
- *   POST /v1/email-hygiene/subscriptions/:id/unsubscribe
- *   GET  /v1/email-hygiene/habits          → habit metrics + suggestions
- *   POST /v1/email-hygiene/cleanup         → apply a suggestion
+ * Backend: apps/api/src/routes/email-hygiene.ts, mounted at /v1/hygiene.
+ * All 12 endpoints are wired via lib/api-email-hygiene.ts (hygieneApi):
+ *   GET  /v1/hygiene/productivity-score
+ *   GET  /v1/hygiene/habits?period=
+ *   GET  /v1/hygiene/habits/today
+ *   GET  /v1/hygiene/subscriptions
+ *   POST /v1/hygiene/subscriptions/:id/wanted
+ *   POST /v1/hygiene/subscriptions/audit
+ *   POST /v1/hygiene/inbox-cleanup
+ *   GET  /v1/hygiene/response-time?period=
+ *   GET  /v1/hygiene/email-volume?period=
+ *   GET  /v1/hygiene/top-senders?limit=
+ *   GET  /v1/hygiene/goals
+ *   POST /v1/hygiene/goals
  *
  * Plan gate: personal+
  */
@@ -24,68 +33,37 @@ import {
   Card,
   CardContent,
   CardHeader,
+  Input,
   PageLayout,
 } from "@alecrae/ui";
 import { PlanGate } from "../../../components/plan-gate";
-import { getAccessToken } from "../../../lib/auth-token";
-
-// ─── Types ─────────────────────────────────────────────────────────────────────
-
-interface HygieneScore {
-  score: number;
-  avgResponseHours: number;
-  unreadCount: number;
-  newslettersPerWeek: number;
-  avgInboxSize: number;
-}
-
-interface Subscription {
-  id: string;
-  sender: string;
-  email: string;
-  frequency: string;
-  lastReceived: string;
-}
-
-interface CleanupSuggestion {
-  id: string;
-  title: string;
-  description: string;
-  count: number;
-}
-
-interface HygieneHabits {
-  inboxZeroDays: number;
-  inboxZeroGoal: number;
-  responseRate: number;
-  unsubscribeRate: number;
-  suggestions: CleanupSuggestion[];
-}
+import {
+  hygieneApi,
+  type HygienePeriod,
+  type ProductivityScore,
+  type TodayHabits,
+  type EmailHabitDay,
+  type HygieneSubscription,
+  type SubscriptionAudit,
+  type InboxCleanupResult,
+  type ResponseTimeAnalytics,
+  type EmailVolume,
+  type TopSender,
+  type GoalsResult,
+  type ProductivityGoals,
+} from "../../../lib/api-email-hygiene";
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://api.alecrae.com";
-
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = getAccessToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-  });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json() as Promise<T>;
-}
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : "Something went wrong";
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -108,7 +86,43 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
+function formatMinutes(mins: number | null): string {
+  if (mins === null) return "—";
+  if (mins < 60) return `${Math.round(mins)}m`;
+  const h = mins / 60;
+  return `${h.toFixed(1)}h`;
+}
+
+function formatPct(rate: number | null): string {
+  if (rate === null) return "—";
+  // openRate is stored 0..1; render as percent.
+  return `${Math.round(rate * 100)}%`;
+}
+
+const PERIODS: readonly HygienePeriod[] = ["week", "month", "quarter"] as const;
+
+const PERIOD_LABELS: Record<HygienePeriod, string> = {
+  week: "Last 7 days",
+  month: "Last month",
+  quarter: "Last quarter",
+};
+
+type TabKey =
+  | "overview"
+  | "subscriptions"
+  | "cleanup"
+  | "activity"
+  | "goals";
+
+const TABS: readonly { key: TabKey; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "subscriptions", label: "Subscriptions" },
+  { key: "cleanup", label: "Cleanup" },
+  { key: "activity", label: "Activity" },
+  { key: "goals", label: "Goals" },
+] as const;
+
+// ─── Generic sub-components ─────────────────────────────────────────────────────
 
 function LoadingSkeleton({ rows = 3 }: { rows?: number }): ReactNode {
   return (
@@ -149,305 +163,62 @@ function ErrorBanner({
 }
 ErrorBanner.displayName = "ErrorBanner";
 
-// ─── Hygiene Score Card ────────────────────────────────────────────────────────
-
-function HygieneScoreCard({ data }: { data: HygieneScore }): ReactNode {
-  const pct = clamp(data.score, 0, 100);
-  const color = scoreColorClass(data.score);
-  const barColor = scoreBarClass(data.score);
-
-  const stats: { label: string; value: string }[] = [
-    { label: "Avg response time", value: `${data.avgResponseHours.toFixed(1)}h` },
-    { label: "Unread emails", value: data.unreadCount.toLocaleString() },
-    { label: "Newsletters/week", value: String(data.newslettersPerWeek) },
-    { label: "Avg inbox size", value: data.avgInboxSize.toLocaleString() },
-  ];
-
+function EmptyState({ message }: { message: string }): ReactNode {
   return (
-    <Card>
-      <CardContent>
-        <Box className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-          {/* Score */}
-          <Box className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-40">
-            <Box className="flex items-baseline gap-2">
-              <Text variant="heading-lg" className={`font-bold leading-none ${color}`}>
-                {pct}
-              </Text>
-              <Text variant="caption" className="text-content-subtle">
-                / 100
-              </Text>
-            </Box>
-            <Text variant="caption" className="text-content-subtle uppercase tracking-wide">
-              Hygiene Score
-            </Text>
-            {/* Progress bar */}
-            <Box
-              className="h-2 w-full rounded-full bg-surface-raised border border-border overflow-hidden"
-              role="progressbar"
-              aria-valuenow={pct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`Hygiene score: ${pct} out of 100`}
-            >
-              <Box
-                className={`h-full rounded-full transition-all ${barColor}`}
-                style={{ width: `${pct}%` }}
-              />
-            </Box>
-          </Box>
-
-          {/* Habit stats */}
-          <Box className="grid grid-cols-2 gap-4 flex-1">
-            {stats.map(({ label, value }) => (
-              <Box
-                key={label}
-                className="flex flex-col rounded-lg border border-border bg-surface-raised px-4 py-3"
-              >
-                <Text variant="heading-md" className="font-bold text-content">
-                  {value}
-                </Text>
-                <Text variant="caption" className="text-content-subtle mt-0.5">
-                  {label}
-                </Text>
-              </Box>
-            ))}
-          </Box>
-        </Box>
-      </CardContent>
-    </Card>
+    <Box className="py-8 text-center">
+      <Text variant="body-sm" className="text-content-subtle">
+        {message}
+      </Text>
+    </Box>
   );
 }
-HygieneScoreCard.displayName = "HygieneScoreCard";
+EmptyState.displayName = "EmptyState";
 
-// ─── Subscription Tracker ──────────────────────────────────────────────────────
-
-function SubscriptionTracker(): ReactNode {
-  const [subs, setSubs] = useState<Subscription[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [unsubscribingId, setUnsubscribingId] = useState<string | null>(null);
-
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiFetch<Subscription[]>("/v1/email-hygiene/subscriptions");
-      setSubs(data);
-    } catch (err) {
-      setError(errMsg(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  async function handleUnsubscribe(id: string): Promise<void> {
-    if (!confirm("Unsubscribe from this sender?")) return;
-    setUnsubscribingId(id);
-    try {
-      await apiFetch<unknown>(`/v1/email-hygiene/subscriptions/${id}/unsubscribe`, {
-        method: "POST",
-      });
-      setSubs((prev) => prev.filter((s) => s.id !== id));
-    } catch (err) {
-      setError(errMsg(err));
-    } finally {
-      setUnsubscribingId(null);
-    }
-  }
-
+function StatTile({ label, value }: { label: string; value: string }): ReactNode {
   return (
-    <Card>
-      <CardHeader>
-        <Text variant="heading-sm" className="font-semibold">
-          Subscription Tracker
-        </Text>
-        <Text variant="body-sm" className="text-content-subtle">
-          Senders delivering regular newsletters or mailing-list emails.
-        </Text>
-      </CardHeader>
-      <CardContent>
-        {loading && <LoadingSkeleton rows={4} />}
-        {!loading && error && <ErrorBanner message={error} onRetry={() => void load()} />}
-        {!loading && !error && subs.length === 0 && (
-          <Box className="py-8 text-center">
-            <Text variant="body-sm" className="text-content-subtle">
-              No subscriptions detected yet.
-            </Text>
-          </Box>
-        )}
-        {!loading && !error && subs.length > 0 && (
-          <Box className="overflow-x-auto">
-            <Box
-              as="table"
-              className="w-full text-sm border-collapse"
-              aria-label="Subscription list"
-            >
-              <Box as="thead">
-                <Box as="tr" className="border-b border-border">
-                  {["Sender", "Email", "Frequency", "Last received", ""].map((h) => (
-                    <Box
-                      key={h}
-                      as="th"
-                      className="py-2 pr-4 text-left text-content-subtle font-medium text-xs uppercase tracking-wide"
-                    >
-                      {h}
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-              <Box as="tbody">
-                {subs.map((sub) => (
-                  <Box
-                    key={sub.id}
-                    as="tr"
-                    className="border-b border-border last:border-0 hover:bg-surface-raised transition-colors"
-                  >
-                    <Box as="td" className="py-2.5 pr-4">
-                      <Text variant="body-sm" className="font-medium text-content">
-                        {sub.sender}
-                      </Text>
-                    </Box>
-                    <Box as="td" className="py-2.5 pr-4">
-                      <Text variant="body-sm" className="text-content-subtle">
-                        {sub.email}
-                      </Text>
-                    </Box>
-                    <Box as="td" className="py-2.5 pr-4 whitespace-nowrap">
-                      <Text variant="body-sm" className="text-content-subtle capitalize">
-                        {sub.frequency}
-                      </Text>
-                    </Box>
-                    <Box as="td" className="py-2.5 pr-4 whitespace-nowrap">
-                      <Text variant="body-sm" className="text-content-subtle">
-                        {formatDate(sub.lastReceived)}
-                      </Text>
-                    </Box>
-                    <Box as="td" className="py-2.5 whitespace-nowrap text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void handleUnsubscribe(sub.id)}
-                        disabled={unsubscribingId === sub.id}
-                        aria-label={`Unsubscribe from ${sub.sender}`}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        {unsubscribingId === sub.id ? "Unsubscribing…" : "Unsubscribe"}
-                      </Button>
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          </Box>
-        )}
-      </CardContent>
-    </Card>
+    <Box className="flex flex-col rounded-lg border border-border bg-surface-raised px-4 py-3">
+      <Text variant="heading-md" className="font-bold text-content">
+        {value}
+      </Text>
+      <Text variant="caption" className="text-content-subtle mt-0.5">
+        {label}
+      </Text>
+    </Box>
   );
 }
-SubscriptionTracker.displayName = "SubscriptionTracker";
+StatTile.displayName = "StatTile";
 
-// ─── Inbox Cleanup ─────────────────────────────────────────────────────────────
-
-function InboxCleanup({ habits }: { habits: HygieneHabits | null }): ReactNode {
-  const [suggestions, setSuggestions] = useState<CleanupSuggestion[]>(
-    habits?.suggestions ?? [],
-  );
-  const [applyingId, setApplyingId] = useState<string | null>(null);
-  const [applyError, setApplyError] = useState<string | null>(null);
-
-  // Sync when parent habits load
-  useEffect(() => {
-    if (habits?.suggestions) setSuggestions(habits.suggestions);
-  }, [habits]);
-
-  async function handleCleanup(id: string): Promise<void> {
-    setApplyingId(id);
-    setApplyError(null);
-    try {
-      await apiFetch<unknown>("/v1/email-hygiene/cleanup", {
-        method: "POST",
-        body: JSON.stringify({ suggestionId: id }),
-      });
-      setSuggestions((prev) => prev.filter((s) => s.id !== id));
-    } catch (err) {
-      setApplyError(errMsg(err));
-    } finally {
-      setApplyingId(null);
-    }
-  }
-
+function PeriodSelect({
+  value,
+  onChange,
+  id,
+}: {
+  value: HygienePeriod;
+  onChange: (p: HygienePeriod) => void;
+  id: string;
+}): ReactNode {
   return (
-    <Card>
-      <CardHeader>
-        <Text variant="heading-sm" className="font-semibold">
-          Inbox Cleanup
-        </Text>
-        <Text variant="body-sm" className="text-content-subtle">
-          AI-powered suggestions to reduce clutter in your inbox.
-        </Text>
-      </CardHeader>
-      <CardContent>
-        {applyError && (
-          <Box className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3" role="alert">
-            <Text variant="body-sm" className="text-red-800">
-              {applyError}
-            </Text>
-          </Box>
-        )}
-        {habits === null && <LoadingSkeleton rows={3} />}
-        {habits !== null && suggestions.length === 0 && (
-          <Box className="py-8 text-center">
-            <Text variant="body-sm" className="text-content-subtle">
-              Your inbox is clean — no suggestions right now.
-            </Text>
-          </Box>
-        )}
-        {habits !== null && suggestions.length > 0 && (
-          <Box className="space-y-3" aria-label="Cleanup suggestions">
-            {suggestions.map((sug) => (
-              <Box
-                key={sug.id}
-                className="flex items-start justify-between gap-4 rounded-lg border border-border bg-surface-raised px-4 py-3"
-              >
-                <Box className="flex-1 min-w-0">
-                  <Text variant="body-sm" className="font-medium text-content">
-                    {sug.title}
-                  </Text>
-                  <Text variant="caption" className="text-content-subtle">
-                    {sug.description}
-                  </Text>
-                  <Box
-                    as="span"
-                    className="mt-1 inline-block rounded-full bg-brand-100 text-brand-700 px-2 py-0.5 text-xs font-medium"
-                  >
-                    {sug.count.toLocaleString()} emails
-                  </Box>
-                </Box>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => void handleCleanup(sug.id)}
-                  disabled={applyingId === sug.id}
-                  aria-label={`Apply cleanup: ${sug.title}`}
-                  className="flex-shrink-0"
-                >
-                  {applyingId === sug.id ? "Applying…" : "Do it"}
-                </Button>
-              </Box>
-            ))}
-          </Box>
-        )}
-      </CardContent>
-    </Card>
+    <Box
+      as="select"
+      id={id}
+      value={value}
+      onChange={(e) =>
+        onChange((e.target as HTMLSelectElement).value as HygienePeriod)
+      }
+      aria-label="Select time period"
+      className="h-9 px-3 rounded-lg border border-border bg-surface text-content text-sm"
+    >
+      {PERIODS.map((p) => (
+        <option key={p} value={p}>
+          {PERIOD_LABELS[p]}
+        </option>
+      ))}
+    </Box>
   );
 }
-InboxCleanup.displayName = "InboxCleanup";
+PeriodSelect.displayName = "PeriodSelect";
 
-// ─── Goals Section ─────────────────────────────────────────────────────────────
+// ─── Goal progress bar (retained from previous design) ─────────────────────────
 
 interface GoalBarProps {
   label: string;
@@ -491,113 +262,1105 @@ function GoalBar({ label, value, max, unit, formatValue }: GoalBarProps): ReactN
 }
 GoalBar.displayName = "GoalBar";
 
-function GoalsCard({ habits }: { habits: HygieneHabits | null }): ReactNode {
+// ─── OVERVIEW: productivity score + today's habits ─────────────────────────────
+
+function ProductivityScoreCard({ data }: { data: ProductivityScore }): ReactNode {
+  if (data.overallScore === null) {
+    return (
+      <Card>
+        <CardContent>
+          <EmptyState
+            message={
+              data.message ??
+              "Not enough activity yet to calculate a productivity score."
+            }
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const pct = clamp(data.overallScore, 0, 100);
+  const color = scoreColorClass(pct);
+  const barColor = scoreBarClass(pct);
+  const b = data.breakdown;
+
+  const parts: { label: string; value: string }[] = [];
+  if (b.responseTime) {
+    parts.push({
+      label: "Response time",
+      value: `${b.responseTime.score} · ${formatMinutes(b.responseTime.avgMinutes)}`,
+    });
+  }
+  if (b.inboxZeroRate) {
+    parts.push({
+      label: "Inbox-zero rate",
+      value: `${b.inboxZeroRate.score} · ${b.inboxZeroRate.days}/${b.inboxZeroRate.total}d`,
+    });
+  }
+  if (b.archiveRate) {
+    parts.push({
+      label: "Archive rate",
+      value: `${b.archiveRate.score} · ${b.archiveRate.archived}/${b.archiveRate.received}`,
+    });
+  }
+  if (b.consistency) {
+    parts.push({
+      label: "Consistency",
+      value: `${b.consistency.score} · ${b.consistency.activeDays}d active`,
+    });
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <Box className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+          <Box className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-40">
+            <Box className="flex items-baseline gap-2">
+              <Text variant="heading-lg" className={`font-bold leading-none ${color}`}>
+                {pct}
+              </Text>
+              <Text variant="caption" className="text-content-subtle">
+                / 100
+              </Text>
+            </Box>
+            <Text variant="caption" className="text-content-subtle uppercase tracking-wide">
+              Productivity Score
+            </Text>
+            <Box
+              className="h-2 w-full rounded-full bg-surface-raised border border-border overflow-hidden"
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Productivity score: ${pct} out of 100`}
+            >
+              <Box
+                className={`h-full rounded-full transition-all ${barColor}`}
+                style={{ width: `${pct}%` }}
+              />
+            </Box>
+            <Text variant="caption" className="text-content-subtle">
+              {data.daysAnalyzed} day{data.daysAnalyzed === 1 ? "" : "s"} analyzed
+            </Text>
+          </Box>
+
+          <Box className="grid grid-cols-2 gap-4 flex-1">
+            {parts.map(({ label, value }) => (
+              <StatTile key={label} label={label} value={value} />
+            ))}
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+ProductivityScoreCard.displayName = "ProductivityScoreCard";
+
+function TodayCard({ data }: { data: TodayHabits }): ReactNode {
+  const stats: { label: string; value: string }[] = [
+    { label: "Sent", value: data.emailsSent.toLocaleString() },
+    { label: "Received", value: data.emailsReceived.toLocaleString() },
+    { label: "Archived", value: data.emailsArchived.toLocaleString() },
+    { label: "Avg response", value: formatMinutes(data.avgResponseTimeMinutes) },
+  ];
   return (
     <Card>
       <CardHeader>
         <Text variant="heading-sm" className="font-semibold">
-          Goals
+          Today
         </Text>
         <Text variant="body-sm" className="text-content-subtle">
-          Track your email health over time.
+          {formatDate(data.date)}
+          {data.inboxZeroAchieved ? " · Inbox zero reached 🎉" : ""}
         </Text>
       </CardHeader>
       <CardContent>
-        {habits === null ? (
-          <LoadingSkeleton rows={3} />
-        ) : (
-          <Box className="space-y-5">
-            <GoalBar
-              label="Inbox-zero days this month"
-              value={habits.inboxZeroDays}
-              max={habits.inboxZeroGoal}
-              unit=" days"
-            />
-            <GoalBar
-              label="Response rate"
-              value={habits.responseRate}
-              max={100}
-              formatValue={(v) => `${v.toFixed(0)}%`}
-            />
-            <GoalBar
-              label="Unsubscribe rate"
-              value={habits.unsubscribeRate}
-              max={100}
-              formatValue={(v) => `${v.toFixed(0)}%`}
-            />
+        <Box className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {stats.map(({ label, value }) => (
+            <StatTile key={label} label={label} value={value} />
+          ))}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+TodayCard.displayName = "TodayCard";
+
+function HabitsTrendCard({ days }: { days: EmailHabitDay[] }): ReactNode {
+  if (days.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <Text variant="heading-sm" className="font-semibold">
+            Habit history
+          </Text>
+        </CardHeader>
+        <CardContent>
+          <EmptyState message="No habit data recorded for this period yet." />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <Text variant="heading-sm" className="font-semibold">
+          Habit history
+        </Text>
+        <Text variant="body-sm" className="text-content-subtle">
+          Daily sent / received / archived and inbox-zero streak.
+        </Text>
+      </CardHeader>
+      <CardContent>
+        <Box className="overflow-x-auto">
+          <Box as="table" className="w-full text-sm border-collapse" aria-label="Habit history">
+            <Box as="thead">
+              <Box as="tr" className="border-b border-border">
+                {["Date", "Sent", "Received", "Archived", "Response", "Inbox zero"].map((h) => (
+                  <Box
+                    key={h}
+                    as="th"
+                    className="py-2 pr-4 text-left text-content-subtle font-medium text-xs uppercase tracking-wide"
+                  >
+                    {h}
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+            <Box as="tbody">
+              {days.map((d) => (
+                <Box
+                  key={d.id}
+                  as="tr"
+                  className="border-b border-border last:border-0 hover:bg-surface-raised transition-colors"
+                >
+                  <Box as="td" className="py-2.5 pr-4 whitespace-nowrap">
+                    <Text variant="body-sm" className="font-medium text-content">
+                      {formatDate(d.date)}
+                    </Text>
+                  </Box>
+                  <Box as="td" className="py-2.5 pr-4">
+                    <Text variant="body-sm" className="text-content-subtle">
+                      {d.emailsSent}
+                    </Text>
+                  </Box>
+                  <Box as="td" className="py-2.5 pr-4">
+                    <Text variant="body-sm" className="text-content-subtle">
+                      {d.emailsReceived}
+                    </Text>
+                  </Box>
+                  <Box as="td" className="py-2.5 pr-4">
+                    <Text variant="body-sm" className="text-content-subtle">
+                      {d.emailsArchived}
+                    </Text>
+                  </Box>
+                  <Box as="td" className="py-2.5 pr-4 whitespace-nowrap">
+                    <Text variant="body-sm" className="text-content-subtle">
+                      {formatMinutes(d.avgResponseTimeMinutes)}
+                    </Text>
+                  </Box>
+                  <Box as="td" className="py-2.5">
+                    <Text variant="body-sm" className="text-content-subtle">
+                      {d.inboxZeroAchieved ? "✓" : "—"}
+                    </Text>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+HabitsTrendCard.displayName = "HabitsTrendCard";
+
+function OverviewTab(): ReactNode {
+  const [score, setScore] = useState<ProductivityScore | null>(null);
+  const [today, setToday] = useState<TodayHabits | null>(null);
+  const [days, setDays] = useState<EmailHabitDay[] | null>(null);
+  const [period, setPeriod] = useState<HygienePeriod>("week");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [scoreRes, todayRes, habitsRes] = await Promise.all([
+        hygieneApi.productivityScore(),
+        hygieneApi.habitsToday(),
+        hygieneApi.habits(period),
+      ]);
+      setScore(scoreRes.data);
+      setToday(todayRes.data);
+      setDays(habitsRes.data);
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [period]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  if (loading) {
+    return (
+      <Box className="space-y-6">
+        <Box className="h-36 animate-pulse rounded-xl bg-surface-raised border border-border" />
+        <LoadingSkeleton rows={4} />
+      </Box>
+    );
+  }
+  if (error) return <ErrorBanner message={error} onRetry={() => void load()} />;
+
+  return (
+    <Box className="space-y-6">
+      {score && <ProductivityScoreCard data={score} />}
+      {today && <TodayCard data={today} />}
+      <Box className="flex items-center justify-between gap-3">
+        <Text variant="heading-sm" className="font-semibold">
+          Trends
+        </Text>
+        <PeriodSelect id="overview-period" value={period} onChange={setPeriod} />
+      </Box>
+      <HabitsTrendCard days={days ?? []} />
+    </Box>
+  );
+}
+OverviewTab.displayName = "OverviewTab";
+
+// ─── SUBSCRIPTIONS: list + wanted toggle + AI audit ────────────────────────────
+
+function SubscriptionsTab(): ReactNode {
+  const [subs, setSubs] = useState<HygieneSubscription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [audit, setAudit] = useState<SubscriptionAudit | null>(null);
+  const [auditing, setAuditing] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+
+  const load = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await hygieneApi.subscriptions({ limit: 50 });
+      setSubs(res.data);
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function toggleWanted(sub: HygieneSubscription): Promise<void> {
+    const next = !sub.isWanted;
+    setBusyId(sub.id);
+    setError(null);
+    try {
+      await hygieneApi.markWanted(sub.id, next);
+      setSubs((prev) =>
+        prev.map((s) => (s.id === sub.id ? { ...s, isWanted: next } : s)),
+      );
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function runAudit(): Promise<void> {
+    setAuditing(true);
+    setAuditError(null);
+    try {
+      const res = await hygieneApi.auditSubscriptions();
+      setAudit(res.data);
+    } catch (err) {
+      setAuditError(errMsg(err));
+    } finally {
+      setAuditing(false);
+    }
+  }
+
+  return (
+    <Box className="space-y-6">
+      <Card>
+        <CardHeader>
+          <Box className="flex items-start justify-between gap-4">
+            <Box>
+              <Text variant="heading-sm" className="font-semibold">
+                Subscription Tracker
+              </Text>
+              <Text variant="body-sm" className="text-content-subtle">
+                Newsletters and mailing lists, ranked by volume. Mark ones you no
+                longer want.
+              </Text>
+            </Box>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => void runAudit()}
+              disabled={auditing}
+              className="flex-shrink-0"
+            >
+              {auditing ? "Auditing…" : "AI Audit"}
+            </Button>
+          </Box>
+        </CardHeader>
+        <CardContent>
+          {auditError && (
+            <Box className="mb-3">
+              <ErrorBanner message={auditError} onRetry={() => void runAudit()} />
+            </Box>
+          )}
+          {loading && <LoadingSkeleton rows={4} />}
+          {!loading && error && <ErrorBanner message={error} onRetry={() => void load()} />}
+          {!loading && !error && subs.length === 0 && (
+            <EmptyState message="No subscriptions detected yet." />
+          )}
+          {!loading && !error && subs.length > 0 && (
+            <Box className="overflow-x-auto">
+              <Box as="table" className="w-full text-sm border-collapse" aria-label="Subscription list">
+                <Box as="thead">
+                  <Box as="tr" className="border-b border-border">
+                    {["Sender", "Received", "Open rate", "Frequency", "Last", ""].map((h) => (
+                      <Box
+                        key={h}
+                        as="th"
+                        className="py-2 pr-4 text-left text-content-subtle font-medium text-xs uppercase tracking-wide"
+                      >
+                        {h}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+                <Box as="tbody">
+                  {subs.map((sub) => (
+                    <Box
+                      key={sub.id}
+                      as="tr"
+                      className="border-b border-border last:border-0 hover:bg-surface-raised transition-colors"
+                    >
+                      <Box as="td" className="py-2.5 pr-4">
+                        <Text variant="body-sm" className="font-medium text-content">
+                          {sub.senderName ?? sub.senderEmail}
+                        </Text>
+                        {sub.senderName && (
+                          <Text variant="caption" className="text-content-subtle block">
+                            {sub.senderEmail}
+                          </Text>
+                        )}
+                      </Box>
+                      <Box as="td" className="py-2.5 pr-4">
+                        <Text variant="body-sm" className="text-content-subtle">
+                          {sub.totalReceived.toLocaleString()}
+                        </Text>
+                      </Box>
+                      <Box as="td" className="py-2.5 pr-4">
+                        <Text variant="body-sm" className="text-content-subtle">
+                          {formatPct(sub.openRate)}
+                        </Text>
+                      </Box>
+                      <Box as="td" className="py-2.5 pr-4 whitespace-nowrap">
+                        <Text variant="body-sm" className="text-content-subtle capitalize">
+                          {sub.frequency ?? "—"}
+                        </Text>
+                      </Box>
+                      <Box as="td" className="py-2.5 pr-4 whitespace-nowrap">
+                        <Text variant="body-sm" className="text-content-subtle">
+                          {formatDate(sub.lastReceived)}
+                        </Text>
+                      </Box>
+                      <Box as="td" className="py-2.5 whitespace-nowrap text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void toggleWanted(sub)}
+                          disabled={busyId === sub.id}
+                          aria-label={
+                            sub.isWanted
+                              ? `Mark ${sub.senderName ?? sub.senderEmail} as unwanted`
+                              : `Mark ${sub.senderName ?? sub.senderEmail} as wanted`
+                          }
+                          className={sub.isWanted ? "text-red-600 hover:text-red-700" : "text-green-600 hover:text-green-700"}
+                        >
+                          {busyId === sub.id
+                            ? "Saving…"
+                            : sub.isWanted
+                              ? "Mark unwanted"
+                              : "Mark wanted"}
+                        </Button>
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
+      {audit && <SubscriptionAuditCard audit={audit} />}
+    </Box>
+  );
+}
+SubscriptionsTab.displayName = "SubscriptionsTab";
+
+function SubscriptionAuditCard({ audit }: { audit: SubscriptionAudit }): ReactNode {
+  const s = audit.suggestions;
+  const groups: { title: string; items: { id: string; label: string; suggestion: string }[] }[] = [
+    {
+      title: `Never opened (${s.neverOpened.length})`,
+      items: s.neverOpened.map((x) => ({
+        id: x.id,
+        label: x.senderName ?? x.senderEmail,
+        suggestion: x.suggestion,
+      })),
+    },
+    {
+      title: `Low engagement (${s.lowEngagement.length})`,
+      items: s.lowEngagement.map((x) => ({
+        id: x.id,
+        label: x.senderName ?? x.senderEmail,
+        suggestion: x.suggestion,
+      })),
+    },
+    {
+      title: `High volume (${s.highVolume.length})`,
+      items: s.highVolume.map((x) => ({
+        id: x.id,
+        label: x.senderName ?? x.senderEmail,
+        suggestion: x.suggestion,
+      })),
+    },
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <Text variant="heading-sm" className="font-semibold">
+          AI Subscription Audit
+        </Text>
+        <Text variant="body-sm" className="text-content-subtle">
+          {audit.totalSubscriptions} total · {audit.wantedCount} wanted ·{" "}
+          {audit.unwantedCount} unwanted · ~
+          {audit.estimatedTimeSavedMinutesPerWeek} min/week could be saved.
+        </Text>
+      </CardHeader>
+      <CardContent>
+        <Box className="space-y-5">
+          {groups.map((g) => (
+            <Box key={g.title} className="space-y-2">
+              <Text variant="body-sm" className="font-semibold text-content">
+                {g.title}
+              </Text>
+              {g.items.length === 0 ? (
+                <Text variant="caption" className="text-content-subtle">
+                  Nothing flagged.
+                </Text>
+              ) : (
+                <Box className="space-y-2">
+                  {g.items.map((item) => (
+                    <Box
+                      key={item.id}
+                      className="rounded-lg border border-border bg-surface-raised px-4 py-3"
+                    >
+                      <Text variant="body-sm" className="font-medium text-content">
+                        {item.label}
+                      </Text>
+                      <Text variant="caption" className="text-content-subtle">
+                        {item.suggestion}
+                      </Text>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          ))}
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+SubscriptionAuditCard.displayName = "SubscriptionAuditCard";
+
+// ─── CLEANUP: inbox-cleanup suggestions ────────────────────────────────────────
+
+function CleanupTab(): ReactNode {
+  const [result, setResult] = useState<InboxCleanupResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await hygieneApi.inboxCleanup();
+      setResult(res.data);
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <Box className="flex items-start justify-between gap-4">
+          <Box>
+            <Text variant="heading-sm" className="font-semibold">
+              Inbox Cleanup
+            </Text>
+            <Text variant="body-sm" className="text-content-subtle">
+              AI-generated suggestions to reduce clutter.
+            </Text>
+          </Box>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void load()}
+            disabled={loading}
+            className="flex-shrink-0"
+          >
+            {loading ? "Loading…" : "Refresh"}
+          </Button>
+        </Box>
+      </CardHeader>
+      <CardContent>
+        {loading && <LoadingSkeleton rows={3} />}
+        {!loading && error && <ErrorBanner message={error} onRetry={() => void load()} />}
+        {!loading && !error && result && (
+          <Box className="space-y-4">
+            <Box className="rounded-lg border border-border bg-surface-raised px-4 py-3">
+              <Box className="flex items-center justify-between gap-2">
+                <Text variant="body-sm" className="font-medium text-content">
+                  Unsubscribe candidates
+                </Text>
+                <Box
+                  as="span"
+                  className="rounded-full bg-brand-100 text-brand-700 px-2 py-0.5 text-xs font-medium"
+                >
+                  {result.suggestions.unsubscribe.count.toLocaleString()}
+                </Box>
+              </Box>
+              {result.suggestions.unsubscribe.candidates.length === 0 ? (
+                <Text variant="caption" className="text-content-subtle mt-1 block">
+                  No unsubscribe candidates right now.
+                </Text>
+              ) : (
+                <Box className="mt-2 space-y-1.5">
+                  {result.suggestions.unsubscribe.candidates.map((cand) => (
+                    <Box
+                      key={cand.id}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <Box className="min-w-0">
+                        <Text variant="body-sm" className="text-content truncate">
+                          {cand.senderName ?? cand.senderEmail}
+                        </Text>
+                        <Text variant="caption" className="text-content-subtle">
+                          {cand.totalReceived.toLocaleString()} received ·{" "}
+                          {formatPct(cand.openRate)} open rate
+                        </Text>
+                      </Box>
+                      {cand.unsubscribeUrl && (
+                        <Box
+                          as="a"
+                          href={cand.unsubscribeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-shrink-0 inline-flex items-center h-8 px-3 rounded-md text-body-sm font-medium text-red-600 hover:text-red-700 hover:bg-surface-tertiary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                          aria-label={`Open unsubscribe page for ${cand.senderName ?? cand.senderEmail}`}
+                        >
+                          Unsubscribe
+                        </Box>
+                      )}
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+
+            <Box className="rounded-lg border border-border bg-surface-raised px-4 py-3">
+              <Box className="flex items-center justify-between gap-2">
+                <Text variant="body-sm" className="font-medium text-content">
+                  Archive habits
+                </Text>
+                <Text variant="caption" className="text-content-subtle">
+                  {result.suggestions.archiveOld.archiveRatio}% archived
+                </Text>
+              </Box>
+              <Text variant="caption" className="text-content-subtle mt-1 block">
+                {result.suggestions.archiveOld.suggestion}
+              </Text>
+            </Box>
+
+            <Box className="rounded-lg border border-border bg-surface-raised px-4 py-3">
+              <Text variant="body-sm" className="font-medium text-content">
+                Organize with labels
+              </Text>
+              <Text variant="caption" className="text-content-subtle mt-1 block">
+                {result.suggestions.labelOrganize.suggestion}
+              </Text>
+            </Box>
+
+            <Text variant="caption" className="text-content-subtle">
+              Generated {formatDate(result.generatedAt)}
+            </Text>
           </Box>
         )}
       </CardContent>
     </Card>
   );
 }
-GoalsCard.displayName = "GoalsCard";
+CleanupTab.displayName = "CleanupTab";
 
-// ─── Inner page (inside plan gate) ────────────────────────────────────────────
+// ─── ACTIVITY: volume + response time + top senders ────────────────────────────
 
-function HygieneContent(): ReactNode {
-  const [score, setScore] = useState<HygieneScore | null>(null);
-  const [loadingScore, setLoadingScore] = useState(true);
-  const [scoreError, setScoreError] = useState<string | null>(null);
+function ActivityTab(): ReactNode {
+  const [period, setPeriod] = useState<HygienePeriod>("week");
+  const [volume, setVolume] = useState<EmailVolume | null>(null);
+  const [respTime, setRespTime] = useState<ResponseTimeAnalytics | null>(null);
+  const [senders, setSenders] = useState<TopSender[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [habits, setHabits] = useState<HygieneHabits | null>(null);
-  const [loadingHabits, setLoadingHabits] = useState(true);
-  const [habitsError, setHabitsError] = useState<string | null>(null);
-
-  const loadScore = useCallback(async (): Promise<void> => {
-    setLoadingScore(true);
-    setScoreError(null);
+  const load = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
     try {
-      const data = await apiFetch<HygieneScore>("/v1/email-hygiene/score");
-      setScore(data);
+      const [volRes, rtRes, senderRes] = await Promise.all([
+        hygieneApi.emailVolume(period),
+        hygieneApi.responseTime(period),
+        hygieneApi.topSenders(10),
+      ]);
+      setVolume(volRes.data);
+      setRespTime(rtRes.data);
+      setSenders(senderRes.data);
     } catch (err) {
-      setScoreError(errMsg(err));
+      setError(errMsg(err));
     } finally {
-      setLoadingScore(false);
+      setLoading(false);
     }
-  }, []);
-
-  const loadHabits = useCallback(async (): Promise<void> => {
-    setLoadingHabits(true);
-    setHabitsError(null);
-    try {
-      const data = await apiFetch<HygieneHabits>("/v1/email-hygiene/habits");
-      setHabits(data);
-    } catch (err) {
-      setHabitsError(errMsg(err));
-    } finally {
-      setLoadingHabits(false);
-    }
-  }, []);
+  }, [period]);
 
   useEffect(() => {
-    void loadScore();
-    void loadHabits();
-  }, [loadScore, loadHabits]);
+    void load();
+  }, [load]);
 
   return (
     <Box className="space-y-6">
-      {/* Score + stat cards */}
-      {loadingScore && (
-        <Box className="h-36 animate-pulse rounded-xl bg-surface-raised border border-border" />
-      )}
-      {!loadingScore && scoreError && (
-        <ErrorBanner message={scoreError} onRetry={() => void loadScore()} />
-      )}
-      {!loadingScore && score && <HygieneScoreCard data={score} />}
+      <Box className="flex items-center justify-between gap-3">
+        <Text variant="heading-sm" className="font-semibold">
+          Activity
+        </Text>
+        <PeriodSelect id="activity-period" value={period} onChange={setPeriod} />
+      </Box>
 
-      {/* Subscription tracker */}
-      <SubscriptionTracker />
+      {loading && <LoadingSkeleton rows={4} />}
+      {!loading && error && <ErrorBanner message={error} onRetry={() => void load()} />}
 
-      {/* Inbox cleanup */}
-      {habitsError ? (
-        <ErrorBanner message={habitsError} onRetry={() => void loadHabits()} />
-      ) : (
-        <InboxCleanup habits={loadingHabits ? null : habits} />
+      {!loading && !error && (
+        <>
+          {volume && (
+            <Card>
+              <CardHeader>
+                <Text variant="heading-sm" className="font-semibold">
+                  Email volume
+                </Text>
+                <Text variant="body-sm" className="text-content-subtle">
+                  {formatDate(volume.dateRange.start)} – {formatDate(volume.dateRange.end)}
+                </Text>
+              </CardHeader>
+              <CardContent>
+                <Box className="grid grid-cols-3 gap-4">
+                  <StatTile label="Sent" value={volume.totals.sent.toLocaleString()} />
+                  <StatTile label="Received" value={volume.totals.received.toLocaleString()} />
+                  <StatTile label="Archived" value={volume.totals.archived.toLocaleString()} />
+                </Box>
+              </CardContent>
+            </Card>
+          )}
+
+          {respTime && (
+            <Card>
+              <CardHeader>
+                <Text variant="heading-sm" className="font-semibold">
+                  Response time
+                </Text>
+                <Text variant="body-sm" className="text-content-subtle">
+                  Based on {respTime.overall.daysWithData} day
+                  {respTime.overall.daysWithData === 1 ? "" : "s"} with data.
+                </Text>
+              </CardHeader>
+              <CardContent>
+                {respTime.overall.daysWithData === 0 ? (
+                  <EmptyState message="No response-time data for this period yet." />
+                ) : (
+                  <Box className="grid grid-cols-3 gap-4">
+                    <StatTile
+                      label="Average"
+                      value={formatMinutes(respTime.overall.avgResponseTimeMinutes)}
+                    />
+                    <StatTile
+                      label="Fastest day"
+                      value={formatMinutes(respTime.overall.fastestDayMinutes)}
+                    />
+                    <StatTile
+                      label="Slowest day"
+                      value={formatMinutes(respTime.overall.slowestDayMinutes)}
+                    />
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <Text variant="heading-sm" className="font-semibold">
+                Top senders
+              </Text>
+              <Text variant="body-sm" className="text-content-subtle">
+                Highest-volume senders with engagement.
+              </Text>
+            </CardHeader>
+            <CardContent>
+              {senders.length === 0 ? (
+                <EmptyState message="No sender data yet." />
+              ) : (
+                <Box className="overflow-x-auto">
+                  <Box as="table" className="w-full text-sm border-collapse" aria-label="Top senders">
+                    <Box as="thead">
+                      <Box as="tr" className="border-b border-border">
+                        {["Sender", "Received", "Opened", "Open rate", "Last"].map((h) => (
+                          <Box
+                            key={h}
+                            as="th"
+                            className="py-2 pr-4 text-left text-content-subtle font-medium text-xs uppercase tracking-wide"
+                          >
+                            {h}
+                          </Box>
+                        ))}
+                      </Box>
+                    </Box>
+                    <Box as="tbody">
+                      {senders.map((s) => (
+                        <Box
+                          key={s.id}
+                          as="tr"
+                          className="border-b border-border last:border-0 hover:bg-surface-raised transition-colors"
+                        >
+                          <Box as="td" className="py-2.5 pr-4">
+                            <Text variant="body-sm" className="font-medium text-content">
+                              {s.senderName ?? s.senderEmail}
+                            </Text>
+                          </Box>
+                          <Box as="td" className="py-2.5 pr-4">
+                            <Text variant="body-sm" className="text-content-subtle">
+                              {s.totalReceived.toLocaleString()}
+                            </Text>
+                          </Box>
+                          <Box as="td" className="py-2.5 pr-4">
+                            <Text variant="body-sm" className="text-content-subtle">
+                              {s.totalOpened.toLocaleString()}
+                            </Text>
+                          </Box>
+                          <Box as="td" className="py-2.5 pr-4">
+                            <Text variant="body-sm" className="text-content-subtle">
+                              {formatPct(s.openRate)}
+                            </Text>
+                          </Box>
+                          <Box as="td" className="py-2.5 pr-4 whitespace-nowrap">
+                            <Text variant="body-sm" className="text-content-subtle">
+                              {formatDate(s.lastReceived)}
+                            </Text>
+                          </Box>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
+    </Box>
+  );
+}
+ActivityTab.displayName = "ActivityTab";
 
-      {/* Goals */}
-      {!habitsError && <GoalsCard habits={loadingHabits ? null : habits} />}
+// ─── GOALS: get + set ──────────────────────────────────────────────────────────
+
+function GoalsTab(): ReactNode {
+  const [result, setResult] = useState<GoalsResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [maxDailyChecks, setMaxDailyChecks] = useState("");
+  const [targetResponse, setTargetResponse] = useState("");
+  const [inboxZeroGoal, setInboxZeroGoal] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const applyGoals = useCallback((goals: ProductivityGoals | null): void => {
+    setMaxDailyChecks(goals?.maxDailyChecks !== undefined ? String(goals.maxDailyChecks) : "");
+    setTargetResponse(
+      goals?.targetResponseTimeMinutes !== undefined
+        ? String(goals.targetResponseTimeMinutes)
+        : "",
+    );
+    setInboxZeroGoal(goals?.inboxZeroGoal ?? false);
+  }, []);
+
+  const load = useCallback(async (): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await hygieneApi.goals();
+      setResult(res.data);
+      applyGoals(res.data.goals);
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [applyGoals]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function handleSave(): Promise<void> {
+    setSaving(true);
+    setSaveError(null);
+    setSaved(false);
+    try {
+      const payload: {
+        maxDailyChecks?: number;
+        targetResponseTimeMinutes?: number;
+        inboxZeroGoal?: boolean;
+      } = { inboxZeroGoal };
+      const checks = Number.parseInt(maxDailyChecks, 10);
+      if (!Number.isNaN(checks)) payload.maxDailyChecks = checks;
+      const target = Number.parseInt(targetResponse, 10);
+      if (!Number.isNaN(target)) payload.targetResponseTimeMinutes = target;
+
+      await hygieneApi.setGoals(payload);
+      setSaved(true);
+      await load();
+    } catch (err) {
+      setSaveError(errMsg(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const progress = result?.progress ?? null;
+
+  return (
+    <Box className="space-y-6">
+      <Card>
+        <CardHeader>
+          <Text variant="heading-sm" className="font-semibold">
+            Productivity Goals
+          </Text>
+          <Text variant="body-sm" className="text-content-subtle">
+            Set targets and track today's progress against them.
+          </Text>
+        </CardHeader>
+        <CardContent>
+          {loading && <LoadingSkeleton rows={3} />}
+          {!loading && error && <ErrorBanner message={error} onRetry={() => void load()} />}
+          {!loading && !error && (
+            <Box className="space-y-5">
+              <Box className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Box className="space-y-1.5">
+                  <Text
+                    as="label"
+                    htmlFor="goal-max-checks"
+                    variant="body-sm"
+                    className="font-medium text-content"
+                  >
+                    Max daily inbox checks
+                  </Text>
+                  <Input
+                    id="goal-max-checks"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={maxDailyChecks}
+                    onChange={(e) => setMaxDailyChecks(e.target.value)}
+                    placeholder="e.g. 6"
+                    aria-label="Maximum daily inbox checks"
+                  />
+                </Box>
+                <Box className="space-y-1.5">
+                  <Text
+                    as="label"
+                    htmlFor="goal-response"
+                    variant="body-sm"
+                    className="font-medium text-content"
+                  >
+                    Target response time (minutes)
+                  </Text>
+                  <Input
+                    id="goal-response"
+                    type="number"
+                    min={1}
+                    max={10080}
+                    value={targetResponse}
+                    onChange={(e) => setTargetResponse(e.target.value)}
+                    placeholder="e.g. 60"
+                    aria-label="Target response time in minutes"
+                  />
+                </Box>
+              </Box>
+
+              <Box className="flex items-center gap-2">
+                <Box
+                  as="input"
+                  type="checkbox"
+                  id="goal-inbox-zero"
+                  checked={inboxZeroGoal}
+                  onChange={(e) =>
+                    setInboxZeroGoal((e.target as HTMLInputElement).checked)
+                  }
+                  className="h-4 w-4 rounded border-border text-brand-600"
+                />
+                <Text
+                  as="label"
+                  htmlFor="goal-inbox-zero"
+                  variant="body-sm"
+                  className="text-content"
+                >
+                  Aim for inbox zero each day
+                </Text>
+              </Box>
+
+              {saveError && <ErrorBanner message={saveError} />}
+              {saved && (
+                <Box role="status" className="rounded-lg border border-green-200 bg-green-50 px-4 py-2">
+                  <Text variant="body-sm" className="text-green-800">
+                    Goals saved.
+                  </Text>
+                </Box>
+              )}
+
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => void handleSave()}
+                disabled={saving}
+              >
+                {saving ? "Saving…" : "Save goals"}
+              </Button>
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
+      {!loading && !error && progress && (progress.responseTime || progress.inboxZero) && (
+        <Card>
+          <CardHeader>
+            <Text variant="heading-sm" className="font-semibold">
+              Today's progress
+            </Text>
+          </CardHeader>
+          <CardContent>
+            <Box className="space-y-5">
+              {progress.responseTime && progress.responseTime.actual !== null && (
+                <GoalBar
+                  label="Response time vs target"
+                  value={clamp(progress.responseTime.target, 0, progress.responseTime.actual)}
+                  max={progress.responseTime.actual}
+                  formatValue={(v) => formatMinutes(v)}
+                />
+              )}
+              {progress.inboxZero && (
+                <Box className="flex items-center justify-between gap-2">
+                  <Text variant="body-sm" className="font-medium text-content">
+                    Inbox zero today
+                  </Text>
+                  <Text
+                    variant="body-sm"
+                    className={
+                      progress.inboxZero.achievedToday
+                        ? "text-green-600 font-medium"
+                        : "text-content-subtle"
+                    }
+                  >
+                    {progress.inboxZero.achievedToday ? "Achieved ✓" : "Not yet"}
+                  </Text>
+                </Box>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+    </Box>
+  );
+}
+GoalsTab.displayName = "GoalsTab";
+
+// ─── Inner page (inside plan gate) ─────────────────────────────────────────────
+
+function HygieneContent(): ReactNode {
+  const [tab, setTab] = useState<TabKey>("overview");
+
+  return (
+    <Box className="space-y-6">
+      <Box
+        role="tablist"
+        aria-label="Email hygiene sections"
+        className="flex flex-wrap gap-1 border-b border-border"
+      >
+        {TABS.map(({ key, label }) => {
+          const active = tab === key;
+          return (
+            <Button
+              key={key}
+              role="tab"
+              aria-selected={active}
+              variant="ghost"
+              size="sm"
+              onClick={() => setTab(key)}
+              className={
+                active
+                  ? "border-b-2 border-brand-600 text-brand-700 rounded-none"
+                  : "text-content-subtle rounded-none"
+              }
+            >
+              {label}
+            </Button>
+          );
+        })}
+      </Box>
+
+      <Box role="tabpanel">
+        {tab === "overview" && <OverviewTab />}
+        {tab === "subscriptions" && <SubscriptionsTab />}
+        {tab === "cleanup" && <CleanupTab />}
+        {tab === "activity" && <ActivityTab />}
+        {tab === "goals" && <GoalsTab />}
+      </Box>
     </Box>
   );
 }
