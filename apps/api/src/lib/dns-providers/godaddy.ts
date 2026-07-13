@@ -88,7 +88,7 @@ export async function configureGodaddy(
             name: relName,
             data: rec.value,
             ttl: 600,
-            ...(rec.priority != null ? { priority: rec.priority } : {}),
+            ...(rec.priority !== null && rec.priority !== undefined ? { priority: rec.priority } : {}),
           },
         ];
       } else {
@@ -98,7 +98,7 @@ export async function configureGodaddy(
             name: relName,
             data: rec.value,
             ttl: 600,
-            ...(rec.priority != null ? { priority: rec.priority } : {}),
+            ...(rec.priority !== null && rec.priority !== undefined ? { priority: rec.priority } : {}),
           },
         ];
       }
