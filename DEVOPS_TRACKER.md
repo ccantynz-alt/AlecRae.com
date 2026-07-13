@@ -1,6 +1,6 @@
 # AlecRae — DevOps Tracker
 
-_Last updated: 2026-07-10 17:45 UTC_
+_Last updated: 2026-07-14 07:10 UTC_
 
 Forward-looking tracker: current infra status + a prioritized roadmap for
 closing backend/frontend coverage gaps. This is **not** a bug log (see
@@ -98,8 +98,14 @@ Pulls from `docs/audits/route-coverage.md` (regenerate with
 full table).
 
 - **97** backend route files, **681** endpoints
-- **30** fully wired, **28** partially wired, **39** fully unwired
-- **46%** endpoint-level coverage, **60%** file-level coverage
+- **As of 2026-07-14 (after the 5-tranche wiring campaign):** ~51 fully wired,
+  ~33 partial, ~13 unwired — **~78% endpoint coverage (a conservative FLOOR** —
+  the tracker under-counts newer clients that split the mount prefix into a
+  constant; see the caveat in `docs/audits/route-coverage.md`). Remaining
+  "unwired" are mostly tracker false-negatives (voice/onboarding/workspace-import
+  have pages) plus the intentionally UI-less infra routes catalogued in
+  `docs/audits/ui-less-routes.md`.
+- (Pre-campaign baseline was 30 wired / 46% for reference.)
 - Biggest fully-unwired domains: `ai-intelligence`, `analytics-dashboard`,
   `attachment-intelligence`, `context-intelligence`, `email-hygiene`,
   `knowledge-graph`, `notification-intelligence`, `productivity-analytics`,
@@ -113,6 +119,18 @@ can shrink but should never silently grow again the way it did five times
 before (Known Issues #27/#39/#47/#51/#65).
 
 ## 3. Prioritized gap-closing roadmap (for whenever alecrae.com resumes)
+
+> **MOSTLY DONE (2026-07-13→14 campaign).** Items 1–6 below were wired across 5
+> tranches: Security Intelligence ✅, Contact Enrichment ✅, Delegation ✅,
+> Analytics subsystems (analytics-dashboard/scheduling-analytics/sentiment/
+> productivity) ✅, AI services stack (ai-intelligence/context/search/knowledge/
+> notification) ✅, plus attachment/scheduling intelligence, video meetings,
+> commitments, inbox+compose power features, signatures, contact-groups,
+> programs, sso, encryption, push, semantic search. The list below is kept for
+> historical context. Remaining genuine gaps are small (see route-coverage.md
+> unwired list minus the `docs/audits/ui-less-routes.md` infra routes). The
+> next high-value work is BACKEND hardening of the stubs/leaks found while
+> wiring (CLAUDE.md Known Issues #73–77), not more UI.
 
 Grouped by domain, not a flat list of 61 routes. Effort estimates are rough
 and directional.
@@ -152,4 +170,4 @@ and directional.
 
 ---
 
-_Last updated: 2026-07-10 17:45 UTC_
+_Last updated: 2026-07-14 07:10 UTC_
