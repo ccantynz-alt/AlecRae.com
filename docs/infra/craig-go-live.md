@@ -6,9 +6,9 @@
 
 ## Summary
 
-"Go live" means: real email arrives at `@alecrae.com`, users can sign up at `mail.alecrae.com`, connect their Gmail/Outlook, pay via Stripe, and send mail that lands in inboxes (not spam). **Budget ~3 hours of active work today**, then **2–4 weeks of background IP warmup** before you push volume. Phase 3 (MTA setup on the Vapron box) and Phase 7 (warmup) are clock-time gated — everything else is keyboard time.
+"Go live" means: real email arrives at `@alecrae.com`, users can sign up at `mail.alecrae.com`, connect their Gmail/Outlook, pay via Stripe, and send mail that lands in inboxes (not spam). **Budget ~3 hours of active work today**, then **2–4 weeks of background IP warmup** before you push volume. Phase 3 (MTA setup on the box) and Phase 7 (warmup) are clock-time gated — everything else is keyboard time.
 
-> **Note:** This checklist was written before the production deployment settled on the dedicated Vapron box at `149.28.119.158`. Fly.io is no longer used. Phases 1–2 (account signups/data stores) and Phases 4–7 remain accurate. Phase 3 has been updated to reflect the box-based MTA. Phase 5 has been updated to use the box `.env` file instead of Vercel. For the complete, current go-live procedure see `docs/infra/morning-setup.md`.
+> **Note (updated 2026-07-13):** Production compute is now the **Jarvis box at `66.42.121.161`** (`ssh root@jarvis` via Tailscale). The old Vapron box (`149.28.119.158`) is **deprecated** — but mail DNS (SPF, PTR) still points at it, and the MTA is not running on either box. The mail consolidation onto Jarvis (new PTR, SPF update, mx1/mx2 A records) is specified in `docs/infra/multi-platform-mail-plan.md` and requires Craig's DNS authorization. Fly.io is no longer used. Phases 1–2 (account signups/data stores) remain accurate. For the complete, current go-live procedure see `docs/infra/morning-setup.md`.
 
 ---
 
@@ -36,9 +36,11 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 ### 2. Vultr — Production Box (MTA host)
 
-- The production box is already running at `149.28.119.158` (Vultr VPS).
-- **Action:** Confirm you have SSH access (`ssh root@149.28.119.158`). The MTA
-  runs as `alecrae-mta` systemd service — see `docs/infra/mta-box-setup.md`.
+- The production box is the **Jarvis box at `66.42.121.161`** (Vultr VPS,
+  hostname `jarvis`). The old box at `149.28.119.158` is deprecated.
+- **Action:** Confirm you have SSH access (`ssh root@jarvis` via Tailscale).
+  The MTA will run as the `alecrae-mta` systemd service — **not yet stood up
+  on Jarvis** — see `docs/infra/mta-box-setup.md`.
 - No new sign-up needed; box is provisioned.
 
 ### 3. Neon — Postgres
@@ -120,22 +122,24 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 ---
 
-## Phase 3 — MTA setup on the Vapron box (~30 min active + 1–3 day wait on PTR)
+## Phase 3 — MTA setup on the Jarvis box (~30 min active + 1–3 day wait on PTR)
 
 > The MTA (Mail Transfer Agent) is the machine that actually sends and receives email. This phase has a clock-time wait (PTR record), so **start it early in the day.**
+>
+> ⚠ **Mail DNS reality check (2026-07-13):** the live SPF and PTR still point at the deprecated 149 box, and `mx1`/`mx2.alecrae.com` A records do **not** exist in DNS yet. The consolidation onto Jarvis is specified in `docs/infra/multi-platform-mail-plan.md` and requires Craig's DNS authorization.
 
 ### 14. Set up the MTA systemd service on the box
 
-- **Action: Follow [`mta-box-setup.md`](./mta-box-setup.md)** — Redis install, systemd unit file, env vars, smoke test.
-- The production box IP is `149.28.119.158`. Both `mx1.alecrae.com` and `mx2.alecrae.com` A records already point there.
+- **Action: Follow [`mta-box-setup.md`](./mta-box-setup.md)** — Redis install, systemd unit file, env vars, smoke test. Note Coolify/Traefik owns 80/443 on Jarvis; the MTA health port defaults to `8082` and must not collide.
+- The production box IP is `66.42.121.161`. The `mx1.alecrae.com` and `mx2.alecrae.com` A records must be created to point there (⚠ pending DNS change — see `multi-platform-mail-plan.md`).
 
 ### 15. Static IPv4
 
-- The box already has a dedicated static IPv4: **`149.28.119.158`**. No allocation needed.
+- The box already has a dedicated static IPv4: **`66.42.121.161`**. No allocation needed.
 
 ### 16. Set PTR / rDNS in Vultr — DO THIS NOW, NOT LATER
 
-- **Action: In the Vultr control panel → your VPS instance → Settings → IPv4 → rDNS, set the PTR record to `mail.alecrae.com`.**
+- **Action: In the Vultr control panel → the Jarvis instance → Settings → IPv4 → rDNS, set the PTR record for `66.42.121.161` to `mail.alecrae.com`.** (Currently it's the generic choopa.net PTR; the deprecated 149 box still holds the `mail.alecrae.com` PTR — part of the pending mail consolidation in `multi-platform-mail-plan.md`.)
 - **Takes effect within minutes** (Vultr self-serve, no ticket required). Without it, Gmail and Outlook will reject or spam-bin every message we send.
 
 ### 17. Set MTA env vars on the box
@@ -150,7 +154,7 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
   sudo systemctl status alecrae-mta
   sudo journalctl -u alecrae-mta -f --since "5 minutes ago"
   ```
-- From another machine: `telnet 149.28.119.158 25` — you should see the SMTP banner (`220 mx1.alecrae.com ESMTP ready`). If port 25 is blocked, open a Vultr support ticket.
+- From another machine: `telnet 66.42.121.161 25` — you should see the SMTP banner (`220 mx1.alecrae.com ESMTP ready`). If port 25 is blocked, open a Vultr support ticket.
 
 **Phase 3 done when:** `alecrae-mta` service is active, SMTP banner is visible, PTR is set in Vultr.
 
@@ -162,9 +166,9 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 ### 19. Paste non-MX records
 
-- **Action: In Cloudflare DNS, paste every record from [`dns-zone-alecrae.md`](./dns-zone-alecrae.md) EXCEPT the `MX` rows.** This includes:
-  - `A` for `mail`, `api`, `admin`, `status`, `docs` → `149.28.119.158` (proxy **disabled** — grey cloud)
-  - `A` for `smtp`, `mx1`, `mx2` → `149.28.119.158` (proxy **disabled** — grey cloud)
+- **Action: In Cloudflare DNS, paste every record from [`dns-zone-alecrae.md`](./dns-zone-alecrae.md) EXCEPT the `MX` rows.** ⚠ Mail records are a pending DNS change — see `multi-platform-mail-plan.md` (Craig authorization required). Target state:
+  - `A` for `mail`, `api` → `66.42.121.161` (already live, Cloudflare-proxied, serving 200)
+  - `A` for `smtp`, `mx1`, `mx2` → `66.42.121.161` (proxy **disabled** — grey cloud; do not proxy mail records)
   - `TXT` SPF on apex
   - `TXT` DKIM on `default._domainkey`
   - `TXT` DMARC on `_dmarc`
@@ -180,7 +184,7 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 - **Action: Only after MTA verified (Phase 3 step 18) AND all non-MX records verified (step 20), paste the two MX rows** from [`dns-zone-alecrae.md`](./dns-zone-alecrae.md). `mx1.alecrae.com` priority 10, `mx2.alecrae.com` priority 20.
 - Propagation: 5–60 minutes. Use `dig MX alecrae.com` until it returns the new values.
 
-**Phase 4 done when:** `dig MX alecrae.com` shows `mx1` and `mx2`, and a test message bounces cleanly OFF Fly's SMTP banner (real delivery is Phase 6).
+**Phase 4 done when:** `dig MX alecrae.com` shows `mx1` and `mx2`, and a test connection reaches the box's SMTP banner (real delivery is Phase 6).
 
 ---
 
@@ -293,4 +297,4 @@ Referenced files:
 
 ---
 
-_Last updated: 2026-06-20 14:00 UTC_
+_Last updated: 2026-07-13 02:30 UTC_

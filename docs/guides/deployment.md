@@ -1,9 +1,12 @@
 # Deployment Guide
 
-Production deployment target is the **dedicated Vapron box at `149.28.119.158`**.
-Kubernetes, Docker Compose, and Cloudflare Pages are not used. All services run
-as systemd units managed by `vapron-bun-gateway` (custom Bun reverse proxy on
-ports 80/443 with TLS via Caddy on-demand certs).
+Production deployment target is the **Jarvis box at `66.42.121.161`** (hostname
+`jarvis`; SSH via Tailscale: `ssh root@jarvis`). The old Vapron box
+(`149.28.119.158`) is **deprecated**. Kubernetes and Cloudflare Pages are not
+used. App services run as systemd units; **Coolify/Traefik owns ports 80/443**
+and routes to them via the append-only dynamic route file
+`/data/coolify/proxy/dynamic/alecrae.yaml` (web/mail/www → `:4200`, api →
+`:4100`). Services must bind `0.0.0.0` so the proxy container can reach them.
 
 ---
 
@@ -11,9 +14,9 @@ ports 80/443 with TLS via Caddy on-demand certs).
 
 | Service | systemd unit | Port | Managed by |
 |---|---|---|---|
-| API (`apps/api`) | `alecrae-api` | 4100 | systemd + vapron-bun-gateway |
-| Web app (`apps/web`) | `alecrae-web` | 4200 | systemd + vapron-bun-gateway |
-| MTA outbound | `alecrae-mta` | — (queue consumer) | systemd |
+| API (`apps/api`) | `alecrae-api` | 4100 | systemd + Coolify/Traefik route |
+| Web app (`apps/web`) | `alecrae-web` | 4200 | systemd + Coolify/Traefik route |
+| MTA outbound | `alecrae-mta` | health :8082 (queue consumer) | systemd — **not currently running on any box** |
 | Redis | `redis-server` | 6379 | apt / systemd |
 | Postgres | `postgresql` | 5432 | apt / systemd (or Neon cloud) |
 
@@ -37,7 +40,7 @@ web app, and restarts all services with health checks. See
 Trigger the **"Deploy to Box"** workflow from the GitHub Actions tab. Requires
 these repository secrets to be set:
 - `BOX_SSH_KEY` — private key for the box
-- `BOX_HOST` — `149.28.119.158`
+- `BOX_HOST` — `66.42.121.161` (public IP; GitHub runners are not on the tailnet)
 - `BOX_USER` — `root` (or your operator username)
 - `BOX_REPO_PATH` — `/opt/alecrae`
 
@@ -100,7 +103,7 @@ curl https://api.alecrae.com/v1/health
 # Web app version
 curl https://mail.alecrae.com/api/version
 
-# Directly on box (bypasses vapron-bun-gateway)
+# Directly on box (bypasses Coolify/Traefik)
 curl http://localhost:4100/health
 curl http://localhost:4200/api/version
 ```
@@ -150,13 +153,22 @@ sudo systemctl start alecrae-mta
 
 ## DNS
 
-All subdomains point to `149.28.119.158` as DNS-only (grey cloud) A records in
-Cloudflare. See `docs/infra/dns-zone-alecrae.md` for the full zone.
+Web subdomains (`alecrae.com`, `mail.alecrae.com`, `api.alecrae.com`) currently
+resolve via Cloudflare **proxied** (orange cloud) to the Jarvis box
+(`66.42.121.161`) and serve 200 OK. See `docs/infra/dns-zone-alecrae.md` for
+the full zone.
+
+**Mail DNS is NOT yet consolidated:** the live SPF still authorizes the
+deprecated 149 box, PTR for Jarvis is still generic, and
+`mx1`/`mx2`/`smtp.alecrae.com` A records don't exist. The consolidation onto
+Jarvis is specified in `docs/infra/multi-platform-mail-plan.md` and requires
+Craig's DNS authorization. Mail-related records must be DNS-only (grey cloud)
+when created — SMTP cannot go through Cloudflare's HTTP proxy.
 
 Key records:
 - `mail.alecrae.com` → web app
 - `api.alecrae.com` → API
-- `mx1.alecrae.com` / `mx2.alecrae.com` → inbound SMTP
+- `mx1.alecrae.com` / `mx2.alecrae.com` → inbound SMTP (⚠ pending, see mail plan)
 
 ---
 
@@ -184,14 +196,14 @@ Before going live, verify:
 - [ ] All environment variables set in `/opt/alecrae/.env`
 - [ ] Database migrations applied (`bun run db:migrate`)
 - [ ] DNS records correct (`docs/infra/dns-zone-alecrae.md`)
-- [ ] TLS certs provisioned by Caddy (first request auto-issues via Let's Encrypt)
+- [ ] TLS terminating cleanly (Cloudflare proxy + Coolify/Traefik on the box)
 - [ ] `GET https://api.alecrae.com/health` returns `{"status":"ok"}`
 - [ ] `GET https://mail.alecrae.com/login` loads without errors
-- [ ] MTA service running (`sudo systemctl status alecrae-mta`)
-- [ ] PTR / rDNS set in Vultr (`mail.alecrae.com` for `149.28.119.158`)
+- [ ] MTA service running (`sudo systemctl status alecrae-mta`) — not yet stood up on Jarvis
+- [ ] PTR / rDNS set in Vultr (`mail.alecrae.com` for `66.42.121.161` — ⚠ pending, see `docs/infra/multi-platform-mail-plan.md`)
 - [ ] IP warmup plan prepared (`docs/infra/deliverability.md`)
 - [ ] Craig has authorised the deployment (Boss Rule)
 
 ---
 
-_Last updated: 2026-06-20 14:00 UTC_
+_Last updated: 2026-07-13 02:25 UTC_

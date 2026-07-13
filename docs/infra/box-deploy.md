@@ -1,11 +1,13 @@
 # Box Deploy — the pull ritual, one command (or one tap)
 
-> **Last updated:** 2026-06-15 23:35 UTC
+> **Last updated:** 2026-07-13 02:15 UTC
 
-Production is the dedicated box at `149.28.119.158` (`mail.alecrae.com` +
-`api.alecrae.com`). "Deployed" means **merged to main AND pulled + rebuilt on
-the box**. This runbook covers the three ways to do that, from most to least
-convenient.
+Production is the **Jarvis box at `66.42.121.161`** (hostname `jarvis`;
+`mail.alecrae.com` + `api.alecrae.com`). SSH access is via Tailscale:
+`ssh root@jarvis`. The old Vapron box (`149.28.119.158`) is **deprecated** and
+no longer production compute. "Deployed" means **merged to main AND pulled +
+rebuilt on the box**. This runbook covers the three ways to do that, from most
+to least convenient.
 
 ## Option A — One tap from GitHub (iPad-friendly) ✦ recommended
 
@@ -31,7 +33,7 @@ Actions → New repository secret, and add:
 | Secret | Value |
 |---|---|
 | `BOX_SSH_KEY` | the private key printed above (the whole block) |
-| `BOX_HOST` | `149.28.119.158` |
+| `BOX_HOST` | `66.42.121.161` (GitHub runners are not on the tailnet, so use the public IP — `jarvis` only resolves via Tailscale) |
 | `BOX_USER` | the operator user on the box |
 | `BOX_REPO_PATH` | absolute path of the AlecRae.com checkout on the box |
 
@@ -54,7 +56,8 @@ see the script header.
 ## Option C — No computer? SSH from the iPad
 
 The iPad can be a terminal: install **Termius** (free, App Store) — or Blink
-Shell. Add a host: `149.28.119.158`, your operator username + password/key.
+Shell. Add a host: `66.42.121.161`, your operator username + password/key
+(or install Tailscale on the iPad and connect to `jarvis` over the tailnet).
 Connect, then paste the Option B one-liner. Five minutes, total.
 
 ## Verifying what's live
@@ -68,12 +71,10 @@ curl -s https://api.alecrae.com/health   # should return {"status":"ok",...}
 curl -s https://alecrae.com              # should return landing page HTML
 ```
 
-**Gateway routing note:** The Caddy config routes `alecrae.com`, `mail.alecrae.com`, and `api.alecrae.com` to the vapron-bun-gateway. The gateway's `/etc/vapron-gateway/config.json` needs entries for all three:
-```json
-{
-  "api.alecrae.com": { "target": "http://127.0.0.1:4100" },
-  "mail.alecrae.com": { "target": "http://127.0.0.1:4200" },
-  "alecrae.com": { "target": "http://127.0.0.1:4200" }
-}
+**Gateway routing note:** On Jarvis, **Coolify/Traefik owns ports 80/443** (not Caddy, not vapron-bun-gateway — those were the old 149 box). Routing for alecrae lives in the append-only Traefik dynamic route file:
+
 ```
-The same Next.js app (port 4200) serves both the landing page (at `/`) and the mail app, so routing `alecrae.com` to 4200 is correct. If `https://alecrae.com` returns a gateway error, add the `alecrae.com` entry to the config and reload the service.
+/data/coolify/proxy/dynamic/alecrae.yaml
+```
+
+It routes `alecrae.com` / `mail.alecrae.com` / `www` → `10.0.1.1:4200` and `api.alecrae.com` → `10.0.1.1:4100`. The services (`alecrae-api` :4100, `alecrae-web` :4200) must bind `0.0.0.0` (a `127.0.0.1` bind in `/opt/alecrae/.env` overrides the systemd unit because Bun auto-loads `.env` — this caused the 2026-07-07..11 outage). The same Next.js app (port 4200) serves both the landing page (at `/`) and the mail app, so routing `alecrae.com` to 4200 is correct. If `https://alecrae.com` returns a 503, check the Traefik route file exists and the services are bound to `0.0.0.0`.

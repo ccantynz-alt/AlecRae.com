@@ -1,10 +1,12 @@
 # MTA Setup on the Production Box
 
-> **Last updated: 2026-06-19 00:00 UTC**
+> **Last updated: 2026-07-13 02:45 UTC**
 
 AlecRae's outbound email path: web UI → API (`POST /v1/messages/send`) → BullMQ (Redis) → **MTA worker** → delivery.
 
-The MTA worker (`services/mta`) must be running on the box as a systemd service. Without it, emails get queued in Redis but never consumed.
+The MTA worker (`services/mta`) must be running on the production box — the **Jarvis box, `66.42.121.161`** (`ssh root@jarvis` via Tailscale) — as a systemd service. Without it, emails get queued in Redis but never consumed. **As of 2026-07-13 the MTA is NOT running on any box** (the old `149.28.119.158` Vapron box is deprecated).
+
+> **Jarvis specifics:** Coolify/Traefik owns ports 80/443 on this box, so the MTA's health server must not collide with anything the proxy or other services use — the default `HEALTH_PORT` is `8082` (do not set it to 80/443/8080).
 
 **Two delivery modes — pick one:**
 
@@ -13,13 +15,13 @@ The MTA worker (`services/mta`) must be running on the box as a systemd service.
 | **Direct port-25** | Port 25 is open on the box (now confirmed). Fastest path — no relay account needed. Requires PTR record. | _nothing_ (no `RELAY_PROVIDER`) |
 | **Resend relay** | More reliable for cold IPs; needs Resend account + domain verified | `RELAY_PROVIDER=smtp`, `SMTP_RELAY_HOST=smtp.resend.com`, `SMTP_RELAY_PORT=465`, `SMTP_RELAY_TLS=true`, `SMTP_RELAY_USERNAME=resend`, `SMTP_RELAY_PASSWORD=<api_key>` |
 
-For the quickest first send, use **direct port-25**: set a PTR record on `149.28.119.158` → `mail.alecrae.com` in the Vultr control panel, then start the MTA with no relay env set. DKIM keys for `alecrae.com` must be in the `domains` table (they're set during domain onboarding in the Workspace page).
+For the quickest first send, use **direct port-25**: set a PTR record on `66.42.121.161` → `mail.alecrae.com` in the Vultr control panel, then start the MTA with no relay env set. ⚠ **Pending DNS change:** mail DNS currently authorizes the deprecated 149 box (the 149 PTR still reads `mail.alecrae.com`; Jarvis's PTR is still generic) — the consolidation onto Jarvis (new PTR, SPF update, mx1/mx2 A records) is specified in `docs/infra/multi-platform-mail-plan.md` and requires Craig's DNS authorization. DKIM keys for `alecrae.com` must be in the `domains` table (they're set during domain onboarding in the Workspace page).
 
 ---
 
 ## Prerequisites
 
-- Box is live at `149.28.119.158`
+- Jarvis box is live at `66.42.121.161` (`ssh root@jarvis` via Tailscale)
 - API (`alecrae-api`) is running
 - Resend SMTP relay is configured in `/opt/alecrae/.env`
 
