@@ -72,6 +72,8 @@ export function PlanBadge({ tier }: { tier: PlanTier }) {
     personal: "bg-blue-100 text-blue-700",
     pro: "bg-brand-100 text-brand-700",
     team: "bg-purple-100 text-purple-700",
+    business: "bg-emerald-100 text-emerald-700",
+    business_plus: "bg-teal-100 text-teal-700",
     enterprise: "bg-amber-100 text-amber-700",
   };
   return (

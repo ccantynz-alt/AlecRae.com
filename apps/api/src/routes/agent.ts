@@ -31,7 +31,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, gte } from "drizzle-orm";
+import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { requireScope } from "../middleware/auth.js";
@@ -328,7 +328,7 @@ function getAgent(): InboxAgent {
         {
           email: {
             id: jobId,
-            accountId: draft.accountId ?? draft.to[0] ?? "unknown",
+            accountId: draft.to[0] ?? "unknown",
             messageId: `<${jobId}@alecrae.com>`,
             from: "agent-draft",
             to: draft.to,

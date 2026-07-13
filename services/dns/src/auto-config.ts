@@ -727,9 +727,10 @@ export async function checkDomainHealth(
   const selectorDateMatch = domainRecord.dkimSelector
     ? /(\d{4})(\d{2})$/.exec(domainRecord.dkimSelector)
     : null;
-  const dkimAgeSource = selectorDateMatch
-    ? new Date(parseInt(selectorDateMatch[1]), parseInt(selectorDateMatch[2]) - 1, 1)
-    : domainRecord.createdAt;
+  const dkimAgeSource =
+    selectorDateMatch?.[1] !== undefined && selectorDateMatch[2] !== undefined
+      ? new Date(parseInt(selectorDateMatch[1], 10), parseInt(selectorDateMatch[2], 10) - 1, 1)
+      : domainRecord.createdAt;
 
   if (dkimAgeSource) {
     const ageMs = Date.now() - dkimAgeSource.getTime();
