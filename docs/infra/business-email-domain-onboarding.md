@@ -82,20 +82,24 @@ customer types and the fully-qualified name.
 ### Notes on each record
 
 **MX → AlecRae inbound.** `mx1`/`mx2.alecrae.com` are A-records pointing at our
-production box — the **Jarvis box at `66.42.121.161`** — and the PTR/rDNS must
-match the HELO hostname (see §3). ⚠ **Pending DNS change:** as of 2026-07-13
-those A records do **not exist** in AlecRae's own DNS yet, and mail DNS (SPF,
-PTR) still authorizes the deprecated 149 box; the consolidation onto Jarvis is
-specified in `docs/infra/multi-platform-mail-plan.md` and requires Craig's DNS
-authorization. Priority 10 is tried first, 20 is the backup. Without these,
-nobody can deliver to `info@bookaride.co.nz`. (Source: `auto-config.ts`
+**dedicated mail box — the "158" box at `149.28.119.158`** (Craig's 2026-07-13
+decision, Option A in `docs/infra/multi-platform-mail-plan.md` §4; Jarvis
+`66.42.121.161` keeps web/api compute only) — and the PTR/rDNS must match the
+HELO hostname (see §3). The PTR on `149.28.119.158` → `mail.alecrae.com` is
+**already set**, and the live SPF already authorizes the 158 IP. ⚠ **Still
+pending:** as of 2026-07-13 the mx1/mx2 A records do **not exist** in
+AlecRae's own DNS yet — they target `149.28.119.158` and await Craig's
+Cloudflare execution. Priority 10 is tried first, 20 is the backup. Without
+these, nobody can deliver to `info@bookaride.co.nz`. (Source: `auto-config.ts`
 `MX_SERVERS`; production hostnames per `dns-zone-alecrae.md`.)
 
 **SPF.** Authorises our sending infra to send *as* `bookaride.co.nz`.
 `include:amazonses.com` covers the **SES relay** path (recommended for a cold
-domain, §2); `include:_spf.alecrae.com` covers our own box IP (the direct-MX
-path and any future senders, so we never have to touch the customer's record
-again). Start with **`~all`** (soft-fail) for the first ~30 days, then tighten
+domain, §2); `include:_spf.alecrae.com` covers our own mail-box IP (the
+direct-MX path and any future senders, so we never have to touch the
+customer's record again). ⚠ Note: the `_spf.alecrae.com` TXT itself doesn't
+exist yet — target value `v=spf1 ip4:149.28.119.158 ~all` (the 158 mail box),
+awaiting Craig's Cloudflare execution. Start with **`~all`** (soft-fail) for the first ~30 days, then tighten
 to **`-all`** once reports are clean — same ramp as `dns-zone-alecrae.md`.
 **Keep total SPF DNS lookups ≤ 10** (`auto-config.ts` `SPF_MAX_LOOKUPS`); two
 includes is fine.
@@ -159,19 +163,20 @@ of the box, so a zero-reputation domain isn't *also* sending from a
 zero-reputation IP. You still warm the *domain* (volume ramp in
 `deliverability.md`), but you skip the much harder IP-warmup-from-scratch.
 
-### Option B — Direct MX (our own box IP: 66.42.121.161)
+### Option B — Direct MX (our own mail-box IP: 149.28.119.158)
 
 Leave `RELAY_PROVIDER` unset. The worker resolves each recipient's MX and
 delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 
 **What it requires:**
-- **Warmed box IP** (`66.42.121.161`, the Jarvis box) with **PTR/rDNS matching
-  `mx1.alecrae.com`** — set via the Vultr control panel (see
-  `docs/infra/mta-box-setup.md`). ⚠ Pending: Jarvis's PTR is still the generic
-  choopa.net one (the `mail.alecrae.com` PTR still sits on the deprecated 149
-  box) — see `docs/infra/multi-platform-mail-plan.md`.
-- **Port 25 outbound open** from the Vultr instance (may require a Vultr
-  support ticket to unblock).
+- **Warmed mail-box IP** (`149.28.119.158`, the 158 box) with matching
+  **PTR/rDNS** — ✅ already in place: the PTR on `149.28.119.158` reads
+  `mail.alecrae.com` (a key reason Option A kept 158 as the mail box; see
+  `docs/infra/mta-box-setup.md` and `multi-platform-mail-plan.md`).
+- **Port 25 outbound open** from the Vultr instance — ✅ already
+  Vultr-unblocked on 158. (Inbound 25 on 158 is still closed; it's opened via
+  ufw + the inbound service in mail-plan Phase 2, and isn't needed for
+  outbound sending.)
 - Strict adherence to the **week-by-week warmup schedule** in
   `deliverability.md` — going fast on a cold IP gets you blocklisted.
 
@@ -180,7 +185,8 @@ delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 > **Brand-new domain, zero reputation → use SES relay (Option A).** Lean on SES's
 > warmed IPs while the *domain* earns reputation, keep the in-house
 > `d=bookaride.co.nz` DKIM for alignment, and only consider direct-MX (Option B)
-> once the box IP has a confirmed PTR record and a real volume reason to leave SES.
+> once there's a real volume reason to leave SES (the 158 mail box's PTR is
+> already confirmed).
 
 ---
 
@@ -189,14 +195,20 @@ delivers via `DeliveryOptimizer` + `SmtpClient` from `MTA_HOSTNAME`.
 ### Services
 - **`services/inbound`** running with the **SMTP receiver on :25** reachable from
   the public internet, behind A records `mx1.alecrae.com` / `mx2.alecrae.com`
-  (both pointing to the Jarvis box, `66.42.121.161` — ⚠ these A records don't
-  exist in DNS yet, see `multi-platform-mail-plan.md`), with **PTR/rDNS** on the
-  box IP matching the HELO hostname. (`index.ts`: `SMTP_PORT`, `SMTP_HOSTNAME`.)
-  The HTTP webhook on :8025 is the alternative ingress if direct :25 isn't viable.
-  **As of 2026-07-13 inbound is NOT running on any box.**
-- **`alecrae-mta` systemd service** running on the Jarvis box and draining the
-  outbound BullMQ queue (`worker.ts`, queue `alecrae-outbound`). Requires
-  **Redis** on the box (`REDIS_URL`). See `docs/infra/mta-box-setup.md`.
+  (both pointing to the **158 mail box, `149.28.119.158`** — ⚠ these A records
+  don't exist in DNS yet; they target 149.28.119.158 per the 2026-07-13 Option A
+  decision and await Craig's Cloudflare execution, see
+  `multi-platform-mail-plan.md`), with **PTR/rDNS** on the box IP matching the
+  HELO hostname (✅ the 158 PTR → `mail.alecrae.com` is already set).
+  (`index.ts`: `SMTP_PORT`, `SMTP_HOSTNAME`.) The HTTP webhook on :8025 is the
+  alternative ingress if direct :25 isn't viable.
+  **As of 2026-07-13 inbound is NOT running on any box**, and inbound port 25
+  on 158 is closed until it's opened via ufw alongside the service
+  (mail-plan Phase 2).
+- **`alecrae-mta` systemd service** running on the **158 mail box** and draining
+  the outbound BullMQ queue (`worker.ts`, queue `alecrae-outbound`). Requires
+  **Redis** reachable from both the API (Jarvis) and the MTA (`REDIS_URL` must
+  be the same queue on both). See `docs/infra/mta-box-setup.md`.
   **As of 2026-07-13 the MTA is NOT running on any box.**
 - **Postgres** reachable (`DATABASE_URL`) — both services persist there, and the
   `domains` row (with the DKIM key) is read by the MTA worker on every send.
@@ -258,16 +270,17 @@ dig CNAME bounce.bookaride.co.nz +short              # → bounce.alecrae.com.
 
 ### B. PTR / rDNS (the silent killer)
 ```bash
-dig A mx1.alecrae.com +short                         # → 66.42.121.161  (target — record pending)
-dig -x 66.42.121.161 +short                          # → mx1.alecrae.com.  (MUST match — target)
+dig A mx1.alecrae.com +short                         # → 149.28.119.158  (target — record ⚠ pending)
+dig -x 149.28.119.158 +short                         # → mail.alecrae.com.  (✅ already set)
 ```
-⚠ **Current reality (2026-07-13):** neither check passes yet — `mx1.alecrae.com`
-has no A record, and the PTR for `66.42.121.161` is still the generic
-choopa.net one (the `mail.alecrae.com` PTR still sits on the deprecated 149
-box). See `docs/infra/multi-platform-mail-plan.md`.
-If the PTR doesn't match the HELO hostname, Gmail/Outlook will spam-bin or
-reject. Fix via the Vultr control panel: Jarvis instance → Settings → IPv4 →
-rDNS → set to `mail.alecrae.com`. See `docs/infra/mta-box-setup.md`.
+**Current reality (2026-07-13):** the PTR check passes — `149.28.119.158`
+already reverse-resolves to `mail.alecrae.com` (set on the 158 mail box; kept
+by the Option A decision). The A-record check does ⚠ not pass yet —
+`mx1.alecrae.com` has no A record; it targets `149.28.119.158` and awaits
+Craig's Cloudflare execution. See `docs/infra/multi-platform-mail-plan.md`.
+If the PTR ever stops matching the HELO hostname, Gmail/Outlook will spam-bin
+or reject — it's managed in the Vultr control panel: 158 instance → Settings →
+IPv4 → rDNS. See `docs/infra/mta-box-setup.md`.
 
 ### C. Receiving — send TO `info@bookaride.co.nz`
 1. From an external account (e.g. a personal Gmail) send a plain test to
@@ -319,9 +332,9 @@ Run `verifyDomainConfig(<domainId>)` (auto-config.ts) → expect `overall:
 - **Cold IP on direct MX.** Sending real volume from the box IP with no warmup
   = blocklisted in hours. Use SES relay for a new domain, or follow the
   `deliverability.md` warmup schedule to the letter.
-- **Port 25 blocked by Vultr.** Vultr may block outbound :25 by default.
-  Direct MX delivery silently fails/defers. Open a Vultr support ticket to
-  unblock, or use the SES relay in the interim.
+- **Port 25 blocked by Vultr.** Vultr blocks outbound :25 by default — direct
+  MX delivery silently fails/defers. ✅ Already unblocked on the 158 mail box
+  (`149.28.119.158`); only relevant if mail ever moves to a different instance.
 - **SES still in sandbox.** Sends only to verified recipients, 200/day. Request
   production access first.
 - **SPF `-all` too early, or > 10 lookups.** Going strict on day 1 before every
@@ -396,4 +409,4 @@ VwIDAQAB
 
 ---
 
-_Last updated: 2026-07-13 02:50 UTC_
+_Last updated: 2026-07-13 03:05 UTC_

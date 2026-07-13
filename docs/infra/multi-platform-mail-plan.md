@@ -1,6 +1,6 @@
 # Multi-Platform Mail Architecture — The Plan
 
-Last updated: 2026-07-13 05:45 UTC
+Last updated: 2026-07-13 08:05 UTC
 
 > **Purpose:** One document that answers "how do all of Craig's platforms send and
 > receive mail through alecrae.com, and how does that fit with Vapron owning its
@@ -64,7 +64,15 @@ Think of AlecRae's mail stack as your own private Postmark + Google Workspace:
 | B6 | **SPF/PTR authorize the deprecated box** | `spf.alecrae.com` = `ip4:149.28.119.158`; PTR on 149 → mail.alecrae.com; PTR on Jarvis (161) is still generic choopa.net. Compute moved to 161 but mail identity didn't |
 | B7 | `smtp.alecrae.com` A record missing | Listed in docs, never created (needed only for authenticated submission later) |
 
-## 4. DECISION 1 (Craig): where does the mail engine run?
+## 4. DECISION 1 — ✅ DECIDED 2026-07-13 (Craig): **Option A — 158 stays as the dedicated mail box**
+
+> Craig confirmed 2026-07-13: keep 149.28.119.158 ("158") as the mail box;
+> Jarvis (161) keeps web/api. Note: outbound port 25 on 158 is open (Vultr
+> unblock done); inbound 25 is currently closed — expected, opened by ufw +
+> the inbound service in Phase 2 (verified by external probe 2026-07-13:
+> box up, 22 reachable, 25 filtered/no-listener).
+
+The options as evaluated:
 
 ### Option A — keep 149.28.119.158 (the "158" box, old Vapron box) as a dedicated mail box (**recommended**)
 
@@ -87,17 +95,14 @@ Web/api stay on Jarvis (161); the MTA + inbound services run on 149, which becom
   `ip4:66.42.121.161`, and restart IP warmup from zero. Mail reputation then
   shares an IP with every product on Jarvis.
 
-**Recommendation: Option A.** Mail reputation is the single hardest thing to
-rebuild; 149 already has it started. Revisit consolidation after launch.
+**Recommendation was Option A — adopted.** Mail reputation is the single
+hardest thing to rebuild; 158 already has it started. Revisit consolidation
+after launch.
 
 ## 5. Execution plan (phased, in order)
 
 ### Phase 0 — DNS fixes (Craig authorizes; ~15 min in Cloudflare)
-Assuming Option A (swap IP to 66.42.121.161 everywhere below if Option B).
-> NB: the infra runbooks (dns-zone-alecrae.md, morning-setup.md, etc.) were
-> refreshed 2026-07-13 showing **161** as the record target — that matches
-> Option B. If Craig picks Option A (recommended), mail records use
-> **149.28.119.158** and the runbooks get one more find/replace pass.
+Option A is decided — all mail records target **149.28.119.158** ("158").
 
 1. `mx1.alecrae.com  A  149.28.119.158` — **grey cloud**
 2. `mx2.alecrae.com  A  149.28.119.158` — **grey cloud**
@@ -152,8 +157,8 @@ For each platform domain (e.g. `vapron.ai` — mail.vapron.ai is already done):
 ## 6. What needs Craig's explicit authorization (Boss Rule)
 
 - All Phase 0 DNS changes (Cloudflare) and any Vultr panel actions (PTR, port 25).
-- Decision 1 (mail box choice) — this doc recommends Option A.
-- Keeping/canceling the 149 box (billing).
+- ~~Decision 1 (mail box choice)~~ — **DECIDED 2026-07-13: Option A (keep 158).**
+- Keeping the 158 box funded (billing) — implied by Option A.
 
 Everything else (systemd units, code for `email.received` webhooks, docs) is
 within the pre-authorized build plan.

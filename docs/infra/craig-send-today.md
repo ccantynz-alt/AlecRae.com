@@ -2,7 +2,7 @@
 
 > **Goal:** Have you sending real support email **from `support@alecrae.com`** within ~24 hours of starting, with full DKIM/SPF/DMARC, near-zero spam-folder risk, and reputation building from day one.
 >
-> **What this skips:** Sending directly from the production box IP — now the **Jarvis box, `66.42.121.161`** (the old Vapron box `149.28.119.158` is deprecated) — on port 25. That's the right destination — but for the first 60–90 days you should relay through Amazon SES so you inherit pre-warmed IP reputation while `alecrae.com` builds its own domain reputation in parallel. When the domain is trusted and the MTA is hardened, you flip `RELAY_PROVIDER=` to direct (unset) and you're independent. Note: mail DNS currently still authorizes the deprecated 149 box; the consolidation onto Jarvis (new PTR, SPF update, mx1/mx2 A records) is specified in `docs/infra/multi-platform-mail-plan.md` and requires Craig's DNS authorization.
+> **What this skips:** Sending directly from the mail box IP — the **"158" box, `149.28.119.158`** (dedicated mail box per Craig's 2026-07-13 decision, Option A in `docs/infra/multi-platform-mail-plan.md` §4; Jarvis `66.42.121.161` keeps web/api compute only) — on port 25. That's the right destination — but for the first 60–90 days you should relay through Amazon SES so you inherit pre-warmed IP reputation while `alecrae.com` builds its own domain reputation in parallel. When the domain is trusted and the MTA is hardened, you flip `RELAY_PROVIDER=` to direct (unset) and you're independent. Note: the live SPF and the PTR (`149.28.119.158` → `mail.alecrae.com`, already set) already authorize the 158 box; the remaining mail records (mx1/mx2 A → 149.28.119.158, `_spf.alecrae.com` TXT) are ⚠ pending, awaiting Craig's Cloudflare execution.
 >
 > **What this is NOT:** A bypass of the rules. Every message still gets DKIM-signed by AlecRae, every recipient still goes through suppression-list checks, DMARC still aligns. The only difference is the IPs that hit Gmail's edge are AWS's — which is exactly how Hey, Front, and Superhuman launched.
 
@@ -164,7 +164,7 @@ You do not need to do anything for these — `services/reputation` is already wi
 
 ---
 
-## Step 7 — Graduating to self-hosted MTA on the Jarvis box (Day ~90)
+## Step 7 — Graduating to self-hosted MTA on the 158 mail box (Day ~90)
 
 Once Postmaster Tools shows:
 - Domain reputation: **High** for 30+ consecutive days
@@ -172,16 +172,19 @@ Once Postmaster Tools shows:
 - Authentication: 100% pass rate
 
 …you're ready to shift outbound from SES relay to AlecRae's own MTA running
-on the Jarvis box (`66.42.121.161`). The process is documented in
+on the dedicated mail box (`149.28.119.158`, `ssh root@vapron-158` via
+Tailscale). The process is documented in
 [`mta-box-setup.md`](./mta-box-setup.md). The shift is graceful: in the box
 `.env`, set `RELAY_PROVIDER=` to empty/unset to enable direct MX delivery,
 while keeping `RELAY_PROVIDER=smtp` (Resend/SES) as the fallback in the
 relay client — half the volume goes direct, half stays on SES, for two weeks
 while the box IP earns its own reputation. After 30 days at 100% direct, SES
-is fallback only. Requires the Vultr PTR record to be set first
-(`mail.alecrae.com` for `66.42.121.161` — ⚠ pending DNS change: the PTR for
-161 is still generic and mail DNS still points at the deprecated 149 box; see
-`docs/infra/multi-platform-mail-plan.md`, Craig authorization required).
+is fallback only. The PTR prerequisite is **already met**: the Vultr PTR for
+`149.28.119.158` → `mail.alecrae.com` is set (a key reason Option A kept the
+158 box for mail), and outbound port 25 on 158 is already Vultr-unblocked.
+Still ⚠ pending: mx1/mx2 A records + `_spf.alecrae.com` TXT targeting
+`149.28.119.158`, awaiting Craig's Cloudflare execution (see
+`docs/infra/multi-platform-mail-plan.md`).
 
 That's the architecture: training wheels for 90 days, independence after.
 
@@ -198,12 +201,12 @@ That's the architecture: training wheels for 90 days, independence after.
 7. Send your first support email.
 8. Read the warmup rules once. Follow them. Don't send a newsletter for 90 days.
 
-After 90 days: graduate to the self-hosted MTA on the Jarvis box (direct MX delivery). Until then: trust the training wheels. SES is doing exactly what we'd build ourselves, with reputation we'd otherwise have to spend a year earning.
+After 90 days: graduate to the self-hosted MTA on the 158 mail box (direct MX delivery). Until then: trust the training wheels. SES is doing exactly what we'd build ourselves, with reputation we'd otherwise have to spend a year earning.
 
 ---
 
-*Pinned 2026-05-08. Update this file after Day 90 graduation to direct MX on the Jarvis box, or if SES region/identity changes.*
+*Pinned 2026-05-08. Update this file after Day 90 graduation to direct MX on the 158 mail box, or if SES region/identity changes.*
 
 ---
 
-_Last updated: 2026-07-13 02:35 UTC_
+_Last updated: 2026-07-13 03:05 UTC_

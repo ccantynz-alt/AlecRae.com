@@ -1,9 +1,9 @@
 # AlecRae Deliverability Runbook
 
-> Self-hosted MTA on the **Jarvis box (66.42.121.161**, `ssh root@jarvis` via Tailscale). New domain. New IP. Zero reputation.
+> Self-hosted MTA on the **dedicated mail box — the "158" box (149.28.119.158**, `ssh root@vapron-158` via Tailscale, peer 100.89.227.39). Jarvis (66.42.121.161) keeps web/api compute only. New domain. Partially-warmed IP.
 > This document is the playbook. Follow it exactly.
 >
-> ⚠ **State as of 2026-07-13:** the MTA is NOT running on any box, and mail DNS still authorizes the deprecated 149 box (SPF + `mail.alecrae.com` PTR). The consolidation onto Jarvis — new PTR, SPF update, mx1/mx2 A records — is specified in `docs/infra/multi-platform-mail-plan.md` and requires Craig's DNS authorization.
+> **State as of 2026-07-13:** Craig decided (Option A, `docs/infra/multi-platform-mail-plan.md` §4) that 158 stays as the mail box — the live SPF and the PTR (`149.28.119.158` → `mail.alecrae.com`, ✅ already set) authorize it, so that deliverability groundwork is kept, not redone. The MTA is NOT yet running on any box. ⚠ Still pending, awaiting Craig's Cloudflare execution: mx1/mx2 A records + `_spf.alecrae.com` TXT (both targeting 149.28.119.158) and grey-clouding `mail.alecrae.com`.
 
 ---
 
@@ -15,10 +15,10 @@ A brand-new sending IP has zero reputation with Gmail, Outlook, Yahoo, and Apple
 
 ## Prerequisites checklist (must be done before any production send)
 
-- [ ] **SPF** published + passing — target: `v=spf1 ip4:66.42.121.161 include:spf.resend.com ~all` (⚠ pending DNS change — the live SPF still authorizes the deprecated 149 box; see `multi-platform-mail-plan.md`)
+- [ ] **SPF** published + passing — target: `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all` (✅ the live `spf.alecrae.com` already authorizes the 158 mail-box IP; ⚠ the `_spf.alecrae.com` TXT — target `v=spf1 ip4:149.28.119.158 ~all`, used by customer-domain includes — is still pending Craig's Cloudflare execution; see `multi-platform-mail-plan.md`)
 - [ ] **DKIM** keypair generated on MTA, public key published in DNS, all outbound signed
 - [ ] **DMARC** published — start at `p=quarantine; pct=10;`
-- [ ] **PTR / rDNS** matches HELO hostname (`mx1.alecrae.com`) — ⚠ pending: Jarvis's PTR is still generic; the `mail.alecrae.com` PTR sits on the deprecated 149 box
+- [ ] **PTR / rDNS** matches HELO hostname — ✅ already set: `149.28.119.158` (the 158 mail box) reverse-resolves to `mail.alecrae.com` (verify: `dig -x 149.28.119.158 +short`); ensure the MTA HELO hostname aligns
 - [ ] **MTA-STS** live + policy served at `https://mta-sts.alecrae.com/.well-known/mta-sts.txt`
 - [ ] **TLS-RPT** published (`_smtp._tls.alecrae.com` TXT record)
 - [ ] **TLS 1.2+** only — no SSL v3, no TLS 1.0, no TLS 1.1
@@ -94,7 +94,7 @@ IPs per domain (Layer 5 gap, tracked separately). Every domain shares the box's 
 reputation crash on that IP threatens every domain sending from it, not just the one that
 happened to trigger the alert.
 
-Install on the box (adjust `User=` to match `alecrae-mta`'s convention):
+Install on the 158 mail box (`ssh root@vapron-158`; adjust `User=` to match `alecrae-mta`'s convention):
 
 ```bash
 sudo tee /etc/systemd/system/alecrae-postmaster.service > /dev/null <<'EOF'
@@ -247,8 +247,8 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 | DKIM fails on forwarded mail | Implement ARC (Authenticated Received Chain). **Wave 2 task.** |
 | From-domain mismatch with `DKIM d=` | Align the DKIM signing domain with the From: header domain. |
 | SPF > 10 DNS lookups | Flatten SPF includes into direct `ip4:` / `ip6:` mechanisms. |
-| PTR doesn't match HELO | Set reverse DNS in Vultr control panel: Jarvis instance → Settings → IPv4 → rDNS → `mail.alecrae.com` (⚠ pending — see `multi-platform-mail-plan.md`). |
-| Shared IP neighbor blacklisted | N/A — the Jarvis box has a dedicated static IP (`66.42.121.161`). No noisy neighbours. |
+| PTR doesn't match HELO | rDNS is managed in the Vultr control panel: 158 instance → Settings → IPv4 → rDNS. ✅ Already set: `149.28.119.158` → `mail.alecrae.com`. |
+| Shared IP neighbor blacklisted | N/A — the 158 mail box has a dedicated static IP (`149.28.119.158`) used only for mail. No noisy neighbours. |
 
 ---
 
@@ -284,7 +284,7 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 
 ## Emergency protocol — first 30 minutes if blacklisted
 
-1. **PAUSE all outbound immediately** — on the box: `sudo systemctl stop alecrae-mta`.
+1. **PAUSE all outbound immediately** — on the 158 mail box: `sudo systemctl stop alecrae-mta`.
 2. **Identify the listing source** — mxtoolbox unified check.
 3. **Check recent sends for root cause:**
    - Compromised sending account?
@@ -302,4 +302,4 @@ If listed: each provider has its own delisting URL. Typical turnaround 24-72 hou
 
 ---
 
-_Last updated: 2026-07-13 02:55 UTC_
+_Last updated: 2026-07-13 03:05 UTC_

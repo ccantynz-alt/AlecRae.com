@@ -1,13 +1,17 @@
 # Box Deploy — the pull ritual, one command (or one tap)
 
-> **Last updated:** 2026-07-13 02:15 UTC
+> **Last updated:** 2026-07-13 03:05 UTC
 
-Production is the **Jarvis box at `66.42.121.161`** (hostname `jarvis`;
-`mail.alecrae.com` + `api.alecrae.com`). SSH access is via Tailscale:
-`ssh root@jarvis`. The old Vapron box (`149.28.119.158`) is **deprecated** and
-no longer production compute. "Deployed" means **merged to main AND pulled +
-rebuilt on the box**. This runbook covers the three ways to do that, from most
-to least convenient.
+Production **compute** is the **Jarvis box at `66.42.121.161`** (hostname `jarvis`;
+serves `mail.alecrae.com` + `api.alecrae.com`). SSH access is via Tailscale:
+`ssh root@jarvis`. The old Vapron box (`149.28.119.158`) is no longer web/api
+compute — per Craig's 2026-07-13 decision (Option A,
+`docs/infra/multi-platform-mail-plan.md` §4) it is now the **dedicated MAIL
+box** (MTA + inbound; SSH via Tailscale peer `vapron-158`, 100.89.227.39:
+`ssh root@vapron-158`). **This runbook covers web/api deploys to Jarvis only**
+— mail-box (MTA) deployment lives in `docs/infra/mta-box-setup.md`. "Deployed"
+means **merged to main AND pulled + rebuilt on the box**. This runbook covers
+the three ways to do that, from most to least convenient.
 
 ## Option A — One tap from GitHub (iPad-friendly) ✦ recommended
 
@@ -71,7 +75,7 @@ curl -s https://api.alecrae.com/health   # should return {"status":"ok",...}
 curl -s https://alecrae.com              # should return landing page HTML
 ```
 
-**Gateway routing note:** On Jarvis, **Coolify/Traefik owns ports 80/443** (not Caddy, not vapron-bun-gateway — those were the old 149 box). Routing for alecrae lives in the append-only Traefik dynamic route file:
+**Gateway routing note:** On Jarvis, **Coolify/Traefik owns ports 80/443** (not Caddy, not vapron-bun-gateway — those live on the 149 box, which still runs `vapron-bun-gateway` on 80/443 in its new role as the dedicated mail box; the Coolify/Traefik collision caveat applies to Jarvis only, and the MTA's `HEALTH_PORT` default of 8082 on 158 is documented in `mta-box-setup.md`). Routing for alecrae lives in the append-only Traefik dynamic route file:
 
 ```
 /data/coolify/proxy/dynamic/alecrae.yaml

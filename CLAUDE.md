@@ -548,6 +548,7 @@ All planned feature tiers are **code-complete**: Tiers 1–8 (36 core + 20 expan
 | 2026-07-01 | **Native IMAP: not required for launch.** Gmail/Outlook OAuth sync is the supported path; `services/imap`'s TCP listener stays broken (issue #58) and is documented honestly rather than claimed done. | OAuth covers the real-world usage pattern; fixing the IMAP handler/type-shape mismatch is ~1 week of work with no launch-blocking upside right now. |
 | 2026-07-01 | **First users: general beta, no specific vertical (not lawyers/accountants-only).** All modules held to a general-beta quality bar rather than a compliance-heavy vertical bar. | No vertical has been chosen yet; revisit this once first users are actually onboarded — a legal/accounting focus would raise the bar on E2EE, audit logging, and retention features specifically. |
 | 2026-07-03 | **Multi-workspace: one login can own/join several separate workspaces (accounts), each with its own billing, domains, mailboxes, and team — via a `workspace_members` table, not by widening `users.accountId` to a many-to-many everywhere.** | Every downstream resource (mailboxes, domains, emails, billing — 90+ route files) is already scoped purely by `auth.accountId` from the JWT; keeping that contract and only changing how the ACTIVE accountId is chosen (login → home workspace; switch-workspace → any workspace you're a member of) avoided touching those 90+ files. Alternative considered: give every `users` row a home account only and require a separate login per workspace (Slack-style) — rejected, worse UX for "one login, many workspaces." |
+| 2026-07-13 | **Mail engine stays on the "158" box (149.28.119.158) as a dedicated mail box; Jarvis (161) keeps web/api.** All mail DNS records target 158. | 158 already has outbound port 25 unblocked by Vultr, PTR → mail.alecrae.com, and SPF authorizing it — weeks of deliverability groundwork kept, and a dedicated sending IP is isolated from other products on Jarvis. Alternative (consolidate on 161) rejected for now: would need a Vultr port-25 ticket, new PTR, SPF rewrite, and IP warmup from zero. Full plan: `docs/infra/multi-platform-mail-plan.md`. |
 
 ---
 
@@ -555,8 +556,8 @@ All planned feature tiers are **code-complete**: Tiers 1–8 (36 core + 20 expan
 
 > Completed items 1–10 + 18–19 of the old list are in the archive. Current list (2026-07-13):
 
-1. **Craig: Decision 1 in `docs/infra/multi-platform-mail-plan.md`** — where the mail engine runs (recommendation: keep the old "158" box, 149.28.119.158, as a dedicated mail box). 30 seconds to decide; unblocks everything below.
-2. **Craig: Phase 0 DNS fixes** — mx1/mx2 A records, `_spf.alecrae.com` TXT, grey-cloud `mail.alecrae.com` (~15 min in Cloudflare; exact records in the mail plan).
+1. ~~Craig: Decision 1~~ — **DECIDED 2026-07-13: keep the "158" box (149.28.119.158) as the dedicated mail box** (see Product Decisions Log).
+2. **Craig: Phase 0 DNS fixes** — `mx1`/`mx2.alecrae.com` A → 149.28.119.158, `_spf.alecrae.com` TXT `"v=spf1 ip4:149.28.119.158 ~all"`, grey-cloud `mail.alecrae.com` (~15 min in Cloudflare; exact records in the mail plan).
 3. **Phase 1: bring up `alecrae-mta`** on the mail box (`docs/infra/mta-box-setup.md`), test send → Gmail inbox with SPF/DKIM/DMARC pass, run the idempotency check.
 4. **Phase 2: deploy the inbound service** (port 25 listener) + test receiving into a provisioned mailbox.
 5. **Phase 3: onboard each platform domain** (mail.vapron.ai already verified; repeat the 5-record recipe per platform) + mint per-platform API keys with `messages:send`.

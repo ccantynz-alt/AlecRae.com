@@ -1,6 +1,6 @@
 # Morning Setup — Get AlecRae Live Today
 
-> **Last updated: 2026-07-13 02:20 UTC**
+> **Last updated: 2026-07-13 12:10 UTC**
 
 This is the single document you follow on the box. Every command is copy-pasteable. No options — one path, start to finish.
 
@@ -11,7 +11,9 @@ This is the single document you follow on the box. Every command is copy-pasteab
 ## Section 1: Production Box — Jarvis (66.42.121.161)
 
 > Production compute is the **Jarvis box** (`66.42.121.161`, hostname `jarvis`).
-> The old Vapron box (`149.28.119.158`) is **deprecated**. Coolify/Traefik owns
+> The old Vapron box (`149.28.119.158`, "158") is the **dedicated MAIL box**
+> (MTA + inbound — Option A, decided 2026-07-13; see
+> `docs/infra/multi-platform-mail-plan.md` §4). Coolify/Traefik owns
 > ports 80/443 on Jarvis (route file: `/data/coolify/proxy/dynamic/alecrae.yaml`);
 > `alecrae-api` (:4100) and `alecrae-web` (:4200) must bind `0.0.0.0`.
 
@@ -171,10 +173,12 @@ Go to **https://dash.cloudflare.com** → click `alecrae.com` → **DNS** → **
 
 > **Current state (verified 2026-07-13):** `alecrae.com`, `mail.alecrae.com`, and
 > `api.alecrae.com` resolve via Cloudflare **proxied** (orange cloud) to the Jarvis
-> box and serve 200 OK — the web side is done. The **mail** records below are the
-> TARGET state: mail DNS currently still authorizes the deprecated 149 box, and the
-> consolidation onto Jarvis (new PTR, SPF update, mx1/mx2 A records) is specified in
-> `docs/infra/multi-platform-mail-plan.md` and requires Craig's DNS authorization.
+> box and serve 200 OK — the web side is done. **Mail decision made (Option A,
+> 2026-07-13):** the 158 box (`149.28.119.158`) stays as the dedicated mail box, so
+> the mail records below target `149.28.119.158`. The live SPF already authorizes
+> 149 and the PTR on 149 → `mail.alecrae.com` is already set; the still-missing
+> records (mx1/mx2 A, `_spf` TXT, grey-clouding `mail.alecrae.com`) await Craig's
+> Cloudflare execution — see `docs/infra/multi-platform-mail-plan.md`.
 
 ### Fix the apex A record
 
@@ -192,14 +196,14 @@ If a `CNAME` for `www` exists pointing anywhere other than the box, delete it, t
 - Name: `www`
 - IPv4 address: `66.42.121.161`
 
-### Add MX host records — ⚠ pending DNS change, see `multi-platform-mail-plan.md`
+### Add MX host records — ⚠ pending DNS change (Option A decided; awaiting Cloudflare execution)
 
-These records do **not exist in DNS yet**. Target state (mail records must be **DNS only** — grey cloud — SMTP cannot go through Cloudflare's HTTP proxy):
+These records do **not exist in DNS yet**. Target state — mail box `149.28.119.158` (mail records must be **DNS only** — grey cloud — SMTP cannot go through Cloudflare's HTTP proxy):
 
 | Type | Name | IPv4 address | Proxy |
 |------|------|-------------|-------|
-| A | `mx1` | `66.42.121.161` | DNS only |
-| A | `mx2` | `66.42.121.161` | DNS only |
+| A | `mx1` | `149.28.119.158` | DNS only |
+| A | `mx2` | `149.28.119.158` | DNS only |
 
 ### Add MX routing record (replace Cloudflare Email Routing if present)
 
@@ -210,16 +214,16 @@ Remove the `route1/route2/route3.mx.cloudflare.net` MX records if they exist, th
 | MX | `@` | `mx1.alecrae.com` | `10` |
 | MX | `@` | `mx2.alecrae.com` | `20` |
 
-### Add SPF records — ⚠ pending DNS change, see `multi-platform-mail-plan.md`
+### Add SPF records — ⚠ `_spf` still pending (Option A decided; awaiting Cloudflare execution)
 
-**Current reality:** the live SPF (`spf.alecrae.com` TXT) still authorizes the deprecated 149 box, and `_spf.alecrae.com` does not exist. The target state (Jarvis) is below; do not apply without Craig's DNS authorization.
+**Current reality:** the live SPF (`spf.alecrae.com` TXT) **already authorizes the 149 mail box** — correct under Option A, no IP churn needed. `_spf.alecrae.com` does not exist yet. Target state (mail box `149.28.119.158`) below; the `_spf` record awaits Craig's Cloudflare execution.
 
 Two SPF records are required — one for `alecrae.com` itself, one for customer domains:
 
 | Type | Name | Content | TTL | Purpose |
 |------|------|---------|-----|---------|
-| TXT | `@` | `v=spf1 ip4:66.42.121.161 include:spf.resend.com ~all` | Auto | Outbound from alecrae.com via Resend |
-| TXT | `_spf` | `v=spf1 ip4:66.42.121.161 include:spf.resend.com ~all` | Auto | Included by customer domain SPF records |
+| TXT | `@` | `v=spf1 ip4:149.28.119.158 include:spf.resend.com ~all` | Auto | Outbound from alecrae.com (direct from the mail box or via Resend) |
+| TXT | `_spf` | `v=spf1 ip4:149.28.119.158 ~all` | Auto | Included by customer domain SPF records |
 
 The `_spf.alecrae.com` record is what the DNS auto-config service tells customers to include in their SPF (`include:_spf.alecrae.com`). Without it, customer domain SPF verification fails.
 
@@ -232,23 +236,14 @@ If you haven't already:
 2. Add the DNS records shown (DKIM TXT + MX for bounces)
 3. Click **Verify Domain** — must show green ✓ before outbound email works
 
-### Set reverse DNS (PTR) in Vultr — ⚠ pending, see `multi-platform-mail-plan.md`
+### Reverse DNS (PTR) — ✅ ALREADY SET (Option A)
 
-**Current reality:** the PTR for the deprecated 149 box still reads `mail.alecrae.com`; the PTR for Jarvis (`66.42.121.161`) is still the generic choopa.net one. Target state:
+The PTR for the mail box (`149.28.119.158`) already reads `mail.alecrae.com` — nothing to do. (Jarvis's PTR stays the generic choopa.net one; Jarvis doesn't send mail.)
 
-1. Log in to **https://my.vultr.com**
-2. Click the Jarvis VPS instance → **Settings** → **IPv4**
-3. Find `66.42.121.161` → click the pencil icon next to rDNS
-4. Set it to: `mail.alecrae.com`
-5. Click **Update**
+### Port 25 — outbound ✅ done, inbound pending Phase 2
 
-### Unblock port 25 in Vultr
-
-1. In the Vultr control panel → **Network** → **Firewall** (or the instance firewall)
-2. Add a rule: Protocol `TCP`, Port `25`, Source `0.0.0.0/0` → **Add**
-3. If there's a banner saying "Port 25 is blocked for spam prevention", open a support ticket:
-   > "Please unblock port 25 on instance 66.42.121.161. I'm running AlecRae, a business email service. Outbound SMTP is required for our MTA."
-   Vultr typically unblocks within a few hours. Until then, Resend relay on port 465 is the fallback.
+- **Outbound port 25 on `149.28.119.158` is already unblocked by Vultr** — no ticket needed.
+- **Inbound port 25 on 158 is currently closed** — it gets opened via ufw + the `alecrae-inbound` service in Phase 2 of `docs/infra/multi-platform-mail-plan.md`. Until then, Resend relay on port 465 handles outbound.
 
 ---
 
@@ -326,7 +321,7 @@ Work through these top to bottom. Stop at the first failure and fix it before mo
 
 ## Section 7: Start the MTA Worker (outbound email)
 
-Email sending requires Redis + the MTA worker. **As of 2026-07-13 the MTA is NOT running on any box** — set it up on Jarvis per `docs/infra/mta-box-setup.md`. Note Coolify/Traefik owns 80/443 on Jarvis, so the MTA health port must not collide (default `HEALTH_PORT=8082`). Short version:
+Email sending requires Redis + the MTA worker. **As of 2026-07-13 the MTA is NOT running on any box** — set it up on the **mail box (`149.28.119.158`; `ssh root@vapron-158` via Tailscale)** per `docs/infra/mta-box-setup.md`. Note `vapron-bun-gateway` owns 80/443 on the 158 box (Coolify/Traefik does NOT run there), so keep the MTA health port at the default `HEALTH_PORT=8082`. Short version (run on the mail box):
 
 ```bash
 # Install Redis (if not already installed)
