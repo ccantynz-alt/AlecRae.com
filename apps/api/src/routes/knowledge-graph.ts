@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, lt, gte, sql, or, ilike } from "drizzle-orm";
+import { eq, and, desc, lt, gte, sql, or, ilike, inArray } from "drizzle-orm";
 import {
   getDatabase,
   knowledgeEntities,
@@ -510,7 +510,7 @@ knowledgeGraphRouter.get(
         .where(
           and(
             eq(knowledgeEntities.accountId, accountId),
-            sql`${knowledgeEntities.id} = ANY(${sql.raw(`ARRAY[${[...entityIds].map((id) => `'${id}'`).join(",")}]`)})`,
+            inArray(knowledgeEntities.id, [...entityIds]),
           ),
         );
 
@@ -533,7 +533,7 @@ knowledgeGraphRouter.get(
         .where(
           and(
             eq(knowledgeRelationships.accountId, accountId),
-            sql`${knowledgeRelationships.sourceEntityId} = ANY(${sql.raw(`ARRAY[${nodeIds.map((id) => `'${id}'`).join(",")}]`)})`,
+            inArray(knowledgeRelationships.sourceEntityId, nodeIds),
           ),
         )
         .limit(200);

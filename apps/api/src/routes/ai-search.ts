@@ -15,6 +15,8 @@ import { z } from "zod";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { searchEmails } from "@alecrae/shared";
+import { getDatabase, searchHistory } from "@alecrae/db";
+import { generateId } from "../lib/jwt.js";
 import { hybridSearch, isVectorSearchAvailable } from "@alecrae/ai-engine/embeddings/hybrid";
 import {
   HybridSearchRequestSchema,
@@ -119,6 +121,22 @@ Only include fields that are mentioned or implied in the query. Return ONLY the 
   }
 }
 
+// Fire-and-forget: record a search into search_history so the Search
+// Intelligence history panel populates. Never let a logging failure break search.
+function recordSearchHistory(
+  accountId: string,
+  query: string,
+  resultCount: number,
+  searchType: "keyword" | "semantic",
+): void {
+  const db = getDatabase();
+  db.insert(searchHistory)
+    .values({ id: generateId(), accountId, query, resultCount, searchType })
+    .catch(() => {
+      /* history is best-effort; ignore */
+    });
+}
+
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 const aiSearch = new Hono();
@@ -145,6 +163,8 @@ aiSearch.post(
       const results = await searchEmails(auth.accountId, searchTerms, {
         limit: input.limit,
       });
+
+      recordSearchHistory(auth.accountId, input.query, results.totalHits, "keyword");
 
       return c.json({
         data: {
@@ -230,6 +250,7 @@ aiSearch.post(
 
     try {
       const response = await hybridSearch(input, auth.accountId);
+      recordSearchHistory(auth.accountId, input.query, response.totalHits, "semantic");
       return c.json({ data: response });
     } catch (err) {
       console.error("[search/semantic] Hybrid search error:", err);

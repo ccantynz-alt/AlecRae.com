@@ -10,11 +10,16 @@
  *   GET  /v1/push-notifications/preferences
  *   PATCH /v1/push-notifications/preferences
  *   GET  /v1/push-notifications/history
+ *
+ * The Notification Intelligence layer (AI rules, pending batches + digest,
+ * evaluate/test panel — /v1/notifications/*) is rendered by
+ * NotificationIntelligencePanel (components/notification-intelligence-panel.tsx).
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { Box, Text, Button, Card, CardContent, CardHeader, PageLayout } from "@alecrae/ui";
 import { getAccessToken, refreshSession, redirectToLogin } from "../../../lib/auth-token";
+import { NotificationIntelligencePanel } from "../../../components/notification-intelligence-panel";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -444,6 +449,9 @@ export default function NotificationsPage(): React.JSX.Element {
             )}
           </CardContent>
         </Card>
+
+        {/* Notification Intelligence — AI rules, batches + digest, evaluate */}
+        <NotificationIntelligencePanel />
 
         {/* Notification history */}
         <Box>

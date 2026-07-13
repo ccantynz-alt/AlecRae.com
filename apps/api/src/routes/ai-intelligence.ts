@@ -139,7 +139,7 @@ aiIntelligenceRouter.post(
     const [existing] = await db
       .select()
       .from(emailPriorityScores)
-      .where(eq(emailPriorityScores.emailId, input.emailId))
+      .where(and(eq(emailPriorityScores.emailId, input.emailId), eq(emailPriorityScores.accountId, auth.accountId)))
       .limit(1);
 
     if (existing) {
@@ -521,7 +521,7 @@ aiIntelligenceRouter.post(
     const [existing] = await db
       .select()
       .from(emailSentiments)
-      .where(eq(emailSentiments.emailId, input.emailId))
+      .where(and(eq(emailSentiments.emailId, input.emailId), eq(emailSentiments.accountId, auth.accountId)))
       .limit(1);
 
     if (existing) {
