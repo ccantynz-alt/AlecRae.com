@@ -61,7 +61,7 @@ Think of AlecRae's mail stack as your own private Postmark + Google Workspace:
 | B3 | ~~Mail hostnames Cloudflare-proxied~~ **REVISED then RESOLVED 2026-07-13:** `mail.alecrae.com` is the webmail app on Jarvis and correctly STAYS proxied. The SMTP identity is the separate `smtp.alecrae.com` (grey, → 158) — grey-clouding `mail` would have broken nothing but was unnecessary; pointing SMTP identity at it would have failed FCrDNS | ✅ resolved by design (smtp.alecrae.com added) |
 | B4 | **MTA worker not running anywhere** | Sends queue in Redis and never deliver (Known Issue #42/#55) |
 | B5 | **Inbound service not deployed anywhere** | No process listens on port 25 |
-| B6 | **PTR on 158 says `mail.alecrae.com`** — but `mail.alecrae.com` forward-resolves to Cloudflare/Jarvis, so FCrDNS would fail once sending starts | ⚠ OPEN — Craig: change PTR in Vultr panel to `smtp.alecrae.com` (after the smtp A record, which now exists) |
+| B6 | ~~PTR on 158 said `mail.alecrae.com`~~ | ✅ FIXED 2026-07-13 — Craig changed PTR to `smtp.alecrae.com` in Vultr; FCrDNS verified passing both directions |
 | B7 | ~~`smtp.alecrae.com` A record missing~~ | ✅ FIXED 2026-07-13 — A → 149.28.119.158, grey |
 
 ## 4. DECISION 1 — ✅ DECIDED 2026-07-13 (Craig): **Option A — 158 stays as the dedicated mail box**
@@ -119,10 +119,10 @@ All applied 2026-07-13 and verified resolving via 1.1.1.1:
 6. ✅ `bounce.alecrae.com` CNAME retargeted `mail.alecrae.com` → `smtp.alecrae.com`
 7. ✅ `mail.alecrae.com` left proxied (webmail on Jarvis — correct)
 
-**Remaining Phase 0 item (Vultr panel, Craig):** change PTR for
-`149.28.119.158` from `mail.alecrae.com` → **`smtp.alecrae.com`** so FCrDNS
-holds (PTR → forward → same IP). Verify after: `nslookup 149.28.119.158` →
-smtp.alecrae.com and `nslookup smtp.alecrae.com` → 149.28.119.158.
+8. ✅ PTR for `149.28.119.158` changed to `smtp.alecrae.com` (Vultr, Craig,
+   2026-07-13) — FCrDNS verified passing both directions.
+
+**Phase 0 is COMPLETE (2026-07-13).** Next: Phase 1 (MTA bring-up on 158).
 
 ### Phase 1 — outbound live
 1. On the mail box: follow `docs/infra/mta-box-setup.md` — install/verify Redis,
@@ -216,8 +216,7 @@ standing-up (no production zones) is routine build work.
 
 ## 7. What needs Craig's explicit authorization (Boss Rule)
 
-- ~~All Phase 0 DNS changes (Cloudflare)~~ — **EXECUTED by Craig 2026-07-13.**
-- Vultr panel: PTR change for 149.28.119.158 → `smtp.alecrae.com` (last Phase 0 item).
+- ~~All Phase 0 DNS changes (Cloudflare + Vultr PTR)~~ — **EXECUTED by Craig 2026-07-13; FCrDNS verified.**
 - ~~Decision 1 (mail box choice)~~ — **DECIDED 2026-07-13: Option A (keep 158).**
 - Keeping the 158 box funded (billing) — implied by Option A.
 
