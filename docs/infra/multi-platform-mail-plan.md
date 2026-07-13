@@ -1,6 +1,6 @@
 # Multi-Platform Mail Architecture — The Plan
 
-Last updated: 2026-07-13 08:05 UTC
+Last updated: 2026-07-13 09:20 UTC
 
 > **Purpose:** One document that answers "how do all of Craig's platforms send and
 > receive mail through alecrae.com, and how does that fit with Vapron owning its
@@ -154,7 +154,53 @@ For each platform domain (e.g. `vapron.ai` — mail.vapron.ai is already done):
   domains whose DNS is managed by the Vapron platform get records created
   automatically instead of via copy-paste.
 
-## 6. What needs Craig's explicit authorization (Boss Rule)
+## 6. DNS end-state: coming off Cloudflare (added 2026-07-13, per Craig)
+
+**Goal confirmed by Craig: eventually run DNS on our own infrastructure (the
+Vapron setup), not Cloudflare.** The code already points there:
+`services/dns/src/authoritative/server.ts` is a working UDP authoritative DNS
+server, and `services/dns/src/config.ts` defaults `DNS_NS_HOSTS` to
+`ns1.alecrae.com,ns2.alecrae.com`.
+
+**The rule that stops the churn: mail does NOT wait for the DNS migration, and
+the DNS migration happens exactly once, when it's proven.** DNS records are
+portable — the Phase 0 records added at Cloudflare today move with the zone
+when it migrates. Nothing is done twice.
+
+Cloudflare currently plays two roles; they detach separately:
+
+| Role | Today | End state |
+|---|---|---|
+| Authoritative DNS (where records live) | Cloudflare zone | Vapron DNS (ns1/ns2.alecrae.com) |
+| HTTP proxy / TLS / origin-hiding (orange cloud) | Cloudflare in front of web hosts | Traefik on Jarvis terminates TLS directly (grey everything) |
+
+### Staged exit
+
+- **Stage 0 (now):** Phase 0–2 of this plan execute at Cloudflare as-is. Mail
+  goes live. No DNS-host decisions coupled to it.
+- **Stage 1 — prove Vapron DNS on low-stakes zones:** stand up the
+  authoritative server as `ns1.alecrae.com` (Jarvis, 66.42.121.161) and
+  `ns2.alecrae.com` (the 158 box) — two NSes on two boxes is the hard
+  requirement; a single-box DNS host is an outage waiting to repeat July.
+  Point a throwaway/test domain at it first, then a real-but-low-stakes
+  platform domain. Must-haves before Stage 2: TCP fallback (RFC 7766, truncated
+  responses), zone transfer or shared-DB replication between ns1/ns2, and
+  30–60 days of clean operation with monitoring/alerting (which currently
+  doesn't exist — Known Issue #72 blocks this stage).
+- **Stage 2 — migrate platform domains:** move vapron.ai etc. off
+  Porkbun/other hosts onto Vapron DNS. Customer-facing win: AlecRae/Vapron can
+  then create mail records automatically at onboarding (no copy-paste wizard).
+- **Stage 3 — migrate alecrae.com itself (last):** export the Cloudflare zone,
+  import to Vapron DNS, switch registrar NS entries. Before flipping: Traefik
+  on Jarvis must terminate TLS itself (certs via ACME), and accept that the
+  origin IP becomes public (ufw + rate limiting already in place; revisit
+  DDoS posture). alecrae.com moves LAST because it's the mail engine's own
+  identity domain — everything else depends on it resolving.
+
+Boss Rule: every stage's cutover needs Craig's authorization; Stage 1
+standing-up (no production zones) is routine build work.
+
+## 7. What needs Craig's explicit authorization (Boss Rule)
 
 - All Phase 0 DNS changes (Cloudflare) and any Vultr panel actions (PTR, port 25).
 - ~~Decision 1 (mail box choice)~~ — **DECIDED 2026-07-13: Option A (keep 158).**
