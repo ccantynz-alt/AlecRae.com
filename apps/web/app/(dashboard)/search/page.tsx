@@ -12,6 +12,8 @@ import {
   PageLayout,
 } from "@alecrae/ui";
 import { EmailQueryConsole } from "../../../components/EmailQueryConsole";
+import { PlanGate } from "../../../components/plan-gate";
+import { SemanticSearchSection } from "../../../components/semantic-search-section";
 import { aiSearchApi, type AISearchResult } from "../../../lib/api-features";
 import {
   searchIntelligenceApi,
@@ -73,6 +75,10 @@ export default function SearchPage(): React.ReactNode {
           onPickSuggestion={runQuery}
           onSearched={handleSearched}
         />
+
+        <PlanGate feature="semantic_search" required="pro">
+          <SemanticSearchSection />
+        </PlanGate>
 
         <Box className="grid gap-6 lg:grid-cols-2">
           <SearchHistoryPanel refreshKey={historyVersion} onRun={runQuery} />

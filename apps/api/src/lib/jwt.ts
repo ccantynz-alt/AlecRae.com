@@ -154,6 +154,8 @@ function scopesForRole(role: string | undefined): string {
     "contacts:read",
     "contacts:write",
     "grammar:read",
+    "encryption:read",
+    "encryption:write",
   ];
   switch (role) {
     case "owner":

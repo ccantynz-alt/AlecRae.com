@@ -3,13 +3,20 @@
 /**
  * AlecRae — Notification Center
  *
- * Manage push notification preferences, quiet hours, AI-powered batching,
- * and view recent notification history.
+ * Manage push notification preferences, quiet hours, registered devices, and
+ * the AI-powered Notification Intelligence layer.
  *
- * API:
- *   GET  /v1/push-notifications/preferences
- *   PATCH /v1/push-notifications/preferences
- *   GET  /v1/push-notifications/history
+ * Push API (mounted at /v1/push in server.ts, via lib/api-push-notifications.ts):
+ *   GET  /v1/push/preferences     — get notification preferences
+ *   PUT  /v1/push/preferences     — update notification preferences
+ *   GET  /v1/push/subscriptions   — list registered devices  (PushDevices)
+ *   POST /v1/push/subscribe       — register a device         (PushDevices)
+ *   DELETE /v1/push/subscribe/:id — unregister a device       (PushDevices)
+ *   POST /v1/push/test            — send a test notification  (PushDevices)
+ *
+ * NB: there is no `/history` endpoint on the server — the previous version of
+ * this page fetched `/v1/push-notifications/history` (wrong mount path + no such
+ * route), which 404'd. That call has been removed.
  *
  * The Notification Intelligence layer (AI rules, pending batches + digest,
  * evaluate/test panel — /v1/notifications/*) is rendered by
@@ -18,90 +25,23 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Box, Text, Button, Card, CardContent, CardHeader, PageLayout } from "@alecrae/ui";
-import { getAccessToken, refreshSession, redirectToLogin } from "../../../lib/auth-token";
 import { NotificationIntelligencePanel } from "../../../components/notification-intelligence-panel";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface NotificationPreferences {
-  enabled: boolean;
-  vipOnly: boolean;
-  threadReplies: boolean;
-  meetingInvites: boolean;
-  agentRuns: boolean;
-  weeklyDigest: boolean;
-  securityAlerts: boolean;
-  quietHoursStart: string;
-  quietHoursEnd: string;
-  aiBatching: boolean;
-}
-
-interface NotificationHistoryItem {
-  id: string;
-  title: string;
-  body: string;
-  type: string;
-  createdAt: string;
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://api.alecrae.com";
-
-const NOTIFICATION_TYPE_ICONS: Record<string, string> = {
-  vip: "⭐",
-  thread: "💬",
-  meeting: "📅",
-  agent: "🤖",
-  digest: "📰",
-  security: "🔒",
-  default: "🔔",
-};
+import { PushDevices } from "../../../components/push-devices";
+import {
+  pushNotificationsApi,
+  type PushPreferences,
+  type UpdatePreferencesPayload,
+} from "../../../lib/api-push-notifications";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const doFetch = async (token: string | null) =>
-    fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${token ?? ""}`,
-        "Content-Type": "application/json",
-        ...options?.headers,
-      },
-    });
-
-  let res = await doFetch(getAccessToken());
-  if (res.status === 401) {
-    const newToken = await refreshSession();
-    if (!newToken) { redirectToLogin(); throw new Error("Session expired"); }
-    res = await doFetch(newToken);
-  }
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json() as Promise<T>;
-}
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : "Something went wrong";
 }
 
-function formatRelativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function typeIcon(type: string): string {
-  return NOTIFICATION_TYPE_ICONS[type] ?? NOTIFICATION_TYPE_ICONS.default ?? "🔔";
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+/** A binary on/off toggle backed by an "all" | "none" preference. */
 function ToggleRow({
   label,
   description,
@@ -158,6 +98,59 @@ function ToggleRow({
   );
 }
 
+/** New-email delivery has three modes (all/important/none) — a segmented picker. */
+function NewEmailModeRow({
+  value,
+  onChange,
+}: {
+  value: PushPreferences["newEmail"];
+  onChange: (val: PushPreferences["newEmail"]) => void;
+}): React.JSX.Element {
+  const options: { key: PushPreferences["newEmail"]; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "important", label: "Important only" },
+    { key: "none", label: "Off" },
+  ];
+  return (
+    <Box className="flex items-center justify-between gap-4 py-3">
+      <Box className="flex-1">
+        <Text variant="body-sm" className="font-medium text-content">
+          New email
+        </Text>
+        <Text variant="body-sm" muted className="mt-0.5 text-xs">
+          How much to notify you when new mail arrives.
+        </Text>
+      </Box>
+      <Box
+        role="radiogroup"
+        aria-label="New email notifications"
+        className="inline-flex overflow-hidden rounded-lg border border-border"
+      >
+        {options.map((opt) => {
+          const active = value === opt.key;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(opt.key)}
+              className={[
+                "px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-inset",
+                active
+                  ? "bg-brand-600 text-white"
+                  : "bg-surface text-content hover:bg-surface-raised",
+              ].join(" ")}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </Box>
+    </Box>
+  );
+}
+
 function TimeInput({
   label,
   value,
@@ -184,67 +177,32 @@ function TimeInput({
   );
 }
 
-function HistoryItem({ item }: { item: NotificationHistoryItem }): React.JSX.Element {
-  return (
-    <Box className="flex items-start gap-3 rounded-xl border border-border bg-surface-raised px-4 py-3">
-      <Box
-        className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-surface text-base select-none"
-        aria-hidden="true"
-      >
-        {typeIcon(item.type)}
-      </Box>
-      <Box className="flex-1 min-w-0">
-        <Text variant="body-sm" className="font-medium text-content truncate">
-          {item.title}
-        </Text>
-        <Text variant="body-sm" muted className="mt-0.5 text-xs line-clamp-2">
-          {item.body}
-        </Text>
-      </Box>
-      <Text variant="body-sm" muted className="flex-shrink-0 text-xs whitespace-nowrap">
-        {formatRelativeTime(item.createdAt)}
-      </Text>
-    </Box>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const DEFAULT_PREFS: NotificationPreferences = {
-  enabled: false,
-  vipOnly: false,
-  threadReplies: true,
-  meetingInvites: true,
-  agentRuns: true,
-  weeklyDigest: true,
-  securityAlerts: true,
-  quietHoursStart: "22:00",
-  quietHoursEnd: "08:00",
-  aiBatching: false,
+const DEFAULT_PREFS: PushPreferences = {
+  newEmail: "important",
+  mentions: "all",
+  calendarReminders: "all",
+  securityAlerts: "all",
+  deliverabilityAlerts: "all",
+  quietHoursStart: null,
+  quietHoursEnd: null,
+  quietHoursTimezone: null,
 };
 
 export default function NotificationsPage(): React.JSX.Element {
-  const [prefs, setPrefs] = useState<NotificationPreferences>(DEFAULT_PREFS);
-  const [history, setHistory] = useState<NotificationHistoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [prefs, setPrefs] = useState<PushPreferences>(DEFAULT_PREFS);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      const [prefsRes, historyRes] = await Promise.all([
-        apiFetch<{ data: NotificationPreferences }>("/v1/push-notifications/preferences").then(
-          (r) => r.data,
-        ),
-        apiFetch<{ data: NotificationHistoryItem[] }>("/v1/push-notifications/history").then(
-          (r) => r.data,
-        ),
-      ]);
-      setPrefs(prefsRes);
-      setHistory(historyRes);
+      const res = await pushNotificationsApi.getPreferences();
+      setPrefs(res.data);
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -257,18 +215,15 @@ export default function NotificationsPage(): React.JSX.Element {
   }, [loadData]);
 
   const updatePref = useCallback(
-    async (patch: Partial<NotificationPreferences>) => {
-      const next = { ...prefs, ...patch };
-      setPrefs(next); // optimistic
+    async (patch: UpdatePreferencesPayload): Promise<void> => {
+      const prev = prefs;
+      setPrefs({ ...prefs, ...patch }); // optimistic
       setSaving(true);
       setSaveError(null);
       try {
-        await apiFetch("/v1/push-notifications/preferences", {
-          method: "PATCH",
-          body: JSON.stringify(patch),
-        });
+        await pushNotificationsApi.updatePreferences(patch);
       } catch (e) {
-        setPrefs(prefs); // rollback
+        setPrefs(prev); // rollback
         setSaveError(errMsg(e));
       } finally {
         setSaving(false);
@@ -276,6 +231,11 @@ export default function NotificationsPage(): React.JSX.Element {
     },
     [prefs],
   );
+
+  // Quiet hours use HH:MM inputs; the backend stores null when a window isn't
+  // set, so an empty input value maps to null.
+  const quietStart = prefs.quietHoursStart ?? "";
+  const quietEnd = prefs.quietHoursEnd ?? "";
 
   return (
     <PageLayout
@@ -300,10 +260,7 @@ export default function NotificationsPage(): React.JSX.Element {
 
         {/* Save error */}
         {saveError && (
-          <Box
-            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3"
-            role="alert"
-          >
+          <Box className="rounded-lg border border-red-200 bg-red-50 px-4 py-3" role="alert">
             <Text variant="body-sm" className="text-red-800">
               Failed to save: {saveError}
             </Text>
@@ -319,32 +276,21 @@ export default function NotificationsPage(): React.JSX.Element {
           </Box>
         )}
 
-        {/* Master push toggle */}
-        <Card>
-          <CardContent>
-            {loading ? (
-              <Box className="h-12 animate-pulse rounded-lg bg-surface-raised" aria-busy="true" />
-            ) : (
-              <ToggleRow
-                label="Push Notifications"
-                description="Receive push notifications from AlecRae in your browser or device"
-                checked={prefs.enabled}
-                onChange={(val) => void updatePref({ enabled: val })}
-                large
-              />
-            )}
-          </CardContent>
-        </Card>
+        {/* Registered devices — Web Push subscriptions */}
+        <PushDevices />
 
         {/* Notification preferences */}
         <Card>
           <CardHeader>
             <Text variant="heading-sm">Notification Preferences</Text>
+            <Text variant="body-sm" muted>
+              Choose which activity is worth an interruption.
+            </Text>
           </CardHeader>
           <CardContent>
             {loading ? (
               <Box className="space-y-3">
-                {[0, 1, 2, 3, 4, 5].map((i) => (
+                {[0, 1, 2, 3, 4].map((i) => (
                   <Box
                     key={i}
                     className="h-10 animate-pulse rounded-lg bg-surface-raised"
@@ -354,47 +300,39 @@ export default function NotificationsPage(): React.JSX.Element {
               </Box>
             ) : (
               <Box className="divide-y divide-border">
-                <ToggleRow
-                  label="VIP contacts only"
-                  description="Only notify for emails from contacts you've starred as VIP"
-                  checked={prefs.vipOnly}
-                  onChange={(val) => void updatePref({ vipOnly: val })}
-                  disabled={!prefs.enabled}
+                <NewEmailModeRow
+                  value={prefs.newEmail}
+                  onChange={(val) => void updatePref({ newEmail: val })}
                 />
                 <ToggleRow
-                  label="Thread replies"
-                  description="Alert when someone replies to a thread you're in"
-                  checked={prefs.threadReplies}
-                  onChange={(val) => void updatePref({ threadReplies: val })}
-                  disabled={!prefs.enabled}
+                  label="Mentions"
+                  description="Alert when you're mentioned in a shared thread or comment"
+                  checked={prefs.mentions === "all"}
+                  onChange={(val) => void updatePref({ mentions: val ? "all" : "none" })}
                 />
                 <ToggleRow
-                  label="Meeting invites"
-                  description="Notify immediately when a calendar invite arrives"
-                  checked={prefs.meetingInvites}
-                  onChange={(val) => void updatePref({ meetingInvites: val })}
-                  disabled={!prefs.enabled}
+                  label="Calendar reminders"
+                  description="Notify ahead of meetings and calendar events"
+                  checked={prefs.calendarReminders === "all"}
+                  onChange={(val) =>
+                    void updatePref({ calendarReminders: val ? "all" : "none" })
+                  }
                 />
                 <ToggleRow
-                  label="AI agent run completions"
-                  description="Get notified when your overnight inbox agent finishes a run"
-                  checked={prefs.agentRuns}
-                  onChange={(val) => void updatePref({ agentRuns: val })}
-                  disabled={!prefs.enabled}
-                />
-                <ToggleRow
-                  label="Weekly digest"
-                  description="Receive a weekly summary of your email activity every Monday"
-                  checked={prefs.weeklyDigest}
-                  onChange={(val) => void updatePref({ weeklyDigest: val })}
-                  disabled={!prefs.enabled}
+                  label="Deliverability alerts"
+                  description="Warn when a message bounces or your sending reputation dips"
+                  checked={prefs.deliverabilityAlerts === "all"}
+                  onChange={(val) =>
+                    void updatePref({ deliverabilityAlerts: val ? "all" : "none" })
+                  }
                 />
                 <ToggleRow
                   label="Security alerts"
-                  description="Always notified about suspicious activity and sign-ins (cannot be disabled when push is on)"
-                  checked={prefs.securityAlerts}
-                  onChange={(val) => void updatePref({ securityAlerts: val })}
-                  disabled={!prefs.enabled}
+                  description="Suspicious activity and new sign-ins. Strongly recommended."
+                  checked={prefs.securityAlerts === "all"}
+                  onChange={(val) =>
+                    void updatePref({ securityAlerts: val ? "all" : "none" })
+                  }
                 />
               </Box>
             )}
@@ -407,7 +345,7 @@ export default function NotificationsPage(): React.JSX.Element {
             <Text variant="heading-sm">Quiet Hours</Text>
             <Text variant="body-sm" muted>
               No notifications will be sent during this window — they queue and deliver when quiet
-              hours end.
+              hours end. Clear both fields to disable.
             </Text>
           </CardHeader>
           <CardContent>
@@ -417,71 +355,25 @@ export default function NotificationsPage(): React.JSX.Element {
               <Box className="grid grid-cols-2 gap-4">
                 <TimeInput
                   label="Start time"
-                  value={prefs.quietHoursStart}
-                  onChange={(val) => void updatePref({ quietHoursStart: val })}
+                  value={quietStart}
+                  onChange={(val) =>
+                    void updatePref({ quietHoursStart: val === "" ? null : val })
+                  }
                 />
                 <TimeInput
                   label="End time"
-                  value={prefs.quietHoursEnd}
-                  onChange={(val) => void updatePref({ quietHoursEnd: val })}
+                  value={quietEnd}
+                  onChange={(val) =>
+                    void updatePref({ quietHoursEnd: val === "" ? null : val })
+                  }
                 />
               </Box>
             )}
           </CardContent>
         </Card>
 
-        {/* AI batching */}
-        <Card>
-          <CardHeader>
-            <Text variant="heading-sm">AI Batching</Text>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Box className="h-12 animate-pulse rounded-lg bg-surface-raised" aria-busy="true" />
-            ) : (
-              <ToggleRow
-                label="Intelligent notification batching"
-                description="AlecRae's AI groups related notifications together and delivers them at the best time for your focus, instead of interrupting you one by one."
-                checked={prefs.aiBatching}
-                onChange={(val) => void updatePref({ aiBatching: val })}
-                disabled={!prefs.enabled}
-              />
-            )}
-          </CardContent>
-        </Card>
-
         {/* Notification Intelligence — AI rules, batches + digest, evaluate */}
         <NotificationIntelligencePanel />
-
-        {/* Notification history */}
-        <Box>
-          <Text variant="heading-sm" className="mb-3">
-            Recent Notifications
-          </Text>
-          {loading ? (
-            <Box className="space-y-2">
-              {[0, 1, 2, 3].map((i) => (
-                <Box
-                  key={i}
-                  className="h-16 animate-pulse rounded-xl bg-surface-raised"
-                  aria-hidden="true"
-                />
-              ))}
-            </Box>
-          ) : history.length === 0 ? (
-            <Box className="rounded-xl border border-border bg-surface-raised px-4 py-8 text-center">
-              <Text variant="body-sm" muted>
-                No notifications yet. Enable push notifications above to start receiving them.
-              </Text>
-            </Box>
-          ) : (
-            <Box className="space-y-2">
-              {history.map((item) => (
-                <HistoryItem key={item.id} item={item} />
-              ))}
-            </Box>
-          )}
-        </Box>
       </Box>
     </PageLayout>
   );

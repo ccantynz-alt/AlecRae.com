@@ -241,7 +241,7 @@ app.route("/v1/auth", auth);
 app.route("/v1/auth/passkey", passkeyRouter);
 
 // SSO endpoints: metadata and ACS are public (IdP calls them), config endpoints use their own auth
-app.use("/v1/sso/config", writeRateLimit);
+app.use("/v1/sso/config", authMiddleware, requireAdmin(), writeRateLimit);
 app.use("/v1/sso/*", authRateLimit);
 app.route("/v1/sso", sso);
 

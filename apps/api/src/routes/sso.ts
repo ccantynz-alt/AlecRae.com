@@ -645,36 +645,11 @@ sso.post("/logout", validateBody(SsoLogoutSchema), async (c) => {
 // ─── GET /v1/sso/config — Get SSO configuration ────────��────────────────────
 
 sso.get("/config", async (c) => {
-  const authHeader = c.req.header("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return c.json(
-      {
-        error: {
-          type: "authentication_error",
-          message: "Admin authentication required",
-          code: "unauthenticated",
-        },
-      },
-      401,
-    );
-  }
-
-  const token = authHeader.slice(7);
-  const payload = await verifyToken(token);
-  if (!payload) {
-    return c.json(
-      {
-        error: {
-          type: "authentication_error",
-          message: "Invalid or expired token",
-          code: "invalid_token",
-        },
-      },
-      401,
-    );
-  }
-
-  const accountId = payload["sub"] as string;
+  // Auth + admin enforced by authMiddleware + requireAdmin() mounted on
+  // /v1/sso/config in server.ts (a normal admin session token, not the
+  // SSO-issued ACS token, which never reaches this config surface).
+  const auth = c.get("auth");
+  const accountId = auth.accountId;
   const config = await getSsoConfig(accountId);
 
   return c.json({
@@ -693,51 +668,10 @@ sso.get("/config", async (c) => {
 // ─── PUT /v1/sso/config — Update SSO configuration ──────────────────────────
 
 sso.put("/config", validateBody(SsoConfigSchema), async (c) => {
-  const authHeader = c.req.header("Authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return c.json(
-      {
-        error: {
-          type: "authentication_error",
-          message: "Admin authentication required",
-          code: "unauthenticated",
-        },
-      },
-      401,
-    );
-  }
-
-  const token = authHeader.slice(7);
-  const payload = await verifyToken(token);
-  if (!payload) {
-    return c.json(
-      {
-        error: {
-          type: "authentication_error",
-          message: "Invalid or expired token",
-          code: "invalid_token",
-        },
-      },
-      401,
-    );
-  }
-
-  // Verify admin/owner role
-  const role = payload["role"] as string;
-  if (role !== "owner" && role !== "admin") {
-    return c.json(
-      {
-        error: {
-          type: "authorization_error",
-          message: "Only account owners and admins can configure SSO",
-          code: "insufficient_permissions",
-        },
-      },
-      403,
-    );
-  }
-
-  const accountId = payload["sub"] as string;
+  // Auth + admin/owner enforced by authMiddleware + requireAdmin() mounted on
+  // /v1/sso/config in server.ts.
+  const auth = c.get("auth");
+  const accountId = auth.accountId;
   const input = getValidatedBody<z.infer<typeof SsoConfigSchema>>(c);
 
   const db = getDatabase();
