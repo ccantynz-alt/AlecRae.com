@@ -15,7 +15,8 @@ import {
   PageLayout,
 } from "@alecrae/ui";
 import { motion } from "motion/react";
-import { authApi, accountApi, type PasskeyInfo, type NotificationPrefs } from "../../../lib/api";
+import { authApi, accountApi, type MeUser, type PasskeyInfo, type NotificationPrefs } from "../../../lib/api";
+import { normalizeApiPlanTier, PLAN_LABELS } from "../../../lib/plan";
 import { PressableScale } from "../../../components/PressableScale";
 import { AnimatedPresence } from "../../../components/AnimatedPresence";
 import {
@@ -39,6 +40,7 @@ export default function SettingsPage(): React.ReactNode {
   const reduced = useAlecRaeReducedMotion();
   const [user, setUser] = useState<UserData | null>(null);
   const [account, setAccount] = useState<AccountData | null>(null);
+  const [me, setMe] = useState<MeUser | null>(null);
   const [loading, setLoading] = useState(true);
   const itemVariants = withReducedMotion(fadeInUp, reduced);
 
@@ -48,6 +50,7 @@ export default function SettingsPage(): React.ReactNode {
       accountApi.get().catch(() => null),
     ]).then(([userRes, accountRes]) => {
       if (userRes) setUser({ name: userRes.data.name, email: userRes.data.email });
+      if (userRes) setMe(userRes.data);
       if (accountRes) setAccount({ planTier: accountRes.data.planTier, emailsSentThisPeriod: accountRes.data.emailsSentThisPeriod });
       setLoading(false);
     });
@@ -96,6 +99,9 @@ export default function SettingsPage(): React.ReactNode {
               </Link>
             </CardContent>
           </Card>
+        </motion.div>
+        <motion.div variants={itemVariants}>
+          <AccountDiagnostics me={me} loading={loading} />
         </motion.div>
         <motion.div variants={itemVariants}>
           <DangerZone />
@@ -236,6 +242,64 @@ function AccountOverview({ account, loading }: { account: AccountData | null; lo
 }
 
 AccountOverview.displayName = "AccountOverview";
+
+/**
+ * Read-only session diagnostics: everything the server currently believes
+ * about this login (email, role, active workspace, plan tier, founder access,
+ * scopes). One screenshot of this card is a complete access diagnosis.
+ */
+function AccountDiagnostics({ me, loading }: { me: MeUser | null; loading: boolean }) {
+  const rows: { label: string; value: string }[] = me
+    ? [
+        { label: "Email", value: me.email },
+        { label: "Role (active workspace)", value: me.role },
+        { label: "Active workspace ID", value: me.accountId },
+        {
+          label: "Plan tier",
+          value: me.planTier
+            ? `${me.planTier} (${PLAN_LABELS[normalizeApiPlanTier(me.planTier)]})`
+            : "not reported by API (older build)",
+        },
+        { label: "Founder access", value: me.isFounder === true ? "yes" : me.isFounder === false ? "no" : "not reported by API (older build)" },
+      ]
+    : [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <Text variant="heading-sm">Session Diagnostics</Text>
+        <Text variant="body-sm" muted>
+          What the server sees for your current login. If something looks locked
+          that shouldn't be, this card shows why.
+        </Text>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Text variant="body-sm" muted>Loading…</Text>
+        ) : !me ? (
+          <Text variant="body-sm" muted>Could not load session details.</Text>
+        ) : (
+          <Box className="space-y-3">
+            {rows.map((row) => (
+              <Box key={row.label} className="grid grid-cols-[200px_1fr] gap-3 items-baseline">
+                <Text variant="body-sm" muted>{row.label}</Text>
+                <Text variant="body-sm" className="font-mono break-all">{row.value}</Text>
+              </Box>
+            ))}
+            <Box className="grid grid-cols-[200px_1fr] gap-3 items-baseline">
+              <Text variant="body-sm" muted>Session scopes</Text>
+              <Text variant="body-sm" className="font-mono break-all">
+                {me.scopes && me.scopes.length > 0 ? me.scopes.join(" ") : "not reported by API (older build)"}
+              </Text>
+            </Box>
+          </Box>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+AccountDiagnostics.displayName = "AccountDiagnostics";
 
 function BillingLink({ account, loading }: { account: AccountData | null; loading: boolean }) {
   const planLabel = loading

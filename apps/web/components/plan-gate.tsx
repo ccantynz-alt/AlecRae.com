@@ -22,8 +22,10 @@ export function PlanGate({ feature: _feature, required, children, showUpgrade = 
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
-          const body = await res.json() as { data?: { planTier?: string } };
-          setPlan(normalizeApiPlanTier(body.data?.planTier));
+          const body = await res.json() as { data?: { planTier?: string; isFounder?: boolean } };
+          // Founder flag is derived server-side from the owner allowlist —
+          // never plan-gate the founder, whatever the active workspace's tier.
+          setPlan(body.data?.isFounder === true ? "enterprise" : normalizeApiPlanTier(body.data?.planTier));
         } else {
           setPlan("free");
         }

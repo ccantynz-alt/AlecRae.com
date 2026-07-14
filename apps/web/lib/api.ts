@@ -144,6 +144,19 @@ export interface AuthResponse {
   };
 }
 
+/** GET /v1/auth/me payload. planTier/isFounder/scopes are optional so the
+ *  client stays tolerant of an older API build during rollout. */
+export interface MeUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  accountId: string;
+  planTier?: string;
+  isFounder?: boolean;
+  scopes?: string[];
+}
+
 export interface PasskeyRegisterChallengeResponse {
   challengeId: string;
   publicKey: {
@@ -274,8 +287,8 @@ export const authApi = {
     clearSession();
   },
 
-  async me(): Promise<{ data: AuthResponse["user"] }> {
-    return apiFetch<{ data: AuthResponse["user"] }>("/v1/auth/me");
+  async me(): Promise<{ data: MeUser }> {
+    return apiFetch<{ data: MeUser }>("/v1/auth/me");
   },
 
   async updateProfile(payload: {
