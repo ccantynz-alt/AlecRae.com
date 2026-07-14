@@ -37,7 +37,10 @@ vi.mock("@alecrae/ai-engine/calendar/slot-suggester", () => ({
 }));
 
 describe("snooze.ts — resolveUndoFromMetadata", () => {
-  it("returns not_registered when there is no metadata or marker", async () => {
+  // 15s: the first dynamic import of snooze.js pays the whole module-graph
+  // transform cost, which exceeds the 5s default when the suite runs in
+  // parallel on a loaded machine (flaked twice on 2026-07-14).
+  it("returns not_registered when there is no metadata or marker", { timeout: 15_000 }, async () => {
     const { resolveUndoFromMetadata } = await import("../src/routes/snooze.js");
 
     expect(resolveUndoFromMetadata(null, Date.now())).toBe("not_registered");
