@@ -54,9 +54,10 @@ function mapDomain(d: Domain): {
 
 // ─── Provider configuration ───────────────────────────────────────────────────
 
-type AutoProvider = "cloudflare" | "godaddy" | "porkbun";
+type AutoProvider = "vapron" | "cloudflare" | "godaddy" | "porkbun";
 
 const DNS_PROVIDERS = [
+  { id: "vapron", label: "Vapron DNS", autoConfig: true },
   { id: "cloudflare", label: "Cloudflare", autoConfig: true },
   { id: "godaddy", label: "GoDaddy", autoConfig: true },
   { id: "porkbun", label: "Porkbun", autoConfig: true },
@@ -68,6 +69,12 @@ const DNS_PROVIDERS = [
 type ProviderId = typeof DNS_PROVIDERS[number]["id"];
 
 const PROVIDER_STEPS: Record<ProviderId, string[]> = {
+  vapron: [
+    "Your domain's zone must be hosted on Vapron DNS (nameservers ns1/ns2.vapron.ai)",
+    'Click "Configure Automatically" — no credentials needed',
+    "AlecRae writes the records through its built-in platform connection",
+    "Records serve as soon as the zone serial updates (usually seconds)",
+  ],
   cloudflare: [
     "Log in at dash.cloudflare.com",
     "Click on your domain → DNS → Records",
@@ -108,6 +115,11 @@ const PROVIDER_STEPS: Record<ProviderId, string[]> = {
 
 // Credential instructions for auto-config providers
 const AUTO_CONFIG_INSTRUCTIONS: Record<AutoProvider, { fields: { key: string; label: string; placeholder: string; hint?: string }[]; tokenHint: string }> = {
+  vapron: {
+    fields: [],
+    tokenHint:
+      "Uses AlecRae's built-in Vapron platform connection — no credentials needed. The domain's zone must already exist on Vapron DNS.",
+  },
   cloudflare: {
     fields: [{ key: "apiToken", label: "API Token", placeholder: "Your Cloudflare API token", hint: "dash.cloudflare.com/profile/api-tokens → Create Token → Edit zone DNS" }],
     tokenHint: "Token needs Zone:DNS:Edit permission. AlecRae uses it once and never stores it.",
@@ -477,7 +489,9 @@ function DnsSetupWizard({
 
     try {
       let params: Parameters<typeof domainsApi.autoConfig>[1];
-      if (provider === "cloudflare") {
+      if (provider === "vapron") {
+        params = { provider: "vapron" };
+      } else if (provider === "cloudflare") {
         params = { provider: "cloudflare", apiToken: credentials["apiToken"] ?? "" };
       } else if (provider === "godaddy") {
         params = { provider: "godaddy", apiKey: credentials["apiKey"] ?? "", apiSecret: credentials["apiSecret"] ?? "" };

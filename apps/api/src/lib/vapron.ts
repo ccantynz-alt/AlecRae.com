@@ -273,6 +273,49 @@ export interface VapronCreateBucketParams {
   isPublic?: boolean;
 }
 
+// ─── DNS (authoritative zones on Vapron DNS) ─────────────────────────────────
+// Customer-facing procedures — tenant-scoped to the API key's user on the
+// Vapron side (`dns_zones.user_id`), so this key can only ever touch zones
+// owned by the platform account it belongs to.
+
+const VapronDnsZoneSchema = z.object({ id: z.string(), name: z.string() }).passthrough();
+const VapronDnsZoneListSchema = z.array(VapronDnsZoneSchema);
+export type VapronDnsZone = z.infer<typeof VapronDnsZoneSchema>;
+
+const VapronDnsRecordSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    content: z.string(),
+    ttl: z.number().nullish(),
+    priority: z.number().nullish(),
+  })
+  .passthrough();
+const VapronZoneWithRecordsSchema = z
+  .object({ zone: VapronDnsZoneSchema, records: z.array(VapronDnsRecordSchema) })
+  .passthrough();
+export type VapronDnsRecord = z.infer<typeof VapronDnsRecordSchema>;
+
+/** Mutation responses are tolerated loosely — we only act on thrown errors. */
+const VapronDnsMutationSchema = z.record(z.string(), z.unknown());
+
+export interface VapronCreateDnsRecordParams {
+  zoneId: string;
+  name: string;
+  type: string;
+  content: string;
+  ttl?: number;
+  priority?: number;
+}
+
+export interface VapronUpdateDnsRecordParams {
+  recordId: string;
+  content?: string;
+  ttl?: number;
+  priority?: number | null;
+}
+
 // ─── Hosting / deploy ────────────────────────────────────────────────────────
 
 export interface VapronQuickDeployParams {
@@ -324,6 +367,25 @@ export const vapron = {
     /** Quick-deploy a GitHub repo to Vapron hosting. */
     quickDeploy(params: VapronQuickDeployParams): Promise<VapronDeployResult> {
       return request("POST", "aiDeploy.quickDeploy", DeploySchema, params);
+    },
+  },
+
+  dns: {
+    /** List the zones owned by this platform account. */
+    listZones(): Promise<VapronDnsZone[]> {
+      return request("GET", "dns.myZones.list", VapronDnsZoneListSchema);
+    },
+    /** Fetch a zone with all of its records. */
+    getZone(zoneId: string): Promise<z.infer<typeof VapronZoneWithRecordsSchema>> {
+      return request("GET", "dns.myZones.get", VapronZoneWithRecordsSchema, { zoneId });
+    },
+    /** Create a record in an owned zone. */
+    createRecord(params: VapronCreateDnsRecordParams): Promise<Record<string, unknown>> {
+      return request("POST", "dns.records.create", VapronDnsMutationSchema, params);
+    },
+    /** Update an existing record in an owned zone. */
+    updateRecord(params: VapronUpdateDnsRecordParams): Promise<Record<string, unknown>> {
+      return request("POST", "dns.records.update", VapronDnsMutationSchema, params);
     },
   },
 } as const;

@@ -34,6 +34,7 @@ import { warmup } from "./warmup.js";
 import { configureCloudflare } from "../lib/dns-providers/cloudflare.js";
 import { configureGodaddy } from "../lib/dns-providers/godaddy.js";
 import { configurePorkbun } from "../lib/dns-providers/porkbun.js";
+import { configureVapron } from "../lib/dns-providers/vapron.js";
 import { inferApexDomain } from "../lib/dns-providers/types.js";
 import type { AutoConfigResult } from "../lib/dns-providers/types.js";
 
@@ -539,6 +540,11 @@ const DnsAutoConfigSchema = z.discriminatedUnion("provider", [
     secretApiKey: z.string().min(1, "Porkbun secret API key is required"),
     apexDomain: z.string().optional(),
   }),
+  // Vapron is our own platform — auth uses the server-side VAPRON_API_KEY,
+  // so the caller supplies no credentials at all.
+  z.object({
+    provider: z.literal("vapron"),
+  }),
 ]);
 
 domains.post(
@@ -606,6 +612,9 @@ domains.post(
       case "porkbun":
         result = await configurePorkbun(body.apiKey, body.secretApiKey, apex, autoConfigRecords);
         break;
+      case "vapron":
+        result = await configureVapron(autoConfigRecords);
+        break;
       default: {
         const _exhaustive: never = body;
         void _exhaustive;
@@ -620,11 +629,19 @@ domains.post(
     // Sanitize the error message — provider responses may contain API keys or
     // internal zone IDs that must not be forwarded to the client.
     if (!result.success && !result.records.length && result.error) {
+      // Vapron error strings are locally authored by our own provider adapter
+      // (never interpolated from remote responses), so they're safe to forward
+      // and far more actionable ("no zone on Vapron DNS yet") than the generic
+      // credentials hint — which is meaningless for Vapron (no credentials).
+      const message =
+        body.provider === "vapron"
+          ? result.error
+          : "DNS provider returned an error. Check your API credentials and that the domain is in your account.";
       return c.json(
         {
           error: {
             type: "provider_error",
-            message: "DNS provider returned an error. Check your API credentials and that the domain is in your account.",
+            message,
             code: "autoconfig_failed",
           },
         },

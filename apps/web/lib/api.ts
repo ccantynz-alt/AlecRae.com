@@ -952,6 +952,7 @@ export const domainsApi = {
   autoConfig(
     id: string,
     params:
+      | { provider: "vapron" }
       | { provider: "cloudflare"; apiToken: string }
       | { provider: "godaddy"; apiKey: string; apiSecret: string; apexDomain?: string }
       | { provider: "porkbun"; apiKey: string; secretApiKey: string; apexDomain?: string },
