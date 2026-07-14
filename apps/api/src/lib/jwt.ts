@@ -137,7 +137,7 @@ const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
  * account — there is no cross-tenant reach. Cross-account `/v1/admin/*` stays
  * separately gated by `requireAdmin` (role-based), which this does NOT widen.
  */
-function scopesForRole(role: string | undefined): string {
+export function scopesForRole(role: string | undefined): string {
   // messages:write covers CRM-style writes (contacts-extended interactions/
   // reminders, analytics-dashboard snapshots/goals) — routes gate on it but no
   // session token carried it before 2026-07-13 (same class as issue #49).

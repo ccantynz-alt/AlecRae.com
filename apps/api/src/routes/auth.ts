@@ -19,6 +19,7 @@ import {
   rotateRefreshToken,
   revokeAllUserTokens,
   verifyAccessToken,
+  scopesForRole,
   TokenError,
 } from "../lib/jwt.js";
 import { upsertWorkspaceMembership, getWorkspaceRole } from "../lib/workspace-membership.js";
@@ -532,6 +533,10 @@ auth.post("/switch-workspace", validateBody(SwitchWorkspaceSchema), async (c) =>
     // fall through
   }
 
+  // Founder switching into a workspace whose plan row lags would otherwise
+  // mint a token claiming "free" until the next refresh cycle.
+  tier = await reconcileOwnerPlan(input.accountId, user.email, tier);
+
   const tokenPair = await issueWorkspaceTokenPair({
     userId: authCtx.userId,
     accountId: input.accountId,
@@ -661,8 +666,24 @@ auth.get("/me", async (c) => {
     .where(eq(accounts.id, session.accountId))
     .limit(1);
 
+  // Login-time reconcile only heals the founder's HOME account; /me reconciles
+  // the ACTIVE workspace so an allowlisted owner is never plan-gated in
+  // whichever workspace they're actually viewing. No-op read for everyone else.
+  const planTier = await reconcileOwnerPlan(
+    session.accountId,
+    user.email,
+    account?.planTier ?? "free",
+  );
+
   return c.json({
-    data: { ...user, accountId: session.accountId, role, planTier: account?.planTier ?? "free" },
+    data: {
+      ...user,
+      accountId: session.accountId,
+      role,
+      planTier,
+      isFounder: isOwnerEmail(user.email),
+      scopes: scopesForRole(role).split(" "),
+    },
   });
 });
 
