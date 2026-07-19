@@ -27,6 +27,7 @@ import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLis
 import { getSendQueue } from "../lib/queue.js";
 import { ensureFreshAccessToken } from "../sync/engine.js";
 import { registerUndoable } from "./snooze.js";
+import { decryptSecretOrNull, encryptSecret } from "../lib/token-crypto.js";
 
 /** Seconds an own-domain send is held before the MTA worker picks it up,
  *  during which POST /v1/send/undo/:id can cancel it. registerUndoable()
@@ -341,6 +342,11 @@ async function handleSend(c: Context) {
     // Degrade gracefully — fall through to domain-based MTA send
   }
 
+  if (connectedAcct) {
+    connectedAcct.accessToken = decryptSecretOrNull(connectedAcct.accessToken);
+    connectedAcct.refreshToken = decryptSecretOrNull(connectedAcct.refreshToken);
+  }
+
   if (connectedAcct?.accessToken) {
     if (connectedAcct.provider === "imap") {
       return c.json(
@@ -366,8 +372,8 @@ async function handleSend(c: Context) {
         await db
           .update(connectedAccounts)
           .set({
-            accessToken: fresh.accessToken,
-            ...(fresh.refreshToken !== undefined ? { refreshToken: fresh.refreshToken } : {}),
+            accessToken: encryptSecret(fresh.accessToken),
+            ...(fresh.refreshToken !== undefined ? { refreshToken: encryptSecret(fresh.refreshToken) } : {}),
             ...(fresh.tokenExpiresAt !== undefined ? { tokenExpiresAt: fresh.tokenExpiresAt } : {}),
             updatedAt: new Date(),
           })

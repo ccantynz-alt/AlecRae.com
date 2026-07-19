@@ -25,6 +25,7 @@ import {
   domains as domainsTable,
 } from "@alecrae/db";
 import { signState, verifyState } from "../lib/oauth-state.js";
+import { encryptSecret, encryptSecretOrNull, decryptSecret } from "../lib/token-crypto.js";
 import {
   isWorkspaceImportConfigured,
   getWorkspaceAuthUrl,
@@ -94,8 +95,8 @@ workspaceImport.get("/callback", async (c) => {
       provider: "gmail",
       email: tokens.adminEmail,
       displayName: `Workspace admin (${tokens.domain})`,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
+      accessToken: encryptSecret(tokens.accessToken),
+      refreshToken: encryptSecretOrNull(tokens.refreshToken),
       tokenExpiresAt: expiresAt,
       syncCursor: tokens.domain, // store the domain for later lookups
       status: WORKSPACE_ADMIN_STATUS,
@@ -131,7 +132,7 @@ async function getAdminGrant(
     .limit(1);
 
   if (!row?.accessToken || !row.domain) return null;
-  return { accessToken: row.accessToken, domain: row.domain };
+  return { accessToken: decryptSecret(row.accessToken), domain: row.domain };
 }
 
 // GET /users — list the connected Workspace domain's users

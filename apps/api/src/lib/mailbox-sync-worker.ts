@@ -26,6 +26,7 @@ import { eq, and, lt, or, isNull } from "drizzle-orm";
 import { getDatabase, connectedAccounts } from "@alecrae/db";
 import { syncAccount, type EmailAccount, type SyncResult } from "../sync/engine.js";
 import { isRedisConfigured } from "./queue.js";
+import { decryptSecretOrNull, encryptSecret } from "./token-crypto.js";
 
 type ConnectedAccountRow = typeof connectedAccounts.$inferSelect;
 
@@ -35,16 +36,26 @@ const RESYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MIN_RESYNC_GAP_MS = 4 * 60 * 1000;
 
 function rowToEmailAccount(row: ConnectedAccountRow): EmailAccount {
+  const accessToken = decryptSecretOrNull(row.accessToken);
+  const refreshToken = decryptSecretOrNull(row.refreshToken);
+  const imapPassword = decryptSecretOrNull(row.imapPassword);
+  const smtpPassword = decryptSecretOrNull(row.smtpPassword);
   return {
     id: row.id,
     userId: row.accountId,
     provider: row.provider,
     email: row.email,
     displayName: row.displayName ?? row.email,
-    ...(row.accessToken ? { accessToken: row.accessToken } : {}),
-    ...(row.refreshToken ? { refreshToken: row.refreshToken } : {}),
+    ...(accessToken ? { accessToken } : {}),
+    ...(refreshToken ? { refreshToken } : {}),
     ...(row.tokenExpiresAt ? { tokenExpiresAt: row.tokenExpiresAt } : {}),
     ...(row.syncCursor ? { syncState: row.syncCursor } : {}),
+    ...(row.imapHost ? { imapHost: row.imapHost } : {}),
+    ...(row.imapUsername ? { imapUsername: row.imapUsername } : {}),
+    ...(imapPassword ? { imapPassword } : {}),
+    ...(row.smtpHost ? { smtpHost: row.smtpHost } : {}),
+    ...(row.smtpUsername ? { smtpUsername: row.smtpUsername } : {}),
+    ...(smtpPassword ? { smtpPassword } : {}),
     status: row.status === "error" ? "error" : "active",
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -76,8 +87,8 @@ export async function syncAndPersist(row: ConnectedAccountRow): Promise<SyncResu
       lastSyncAt: now,
       updatedAt: now,
       ...(result.newSyncState !== undefined ? { syncCursor: result.newSyncState } : {}),
-      ...(result.newAccessToken !== undefined ? { accessToken: result.newAccessToken } : {}),
-      ...(result.newRefreshToken !== undefined ? { refreshToken: result.newRefreshToken } : {}),
+      ...(result.newAccessToken !== undefined ? { accessToken: encryptSecret(result.newAccessToken) } : {}),
+      ...(result.newRefreshToken !== undefined ? { refreshToken: encryptSecret(result.newRefreshToken) } : {}),
       ...(result.newTokenExpiresAt !== undefined ? { tokenExpiresAt: result.newTokenExpiresAt } : {}),
       lastError: result.errors.length > 0 ? result.errors.slice(0, 3).join("; ").slice(0, 500) : null,
       status: hardFailure ? "error" : "active",

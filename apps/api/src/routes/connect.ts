@@ -26,6 +26,7 @@ import { getDatabase, connectedAccounts } from "@alecrae/db";
 import { eq, and } from "drizzle-orm";
 import { signState, verifyState } from "../lib/oauth-state.js";
 import { syncAndPersist } from "../lib/mailbox-sync-worker.js";
+import { encryptSecret } from "../lib/token-crypto.js";
 
 /** Fire off the initial sync in the background and persist whatever it finds
  *  (or fails on) — never left as a bare `.catch(console.error)` that discards
@@ -149,8 +150,8 @@ connect.get(
         provider: "gmail",
         email: tokens.email,
         displayName: tokens.name ?? null,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: encryptSecret(tokens.accessToken),
+        refreshToken: encryptSecret(tokens.refreshToken),
         tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
         status: "active",
         createdAt: now,
@@ -212,8 +213,8 @@ connect.get(
         provider: "outlook",
         email: tokens.email,
         displayName: tokens.name ?? null,
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
+        accessToken: encryptSecret(tokens.accessToken),
+        refreshToken: encryptSecret(tokens.refreshToken),
         tokenExpiresAt: new Date(Date.now() + tokens.expiresIn * 1000),
         status: "active",
         createdAt: now,
@@ -271,11 +272,11 @@ connect.post(
       imapHost: input.imapHost,
       imapPort: String(input.imapPort),
       imapUsername: input.imapUsername,
-      imapPassword: input.imapPassword,
+      imapPassword: encryptSecret(input.imapPassword),
       smtpHost: input.smtpHost,
       smtpPort: String(input.smtpPort),
       smtpUsername: input.smtpUsername,
-      smtpPassword: input.smtpPassword,
+      smtpPassword: encryptSecret(input.smtpPassword),
       status: "active",
       createdAt: now,
       updatedAt: now,

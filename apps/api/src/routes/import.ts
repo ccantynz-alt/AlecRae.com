@@ -29,6 +29,7 @@ import {
   type ImportJobProgress,
 } from "@alecrae/db";
 import { parseEmail } from "@alecrae/email-parser";
+import { decryptSecretOrNull } from "../lib/token-crypto.js";
 import {
   storeReceivedEmail,
   parsedToReceived,
@@ -394,14 +395,17 @@ async function loadConnectedAccount(
 
   if (!row) return null;
 
+  const accessToken = decryptSecretOrNull(row.accessToken);
+  const refreshToken = decryptSecretOrNull(row.refreshToken);
+
   return {
     id: row.id,
     userId: row.accountId,
     provider: row.provider,
     email: row.email,
     displayName: row.displayName ?? row.email,
-    ...(row.accessToken !== null && row.accessToken !== undefined ? { accessToken: row.accessToken } : {}),
-    ...(row.refreshToken !== null && row.refreshToken !== undefined ? { refreshToken: row.refreshToken } : {}),
+    ...(accessToken ? { accessToken } : {}),
+    ...(refreshToken ? { refreshToken } : {}),
     ...(row.tokenExpiresAt !== null && row.tokenExpiresAt !== undefined ? { tokenExpiresAt: row.tokenExpiresAt } : {}),
     ...(row.syncCursor !== null && row.syncCursor !== undefined ? { syncState: row.syncCursor } : {}),
     status: (row.status as "active" | "error" | "disconnected" | "syncing") ?? "active",
