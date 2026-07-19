@@ -264,7 +264,8 @@ aiWritingRouter.post(
         body,
         tone,
         length,
-        confidence: 0.88,
+        confidence: 0,
+        degraded: true,
         wordCount: body.split(/\s+/).length,
         profileUsed: input.profileId ?? null,
       },
@@ -321,7 +322,8 @@ aiWritingRouter.post(
         original: input.text,
         rewritten,
         style: input.style,
-        confidence: 0.82,
+        confidence: 0,
+        degraded: true,
         changes: [
           {
             type: "style" as const,
@@ -386,7 +388,8 @@ aiWritingRouter.post(
         original: input.text,
         expanded,
         targetLength,
-        confidence: 0.85,
+        confidence: 0,
+        degraded: true,
         wordCount: expanded.split(/\s+/).length,
       },
     });
@@ -426,7 +429,8 @@ aiWritingRouter.post(
       });
     }
 
-    // Fallback: simple truncation
+    // Fallback: simple truncation (real, mechanical — not fabricated content —
+    // but it's truncation, not summarization, so it's flagged degraded too).
     const summaryWords = Math.min(maxLength, Math.ceil(words.length * 0.2));
     const summary = words.slice(0, summaryWords).join(" ") + "...";
 
@@ -437,7 +441,8 @@ aiWritingRouter.post(
         originalWordCount: words.length,
         summaryWordCount: summaryWords,
         compressionRatio: Math.round((1 - summaryWords / words.length) * 100),
-        confidence: 0.87,
+        confidence: 0,
+        degraded: true,
       },
     });
   },
@@ -478,7 +483,7 @@ aiWritingRouter.post(
       });
     }
 
-    // Fallback when API is unavailable
+    // Fallback when API is unavailable — not a real translation
     const translated = `[Translation to ${input.targetLanguage}]: ${input.text}`;
 
     return c.json({
@@ -487,7 +492,8 @@ aiWritingRouter.post(
         translated,
         targetLanguage: input.targetLanguage,
         detectedSourceLanguage: "en",
-        confidence: 0.91,
+        confidence: 0,
+        degraded: true,
       },
     });
   },
@@ -540,11 +546,13 @@ aiWritingRouter.post(
       }
     }
 
-    // Fallback subject lines
+    // Fallback: these aren't real subject line suggestions (just "Option N:
+    // Re: <body preview>"), so present them as unavailable rather than as a
+    // ranked AI result with a descending fake-confidence gradient.
     const styleOptions = ["direct", "question", "action-oriented", "conversational", "formal"] as const;
     const subjects = Array.from({ length: requestedCount }, (_, i) => ({
       subject: `Option ${i + 1}: Re: ${bodyPreview.slice(0, 50).trim()}...`,
-      confidence: Math.round((0.95 - i * 0.05) * 100) / 100,
+      confidence: 0,
       style: styleOptions[i % styleOptions.length],
     }));
 
@@ -552,6 +560,7 @@ aiWritingRouter.post(
       data: {
         subjects,
         bodyPreview: bodyPreview.slice(0, 100),
+        degraded: true,
       },
     });
   },
@@ -603,10 +612,16 @@ aiWritingRouter.post(
       tone: 0.9,
       conciseness: words.length > 500 ? 0.6 : 0.9,
     };
+    // Tracks which path produced the result — the heuristic fallback below
+    // computes real (if crude) scores from actual sentence-length counts,
+    // it's not fabricated, but it's a different method than Claude scoring
+    // and callers should be able to tell them apart.
+    let degraded = true;
 
     if (result) {
       const parsed = parseJsonSafely<ProofreadResponse>(result);
       if (parsed) {
+        degraded = false;
         const validTypes = new Set(["grammar", "style", "tone", "clarity", "conciseness"]);
         if (Array.isArray(parsed.issues)) {
           issues = parsed.issues
@@ -701,7 +716,8 @@ aiWritingRouter.post(
           18,
           Math.round((words.length / Math.max(sentences.length, 1)) * 0.5 + 5),
         ),
-        confidence: 0.86,
+        confidence: degraded ? 0 : 0.86,
+        degraded,
       },
     });
   },
@@ -754,20 +770,13 @@ aiWritingRouter.post(
       }
     }
 
-    // Fallback static suggestions
+    // Fallback: generic, unrelated to the user's actual partial text — not
+    // real completions, so flagged degraded with zero confidence rather
+    // than presented as AI-ranked suggestions.
     const suggestions = [
-      {
-        text: " and I look forward to hearing from you.",
-        confidence: 0.72,
-      },
-      {
-        text: " regarding this matter.",
-        confidence: 0.65,
-      },
-      {
-        text: ". Please let me know if you have any questions.",
-        confidence: 0.58,
-      },
+      { text: " and I look forward to hearing from you.", confidence: 0 },
+      { text: " regarding this matter.", confidence: 0 },
+      { text: ". Please let me know if you have any questions.", confidence: 0 },
     ];
 
     return c.json({
@@ -775,6 +784,7 @@ aiWritingRouter.post(
         suggestions,
         partialText: input.partialText,
         contextUsed: input.context ?? null,
+        degraded: true,
       },
     });
   },
