@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { PageLayout, ComposeEditor, Box, Text, type ComposeData, type AISuggestion } from "@alecrae/ui";
+import { PageLayout, ComposeEditor, Box, Text, type ComposeData } from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
 import { messagesApi, authApi, calendarApi, grammarApi } from "../../../lib/api";
+import { initLocalAI, grammarCheck as localGrammarCheck } from "../../../lib/local-ai";
 import { RecipientAutocomplete } from "../../../components/RecipientAutocomplete";
 import { SendTimePanel } from "../../../components/SendTimePanel";
 import { AnimatedCompose } from "../../../components/AnimatedCompose";
@@ -55,7 +56,16 @@ function ComposePage(): React.ReactNode {
   const [userEmail, setUserEmail] = useState("");
   const [recipientForPrediction, setRecipientForPrediction] = useState("");
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<AISuggestion[]>([]);
+  // Grammar check result — a full corrected-text version of the body, not a
+  // structured issue list. "Apply" replaces the whole body with `text`,
+  // which is a real, working edit (the old chip-based UI's Apply button only
+  // ever dismissed the chip — it never touched the editor's content).
+  const [grammarCorrection, setGrammarCorrection] = useState<{
+    text: string;
+    source: "webgpu" | "cloud";
+    issueCount: number;
+  } | null>(null);
+  const [applyingGrammar, setApplyingGrammar] = useState(false);
   // Contact-autocomplete recipients (merged into To/Cc on send).
   // The ComposeEditor manages its own To/Cc inputs internally, so the
   // autocomplete fields live at page level and their picks are merged in.
@@ -80,6 +90,14 @@ function ComposePage(): React.ReactNode {
     return () => {
       if (undoTimerRef.current) clearInterval(undoTimerRef.current);
     };
+  }, []);
+
+  // Probe (don't force-download) local WebGPU capability on mount, so the
+  // first real grammar check knows whether it can run on-device. The model
+  // itself lazy-loads on first actual use inside runAI() — this call is
+  // cheap and never blocks typing.
+  useEffect(() => {
+    void initLocalAI({ probeOnly: true });
   }, []);
 
   const startUndoCountdown = useCallback((id: string, untilIso: string) => {
@@ -121,24 +139,47 @@ function ComposePage(): React.ReactNode {
 
     if (grammarTimerRef.current) clearTimeout(grammarTimerRef.current);
 
+    // Short debounce — local WebGPU inference is sub-10ms once the model is
+    // loaded, so this only needs to avoid checking on every keystroke, not
+    // absorb network latency the way the old 1500ms cloud-only debounce did.
     grammarTimerRef.current = setTimeout(async () => {
       lastCheckedRef.current = plainText;
       try {
-        const res = await grammarApi.check({ text: plainText });
-        const newSuggestions: AISuggestion[] = res.data.issues.slice(0, 5).map((issue, i) => ({
-          id: `g${i}`,
-          type: "grammar" as const,
-          label: issue.message,
-          preview: issue.replacements.length > 0
-            ? `Suggestion: ${issue.replacements[0]}`
-            : issue.message,
-        }));
-        setSuggestions(newSuggestions);
+        const local = await localGrammarCheck(plainText);
+        if (local.text.trim() && local.text.trim() !== plainText) {
+          setGrammarCorrection({ text: local.text, source: local.source, issueCount: 1 });
+        } else {
+          setGrammarCorrection(null);
+        }
       } catch {
-        // Grammar API unavailable — no suggestions
+        // localGrammarCheck() tries WebGPU first and falls back to
+        // /api/ai/complete internally — but that Next.js route doesn't
+        // exist yet, so for anyone without WebGPU this always throws. Fall
+        // back to the real, working Hono endpoint directly.
+        try {
+          const res = await grammarApi.correct({ text: plainText });
+          if (res.data.corrected.trim() && res.data.corrected.trim() !== plainText) {
+            setGrammarCorrection({ text: res.data.corrected, source: "cloud", issueCount: res.data.issueCount });
+          } else {
+            setGrammarCorrection(null);
+          }
+        } catch {
+          // Grammar checking unavailable entirely — leave any prior
+          // correction banner as-is rather than clearing useful state.
+        }
       }
-    }, 1500);
+    }, 400);
   }, []);
+
+  const handleApplyGrammar = useCallback(() => {
+    if (!grammarCorrection) return;
+    setApplyingGrammar(true);
+    setBodyDraft(grammarCorrection.text);
+    setEditorKey((k) => k + 1); // force ComposeEditor to remount with the corrected body
+    setGrammarCorrection(null);
+    lastCheckedRef.current = grammarCorrection.text.replace(/<[^>]*>/g, "").trim();
+    setApplyingGrammar(false);
+  }, [grammarCorrection]);
 
   // Get compose mode from URL params (reply, forward, or new)
   const mode = searchParams.get("mode") as "reply" | "replyAll" | "forward" | null;
@@ -392,65 +433,40 @@ function ComposePage(): React.ReactNode {
             the To/Cc fields when you send.
           </Text>
         </Box>
-        {/* Grammar AI status bar — visible once the engine has a result */}
-        {suggestions.length > 0 && (
+        {/* Grammar check — a correction is available and can be applied */}
+        {grammarCorrection && (
           <Box className="mb-3 px-3 py-2 rounded-lg border border-border bg-surface-secondary flex items-center gap-3">
             <Box className="flex items-center gap-1.5 flex-shrink-0">
               <span className="w-2 h-2 rounded-full bg-green-500 inline-block" aria-hidden="true" />
               <Text variant="caption" className="font-medium text-content">
-                Grammar AI active
+                {grammarCorrection.source === "webgpu" ? "Grammar check (instant, on-device)" : "Grammar check"}
               </Text>
               <Text variant="caption" muted>
-                &mdash; {suggestions.length} suggestion{suggestions.length !== 1 ? "s" : ""}
+                &mdash; corrections available
               </Text>
             </Box>
-            {/* Suggestion chips — horizontally scrollable */}
-            <Box className="flex-1 min-w-0 overflow-x-auto">
-              <Box className="flex items-center gap-2 pb-0.5" style={{ minWidth: "max-content" }}>
-                {suggestions.map((s) => {
-                  // Extract original and correction from the preview string
-                  // preview format: "Suggestion: <correction>" or just the label
-                  const correctionMatch = s.preview.match(/^Suggestion:\s*(.+)$/);
-                  const correction: string = correctionMatch?.[1] ?? s.preview;
-                  return (
-                    <Box
-                      key={s.id}
-                      className="flex items-center gap-1.5 px-2 py-1 rounded border border-border bg-surface text-sm flex-shrink-0"
-                    >
-                      <Text as="span" variant="caption" muted className="line-through max-w-[80px] truncate">
-                        {s.label.length > 30 ? `${s.label.slice(0, 30)}…` : s.label}
-                      </Text>
-                      <Text as="span" variant="caption" muted>→</Text>
-                      <Text as="span" variant="caption" className="text-brand-600 max-w-[100px] truncate">
-                        {correction.length > 30 ? `${correction.slice(0, 30)}…` : correction}
-                      </Text>
-                      <button
-                        type="button"
-                        className="ml-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-brand-100 text-brand-700 hover:bg-brand-600 hover:text-white transition-colors"
-                        onClick={() => {
-                          setSuggestions((prev) => prev.filter((x) => x.id !== s.id));
-                        }}
-                        aria-label={`Apply suggestion: ${correction}`}
-                      >
-                        Apply
-                      </button>
-                    </Box>
-                  );
-                })}
-              </Box>
-            </Box>
+            <Box className="flex-1" />
+            <button
+              type="button"
+              className="flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded bg-brand-100 text-brand-700 hover:bg-brand-600 hover:text-white transition-colors disabled:opacity-50"
+              onClick={handleApplyGrammar}
+              disabled={applyingGrammar}
+              aria-label="Apply grammar corrections"
+            >
+              {applyingGrammar ? "Applying…" : "Apply"}
+            </button>
             <button
               type="button"
               className="flex-shrink-0 text-content-tertiary hover:text-content text-xs transition-colors"
-              onClick={() => setSuggestions([])}
-              aria-label="Dismiss all grammar suggestions"
+              onClick={() => setGrammarCorrection(null)}
+              aria-label="Dismiss grammar suggestion"
             >
-              Dismiss all
+              Dismiss
             </button>
           </Box>
         )}
         {/* Grammar AI idle state — shown while body is being typed, before first check */}
-        {suggestions.length === 0 && (
+        {!grammarCorrection && (
           <Box className="mb-3 px-3 py-1.5 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-surface-tertiary inline-block" aria-hidden="true" />
             <Text variant="caption" muted>Grammar AI — type 20+ characters to activate</Text>
@@ -469,8 +485,6 @@ function ComposePage(): React.ReactNode {
             cc={mode === "replyAll" ? replyCc : ""}
             subject={initialSubject}
             body={editorKey === 0 ? initialBody : bodyDraft}
-            suggestions={suggestions}
-            showAIPanel={suggestions.length > 0}
             onSend={handleSend}
             onSaveDraft={() => {
               setStatus("Draft saved locally");
@@ -480,9 +494,6 @@ function ComposePage(): React.ReactNode {
               window.history.back();
             }}
             onBodyChange={_checkGrammar}
-            onApplySuggestion={(suggestion: AISuggestion) => {
-              setSuggestions((prev) => prev.filter((s) => s.id !== suggestion.id));
-            }}
             onRequestCalendarSlots={handleRequestCalendarSlots}
             className="flex-1"
           />

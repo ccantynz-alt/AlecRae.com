@@ -1543,11 +1543,21 @@ export const grammarApi = {
     });
   },
 
+  /** Full-text grammar correction — returns the whole corrected body, not a
+   *  structured issue list (see grammarApi.check for that). Response shape
+   *  previously didn't match what the server actually returns; fixed. */
   correct(payload: { text: string; language?: string }) {
-    return apiFetch<{ data: { correctedText: string; changes: number } }>(
-      "/v1/grammar/correct",
-      { method: "POST", body: JSON.stringify(payload) },
-    );
+    return apiFetch<{
+      data: {
+        original: string;
+        corrected: string;
+        qualityScore: number;
+        issueCount: number;
+        detectedTone: string;
+        detectedLanguage: string;
+        emailWarnings: string[];
+      };
+    }>("/v1/grammar/correct", { method: "POST", body: JSON.stringify(payload) });
   },
 };
 
