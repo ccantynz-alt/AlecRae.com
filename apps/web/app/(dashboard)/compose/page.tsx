@@ -13,6 +13,7 @@ import { OfflineComposeBanner } from "../../../components/OfflineComposeBanner";
 import { ComposeSpellcheckPanel } from "../../../components/compose-spellcheck-panel";
 import { ComposeAssistPanel, type AssistSlot } from "../../../components/compose-assist-panel";
 import { ComposeRecallPanel } from "../../../components/compose-recall-panel";
+import { VoiceDictationButton, type DictationResult } from "../../../components/voice-dictation-button";
 import { PlanGate } from "../../../components/plan-gate";
 import {
   composeEnter,
@@ -186,6 +187,11 @@ function ComposePage(): React.ReactNode {
   const replyTo = searchParams.get("to") ?? "";
   const replySubject = searchParams.get("subject") ?? "";
   const replyBody = searchParams.get("body") ?? "";
+
+  const [dictationStatus, setDictationStatus] = useState<string | null>(null);
+  const dictationMode: "compose" | "reply" = mode === "reply" || mode === "replyAll" ? "reply" : "compose";
+  const dictationReplyContext =
+    dictationMode === "reply" ? { from: replyTo, subject: replySubject, body: replyBody } : undefined;
   const replyCc = searchParams.get("cc") ?? "";
 
   useEffect(() => {
@@ -203,6 +209,22 @@ function ComposePage(): React.ReactNode {
   const initialBody = mode && replyBody
     ? `\n\n--- Original Message ---\n${replyBody}`
     : "";
+
+  const handleDictationResult = useCallback(
+    (result: DictationResult) => {
+      const currentBody = editorKey === 0 ? initialBody : bodyDraft;
+      const newBody = currentBody.trim().length > 0 ? `${currentBody}\n\n${result.body}` : result.body;
+      setBodyDraft(newBody);
+      setEditorKey((k) => k + 1);
+      lastCheckedRef.current = "";
+      setDictationStatus("Dictation added to your draft.");
+    },
+    [editorKey, initialBody, bodyDraft],
+  );
+
+  const handleDictationError = useCallback((message: string) => {
+    setDictationStatus(`Dictation: ${message}`);
+  }, []);
 
   // S10: Send-time optimization handlers
   const handleScheduleAt = useCallback(
@@ -374,6 +396,19 @@ function ComposePage(): React.ReactNode {
             </motion.div>
           )}
         </AnimatePresence>
+        <Box className="mb-3 flex items-center gap-3">
+          <VoiceDictationButton
+            mode={dictationMode}
+            {...(dictationReplyContext ? { replyContext: dictationReplyContext } : {})}
+            onResult={handleDictationResult}
+            onError={handleDictationError}
+          />
+          {dictationStatus && (
+            <Text variant="caption" muted>
+              {dictationStatus}
+            </Text>
+          )}
+        </Box>
         <SendTimePanel
           recipientEmail={recipientForPrediction || replyTo}
           onScheduleAt={handleScheduleAt}
