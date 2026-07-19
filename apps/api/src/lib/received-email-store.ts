@@ -18,6 +18,7 @@ import { and, eq } from "drizzle-orm";
 import { getDatabase, emails } from "@alecrae/db";
 import type { ParsedEmail } from "@alecrae/email-parser";
 import { aiComplete } from "./ai.js";
+import { runRulesForEmail } from "./rule-engine.js";
 
 export interface ReceivedAddress {
   address: string;
@@ -214,6 +215,20 @@ export async function storeReceivedEmail(
 
   // AI auto-triage: fire-and-forget — never blocks the caller.
   void runAiTriage(id, input);
+
+  // User-defined email rules (routes/ai-rules.ts) — fire-and-forget, same as
+  // AI-triage above. Previously nothing ever applied a saved rule to
+  // incoming mail; this is the missing execution half.
+  runRulesForEmail(input.accountId, id, {
+    from: input.from,
+    to: input.to,
+    cc: input.cc ?? [],
+    subject: input.subject,
+    textBody: input.textBody ?? null,
+    htmlBody: input.htmlBody ?? null,
+  }).catch((err) => {
+    console.error("[rule-engine] Failed to evaluate rules for email", id, err instanceof Error ? err.message : String(err));
+  });
 
   return { stored: true, id };
 }

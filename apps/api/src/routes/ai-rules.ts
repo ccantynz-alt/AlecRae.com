@@ -9,10 +9,9 @@
  * POST /v1/rules                   — Create rule manually
  * PATCH /v1/rules/:id              — Update rule
  * DELETE /v1/rules/:id             — Delete rule
- * POST /v1/rules/:id/test          — Test rule against recent emails
- *
  * Rules are persisted in the `email_rules` table (Drizzle) so they survive
- * API restarts.
+ * API restarts, and are applied to newly-synced/imported mail by
+ * lib/rule-engine.ts (called from lib/received-email-store.ts).
  */
 
 import { Hono } from "hono";
