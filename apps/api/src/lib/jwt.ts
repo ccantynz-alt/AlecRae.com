@@ -149,6 +149,26 @@ export function scopesForRole(role: string | undefined): string {
   // (issue #45/#49 class, found 2026-07-19 auditing todo.ts/unsubscribe.ts/
   // recall.ts) — no session token ever carried them, so Tasks, the recall
   // panel, and the unsubscribe manager 403'd for every real user.
+  // agent:*, collaborate:*, and dictation:* are baseline for the same
+  // reason, found 2026-07-19 while wiring dictation into compose — these
+  // were missing from BOTH base and the owner/admin list, so the AI Inbox
+  // Agent, team chat/shared-inboxes, and dictation 403'd for every session
+  // including owners, not just members.
+  //
+  // templates:*, translate:read, programs:*, and calendar:* are baseline
+  // for the same reason, found doing a full audit of every requireScope()
+  // prefix against what's actually granted (2026-07-19) — each gates a
+  // real, wired web page (Templates, Translate, Programs, and compose's B7
+  // calendar-slot assistant) that only owner/admin could reach; every
+  // member-role session 403'd.
+  //
+  // analytics:read is baseline for the same reason — it gates the *read*
+  // side of the Tier-7 "personal AI intelligence" routers (commitments,
+  // knowledge graph, sentiment timeline, productivity analytics, scheduling
+  // intelligence): a member's own AI insights on their own mail, not
+  // account-wide reporting. It was previously owner/admin/viewer-only, so a
+  // member could never read data those routers' own write-side endpoints
+  // (already baseline via messages:write) had just created for them.
   const base = [
     "messages:send",
     "messages:read",
@@ -164,6 +184,20 @@ export function scopesForRole(role: string | undefined): string {
     "inbox:write",
     "recall:read",
     "recall:write",
+    "agent:read",
+    "agent:write",
+    "collaborate:read",
+    "collaborate:write",
+    "dictation:read",
+    "dictation:write",
+    "templates:read",
+    "templates:write",
+    "translate:read",
+    "programs:read",
+    "programs:write",
+    "calendar:read",
+    "calendar:write",
+    "analytics:read",
   ];
   switch (role) {
     case "owner":
@@ -172,7 +206,6 @@ export function scopesForRole(role: string | undefined): string {
         ...base,
         "domains:manage",
         "team:manage",
-        "analytics:read",
         "webhooks:manage",
         "api_keys:manage",
         "import:read",
