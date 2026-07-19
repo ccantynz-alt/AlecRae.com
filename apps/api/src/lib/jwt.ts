@@ -145,6 +145,10 @@ export function scopesForRole(role: string | undefined): string {
   // enrichment must work for member roles, not just owner/admin.
   // grammar:read is baseline because compose grammar-check AND spellcheck both
   // gate on it — without it those features 403 for every session (issue #49 class).
+  // inbox:read/write and recall:read/write are baseline for the same reason
+  // (issue #45/#49 class, found 2026-07-19 auditing todo.ts/unsubscribe.ts/
+  // recall.ts) — no session token ever carried them, so Tasks, the recall
+  // panel, and the unsubscribe manager 403'd for every real user.
   const base = [
     "messages:send",
     "messages:read",
@@ -156,6 +160,10 @@ export function scopesForRole(role: string | undefined): string {
     "grammar:read",
     "encryption:read",
     "encryption:write",
+    "inbox:read",
+    "inbox:write",
+    "recall:read",
+    "recall:write",
   ];
   switch (role) {
     case "owner":
