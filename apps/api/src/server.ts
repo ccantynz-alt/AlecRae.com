@@ -53,6 +53,7 @@ import { account } from "./routes/account.js";
 import { auth } from "./routes/auth.js";
 import { passkeyRouter } from "./routes/passkey.js";
 import { health } from "./routes/health.js";
+import { getDeployedCommit } from "./lib/deploy-info.js";
 import { admin } from "./routes/admin.js";
 import { billing } from "./routes/billing.js";
 import { templatesRouter } from "./routes/templates.js";
@@ -221,6 +222,7 @@ app.get("/health", (c) => {
     status: "ok",
     service: "alecrae-api",
     version: process.env["SERVICE_VERSION"] ?? "0.1.0",
+    commit: getDeployedCommit(),
     timestamp: new Date().toISOString(),
   });
 });

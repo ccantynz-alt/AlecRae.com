@@ -16,6 +16,7 @@ import { sql } from "drizzle-orm";
 import Redis from "ioredis";
 import { Queue } from "bullmq";
 import { MeiliSearch } from "meilisearch";
+import { getDeployedCommit, getDriftStatus } from "../lib/deploy-info.js";
 
 const health = new Hono();
 
@@ -146,11 +147,19 @@ health.get("/", async (c) => {
 
   // Overall status: "ok" if all deps are ok, "degraded" if some are down
   const allStatuses = Object.values(services).map((s) => s.status);
-  const overallStatus = allStatuses.every((s) => s === "ok")
+  let overallStatus = allStatuses.every((s) => s === "ok")
     ? "ok"
     : allStatuses.some((s) => s === "ok")
       ? "degraded"
       : "down";
+
+  // Deploy drift (Known Issue #78): scripts/check-deploy-drift.sh writes a
+  // status file on a timer; a drifted box is serving stale code, which is a
+  // real degradation even though every dependency check above is "ok".
+  const driftStatus = getDriftStatus();
+  if (driftStatus?.drifted && overallStatus === "ok") {
+    overallStatus = "degraded";
+  }
 
   const statusCode = overallStatus === "ok" ? 200 : overallStatus === "degraded" ? 200 : 503;
 
@@ -158,9 +167,11 @@ health.get("/", async (c) => {
     {
       status: overallStatus,
       version: SERVICE_VERSION,
+      commit: getDeployedCommit(),
       uptime: Math.floor((Date.now() - startedAt) / 1000),
       timestamp: new Date().toISOString(),
       services,
+      deployDrift: driftStatus,
     },
     statusCode,
   );
@@ -179,6 +190,7 @@ interface DetailedHealthReport {
   status: "healthy" | "degraded" | "critical";
   timestamp: string;
   version: string;
+  commit: string;
   uptime_seconds: number;
   checks: {
     database: ConfigCheck;
@@ -194,6 +206,7 @@ interface DetailedHealthReport {
   missing_required: string[];
   missing_optional: string[];
   ready_for_production: boolean;
+  deployDrift: ReturnType<typeof getDriftStatus>;
 }
 
 /** Run a quick Meilisearch health probe. */
@@ -445,11 +458,13 @@ health.get("/detailed", async (c) => {
     status: overallStatus,
     timestamp: new Date().toISOString(),
     version: SERVICE_VERSION,
+    commit: getDeployedCommit(),
     uptime_seconds: Math.floor((Date.now() - startedAt) / 1000),
     checks,
     missing_required,
     missing_optional,
     ready_for_production,
+    deployDrift: getDriftStatus(),
   };
 
   const httpStatus = overallStatus === "critical" ? 503 : 200;

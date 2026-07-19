@@ -1,6 +1,6 @@
 # Box Deploy — the pull ritual, one command (or one tap)
 
-> **Last updated:** 2026-07-13 03:05 UTC
+> **Last updated:** 2026-07-20 00:00 UTC
 
 Production **compute** is the **Jarvis box at `66.42.121.161`** (hostname `jarvis`;
 serves `mail.alecrae.com` + `api.alecrae.com`). SSH access is via Tailscale:
@@ -69,9 +69,14 @@ Connect, then paste the Option B one-liner. Five minutes, total.
 `https://mail.alecrae.com/api/version` returns the deployed commit — compare
 it to `main` on GitHub. If they differ, the box hasn't pulled.
 
+`https://api.alecrae.com/health` also reports its own `commit`, plus a
+`deployDrift` object computed by a scheduled on-box check that compares HEAD
+to `origin/main` automatically — see `docs/infra/deploy-drift-check.md`
+(Known Issue #78). No more comparing SHAs by hand to catch a stuck deploy.
+
 Also verify:
 ```bash
-curl -s https://api.alecrae.com/health   # should return {"status":"ok",...}
+curl -s https://api.alecrae.com/health   # should return {"status":"ok","commit":"...",...}
 curl -s https://alecrae.com              # should return landing page HTML
 ```
 

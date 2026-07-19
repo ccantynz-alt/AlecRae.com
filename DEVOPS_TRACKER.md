@@ -1,6 +1,6 @@
 # AlecRae — DevOps Tracker
 
-_Last updated: 2026-07-14 01:20 UTC_
+_Last updated: 2026-07-20 00:00 UTC_
 
 Forward-looking tracker: current infra status + a prioritized roadmap for
 closing backend/frontend coverage gaps. This is **not** a bug log (see
@@ -104,8 +104,17 @@ Jarvis despite docs claiming otherwise — the API logged constant
 main → `git reset --hard origin/main`; `redis-server` installed and enabled
 (binds 127.0.0.1); full deploy ritual run (install → migrate → web build →
 restart → health checks). Lessons: never commit on the box; a failed
-`--ff-only` is a stop-and-reconcile signal; drift detection still needed
-(#78).
+`--ff-only` is a stop-and-reconcile signal.
+
+**Drift detection shipped 2026-07-20 (#78):** `/health` and `/v1/health` now
+report the running process's own commit SHA, and `scripts/check-deploy-drift.sh`
+(installed on the box as a systemd timer, see
+`docs/infra/deploy-drift-check.md`) compares box HEAD to `origin/main` every
+15 minutes and writes a status file the API reads back — a drifted box now
+flips `/health`'s status to `degraded` instead of silently serving stale
+code for 10 days again. Timer install on the box is still pending (code +
+docs are done; enabling the systemd unit is an on-box step for the next
+deploy session).
 
 ## 2. Route coverage snapshot
 
@@ -186,4 +195,4 @@ and directional.
 
 ---
 
-_Last updated: 2026-07-14 01:20 UTC_
+_Last updated: 2026-07-20 00:00 UTC_
