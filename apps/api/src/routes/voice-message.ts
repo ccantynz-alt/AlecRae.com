@@ -1,34 +1,42 @@
 /**
  * Voice Message Route — Voice-to-Voice Replies (B8)
  *
- * POST /v1/voice-messages/record     — Upload voice message, get transcription + storage URL
- * POST /v1/voice-messages/transcribe — Transcribe existing audio file
+ * POST /v1/voice-messages/record     — 501: no object storage backend wired up yet (#29)
+ * POST /v1/voice-messages/transcribe — Transcribe existing audio file (unaffected — doesn't persist)
  * GET  /v1/voice-messages/:id        — Get voice message metadata + transcript
- * POST /v1/voice-messages/:id/reply  — Reply to a voice message with another voice message
+ * POST /v1/voice-messages/:id/reply  — 501: no object storage backend wired up yet (#29)
  */
 
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
-  processVoiceMessage,
   transcribeAudio,
   formatDuration,
-  MAX_VOICE_AUDIO_SIZE,
 } from "@alecrae/ai-engine/voice/voice-message";
 import {
   getDatabase,
   voiceMessages,
-  type VoiceMessage,
 } from "@alecrae/db";
 
 // Voice message metadata + transcripts are persisted in the `voice_messages`
-// table (Drizzle) so they survive API restarts. Audio blobs themselves are
-// served from audioUrl (R2 in production).
-
-function generateId(): string {
-  return `vm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-}
+// table (Drizzle) so they survive API restarts, but no object-storage
+// backend is actually wired up yet (Known Issue #29): the stack table names
+// "Vapron Object Storage" but only listBuckets/createBucket exist in
+// lib/vapron.ts, and Vapron API calls are broken in prod regardless (issue
+// #83, wrong key scheme). /record and /:id/reply used to hand back a fake
+// `/v1/voice-messages/:id/audio` URL that no route ever served — the raw
+// audio bytes were discarded and any recipient's embedded player 404s.
+// Both now refuse up front instead of silently losing the audio.
+// /transcribe is unaffected — it never claimed to persist anything.
+const STORAGE_UNAVAILABLE = {
+  error: {
+    type: "storage_unavailable",
+    message:
+      "Voice messages are not available yet — no object storage backend is connected to persist the audio. See CLAUDE.md Known Issue #29.",
+    code: "storage_unavailable",
+  },
+} as const;
 
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
@@ -39,133 +47,7 @@ voiceMessageRouter.post(
   "/record",
   requireScope("voice:write"),
   async (c) => {
-    const auth = c.get("auth");
-
-    const OPENAI_API_KEY = process.env["OPENAI_API_KEY"];
-    if (!OPENAI_API_KEY) {
-      return c.json(
-        {
-          error: {
-            type: "configuration_error",
-            message: "Transcription service not configured. Set OPENAI_API_KEY.",
-            code: "transcription_unavailable",
-          },
-        },
-        503,
-      );
-    }
-
-    // Parse multipart form data
-    const formData = await c.req.formData();
-    const audioFile = formData.get("audio");
-    const languageHint = formData.get("language") as string | null;
-
-    if (!audioFile || !(audioFile instanceof File)) {
-      return c.json(
-        {
-          error: {
-            type: "validation_error",
-            message: "Missing 'audio' file in form data. Send a multipart form with an 'audio' field.",
-            code: "missing_audio",
-          },
-        },
-        400,
-      );
-    }
-
-    if (audioFile.size > MAX_VOICE_AUDIO_SIZE) {
-      return c.json(
-        {
-          error: {
-            type: "validation_error",
-            message: `Audio file too large: ${Math.round(audioFile.size / 1024 / 1024)}MB. Maximum: 25MB.`,
-            code: "audio_too_large",
-          },
-        },
-        400,
-      );
-    }
-
-    if (audioFile.size === 0) {
-      return c.json(
-        {
-          error: {
-            type: "validation_error",
-            message: "Audio file is empty.",
-            code: "empty_audio",
-          },
-        },
-        400,
-      );
-    }
-
-    // Generate a storage URL placeholder (production: upload to R2 and get real URL)
-    const messageId = generateId();
-    const audioUrl = `/v1/voice-messages/${messageId}/audio`;
-
-    // Process: validate + transcribe + generate embed
-    const result = await processVoiceMessage(
-      {
-        audioData: audioFile,
-        mimeType: audioFile.type || "audio/webm",
-        filename: audioFile.name || "voice-message.webm",
-        language: languageHint ?? undefined,
-      },
-      audioUrl,
-      { openaiApiKey: OPENAI_API_KEY },
-    );
-
-    if (!result.ok) {
-      const statusCode =
-        result.error.code === "whisper_error" ? 502
-        : result.error.code === "whisper_unreachable" ? 502
-        : 400;
-
-      return c.json(
-        {
-          error: {
-            type: result.error.code,
-            message: result.error.message,
-            code: result.error.code,
-          },
-        },
-        statusCode,
-      );
-    }
-
-    // Store the voice message (persisted — survives restarts)
-    const createdAt = new Date();
-    const stored: VoiceMessage = {
-      id: messageId,
-      accountId: auth.accountId,
-      audioUrl: result.value.audioUrl,
-      mimeType: audioFile.type || "audio/webm",
-      filename: audioFile.name || "voice-message.webm",
-      sizeBytes: audioFile.size,
-      transcriptText: result.value.transcriptText,
-      language: result.value.language,
-      duration: result.value.duration,
-      htmlEmbed: result.value.htmlEmbed,
-      replyToId: null,
-      createdAt,
-    };
-
-    const db = getDatabase();
-    await db.insert(voiceMessages).values(stored);
-
-    return c.json({
-      data: {
-        id: messageId,
-        audioUrl: stored.audioUrl,
-        transcriptText: stored.transcriptText,
-        language: stored.language,
-        duration: stored.duration,
-        durationFormatted: formatDuration(stored.duration),
-        htmlEmbed: stored.htmlEmbed,
-        sizeBytes: stored.sizeBytes,
-        createdAt: createdAt.toISOString(),
-      },
-    });
+    return c.json(STORAGE_UNAVAILABLE, 501);
   },
 );
 
@@ -303,135 +185,7 @@ voiceMessageRouter.post(
   "/:id/reply",
   requireScope("voice:write"),
   async (c) => {
-    const auth = c.get("auth");
-    const parentId = c.req.param("id");
-
-    const OPENAI_API_KEY = process.env["OPENAI_API_KEY"];
-    if (!OPENAI_API_KEY) {
-      return c.json(
-        {
-          error: {
-            type: "configuration_error",
-            message: "Transcription service not configured. Set OPENAI_API_KEY.",
-            code: "transcription_unavailable",
-          },
-        },
-        503,
-      );
-    }
-
-    // Verify parent exists
-    const db = getDatabase();
-    const [parent] = await db
-      .select()
-      .from(voiceMessages)
-      .where(eq(voiceMessages.id, parentId))
-      .limit(1);
-
-    if (!parent) {
-      return c.json(
-        {
-          error: {
-            type: "not_found",
-            message: `Voice message '${parentId}' not found.`,
-            code: "voice_message_not_found",
-          },
-        },
-        404,
-      );
-    }
-
-    // Parse audio reply
-    const formData = await c.req.formData();
-    const audioFile = formData.get("audio");
-    const languageHint = formData.get("language") as string | null;
-
-    if (!audioFile || !(audioFile instanceof File)) {
-      return c.json(
-        {
-          error: {
-            type: "validation_error",
-            message: "Missing 'audio' file in form data.",
-            code: "missing_audio",
-          },
-        },
-        400,
-      );
-    }
-
-    if (audioFile.size > MAX_VOICE_AUDIO_SIZE) {
-      return c.json(
-        {
-          error: {
-            type: "validation_error",
-            message: `Audio file too large: ${Math.round(audioFile.size / 1024 / 1024)}MB. Maximum: 25MB.`,
-            code: "audio_too_large",
-          },
-        },
-        400,
-      );
-    }
-
-    const replyId = generateId();
-    const audioUrl = `/v1/voice-messages/${replyId}/audio`;
-
-    const result = await processVoiceMessage(
-      {
-        audioData: audioFile,
-        mimeType: audioFile.type || "audio/webm",
-        filename: audioFile.name || "voice-reply.webm",
-        language: languageHint ?? undefined,
-      },
-      audioUrl,
-      { openaiApiKey: OPENAI_API_KEY },
-    );
-
-    if (!result.ok) {
-      return c.json(
-        {
-          error: {
-            type: result.error.code,
-            message: result.error.message,
-            code: result.error.code,
-          },
-        },
-        502,
-      );
-    }
-
-    const createdAt = new Date();
-    const stored: VoiceMessage = {
-      id: replyId,
-      accountId: auth.accountId,
-      audioUrl: result.value.audioUrl,
-      mimeType: audioFile.type || "audio/webm",
-      filename: audioFile.name || "voice-reply.webm",
-      sizeBytes: audioFile.size,
-      transcriptText: result.value.transcriptText,
-      language: result.value.language,
-      duration: result.value.duration,
-      htmlEmbed: result.value.htmlEmbed,
-      replyToId: parentId,
-      createdAt,
-    };
-
-    await db.insert(voiceMessages).values(stored);
-
-    return c.json({
-      data: {
-        id: replyId,
-        audioUrl: stored.audioUrl,
-        transcriptText: stored.transcriptText,
-        language: stored.language,
-        duration: stored.duration,
-        durationFormatted: formatDuration(stored.duration),
-        htmlEmbed: stored.htmlEmbed,
-        replyToId: parentId,
-        parentTranscript: parent.transcriptText,
-        sizeBytes: stored.sizeBytes,
-        createdAt: createdAt.toISOString(),
-      },
-    });
+    return c.json(STORAGE_UNAVAILABLE, 501);
   },
 );
 

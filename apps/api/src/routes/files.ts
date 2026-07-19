@@ -3,7 +3,7 @@
  *
  * GET    /v1/files                        — List all files (paginated, filterable)
  * GET    /v1/files/:id                    — Get file metadata
- * POST   /v1/files/upload                 — Upload a file (presigned URL placeholder)
+ * POST   /v1/files/upload                 — 501: no object storage backend wired up yet (#29)
  * DELETE /v1/files/:id                    — Delete a file
  * GET    /v1/files/stats                  — Get storage usage stats
  * GET    /v1/emails/:emailId/attachments  — List attachments for an email
@@ -14,23 +14,12 @@ import { z } from "zod";
 import { eq, and, desc, lt, sql, count } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
-  validateBody,
   validateQuery,
-  getValidatedBody,
   getValidatedQuery,
 } from "../middleware/validator.js";
 import { getDatabase, files } from "@alecrae/db";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
-
-const UploadFileSchema = z.object({
-  name: z.string().min(1).max(500),
-  mimeType: z.string().min(1).max(255),
-  size: z.number().int().min(1),
-  emailId: z.string().optional(),
-  threadId: z.string().optional(),
-  source: z.enum(["attachment", "upload", "drive"]).default("upload"),
-});
 
 const ListFilesQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -41,13 +30,6 @@ const ListFilesQuery = z.object({
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function generateId(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 function formatFile(row: {
   id: string;
@@ -227,50 +209,29 @@ filesRouter.get(
   },
 );
 
-// POST /v1/files/upload — Upload a file (presigned URL placeholder)
+// POST /v1/files/upload — Upload a file (presigned URL)
+//
+// No object-storage backend is actually wired up yet (Known Issue #29): the
+// stack table names "Vapron Object Storage" but only listBuckets/createBucket
+// exist in lib/vapron.ts, and Vapron API calls are broken in prod regardless
+// (issue #83, wrong key scheme). This used to insert a `files` row and hand
+// back a fake `https://storage.alecrae.com/...` URL that 404s on every PUT —
+// silent data loss, since the caller believed the upload succeeded. Refusing
+// up front is the honest behavior until a real storage backend is picked.
 filesRouter.post(
   "/upload",
   requireScope("messages:write"),
-  validateBody(UploadFileSchema),
   async (c) => {
-    const input = getValidatedBody<z.infer<typeof UploadFileSchema>>(c);
-    const auth = c.get("auth");
-    const db = getDatabase();
-
-    const id = generateId();
-    const storageKey = `${auth.accountId}/${id}/${input.name}`;
-    const now = new Date();
-
-    await db.insert(files).values({
-      id,
-      accountId: auth.accountId,
-      name: input.name,
-      mimeType: input.mimeType,
-      size: input.size,
-      storageKey,
-      source: input.source,
-      emailId: input.emailId ?? null,
-      threadId: input.threadId ?? null,
-      thumbnailKey: null,
-      uploadedAt: now,
-    });
-
-    // In production this would return a presigned R2 upload URL.
-    // For now we return the storage key and a placeholder upload URL.
-    const presignedUrl = `https://storage.alecrae.com/upload/${storageKey}?token=${id}`;
-
     return c.json(
       {
-        data: {
-          id,
-          name: input.name,
-          storageKey,
-          uploadUrl: presignedUrl,
-          expiresIn: 3600,
-          uploadedAt: now.toISOString(),
+        error: {
+          type: "storage_unavailable",
+          message:
+            "File uploads are not available yet — no object storage backend is connected. See CLAUDE.md Known Issue #29.",
+          code: "storage_unavailable",
         },
       },
-      201,
+      501,
     );
   },
 );
