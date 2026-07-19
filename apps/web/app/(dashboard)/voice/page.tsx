@@ -16,6 +16,7 @@ import {
 } from "../../../components/VoiceReplyComposer";
 import { getApiBase } from "../../../lib/api-base";
 import { getAccessToken } from "../../../lib/auth-token";
+import { PlanGate } from "../../../components/plan-gate";
 
 export default function VoicePage(): React.ReactNode {
   const [authToken, setAuthToken] = useState<string>("");
@@ -40,7 +41,9 @@ export default function VoicePage(): React.ReactNode {
             Train AI on your sent email so drafts sound exactly like you —
             rhythm, vocabulary, punctuation, and all.
           </Text>
-          <VoiceCloneManager />
+          <PlanGate feature="voice_clone" required="pro">
+            <VoiceCloneManager />
+          </PlanGate>
         </Box>
 
         <Card>

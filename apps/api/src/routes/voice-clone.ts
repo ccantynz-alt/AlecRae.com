@@ -506,25 +506,15 @@ voiceClone.post(
 
     const fingerprint = profile.styleFingerprint as StyleFingerprintData;
 
-    // Graceful degradation: when the AI provider is unavailable (no key or a
-    // runtime failure), return a clearly-labelled lower-confidence fallback
-    // draft instead of throwing a 500.
-    const fallbackData = {
-      body:
-        `Hi,\n\n` +
-        `[AI voice-clone draft unavailable — Claude could not be reached. ` +
-        `Compose your message about: ${input.prompt.slice(0, 200)}]\n\n` +
-        `Best regards`,
-      profileId: profile.id,
-      profileName: profile.name,
-      confidenceScore: 0.3,
-      formalityLevel: fingerprint.formalityLevel,
-      sampleCount: profile.sampleCount,
-      aiUnavailable: true,
-    };
-
+    // Honest degradation: when the AI provider is unavailable (no key or a
+    // runtime failure), return a clear 503 instead of a 200 carrying a
+    // placeholder draft and a fabricated confidenceScore — matches the
+    // pattern routes/explain.ts uses.
     if (!ANTHROPIC_API_KEY) {
-      return c.json({ data: fallbackData });
+      return c.json(
+        { error: { type: "service_unavailable", message: "Voice-clone composition is not configured", code: "ai_unavailable" } },
+        503,
+      );
     }
 
     let result: { body: string; confidenceScore: number };
@@ -541,8 +531,11 @@ voiceClone.post(
         },
         claudeClient,
       );
-    } catch {
-      return c.json({ data: fallbackData });
+    } catch (err) {
+      return c.json(
+        { error: { type: "ai_error", message: err instanceof Error ? err.message : "Voice-clone composition failed", code: "ai_error" } },
+        502,
+      );
     }
 
     return c.json({
