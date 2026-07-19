@@ -13,6 +13,7 @@ import { Hono } from "hono";
 import { eq } from "drizzle-orm";
 import { getDatabase, emails, events } from "@alecrae/db";
 import { enqueueWebhookDelivery } from "../lib/webhook-dispatcher.js";
+import { recordEngagementEvent } from "./send-time.js";
 
 const tracking = new Hono();
 
@@ -48,6 +49,9 @@ async function recordEvent(
       accountId: emails.accountId,
       messageId: emails.messageId,
       tags: emails.tags,
+      toAddresses: emails.toAddresses,
+      sentAt: emails.sentAt,
+      createdAt: emails.createdAt,
     })
     .from(emails)
     .where(eq(emails.id, emailId))
@@ -74,6 +78,33 @@ async function recordEvent(
   enqueueWebhookDelivery(eventId, emailRecord.accountId).catch((err) => {
     console.error(`[tracking] Webhook enqueue failed: ${err}`);
   });
+
+  // Feed the send-time predictor's engagement aggregates. Previously nothing
+  // ever called this — the pixel/click handlers recorded a generic `events`
+  // row and stopped, so recipientEngagement stayed empty forever and
+  // send-time predictions never left their generic "Tue-Thu mornings"
+  // fallback. Tracking is per-email, not per-recipient — for a single-
+  // recipient send this attributes correctly; for a multi-recipient send it
+  // attributes to the first recipient, a known approximation rather than a
+  // silent gap.
+  const sendTimeEventType =
+    eventType === "email.opened" ? "open" : eventType === "email.clicked" ? "click" : null;
+  const firstRecipient = Array.isArray(emailRecord.toAddresses)
+    ? (emailRecord.toAddresses[0] as { address?: string } | undefined)?.address
+    : undefined;
+
+  if (sendTimeEventType && firstRecipient) {
+    recordEngagementEvent({
+      accountId: emailRecord.accountId,
+      recipientEmail: firstRecipient,
+      emailId: emailRecord.id,
+      eventType: sendTimeEventType,
+      sentAt: emailRecord.sentAt ?? emailRecord.createdAt,
+      engagedAt: new Date(),
+    }).catch((err) => {
+      console.error(`[tracking] Engagement recording failed: ${err}`);
+    });
+  }
 }
 
 

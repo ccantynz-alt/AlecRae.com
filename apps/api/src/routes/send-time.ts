@@ -325,6 +325,106 @@ sendTime.post(
   },
 );
 
+/**
+ * Record a single engagement event and update the recipient's aggregate row.
+ * Shared by the authenticated POST /v1/send-time/record-engagement route AND
+ * tracking.ts's unauthenticated open-pixel/click-redirect handlers — this is
+ * the write path that was previously never called from anywhere, so
+ * send-time predictions had no real engagement data to work from and stayed
+ * on the generic "Tue-Thu mornings" fallback for every recipient, forever.
+ */
+export async function recordEngagementEvent(params: {
+  accountId: string;
+  recipientEmail: string;
+  emailId: string;
+  eventType: "open" | "click" | "reply";
+  sentAt: Date;
+  engagedAt: Date;
+}): Promise<{ eventId: string; delaySeconds: number }> {
+  const db = getDatabase();
+  const { accountId, emailId, eventType, sentAt, engagedAt } = params;
+  const normalizedEmail = params.recipientEmail.toLowerCase().trim();
+
+  const delaySeconds = Math.max(
+    0,
+    Math.floor((engagedAt.getTime() - sentAt.getTime()) / 1000),
+  );
+  const delayHours = delaySeconds / 3600;
+  const engagedHour = engagedAt.getUTCHours();
+  const engagedDayOfWeek = engagedAt.getUTCDay();
+
+  // 1. Insert the raw engagement event
+  const eventId = generateId();
+  await db.insert(engagementEvents).values({
+    id: eventId,
+    accountId,
+    recipientEmail: normalizedEmail,
+    emailId,
+    eventType,
+    sentAt,
+    engagedAt,
+    delaySeconds,
+    engagedHour,
+    engagedDayOfWeek,
+  });
+
+  // 2. Upsert + update the aggregate row
+  const existing = await getEngagementRow(accountId, normalizedEmail);
+
+  if (!existing) {
+    const hourDist: Record<string, number> = { [String(engagedHour)]: 1 };
+    const dayDist: Record<string, number> = { [String(engagedDayOfWeek)]: 1 };
+
+    const isOpen = eventType === "open";
+    const isClick = eventType === "click";
+    const isReply = eventType === "reply";
+
+    await db.insert(recipientEngagement).values({
+      id: generateId(),
+      accountId,
+      recipientEmail: normalizedEmail,
+      totalSent: 1,
+      totalOpened: isOpen ? 1 : 0,
+      totalClicked: isClick ? 1 : 0,
+      totalReplied: isReply ? 1 : 0,
+      openRate: isOpen ? 1 : 0,
+      clickRate: isClick ? 1 : 0,
+      replyRate: isReply ? 1 : 0,
+      openHourDistribution: isOpen ? hourDist : {},
+      openDayDistribution: isOpen ? dayDist : {},
+      clickHourDistribution: isClick ? hourDist : {},
+      clickDayDistribution: isClick ? dayDist : {},
+      avgOpenDelayHours: isOpen ? delayHours : null,
+      avgClickDelayHours: isClick ? delayHours : null,
+      avgReplyDelayHours: isReply ? delayHours : null,
+      peakOpenHour: isOpen ? engagedHour : null,
+      peakOpenDay: isOpen ? engagedDayOfWeek : null,
+      peakClickHour: isClick ? engagedHour : null,
+      peakClickDay: isClick ? engagedDayOfWeek : null,
+      firstInteractionAt: engagedAt,
+      lastInteractionAt: engagedAt,
+    });
+  } else {
+    const updates = computeUpdatedAggregates(existing, eventType, engagedAt, delayHours);
+
+    await db
+      .update(recipientEngagement)
+      .set({
+        ...updates,
+        lastInteractionAt: engagedAt,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(recipientEngagement.accountId, accountId),
+          eq(recipientEngagement.recipientEmail, normalizedEmail),
+        ),
+      );
+  }
+
+  return { eventId, delaySeconds };
+}
+
 // POST /v1/send-time/record-engagement — Record engagement event + update aggregates
 sendTime.post(
   "/record-engagement",
@@ -333,96 +433,16 @@ sendTime.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof RecordEngagementSchema>>(c);
     const auth = c.get("auth");
-    const db = getDatabase();
 
-    const sentDate = new Date(input.sentAt);
-    const engagedDate = new Date(input.engagedAt);
-    const delaySeconds = Math.max(
-      0,
-      Math.floor((engagedDate.getTime() - sentDate.getTime()) / 1000),
-    );
-    const delayHours = delaySeconds / 3600;
-    const engagedHour = engagedDate.getUTCHours();
-    const engagedDayOfWeek = engagedDate.getUTCDay();
     const normalizedEmail = input.recipientEmail.toLowerCase().trim();
-
-    // 1. Insert the raw engagement event
-    const eventId = generateId();
-    await db.insert(engagementEvents).values({
-      id: eventId,
+    const { eventId, delaySeconds } = await recordEngagementEvent({
       accountId: auth.accountId,
       recipientEmail: normalizedEmail,
       emailId: input.emailId,
       eventType: input.eventType,
-      sentAt: sentDate,
-      engagedAt: engagedDate,
-      delaySeconds,
-      engagedHour,
-      engagedDayOfWeek,
+      sentAt: new Date(input.sentAt),
+      engagedAt: new Date(input.engagedAt),
     });
-
-    // 2. Upsert + update the aggregate row
-    const existing = await getEngagementRow(auth.accountId, normalizedEmail);
-
-    if (!existing) {
-      // Create a new engagement row
-      const hourDist: Record<string, number> = {};
-      const dayDist: Record<string, number> = {};
-      hourDist[String(engagedHour)] = 1;
-      dayDist[String(engagedDayOfWeek)] = 1;
-
-      const isOpen = input.eventType === "open";
-      const isClick = input.eventType === "click";
-      const isReply = input.eventType === "reply";
-
-      await db.insert(recipientEngagement).values({
-        id: generateId(),
-        accountId: auth.accountId,
-        recipientEmail: normalizedEmail,
-        totalSent: 1,
-        totalOpened: isOpen ? 1 : 0,
-        totalClicked: isClick ? 1 : 0,
-        totalReplied: isReply ? 1 : 0,
-        openRate: isOpen ? 1 : 0,
-        clickRate: isClick ? 1 : 0,
-        replyRate: isReply ? 1 : 0,
-        openHourDistribution: isOpen ? hourDist : {},
-        openDayDistribution: isOpen ? dayDist : {},
-        clickHourDistribution: isClick ? hourDist : {},
-        clickDayDistribution: isClick ? dayDist : {},
-        avgOpenDelayHours: isOpen ? delayHours : null,
-        avgClickDelayHours: isClick ? delayHours : null,
-        avgReplyDelayHours: isReply ? delayHours : null,
-        peakOpenHour: isOpen ? engagedHour : null,
-        peakOpenDay: isOpen ? engagedDayOfWeek : null,
-        peakClickHour: isClick ? engagedHour : null,
-        peakClickDay: isClick ? engagedDayOfWeek : null,
-        firstInteractionAt: engagedDate,
-        lastInteractionAt: engagedDate,
-      });
-    } else {
-      // Update existing aggregates
-      const updates = computeUpdatedAggregates(
-        existing,
-        input.eventType,
-        engagedDate,
-        delayHours,
-      );
-
-      await db
-        .update(recipientEngagement)
-        .set({
-          ...updates,
-          lastInteractionAt: engagedDate,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(recipientEngagement.accountId, auth.accountId),
-            eq(recipientEngagement.recipientEmail, normalizedEmail),
-          ),
-        );
-    }
 
     return c.json({
       data: {
