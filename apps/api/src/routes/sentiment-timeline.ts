@@ -5,6 +5,27 @@ import { getDatabase, sentimentTimeline, relationshipHealth } from "@alecrae/db"
 import { generateId } from "../lib/jwt.js";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, validateQuery, getValidatedBody, getValidatedQuery } from "../middleware/validator.js";
+import { analyzeEmailSentiment, type EmailSentiment } from "@alecrae/ai-engine/intelligence/sentiment-analyzer";
+
+const SENTIMENT_LEVELS = ["very_positive", "positive", "neutral", "negative", "very_negative"] as const;
+const TOPIC_KEYWORDS = ["project", "deadline", "budget", "meeting", "review", "update", "proposal", "report"];
+
+/** Schema's score column is documented 0.0-1.0; the analyzer's is -1.0-1.0. */
+function toSchemaScore(analyzerScore: number): number {
+  return Math.max(0, Math.min(1, (analyzerScore + 1) / 2));
+}
+
+async function runSentimentAnalysis(content: string): Promise<EmailSentiment> {
+  try {
+    return await analyzeEmailSentiment({ subject: "", body: content });
+  } catch (err) {
+    throw new Error(
+      err instanceof Error && err.message.includes("ANTHROPIC_API_KEY")
+        ? "Sentiment analysis is unavailable — no AI provider configured."
+        : `Sentiment analysis failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+}
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -60,33 +81,22 @@ sentimentTimelineRouter.post(
   validateBody(AnalyzeBodySchema),
   async (c) => {
     const body = getValidatedBody<z.infer<typeof AnalyzeBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
-    const sentimentLevels = ["very_positive", "positive", "neutral", "negative", "very_negative"] as const;
-    const tones = ["appreciative", "professional", "frustrated", "enthusiastic", "concerned", "formal", "friendly"];
-    const topicKeywords = ["project", "deadline", "budget", "meeting", "review", "update", "proposal", "report"];
+    let analysis: EmailSentiment;
+    try {
+      analysis = await runSentimentAnalysis(body.content);
+    } catch (err) {
+      return c.json({ error: { message: err instanceof Error ? err.message : String(err), code: "sentiment_analysis_unavailable" } }, 503);
+    }
 
     const contentLower = body.content.toLowerCase();
-    const positiveWords = ["thank", "great", "excellent", "appreciate", "wonderful", "happy", "pleased"];
-    const negativeWords = ["issue", "problem", "urgent", "concern", "disappointed", "delay", "fail"];
-
-    let positiveCount = 0;
-    let negativeCount = 0;
-    for (const w of positiveWords) if (contentLower.includes(w)) positiveCount++;
-    for (const w of negativeWords) if (contentLower.includes(w)) negativeCount++;
-
-    const net = positiveCount - negativeCount;
-    let sentimentIdx = 2;
-    if (net >= 2) sentimentIdx = 0;
-    else if (net === 1) sentimentIdx = 1;
-    else if (net === -1) sentimentIdx = 3;
-    else if (net <= -2) sentimentIdx = 4;
-
-    const sentiment = sentimentLevels[sentimentIdx] ?? "neutral";
-    const score = Math.max(0, Math.min(1, 0.5 + net * 0.15));
-    const emotionalTone = tones[Math.abs(net) % tones.length] ?? "professional";
-    const topics = topicKeywords.filter((t) => contentLower.includes(t));
+    const topics = TOPIC_KEYWORDS.filter((t) => contentLower.includes(t));
+    const sentiment = analysis.sentiment;
+    const score = toSchemaScore(analysis.score);
+    const emotionalTone = analysis.emotions[0] ?? null;
+    const sentimentIdx = SENTIMENT_LEVELS.indexOf(sentiment);
 
     const id = generateId();
     const [entry] = await db
@@ -166,7 +176,7 @@ sentimentTimelineRouter.get(
   validateQuery(TimelineQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof TimelineQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const conditions = [eq(sentimentTimeline.accountId, accountId)];
@@ -201,7 +211,7 @@ sentimentTimelineRouter.get(
   requireScope("analytics:read"),
   async (c) => {
     const contactEmail = c.req.param("contactEmail");
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const rows = await db
@@ -230,7 +240,7 @@ sentimentTimelineRouter.get(
   validateQuery(ContactsQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof ContactsQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const conditions = [eq(relationshipHealth.accountId, accountId)];
@@ -267,7 +277,7 @@ sentimentTimelineRouter.get(
   requireScope("analytics:read"),
   async (c) => {
     const contactEmail = c.req.param("contactEmail");
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const [record] = await db
@@ -296,7 +306,7 @@ sentimentTimelineRouter.get(
   validateQuery(TrendsQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof TrendsQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const cutoff = new Date(Date.now() - query.days * 86400000);
@@ -330,7 +340,7 @@ sentimentTimelineRouter.get(
   "/alerts",
   requireScope("analytics:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const rows = await db
@@ -359,43 +369,45 @@ sentimentTimelineRouter.post(
   validateBody(BatchAnalyzeBodySchema),
   async (c) => {
     const body = getValidatedBody<z.infer<typeof BatchAnalyzeBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
-    const results: { emailId: string; sentiment: string; score: number }[] = [];
-    const positiveWords = ["thank", "great", "excellent", "appreciate", "wonderful", "happy", "pleased"];
-    const negativeWords = ["issue", "problem", "urgent", "concern", "disappointed", "delay", "fail"];
-    const sentimentLevels = ["very_positive", "positive", "neutral", "negative", "very_negative"] as const;
+    const analyzed = await Promise.allSettled(
+      body.emails.map((email) => runSentimentAnalysis(email.content)),
+    );
 
-    for (const email of body.emails) {
-      const contentLower = email.content.toLowerCase();
-      let pos = 0;
-      let neg = 0;
-      for (const w of positiveWords) if (contentLower.includes(w)) pos++;
-      for (const w of negativeWords) if (contentLower.includes(w)) neg++;
-      const net = pos - neg;
-      let idx = 2;
-      if (net >= 2) idx = 0;
-      else if (net === 1) idx = 1;
-      else if (net === -1) idx = 3;
-      else if (net <= -2) idx = 4;
-      const score = Math.max(0, Math.min(1, 0.5 + net * 0.15));
-      const batchSentiment = sentimentLevels[idx] ?? "neutral";
+    const results: { emailId: string; sentiment: string; score: number }[] = [];
+    const failures: { emailId: string; error: string }[] = [];
+
+    for (let i = 0; i < analyzed.length; i++) {
+      const email = body.emails[i];
+      const outcome = analyzed[i];
+      if (!email || !outcome) continue;
+
+      if (outcome.status === "rejected") {
+        failures.push({ emailId: email.emailId, error: String(outcome.reason) });
+        continue;
+      }
+
+      const analysis = outcome.value;
+      const sentiment = analysis.sentiment;
+      const score = toSchemaScore(analysis.score);
 
       await db.insert(sentimentTimeline).values({
         id: generateId(),
         accountId,
         contactEmail: email.senderEmail,
         emailId: email.emailId,
-        sentiment: batchSentiment,
+        sentiment,
         score,
         topics: [],
+        emotionalTone: analysis.emotions[0] ?? null,
       });
 
-      results.push({ emailId: email.emailId, sentiment: batchSentiment, score });
+      results.push({ emailId: email.emailId, sentiment, score });
     }
 
-    return c.json({ success: true, analyzed: results.length, data: results });
+    return c.json({ success: true, analyzed: results.length, failed: failures.length, data: results, failures });
   },
 );
 
@@ -407,7 +419,7 @@ sentimentTimelineRouter.get(
   "/topics",
   requireScope("analytics:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const rows = await db
@@ -434,7 +446,7 @@ sentimentTimelineRouter.get(
   "/dashboard",
   requireScope("analytics:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const [totalEntries] = await db
