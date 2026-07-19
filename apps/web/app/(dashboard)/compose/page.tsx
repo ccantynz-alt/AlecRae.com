@@ -68,8 +68,50 @@ function ComposePage(): React.ReactNode {
   const [editorKey, setEditorKey] = useState(0);
   // Id of the most recently sent email — enables the recall panel.
   const [lastSentEmailId, setLastSentEmailId] = useState<string | null>(null);
+  // Undo-send countdown: set right after a successful immediate send, cleared
+  // when the window closes or the user hits Undo.
+  const [undoableSend, setUndoableSend] = useState<{ id: string; secondsLeft: number } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const undoTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const grammarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCheckedRef = useRef("");
+
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+    };
+  }, []);
+
+  const startUndoCountdown = useCallback((id: string, untilIso: string) => {
+    if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+    const secondsLeft = Math.max(0, Math.round((new Date(untilIso).getTime() - Date.now()) / 1000));
+    setUndoableSend({ id, secondsLeft });
+    undoTimerRef.current = setInterval(() => {
+      setUndoableSend((prev) => {
+        if (!prev) return prev;
+        if (prev.secondsLeft <= 1) {
+          if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+          return null;
+        }
+        return { ...prev, secondsLeft: prev.secondsLeft - 1 };
+      });
+    }, 1000);
+  }, []);
+
+  const handleUndoSend = useCallback(async () => {
+    if (!undoableSend || undoing) return;
+    setUndoing(true);
+    try {
+      await messagesApi.undoSend(undoableSend.id);
+      setStatus("Send cancelled — moved back to drafts.");
+      if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+      setUndoableSend(null);
+    } catch (err) {
+      setStatus(`Couldn't undo: ${err instanceof Error ? err.message : "the undo window may have closed"}`);
+    } finally {
+      setUndoing(false);
+    }
+  }, [undoableSend, undoing]);
 
   const _checkGrammar = useCallback((text: string) => {
     // Track the live body for the spellcheck + compose-assist panels.
@@ -233,7 +275,12 @@ function ComposePage(): React.ReactNode {
       if (ccList.length > 0) sendPayload.cc = ccList;
       const result = await messagesApi.send(sendPayload);
       setLastSentEmailId(result.id);
-      setStatus(`Email queued successfully (ID: ${result.id})`);
+      if (result.undoableUntil) {
+        startUndoCountdown(result.id, result.undoableUntil);
+        setStatus(null);
+      } else {
+        setStatus(`Email queued successfully (ID: ${result.id})`);
+      }
     } catch (err) {
       setStatus(`Error: ${err instanceof Error ? err.message : "Failed to send"}`);
     } finally {
@@ -261,6 +308,28 @@ function ComposePage(): React.ReactNode {
               exit="exit"
             >
               {status}
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {undoableSend && (
+            <motion.div
+              key="undo-send-banner"
+              className="mb-4 p-3 rounded text-sm bg-blue-50 text-blue-800 flex items-center justify-between"
+              variants={statusVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <span>Sending in {undoableSend.secondsLeft}s…</span>
+              <button
+                type="button"
+                onClick={() => void handleUndoSend()}
+                disabled={undoing}
+                className="font-medium underline disabled:opacity-50"
+              >
+                {undoing ? "Undoing…" : "Undo"}
+              </button>
             </motion.div>
           )}
         </AnimatePresence>

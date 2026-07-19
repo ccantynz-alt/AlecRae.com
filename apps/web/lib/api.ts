@@ -878,9 +878,17 @@ export const messagesApi = {
     tags?: string[];
     scheduledAt?: string;
   }) {
-    return apiFetch<{ id: string; messageId: string; status: string }>(
+    return apiFetch<{ id: string; messageId: string; status: string; undoableUntil?: string }>(
       "/v1/messages/send",
       { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** POST /v1/send/undo/:id — cancel a send still inside its undo window. */
+  undoSend(id: string) {
+    return apiFetch<{ data: { emailId: string; message: string } }>(
+      `/v1/send/undo/${encodeURIComponent(id)}`,
+      { method: "POST" },
     );
   },
 

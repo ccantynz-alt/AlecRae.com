@@ -26,6 +26,12 @@ import type {
 import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
 import { ensureFreshAccessToken } from "../sync/engine.js";
+import { registerUndoable } from "./snooze.js";
+
+/** Seconds an own-domain send is held before the MTA worker picks it up,
+ *  during which POST /v1/send/undo/:id can cancel it. registerUndoable()
+ *  existed but had zero callers anywhere — undo-send was pure dead code. */
+const UNDO_SEND_WINDOW_SECONDS = 10;
 import { checkQuota, incrementQuota } from "../lib/quota.js";
 import { indexEmail, searchEmails } from "@alecrae/shared";
 import { usageEnforcement } from "../middleware/usage.js";
@@ -754,16 +760,23 @@ async function handleSend(c: Context) {
   // ── 6. Enqueue to MTA via BullMQ ─────────────────────────────────
   const queue = getSendQueue();
 
+  // An explicit scheduledAt already has its own cancel path
+  // (DELETE /v1/send/schedule/:id) — only add the undo-send hold for
+  // immediate sends.
+  const isImmediateSend = !input.scheduledAt;
   let delay: number | undefined;
   if (input.scheduledAt) {
     const delayMs = new Date(input.scheduledAt).getTime() - Date.now();
     if (delayMs > 0) {
       delay = delayMs;
     }
+  } else {
+    delay = UNDO_SEND_WINDOW_SECONDS * 1000;
   }
 
+  let sendJob: Awaited<ReturnType<typeof queue.add>> | undefined;
   try {
-    await queue.add(
+    sendJob = await queue.add(
       id,
       {
         email: {
@@ -803,6 +816,21 @@ async function handleSend(c: Context) {
       { error: "Email saved but delivery queue unavailable. The MTA worker may not be running. Check REDIS_URL and alecrae-mta service." },
       503,
     );
+  }
+
+  let undoableUntil: string | undefined;
+  if (isImmediateSend && sendJob) {
+    const job = sendJob;
+    registerUndoable(
+      id,
+      () => {
+        void job.remove().catch((err: unknown) => {
+          console.warn(`[messages] Failed to remove queued job for undone send ${id}:`, err);
+        });
+      },
+      UNDO_SEND_WINDOW_SECONDS,
+    );
+    undoableUntil = new Date(Date.now() + UNDO_SEND_WINDOW_SECONDS * 1000).toISOString();
   }
 
   // ── 6b. Record send against warm-up counter (fire-and-forget) ────
@@ -862,7 +890,10 @@ async function handleSend(c: Context) {
   }
 
   // ── 10. Return response ───────────────────────────────────────────
-  return c.json({ id, messageId, status: "queued" as const }, 202);
+  return c.json(
+    { id, messageId, status: "queued" as const, ...(undoableUntil ? { undoableUntil } : {}) },
+    202,
+  );
 }
 
 // ─── Route handler ──────────────────────────────────────────────────────────
