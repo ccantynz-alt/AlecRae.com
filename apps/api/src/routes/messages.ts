@@ -35,6 +35,7 @@ import { decryptSecretOrNull, encryptSecret } from "../lib/token-crypto.js";
 const UNDO_SEND_WINDOW_SECONDS = 10;
 import { checkQuota, incrementQuota } from "../lib/quota.js";
 import { indexEmail, searchEmails } from "@alecrae/shared";
+import { enqueueEmail } from "@alecrae/ai-engine/embeddings/auto-indexer";
 import { usageEnforcement } from "../middleware/usage.js";
 import { idempotency } from "../middleware/idempotency.js";
 import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED, ComplianceEngine } from "@alecrae/reputation";
@@ -457,6 +458,10 @@ async function handleSend(c: Context) {
       sentAt: now,
     });
 
+    // Semantic search indexing — the MTA send path below already does this
+    // via indexEmail() (Meilisearch); this fast-path skipped it entirely.
+    enqueueEmail(id, auth.accountId);
+
     return c.json({ id, messageId: providerMessageId ?? messageId, status: "sent" as const }, 202);
   }
 
@@ -867,6 +872,9 @@ async function handleSend(c: Context) {
   }).catch((err) => {
     console.warn("[messages] Meilisearch indexing failed:", err);
   });
+
+  // ── 7b. Semantic search indexing (fire-and-forget) ────────────────
+  enqueueEmail(id, auth.accountId);
 
   // ── 8. Increment account usage counter (fire-and-forget) ─────────
   db.update(accounts)

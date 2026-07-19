@@ -19,6 +19,7 @@ import { getDatabase, emails } from "@alecrae/db";
 import type { ParsedEmail } from "@alecrae/email-parser";
 import { aiComplete } from "./ai.js";
 import { runRulesForEmail } from "./rule-engine.js";
+import { enqueueEmail } from "@alecrae/ai-engine/embeddings/auto-indexer";
 
 export interface ReceivedAddress {
   address: string;
@@ -215,6 +216,12 @@ export async function storeReceivedEmail(
 
   // AI auto-triage: fire-and-forget — never blocks the caller.
   void runAiTriage(id, input);
+
+  // Semantic search indexing — enqueueEmail's own doc comment says it's
+  // "called by the email ingest pipeline when a new email arrives," but
+  // nothing ever called it. New mail was invisible to semantic search until
+  // someone manually re-indexed.
+  enqueueEmail(id, input.accountId);
 
   // User-defined email rules (routes/ai-rules.ts) — fire-and-forget, same as
   // AI-triage above. Previously nothing ever applied a saved rule to
