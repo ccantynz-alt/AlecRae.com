@@ -1,0 +1,1 @@
+ALTER TYPE "public"."email_event_type" ADD VALUE 'email.received' BEFORE 'domain.verified';

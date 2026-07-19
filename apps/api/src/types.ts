@@ -128,12 +128,19 @@ export interface DomainRecord {
 }
 
 // --- Webhook ---
+//
+// Must match the dotted `email_event_type` DB enum (packages/db/src/schema/
+// events.ts) — webhook-dispatcher.ts filters by exact string equality
+// against `events.type`, so a mismatch here silently means "this webhook's
+// event filter never matches anything" (previously used bare "opened" /
+// "clicked" etc., which could never match a real "email.opened" event).
 export const WebhookEventType = z.enum([
-  "delivered",
-  "bounced",
-  "opened",
-  "clicked",
-  "complained",
+  "email.delivered",
+  "email.bounced",
+  "email.opened",
+  "email.clicked",
+  "email.complained",
+  "email.received",
 ]);
 
 export type WebhookEventType = z.infer<typeof WebhookEventType>;

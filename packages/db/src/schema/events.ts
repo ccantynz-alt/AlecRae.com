@@ -28,6 +28,7 @@ export const emailEventTypeEnum = pgEnum("email_event_type", [
   "email.clicked",
   "email.unsubscribed",
   "email.complained",
+  "email.received",
   "domain.verified",
   "domain.failed",
 ]);

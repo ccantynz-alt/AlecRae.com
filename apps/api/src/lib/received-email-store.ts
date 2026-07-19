@@ -15,11 +15,12 @@
 
 import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import { getDatabase, emails } from "@alecrae/db";
+import { getDatabase, emails, events } from "@alecrae/db";
 import type { ParsedEmail } from "@alecrae/email-parser";
 import { aiComplete } from "./ai.js";
 import { runRulesForEmail } from "./rule-engine.js";
 import { enqueueEmail } from "@alecrae/ai-engine/embeddings/auto-indexer";
+import { enqueueWebhookDelivery } from "./webhook-dispatcher.js";
 
 export interface ReceivedAddress {
   address: string;
@@ -237,7 +238,31 @@ export async function storeReceivedEmail(
     console.error("[rule-engine] Failed to evaluate rules for email", id, err instanceof Error ? err.message : String(err));
   });
 
+  // email.received webhook (Known Issue #70) — previously there was no way
+  // for an external platform to programmatically react to inbound mail.
+  // Fire-and-forget, same pattern as tracking.ts's pixel/click handlers.
+  void emitReceivedWebhook(id, input);
+
   return { stored: true, id };
+}
+
+/** Record an `email.received` event and enqueue webhook delivery. Never throws. */
+async function emitReceivedWebhook(emailId: string, input: ReceivedEmailInput): Promise<void> {
+  try {
+    const db = getDatabase();
+    const eventId = genId();
+    await db.insert(events).values({
+      id: eventId,
+      accountId: input.accountId,
+      emailId,
+      messageId: input.messageId ?? null,
+      type: "email.received",
+      recipient: input.to[0]?.address ?? null,
+    });
+    await enqueueWebhookDelivery(eventId, input.accountId);
+  } catch (err) {
+    console.error("[received-email-store] Failed to emit email.received webhook for", emailId, err instanceof Error ? err.message : String(err));
+  }
 }
 
 /** Map a parsed RFC 5322 message to the store input. */

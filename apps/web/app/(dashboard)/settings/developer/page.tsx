@@ -253,7 +253,18 @@ ApiKeysSection.displayName = "ApiKeysSection";
 
 // ─── Webhooks ────────────────────────────────────────────────────────────────
 
-const WEBHOOK_EVENTS = ["delivered", "bounced", "opened", "clicked", "complained"] as const;
+// Values must match apps/api/src/types.ts's WebhookEventType (dotted, matching
+// the DB's email_event_type enum) — webhook-dispatcher.ts filters by exact
+// string equality, so a mismatched value here means the event filter never
+// matches anything.
+const WEBHOOK_EVENTS = [
+  { value: "email.received", label: "received" },
+  { value: "email.delivered", label: "delivered" },
+  { value: "email.bounced", label: "bounced" },
+  { value: "email.opened", label: "opened" },
+  { value: "email.clicked", label: "clicked" },
+  { value: "email.complained", label: "complained" },
+] as const;
 
 function WebhooksSection(): React.ReactNode {
   const [hooks, setHooks] = useState<Webhook[]>([]);
@@ -261,7 +272,7 @@ function WebhooksSection(): React.ReactNode {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [url, setUrl] = useState("");
-  const [events, setEvents] = useState<Set<string>>(new Set(["delivered", "bounced"]));
+  const [events, setEvents] = useState<Set<string>>(new Set(["email.delivered", "email.bounced"]));
   const [creating, setCreating] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
@@ -357,15 +368,15 @@ function WebhooksSection(): React.ReactNode {
                 Events
               </Text>
               <Box className="flex flex-wrap gap-2" role="group" aria-label="Webhook events">
-                {WEBHOOK_EVENTS.map((event) => (
+                {WEBHOOK_EVENTS.map(({ value, label }) => (
                   <Button
-                    key={event}
-                    variant={events.has(event) ? "secondary" : "ghost"}
+                    key={value}
+                    variant={events.has(value) ? "secondary" : "ghost"}
                     size="sm"
-                    aria-pressed={events.has(event)}
-                    onClick={() => toggleEvent(event)}
+                    aria-pressed={events.has(value)}
+                    onClick={() => toggleEvent(value)}
                   >
-                    {event}
+                    {label}
                   </Button>
                 ))}
               </Box>

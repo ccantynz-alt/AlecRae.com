@@ -50,6 +50,13 @@
       "when": 1784563200000,
       "tag": "0006_add_email_read_star_folder_state",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784487575744,
+      "tag": "0007_numerous_valkyrie",
+      "breakpoints": true
     }
   ]
 }
