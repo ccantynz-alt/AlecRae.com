@@ -41,7 +41,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-User=deploy
+User=root
 WorkingDirectory=/opt/alecrae
 ExecStart=/bin/bash /opt/alecrae/scripts/check-deploy-drift.sh
 EOF
@@ -66,9 +66,16 @@ systemctl status alecrae-drift-check.timer
 cat /opt/alecrae/deploy-drift-status.json
 ```
 
-> If running as `root` instead of `deploy`, change `User=deploy` to
-> `User=root`. `WorkingDirectory` must be the repo checkout so `git fetch`
-> resolves `origin/main` correctly.
+> **Must run as `User=root` on Jarvis, not `deploy`/`alecrae`** — verified
+> live 2026-07-20: `git remote -v` on `/opt/alecrae` uses an SSH remote
+> (`git@github.com:...`), and only `root`'s SSH agent/known_hosts has access
+> to it. Running the service as the `alecrae` user (the account
+> `alecrae-api`/`alecrae-web` run as) fails with `Host key verification
+> failed` — there's no deploy key provisioned for that account. The status
+> file is still readable by `alecrae-api` regardless of which user writes
+> it: `write_status()` in the script `chmod 644`s it after every write, since
+> the file needs to cross the root → `alecrae` privilege boundary to reach
+> `deploy-info.ts`.
 
 ## Verifying it's working
 

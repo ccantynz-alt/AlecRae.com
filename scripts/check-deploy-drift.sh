@@ -42,15 +42,23 @@ write_status() {
   fi
   mkdir -p "$(dirname "$STATUS_FILE")"
   mv "$tmp" "$STATUS_FILE"
+  # World-readable: this script typically runs as the deploy user (root or
+  # the git-owning account), but apps/api/src/lib/deploy-info.ts reads this
+  # file from the alecrae-api service, which usually runs as a different,
+  # less-privileged user — without this, deployDrift silently reads as null.
+  chmod 644 "$STATUS_FILE" 2>/dev/null || true
 }
 
-if ! git fetch origin "$BRANCH" --quiet 2>/tmp/deploy-drift-fetch-err; then
-  ERR="$(tr -d '"\n' < /tmp/deploy-drift-fetch-err | head -c 200)"
+FETCH_ERR_FILE="$(mktemp)"
+if ! git fetch origin "$BRANCH" --quiet 2>"$FETCH_ERR_FILE"; then
+  ERR="$(tr -d '"\n' < "$FETCH_ERR_FILE" | head -c 200)"
+  rm -f "$FETCH_ERR_FILE"
   LOCAL="$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)"
   write_status "$LOCAL" "unknown" "false" "0" "fetch failed: $ERR"
   echo "ERROR: git fetch failed — $ERR" >&2
   exit 1
 fi
+rm -f "$FETCH_ERR_FILE"
 
 LOCAL_SHA="$(git rev-parse HEAD)"
 REMOTE_SHA="$(git rev-parse "origin/$BRANCH")"
