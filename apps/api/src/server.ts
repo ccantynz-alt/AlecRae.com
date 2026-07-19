@@ -30,6 +30,7 @@ import { secureHeaders } from "hono/secure-headers";
 
 import { authMiddleware, requireAdmin } from "./middleware/auth.js";
 import { requirePlan } from "./middleware/plan-gate.js";
+import { requireAiQuota } from "./middleware/ai-quota.js";
 import {
   globalIpRateLimit,
   authRateLimit,
@@ -296,8 +297,8 @@ app.use("/v1/templates", authMiddleware, writeRateLimit);
 // Voice: write-level limits (200 req/min)
 app.use("/v1/voice/*", authMiddleware, writeRateLimit);
 // Voice Clone (S4): write-level — heavier than basic voice profile
-app.use("/v1/voice-clone/*", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/voice-clone", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/voice-clone/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/voice-clone", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
 // Meeting Link (S9): read-level — detection + transcript fetch
 app.use("/v1/meeting-link/*", authMiddleware, readRateLimit);
 app.use("/v1/meeting-link", authMiddleware, readRateLimit);
@@ -308,9 +309,9 @@ app.use("/v1/meetings/*/link-recording", authMiddleware, writeRateLimit);
 app.use("/v1/meetings/*/transcribe", authMiddleware, writeRateLimit);
 app.use("/v1/meetings/*/summary", authMiddleware, readRateLimit);
 // Grammar: high-frequency read (600 req/min — real-time typing)
-app.use("/v1/grammar/*", authMiddleware, readRateLimit);
+app.use("/v1/grammar/*", authMiddleware, readRateLimit, requireAiQuota);
 // Dictation: write-level (200 req/min)
-app.use("/v1/dictation/*", authMiddleware, writeRateLimit);
+app.use("/v1/dictation/*", authMiddleware, writeRateLimit, requireAiQuota);
 // Smart Inbox: read/write (200 req/min)
 app.use("/v1/inbox/*", authMiddleware, writeRateLimit);
 // Recall: write-level (200 req/min)
@@ -320,8 +321,8 @@ app.use("/v1/recall/status/*", authMiddleware, readRateLimit);
 app.use("/v1/recall/self-destruct", authMiddleware, writeRateLimit);
 // Recall view is PUBLIC (no auth — recipients access via link)
 // Translation: read-level (600 req/min)
-app.use("/v1/translate/*", authMiddleware, readRateLimit);
-app.use("/v1/translate", authMiddleware, readRateLimit);
+app.use("/v1/translate/*", authMiddleware, readRateLimit, requireAiQuota);
+app.use("/v1/translate", authMiddleware, readRateLimit, requireAiQuota);
 // Collaboration: write-level (200 req/min)
 app.use("/v1/collaborate/*", authMiddleware, writeRateLimit);
 // Account connection: OAuth callbacks are public, everything else authed
@@ -340,8 +341,8 @@ app.use("/v1/import/*", authMiddleware, writeRateLimit);
 // AI Search: search-level (60 req/min)
 app.use("/v1/search/*", authMiddleware, searchRateLimit);
 // Semantic Vector Search: search-level (60 req/min) — Pro-gated (FEATURE_PLANS.semantic_search)
-app.use("/v1/semantic/*", authMiddleware, searchRateLimit, requirePlan("pro"));
-app.use("/v1/semantic", authMiddleware, searchRateLimit, requirePlan("pro"));
+app.use("/v1/semantic/*", authMiddleware, searchRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/semantic", authMiddleware, searchRateLimit, requirePlan("pro"), requireAiQuota);
 // Contacts: read-level (600 req/min)
 app.use("/v1/contacts/*", authMiddleware, readRateLimit);
 app.use("/v1/contacts", authMiddleware, readRateLimit);
@@ -357,13 +358,13 @@ app.use("/v1/calendar/*", authMiddleware, readRateLimit);
 // Encryption: write-level (200 req/min)
 app.use("/v1/encryption/*", authMiddleware, writeRateLimit);
 // AI Rules: write-level (200 req/min)
-app.use("/v1/rules/*", authMiddleware, writeRateLimit);
+app.use("/v1/rules/*", authMiddleware, writeRateLimit, requireAiQuota);
 // Pro-gated (FEATURE_PLANS.programs — sandboxed code execution, cost/security profile like ai_agent)
-app.use("/v1/programs", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/programs/*", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/programs", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/programs/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
 app.use("/v1/rules", authMiddleware, readRateLimit);
 // Explain (newsletter summary + "why is this in my inbox?"): read-level (600 req/min)
-app.use("/v1/explain/*", authMiddleware, readRateLimit);
+app.use("/v1/explain/*", authMiddleware, readRateLimit, requireAiQuota);
 // Email-level explain/summary convenience endpoints (S6+S7)
 app.use("/v1/emails/*/summary", authMiddleware, readRateLimit);
 app.use("/v1/emails/*/explain", authMiddleware, readRateLimit);
@@ -376,8 +377,8 @@ app.use("/v1/emails/*/translation", authMiddleware, readRateLimit);
 // Per-email security report (B5+B6): read-level (600 req/min)
 app.use("/v1/emails/*/security", authMiddleware, readRateLimit);
 // AI Inbox Agent: write-level (200 req/min) — heavy operations, Pro-gated (FEATURE_PLANS.ai_agent)
-app.use("/v1/agent/*", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/agent", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/agent/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/agent", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
 // Security (sender verification + phishing protection): read-level (600 req/min)
 app.use("/v1/security/*", authMiddleware, readRateLimit);
 app.use("/v1/unsubscribe/*", authMiddleware, writeRateLimit);
@@ -387,7 +388,7 @@ app.use("/v1/send-time/*", authMiddleware, writeRateLimit);
 // Optimal Send Time (batch endpoint for multiple recipients)
 app.use("/v1/emails/optimal-send-time", authMiddleware, readRateLimit);
 // Compose-Assist / AI calendar slot suggestions (B7)
-app.use("/v1/compose-assist/*", authMiddleware, writeRateLimit);
+app.use("/v1/compose-assist/*", authMiddleware, writeRateLimit, requireAiQuota);
 // Spell Check (C10): high-frequency read (600 req/min — real-time typing)
 app.use("/v1/compose/spellcheck/*", authMiddleware, readRateLimit);
 app.use("/v1/compose/spellcheck", authMiddleware, readRateLimit);
@@ -406,8 +407,8 @@ app.use("/v1/tasks", authMiddleware, readRateLimit);
 app.use("/v1/gamification/*", authMiddleware, readRateLimit);
 app.use("/v1/gamification", authMiddleware, readRateLimit);
 // Email Query (B2): search-level (60 req/min — AI query translation), Pro-gated (FEATURE_PLANS.email_query)
-app.use("/v1/query/*", authMiddleware, searchRateLimit, requirePlan("pro"));
-app.use("/v1/query", authMiddleware, searchRateLimit, requirePlan("pro"));
+app.use("/v1/query/*", authMiddleware, searchRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/query", authMiddleware, searchRateLimit, requirePlan("pro"), requireAiQuota);
 // Changelog (C8): public read, admin-authed write (200 req/min)
 // Note: GET endpoints are public (no auth middleware). POST/PUT/DELETE require admin scope
 // which is enforced inside the route via requireScope("admin:write").
@@ -471,19 +472,19 @@ app.use("/v1/onboarding", authMiddleware, writeRateLimit);
 // AlecRae Meet — Pro-gated (FEATURE_PLANS.video_meetings). Scoped to the
 // rooms/recordings/instant paths only — /v1/meetings/detect + thread/*
 // above belong to the separate, ungated in-thread meeting-detection feature.
-app.use("/v1/meetings/rooms/*/recordings", authMiddleware, readRateLimit, requirePlan("pro"));
-app.use("/v1/meetings/rooms/*/schedule", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/meetings/rooms/*", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/meetings/rooms", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/meetings/recordings/*/summarize", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/meetings/recordings/*", authMiddleware, readRateLimit, requirePlan("pro"));
-app.use("/v1/meetings/instant", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/meetings/rooms/*/recordings", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/meetings/rooms/*/schedule", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/meetings/rooms/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/meetings/rooms", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/meetings/recordings/*/summarize", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/meetings/recordings/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/meetings/instant", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
 // AI Writing Intelligence: write-level for compose/rewrite/expand, read-level for stats/profiles
 app.use("/v1/ai/write/profiles/*", authMiddleware, writeRateLimit);
 app.use("/v1/ai/write/profiles", authMiddleware, readRateLimit);
 app.use("/v1/ai/write/stats", authMiddleware, readRateLimit);
-app.use("/v1/ai/write/*", authMiddleware, writeRateLimit);
-app.use("/v1/ai/write", authMiddleware, writeRateLimit);
+app.use("/v1/ai/write/*", authMiddleware, writeRateLimit, requireAiQuota);
+app.use("/v1/ai/write", authMiddleware, writeRateLimit, requireAiQuota);
 // Notification Intelligence: write-level for rule CRUD + evaluate, read-level for batches/digest
 app.use("/v1/notifications/rules/*", authMiddleware, writeRateLimit);
 app.use("/v1/notifications/rules", authMiddleware, writeRateLimit);
@@ -540,12 +541,12 @@ app.use("/v1/workflows/*", authMiddleware, writeRateLimit);
 app.use("/v1/workflows", authMiddleware, writeRateLimit);
 // AI Categorization: write-level for categorize/train, read-level for listing
 // Pro-gated (FEATURE_PLANS.ai_categorization — batch Claude calls, cost risk)
-app.use("/v1/ai/categorize/feedback", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/ai/categorize/batch", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/ai/categorize/smart-labels/*", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/ai/categorize/smart-labels", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/ai/categorize/*", authMiddleware, readRateLimit, requirePlan("pro"));
-app.use("/v1/ai/categorize", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/ai/categorize/feedback", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai/categorize/batch", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai/categorize/smart-labels/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai/categorize/smart-labels", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai/categorize/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai/categorize", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
 // Search Intelligence: search-level for queries, write-level for bookmarks
 app.use("/v1/search-intelligence/bookmarks/*", authMiddleware, writeRateLimit);
 app.use("/v1/search-intelligence/bookmarks", authMiddleware, writeRateLimit);
@@ -560,53 +561,53 @@ app.use("/v1/security-intelligence/report-phishing", authMiddleware, writeRateLi
 app.use("/v1/security-intelligence/*", authMiddleware, readRateLimit);
 app.use("/v1/security-intelligence", authMiddleware, readRateLimit);
 // Sentiment Timeline: write-level for analyze, read-level for queries — Pro-gated (FEATURE_PLANS.sentiment_timeline)
-app.use("/v1/sentiment/analyze", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/sentiment/batch-analyze", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/sentiment/*", authMiddleware, readRateLimit, requirePlan("pro"));
-app.use("/v1/sentiment", authMiddleware, readRateLimit, requirePlan("pro"));
+app.use("/v1/sentiment/analyze", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/sentiment/batch-analyze", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/sentiment/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/sentiment", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
 // Attachment Intelligence: write-level for analyze/scan, read-level for queries — Pro-gated (FEATURE_PLANS.attachment_intelligence)
-app.use("/v1/attachments/intelligence/analyze", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/attachments/intelligence/scan", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/attachments/intelligence/batch-scan", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/attachments/intelligence/extract-text", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/attachments/intelligence/organize/*/action", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/attachments/intelligence/*", authMiddleware, readRateLimit, requirePlan("pro"));
-app.use("/v1/attachments/intelligence", authMiddleware, readRateLimit, requirePlan("pro"));
+app.use("/v1/attachments/intelligence/analyze", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/attachments/intelligence/scan", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/attachments/intelligence/batch-scan", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/attachments/intelligence/extract-text", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/attachments/intelligence/organize/*/action", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/attachments/intelligence/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/attachments/intelligence", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
 // Scheduling Intelligence: write-level for propose/detect, read-level for queries — Pro-gated (FEATURE_PLANS.scheduling_intelligence)
-app.use("/v1/scheduling/detect", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/scheduling/propose", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/scheduling/auto-respond", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/scheduling/patterns/learn", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/scheduling/patterns", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/scheduling/*", authMiddleware, readRateLimit, requirePlan("pro"));
-app.use("/v1/scheduling", authMiddleware, readRateLimit, requirePlan("pro"));
+app.use("/v1/scheduling/detect", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/scheduling/propose", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/scheduling/auto-respond", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/scheduling/patterns/learn", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/scheduling/patterns", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/scheduling/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/scheduling", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
 // Context Intelligence: write-level for extract, read-level for queries — Pro-gated (FEATURE_PLANS.context_intelligence)
-app.use("/v1/context/extract", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/context/batch-extract", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/context/action-items/*", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/context/deadlines/*/remind", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/context/promises/*", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/context/*", authMiddleware, readRateLimit, requirePlan("pro"));
-app.use("/v1/context", authMiddleware, readRateLimit, requirePlan("pro"));
+app.use("/v1/context/extract", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/context/batch-extract", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/context/action-items/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/context/deadlines/*/remind", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/context/promises/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/context/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/context", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
 // Productivity Analytics: write-level for track/generate, read-level for queries — Pro-gated (FEATURE_PLANS.productivity_analytics)
-app.use("/v1/productivity/track", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/productivity/insights/generate", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/productivity/insights/*", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/productivity/*", authMiddleware, readRateLimit, requirePlan("pro"));
-app.use("/v1/productivity", authMiddleware, readRateLimit, requirePlan("pro"));
+app.use("/v1/productivity/track", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/productivity/insights/generate", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/productivity/insights/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/productivity/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/productivity", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
 // Knowledge Graph: write-level for extract/update/delete, read-level for queries — Pro-gated (FEATURE_PLANS.knowledge_graph)
-app.use("/v1/knowledge/extract", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/knowledge/batch-extract", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/knowledge/entities/*", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/knowledge/*", authMiddleware, readRateLimit, requirePlan("pro"));
-app.use("/v1/knowledge", authMiddleware, readRateLimit, requirePlan("pro"));
+app.use("/v1/knowledge/extract", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/knowledge/batch-extract", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/knowledge/entities/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/knowledge/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/knowledge", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
 // AI Intelligence Hub — priority scoring, relationships, smart replies, sentiment,
 // writing coach, predictions. Pro-gated (client borrows FEATURE_PLANS.context_intelligence
 // for this hub). Previously had NO authMiddleware wired at all here — every request hit
 // requireScope() with c.get("auth") undefined and 401'd unconditionally, for every caller
 // including owners. Found while adding plan enforcement for this task.
-app.use("/v1/ai-intelligence/*", authMiddleware, writeRateLimit, requirePlan("pro"));
-app.use("/v1/ai-intelligence", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/ai-intelligence/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai-intelligence", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
 // Mount route handlers
 app.route("/v1/messages", messages);
 app.route("/v1/domains", domains);

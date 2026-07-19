@@ -40,15 +40,19 @@ export interface PlanDefinition {
   emailsPerMonth: number;
   domains: number;
   webhooks: number;
+  /** Ceiling on Claude/Whisper API calls per month. Previously no such limit
+   *  existed anywhere in code — a single session had unbounded AI spend. */
+  aiCallsPerMonth: number;
 }
 
 export const PLANS: Record<PlanId, PlanDefinition> = {
-  free: { priceId: null, emailsPerMonth: 1_000, domains: 1, webhooks: 2 },
+  free: { priceId: null, emailsPerMonth: 1_000, domains: 1, webhooks: 2, aiCallsPerMonth: 300 },
   starter: {
     priceId: process.env["STRIPE_PRICE_STARTER"] ?? "price_starter",
     emailsPerMonth: 10_000,
     domains: 5,
     webhooks: 10,
+    aiCallsPerMonth: 3_000,
   },
   professional: {
     priceId:
@@ -56,12 +60,14 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
     emailsPerMonth: 100_000,
     domains: 25,
     webhooks: 50,
+    aiCallsPerMonth: 30_000,
   },
   enterprise: {
     priceId: process.env["STRIPE_PRICE_ENTERPRISE"] ?? "price_enterprise",
     emailsPerMonth: 1_000_000,
     domains: 100,
     webhooks: 200,
+    aiCallsPerMonth: 300_000,
   },
 };
 
