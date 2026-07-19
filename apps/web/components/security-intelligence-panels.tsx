@@ -554,7 +554,7 @@ function BatchScanCard(): ReactNode {
         {result && (
           <Box className="mt-3">
             <SuccessBanner
-              message={`Batch complete: ${result.scanned} newly scanned, ${result.alreadyScanned} already scanned (${result.total} total).`}
+              message={`Batch checked: ${result.alreadyScanned} already had a scan on file, ${result.unavailable} have no analysis available yet (${result.total} total). Threat analysis isn't implemented yet — nothing was fabricated for the ${result.unavailable} unscanned email${result.unavailable === 1 ? "" : "s"}.`}
             />
           </Box>
         )}
@@ -1379,7 +1379,8 @@ export function SenderReputationPanel(): ReactNode {
                   {result.email}
                 </Text>
                 <Text variant="caption" className="text-content-subtle">
-                  Domain: {result.domain} · Reputation score: {result.reputationScore}/100 ·{" "}
+                  Domain: {result.domain}
+                  {result.reputationScore !== null ? ` · Reputation score: ${result.reputationScore}/100` : ""} ·{" "}
                   {result.threatHistory} prior threat detection
                   {result.threatHistory === 1 ? "" : "s"}
                 </Text>
@@ -1401,38 +1402,47 @@ export function SenderReputationPanel(): ReactNode {
               )}
             </Box>
 
-            <Box className="flex flex-wrap gap-1.5" aria-label="Authentication checks">
-              {(
-                [
-                  { label: "SPF", pass: result.checks.spf === "pass" },
-                  { label: "DKIM", pass: result.checks.dkim === "pass" },
-                  { label: "DMARC", pass: result.checks.dmarc === "pass" },
-                ] as const
-              ).map(({ label, pass }) => (
+            {result.checks !== null ? (
+              <Box className="flex flex-wrap gap-1.5" aria-label="Authentication checks">
+                {(
+                  [
+                    { label: "SPF", pass: result.checks.spf === "pass" },
+                    { label: "DKIM", pass: result.checks.dkim === "pass" },
+                    { label: "DMARC", pass: result.checks.dmarc === "pass" },
+                  ] as const
+                ).map(({ label, pass }) => (
+                  <Box
+                    key={label}
+                    as="span"
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${checkBadgeClass(pass)}`}
+                  >
+                    {label}: {pass ? "pass" : "fail"}
+                  </Box>
+                ))}
                 <Box
-                  key={label}
                   as="span"
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${checkBadgeClass(pass)}`}
+                  className="rounded-full bg-surface border border-border text-content-subtle px-2.5 py-0.5 text-xs"
                 >
-                  {label}: {pass ? "pass" : "fail"}
+                  Domain age: {result.checks.domainAge}
                 </Box>
-              ))}
+                <Box
+                  as="span"
+                  className="rounded-full bg-surface border border-border text-content-subtle px-2.5 py-0.5 text-xs"
+                >
+                  {result.checks.knownProvider ? "Known provider" : "Unknown provider"}
+                </Box>
+              </Box>
+            ) : (
               <Box
                 as="span"
-                className="rounded-full bg-surface border border-border text-content-subtle px-2.5 py-0.5 text-xs"
+                className="inline-block rounded-full bg-surface border border-border text-content-subtle px-2.5 py-0.5 text-xs"
               >
-                Domain age: {result.checks.domainAge}
+                SPF/DKIM/DMARC verification not yet available
               </Box>
-              <Box
-                as="span"
-                className="rounded-full bg-surface border border-border text-content-subtle px-2.5 py-0.5 text-xs"
-              >
-                {result.checks.knownProvider ? "Known provider" : "Unknown provider"}
-              </Box>
-            </Box>
+            )}
 
             <Text variant="body-sm" className="text-content">
-              {result.aiSummary}
+              {result.summary}
             </Text>
           </Box>
         )}

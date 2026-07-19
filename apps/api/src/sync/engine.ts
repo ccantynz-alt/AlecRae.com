@@ -215,7 +215,7 @@ export async function exchangeGoogleCode(code: string): Promise<{
   };
 }
 
-async function refreshGoogleToken(refreshToken: string): Promise<{ accessToken: string; expiresIn: number }> {
+export async function refreshGoogleToken(refreshToken: string): Promise<{ accessToken: string; expiresIn: number }> {
   const res = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -286,7 +286,7 @@ export async function syncGmailMessages(
           for (const entry of historyData.history) {
             if (entry.messagesAdded) {
               for (const added of entry.messagesAdded) {
-                await fetchAndStoreGmailMessage(added.message.id, account.id, token);
+                await fetchAndStoreGmailMessage(added.message.id, account.userId, token);
                 result.messagesAdded++;
               }
             }
@@ -299,11 +299,11 @@ export async function syncGmailMessages(
         result.newSyncState = historyData.historyId;
       } else {
         // History expired, fall back to full sync
-        await fullGmailSync(account.id, token, maxResults, result);
+        await fullGmailSync(account.userId, token, maxResults, result);
       }
     } else {
       // First sync — full sync
-      await fullGmailSync(account.id, token, maxResults, result);
+      await fullGmailSync(account.userId, token, maxResults, result);
     }
   } catch (err) {
     result.errors.push(`Sync error: ${err instanceof Error ? err.message : String(err)}`);
@@ -313,6 +313,11 @@ export async function syncGmailMessages(
   return result;
 }
 
+/**
+ * @param accountId The workspace account (`accounts.id`) messages should be
+ *   attributed to — NOT the `connected_accounts.id` row for this mailbox.
+ *   Passing the latter fails the NOT NULL FK on `emails.account_id`.
+ */
 async function fullGmailSync(
   accountId: string,
   token: string,
@@ -588,7 +593,7 @@ export async function exchangeMicrosoftCode(code: string): Promise<{
   };
 }
 
-async function refreshMicrosoftToken(
+export async function refreshMicrosoftToken(
   refreshToken: string,
 ): Promise<{ accessToken: string; refreshToken: string; expiresIn: number }> {
   const res = await fetch(MS_TOKEN_URL, {
@@ -685,7 +690,7 @@ export async function syncOutlookMessages(
       });
 
       await storeReceivedEmail({
-        accountId: account.id,
+        accountId: account.userId,
         source: "outlook",
         from: parsed.from ? toAddr(parsed.from) : { address: "unknown" },
         to: (parsed.to ?? []).map(toAddr),
@@ -754,6 +759,58 @@ function parseOutlookMessage(msg: OutlookMessage, accountId: string): Partial<Sy
     sizeBytes: 0,
     receivedAt: new Date(msg.receivedDateTime),
     syncedAt: new Date(),
+  };
+}
+
+// ─── Shared token-freshness check (used by sync AND by the send path) ───────
+
+export interface FreshTokenResult {
+  accessToken: string;
+  /** Present only when the provider rotated the refresh token too (Outlook may). */
+  refreshToken?: string;
+  tokenExpiresAt?: Date;
+  refreshed: boolean;
+}
+
+/**
+ * Return a guaranteed-valid access token, refreshing it first if it's expired
+ * or expires within the next 60 seconds. Both syncAccount() and the
+ * connected-account send fast-path in routes/messages.ts call this — a send
+ * using a token that was fine at connect time but silently expired ~1 hour
+ * later was previously the single biggest cause of "sending stopped working"
+ * for connected Gmail/Outlook accounts.
+ */
+export async function ensureFreshAccessToken(params: {
+  provider: "gmail" | "outlook";
+  accessToken: string;
+  refreshToken: string | null;
+  tokenExpiresAt: Date | null;
+}): Promise<FreshTokenResult> {
+  const expiresSoon =
+    params.tokenExpiresAt !== null && params.tokenExpiresAt.getTime() <= Date.now() + 60_000;
+
+  if (!expiresSoon) {
+    return { accessToken: params.accessToken, refreshed: false };
+  }
+  if (!params.refreshToken) {
+    throw new Error(`Access token expired and no refresh token stored for this ${params.provider} account`);
+  }
+
+  if (params.provider === "gmail") {
+    const refreshed = await refreshGoogleToken(params.refreshToken);
+    return {
+      accessToken: refreshed.accessToken,
+      tokenExpiresAt: new Date(Date.now() + refreshed.expiresIn * 1000),
+      refreshed: true,
+    };
+  }
+
+  const refreshed = await refreshMicrosoftToken(params.refreshToken);
+  return {
+    accessToken: refreshed.accessToken,
+    refreshToken: refreshed.refreshToken,
+    tokenExpiresAt: new Date(Date.now() + refreshed.expiresIn * 1000),
+    refreshed: true,
   };
 }
 

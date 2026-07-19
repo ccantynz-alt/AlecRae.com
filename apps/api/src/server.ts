@@ -143,6 +143,7 @@ import { closeSendQueue, isRedisConfigured } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
 import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@alecrae/shared";
 import { startAutoIndexer, stopAutoIndexer } from "@alecrae/ai-engine/embeddings/auto-indexer";
+import { startMailboxResyncWorker, stopMailboxResyncWorker } from "./lib/mailbox-sync-worker.js";
 import { processDLQ } from "./lib/dlq-processor.js";
 import { reconcileStorageUsage } from "./lib/storage-quota.js";
 import { processExpiredGrace } from "./lib/billing.js";
@@ -852,6 +853,14 @@ try {
   console.warn("[api] Auto-indexer start failed:", err);
 }
 
+// Start the mailbox background re-sync worker (keeps connected Gmail/Outlook
+// accounts syncing after the initial connect — see mailbox-sync-worker.ts).
+try {
+  startMailboxResyncWorker();
+} catch (err) {
+  console.warn("[api] Mailbox resync worker start failed:", err);
+}
+
 // Start blocklist monitoring (checks every 15 min for IP/domain listings)
 import("@alecrae/reputation").then(({ BlocklistMonitor }) => {
   try {
@@ -919,6 +928,10 @@ async function shutdown(signal: string): Promise<void> {
     // Stop the semantic search auto-indexer (drains remaining queue)
     await stopAutoIndexer();
     console.log("[api] Auto-indexer stopped");
+
+    // Stop the mailbox background re-sync worker
+    stopMailboxResyncWorker();
+    console.log("[api] Mailbox resync worker stopped");
 
     // Close the webhook delivery worker
     await stopWebhookWorker();

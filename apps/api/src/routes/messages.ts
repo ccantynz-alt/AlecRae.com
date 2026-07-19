@@ -25,6 +25,7 @@ import type {
 } from "../types.js";
 import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
+import { ensureFreshAccessToken } from "../sync/engine.js";
 import { checkQuota, incrementQuota } from "../lib/quota.js";
 import { indexEmail, searchEmails } from "@alecrae/shared";
 import { usageEnforcement } from "../middleware/usage.js";
@@ -309,10 +310,18 @@ async function handleSend(c: Context) {
   // If the sender address belongs to a connected Gmail or Outlook account,
   // route through the provider API. Domain verification, warmup, and
   // suppression checks don't apply — the provider owns deliverability.
-  let connectedAcct: { id: string; provider: string; accessToken: string | null } | undefined;
+  let connectedAcct:
+    | { id: string; provider: string; accessToken: string | null; refreshToken: string | null; tokenExpiresAt: Date | null }
+    | undefined;
   try {
     [connectedAcct] = await db
-      .select({ id: connectedAccounts.id, provider: connectedAccounts.provider, accessToken: connectedAccounts.accessToken })
+      .select({
+        id: connectedAccounts.id,
+        provider: connectedAccounts.provider,
+        accessToken: connectedAccounts.accessToken,
+        refreshToken: connectedAccounts.refreshToken,
+        tokenExpiresAt: connectedAccounts.tokenExpiresAt,
+      })
       .from(connectedAccounts)
       .where(and(
         eq(connectedAccounts.email, input.from.email.toLowerCase()),
@@ -331,6 +340,41 @@ async function handleSend(c: Context) {
       );
     }
 
+    // Refresh the access token first if it's expired — previously the send
+    // path used whatever was stored at connect time with no expiry check, so
+    // sending broke ~1 hour after connecting and stayed broken until the user
+    // manually reconnected the account.
+    let freshAccessToken = connectedAcct.accessToken;
+    try {
+      const fresh = await ensureFreshAccessToken({
+        provider: connectedAcct.provider as "gmail" | "outlook",
+        accessToken: connectedAcct.accessToken,
+        refreshToken: connectedAcct.refreshToken,
+        tokenExpiresAt: connectedAcct.tokenExpiresAt,
+      });
+      freshAccessToken = fresh.accessToken;
+      if (fresh.refreshed) {
+        await db
+          .update(connectedAccounts)
+          .set({
+            accessToken: fresh.accessToken,
+            ...(fresh.refreshToken !== undefined ? { refreshToken: fresh.refreshToken } : {}),
+            ...(fresh.tokenExpiresAt !== undefined ? { tokenExpiresAt: fresh.tokenExpiresAt } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(connectedAccounts.id, connectedAcct.id));
+      }
+    } catch (err) {
+      return c.json(
+        {
+          error: "PROVIDER_SEND_FAILED",
+          provider: connectedAcct.provider,
+          message: `Reconnect the ${connectedAcct.provider} account — its access token expired and could not be refreshed: ${err instanceof Error ? err.message : String(err)}`,
+        },
+        502,
+      );
+    }
+
     let providerMessageId: string | undefined;
 
     if (connectedAcct.provider === "gmail") {
@@ -338,7 +382,7 @@ async function handleSend(c: Context) {
       const raw = Buffer.from(rawMsg).toString("base64url");
       const gmailRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
         method: "POST",
-        headers: { Authorization: `Bearer ${connectedAcct.accessToken}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${freshAccessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({ raw }),
       });
       if (!gmailRes.ok) {
@@ -353,7 +397,7 @@ async function handleSend(c: Context) {
     } else if (connectedAcct.provider === "outlook") {
       const outlookRes = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
         method: "POST",
-        headers: { Authorization: `Bearer ${connectedAcct.accessToken}`, "Content-Type": "application/json" },
+        headers: { Authorization: `Bearer ${freshAccessToken}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           message: {
             subject: resolvedSubject,

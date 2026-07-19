@@ -105,15 +105,15 @@ export interface ThreatDetectionData {
 
 export interface BatchScanResultData {
   emailId: string;
-  status: "scanned" | "already_scanned";
-  threatDetectionId: string;
+  status: "already_scanned" | "unavailable";
+  threatDetectionId?: string;
 }
 
 export interface BatchScanResponse {
   data: BatchScanResultData[];
   total: number;
-  scanned: number;
   alreadyScanned: number;
+  unavailable: number;
 }
 
 export interface ThreatListQuery {
@@ -186,17 +186,20 @@ export interface SecurityDashboardData {
 export interface SenderReputationData {
   email: string;
   domain: string;
-  reputationScore: number;
+  /** null until real reputation scoring ships — see analysisAvailable. */
+  reputationScore: number | null;
   isBlocked: boolean;
   threatHistory: number;
+  /** null until SPF/DKIM/DMARC authentication-result parsing ships. */
   checks: {
     spf: string;
     dkim: string;
     dmarc: string;
     domainAge: string;
     knownProvider: boolean;
-  };
-  aiSummary: string;
+  } | null;
+  analysisAvailable: boolean;
+  summary: string;
 }
 
 export interface ThreatActionResult {

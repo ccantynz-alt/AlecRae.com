@@ -20,12 +20,30 @@ import {
   exchangeGoogleCode,
   getMicrosoftAuthUrl,
   exchangeMicrosoftCode,
-  syncAccount,
   type EmailAccount,
 } from "../sync/engine.js";
 import { getDatabase, connectedAccounts } from "@alecrae/db";
 import { eq, and } from "drizzle-orm";
 import { signState, verifyState } from "../lib/oauth-state.js";
+import { syncAndPersist } from "../lib/mailbox-sync-worker.js";
+
+/** Fire off the initial sync in the background and persist whatever it finds
+ *  (or fails on) — never left as a bare `.catch(console.error)` that discards
+ *  the sync's cursor/refreshed-token/error state. */
+function kickOffInitialSync(accountId: string, providerLabel: string, email: string): void {
+  const db = getDatabase();
+  db.select()
+    .from(connectedAccounts)
+    .where(eq(connectedAccounts.id, accountId))
+    .limit(1)
+    .then(async ([row]) => {
+      if (!row) return;
+      await syncAndPersist(row);
+    })
+    .catch((err) => {
+      console.error(`[connect] Initial ${providerLabel} sync failed for ${email}:`, err);
+    });
+}
 
 function generateId(): string {
   return crypto.randomUUID().replace(/-/g, "");
@@ -139,9 +157,7 @@ connect.get(
         updatedAt: now,
       });
 
-      syncAccount(account).catch((err) => {
-        console.error(`[connect] Initial Gmail sync failed for ${account.email}:`, err);
-      });
+      kickOffInitialSync(account.id, "Gmail", account.email);
 
       const webUrl = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
       return c.redirect(`${webUrl}/onboarding?connected=gmail&email=${encodeURIComponent(tokens.email)}`);
@@ -204,9 +220,7 @@ connect.get(
         updatedAt: now,
       });
 
-      syncAccount(account).catch((err) => {
-        console.error(`[connect] Initial Outlook sync failed for ${account.email}:`, err);
-      });
+      kickOffInitialSync(account.id, "Outlook", account.email);
 
       const webUrl = process.env["WEB_URL"] ?? "https://mail.alecrae.com";
       return c.redirect(`${webUrl}/onboarding?connected=outlook&email=${encodeURIComponent(tokens.email)}`);
@@ -295,6 +309,7 @@ connect.get(
         displayName: connectedAccounts.displayName,
         status: connectedAccounts.status,
         lastSyncAt: connectedAccounts.lastSyncAt,
+        lastError: connectedAccounts.lastError,
         createdAt: connectedAccounts.createdAt,
       })
       .from(connectedAccounts)
@@ -355,21 +370,7 @@ connect.post(
       return c.json({ error: { message: "Account not found" } }, 404);
     }
 
-    const account: EmailAccount = {
-      id: row.id,
-      userId: row.accountId,
-      provider: row.provider,
-      email: row.email,
-      displayName: row.displayName ?? row.email,
-      ...(row.accessToken !== null && row.accessToken !== undefined ? { accessToken: row.accessToken } : {}),
-      ...(row.refreshToken !== null && row.refreshToken !== undefined ? { refreshToken: row.refreshToken } : {}),
-      ...(row.tokenExpiresAt !== null && row.tokenExpiresAt !== undefined ? { tokenExpiresAt: row.tokenExpiresAt } : {}),
-      status: row.status as "active" | "error",
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
-
-    const result = await syncAccount(account);
+    const result = await syncAndPersist(row);
 
     return c.json({
       data: {

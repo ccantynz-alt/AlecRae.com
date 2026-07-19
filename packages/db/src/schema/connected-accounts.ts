@@ -36,6 +36,8 @@ export const connectedAccounts = pgTable(
     status: text("status").notNull().default("active"),
     lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
     syncCursor: text("sync_cursor"),
+    /** Human-readable summary of the most recent sync failure, if any. Cleared on a successful sync. */
+    lastError: text("last_error"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

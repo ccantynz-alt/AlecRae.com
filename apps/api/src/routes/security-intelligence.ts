@@ -103,50 +103,21 @@ function generateId(): string {
     .join("");
 }
 
-/** Placeholder AI threat analysis — in production this calls Claude. */
-function analyzeEmailThreat(emailId: string): {
-  threatType: "phishing" | "malware" | "spam" | "impersonation" | "business_email_compromise" | "credential_harvesting";
-  severity: "critical" | "high" | "medium" | "low";
-  confidence: number;
-  signals: {
-    urlMismatch?: boolean;
-    senderSpoofed?: boolean;
-    urgentLanguage?: boolean;
-    attachmentRisk?: boolean;
-    newSender?: boolean;
-    domainAge?: number;
-    replyToMismatch?: boolean;
-  };
-  aiExplanation: string;
-} {
-  const threatTypes = [
-    "phishing",
-    "malware",
-    "spam",
-    "impersonation",
-    "business_email_compromise",
-    "credential_harvesting",
-  ] as const;
-  const severities = ["critical", "high", "medium", "low"] as const;
-  const threatType = threatTypes[Math.floor(Math.random() * threatTypes.length)] ?? "spam";
-  const severity = severities[Math.floor(Math.random() * severities.length)] ?? "low";
-
-  return {
-    threatType,
-    severity,
-    confidence: Math.round(Math.random() * 40 + 60) / 100,
-    signals: {
-      urlMismatch: Math.random() > 0.6,
-      senderSpoofed: Math.random() > 0.7,
-      urgentLanguage: Math.random() > 0.5,
-      attachmentRisk: Math.random() > 0.8,
-      newSender: Math.random() > 0.5,
-      domainAge: Math.floor(Math.random() * 365),
-      replyToMismatch: Math.random() > 0.7,
-    },
-    aiExplanation: `Email ${emailId} analyzed for threat indicators. Detected ${threatType} with ${severity} severity based on content signals and sender reputation analysis.`,
-  };
-}
+/**
+ * Real threat analysis (Claude-based content scanning, SPF/DKIM/DMARC
+ * authentication-result parsing, threat-intelligence feed lookups) is not
+ * implemented yet. This function used to fabricate a threat verdict with
+ * Math.random() — a fake "malware, critical severity, 94% confidence"
+ * verdict on a completely safe email — and silently persist it as if it
+ * were a real scan. An honest "not available" response is used instead;
+ * see the /scan, /scan/batch, and /sender-reputation handlers below.
+ */
+const THREAT_ANALYSIS_UNAVAILABLE = {
+  type: "not_implemented",
+  message:
+    "Threat analysis isn't available yet for this account. No result was generated — nothing was scanned.",
+  code: "threat_analysis_unavailable",
+} as const;
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
@@ -179,45 +150,7 @@ securityIntelligenceRouter.post(
       return c.json({ data: existing });
     }
 
-    // Placeholder AI threat analysis
-    const analysis = analyzeEmailThreat(input.emailId);
-    const id = generateId();
-    const now = new Date();
-
-    await db.insert(threatDetections).values({
-      id,
-      accountId: auth.accountId,
-      emailId: input.emailId,
-      threatType: analysis.threatType,
-      severity: analysis.severity,
-      confidence: analysis.confidence,
-      signals: analysis.signals,
-      aiExplanation: analysis.aiExplanation,
-      userAction: null,
-      createdAt: now,
-    });
-
-    // Log the detection
-    await db.insert(securityAuditLog).values({
-      id: generateId(),
-      accountId: auth.accountId,
-      eventType: "threat_detected",
-      details: {
-        emailId: input.emailId,
-        threatType: analysis.threatType,
-        severity: analysis.severity,
-        confidence: analysis.confidence,
-      },
-      createdAt: now,
-    });
-
-    const [created] = await db
-      .select()
-      .from(threatDetections)
-      .where(eq(threatDetections.id, id))
-      .limit(1);
-
-    return c.json({ data: created }, 201);
+    return c.json({ error: THREAT_ANALYSIS_UNAVAILABLE }, 501);
   },
 );
 
@@ -234,12 +167,13 @@ securityIntelligenceRouter.post(
 
     const results: {
       emailId: string;
-      status: "scanned" | "already_scanned";
-      threatDetectionId: string;
+      status: "already_scanned" | "unavailable";
+      threatDetectionId?: string;
     }[] = [];
 
     for (const emailId of input.emailIds) {
-      // Check if already scanned
+      // Check if already scanned (from before threat analysis was disabled,
+      // or once a real analysis pipeline ships)
       const [existing] = await db
         .select({ id: threatDetections.id })
         .from(threatDetections)
@@ -260,50 +194,17 @@ securityIntelligenceRouter.post(
         continue;
       }
 
-      const analysis = analyzeEmailThreat(emailId);
-      const id = generateId();
-      const now = new Date();
-
-      await db.insert(threatDetections).values({
-        id,
-        accountId: auth.accountId,
-        emailId,
-        threatType: analysis.threatType,
-        severity: analysis.severity,
-        confidence: analysis.confidence,
-        signals: analysis.signals,
-        aiExplanation: analysis.aiExplanation,
-        userAction: null,
-        createdAt: now,
-      });
-
-      await db.insert(securityAuditLog).values({
-        id: generateId(),
-        accountId: auth.accountId,
-        eventType: "threat_detected",
-        details: {
-          emailId,
-          threatType: analysis.threatType,
-          severity: analysis.severity,
-          confidence: analysis.confidence,
-          source: "batch_scan",
-        },
-        createdAt: now,
-      });
-
-      results.push({
-        emailId,
-        status: "scanned",
-        threatDetectionId: id,
-      });
+      // No fabricated verdict — threat analysis isn't implemented yet (see
+      // THREAT_ANALYSIS_UNAVAILABLE above).
+      results.push({ emailId, status: "unavailable" });
     }
 
     return c.json({
       data: results,
       total: results.length,
-      scanned: results.filter((r) => r.status === "scanned").length,
       alreadyScanned: results.filter((r) => r.status === "already_scanned").length,
-    }, 201);
+      unavailable: results.filter((r) => r.status === "unavailable").length,
+    }, 200);
   },
 );
 
@@ -758,26 +659,32 @@ securityIntelligenceRouter.get(
       )
       .limit(1);
 
-    // Placeholder AI reputation analysis — in production this checks SPF/DKIM/DMARC,
-    // WHOIS domain age, and cross-references threat intelligence feeds
+    // SPF/DKIM/DMARC authentication-result parsing, WHOIS domain age, and
+    // threat-intelligence feed cross-referencing aren't implemented yet.
+    // This used to fabricate all of it with Math.random() and present it as
+    // a confident reputation score — worse than not answering, since a real
+    // security decision could be made on an invented number. What's real is
+    // returned below (block-policy status, this account's own threat
+    // history); everything else is honestly null.
     const domain = email.split("@")[1] ?? "unknown";
-    const reputationScore = Math.round(Math.random() * 40 + 60);
+    const summaryParts = [
+      blockedPolicy ? "This sender is blocked by an active policy." : "No active block policy for this sender.",
+      senderThreats.length > 0
+        ? `${senderThreats.length} historical threat detection(s) on file for this account.`
+        : "No prior threat detections on file for this account.",
+      "Reputation scoring and SPF/DKIM/DMARC verification aren't available yet.",
+    ];
 
     return c.json({
       data: {
         email,
         domain,
-        reputationScore,
+        reputationScore: null,
         isBlocked: blockedPolicy !== undefined,
         threatHistory: senderThreats.length,
-        checks: {
-          spf: Math.random() > 0.3 ? "pass" : "fail",
-          dkim: Math.random() > 0.3 ? "pass" : "fail",
-          dmarc: Math.random() > 0.3 ? "pass" : "fail",
-          domainAge: `${Math.floor(Math.random() * 10) + 1} years`,
-          knownProvider: Math.random() > 0.5,
-        },
-        aiSummary: `Sender ${email} from domain ${domain} has a reputation score of ${reputationScore}/100. ${blockedPolicy ? "This sender is currently blocked by a policy." : "No active blocks."} ${senderThreats.length > 0 ? `Found ${senderThreats.length} historical threat detection(s).` : "No prior threats detected."}`,
+        checks: null,
+        analysisAvailable: false,
+        summary: summaryParts.join(" "),
       },
     });
   },
