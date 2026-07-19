@@ -77,7 +77,7 @@ knowledgeGraphRouter.post(
   validateBody(ExtractBodySchema),
   async (c) => {
     const body = getValidatedBody<z.infer<typeof ExtractBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const startTime = Date.now();
 
@@ -253,7 +253,7 @@ knowledgeGraphRouter.get(
   validateQuery(ListEntitiesQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof ListEntitiesQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const conditions = [eq(knowledgeEntities.accountId, accountId)];
@@ -289,7 +289,7 @@ knowledgeGraphRouter.get(
   requireScope("messages:read"),
   async (c) => {
     const id = c.req.param("id");
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const [entity] = await db
@@ -330,7 +330,7 @@ knowledgeGraphRouter.put(
   async (c) => {
     const id = c.req.param("id");
     const body = getValidatedBody<z.infer<typeof UpdateEntityBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const [updated] = await db
@@ -357,7 +357,7 @@ knowledgeGraphRouter.delete(
   requireScope("messages:write"),
   async (c) => {
     const id = c.req.param("id");
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const [deleted] = await db
@@ -379,7 +379,7 @@ knowledgeGraphRouter.get(
   requireScope("messages:read"),
   async (c) => {
     const id = c.req.param("id");
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const rows = await db
@@ -411,7 +411,7 @@ knowledgeGraphRouter.get(
   validateQuery(ListRelationshipsQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof ListRelationshipsQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const conditions = [eq(knowledgeRelationships.accountId, accountId)];
@@ -446,7 +446,7 @@ knowledgeGraphRouter.get(
   validateQuery(SearchQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof SearchQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const rows = await db
@@ -478,7 +478,7 @@ knowledgeGraphRouter.get(
   validateQuery(GraphQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof GraphQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     let nodes;
@@ -553,7 +553,7 @@ knowledgeGraphRouter.post(
   validateBody(BatchExtractBodySchema),
   async (c) => {
     const body = getValidatedBody<z.infer<typeof BatchExtractBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const results: { emailId: string; entitiesExtracted: number }[] = [];
@@ -618,7 +618,7 @@ knowledgeGraphRouter.get(
   "/stats",
   requireScope("messages:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const entityCounts = await db
@@ -658,7 +658,7 @@ knowledgeGraphRouter.get(
   "/suggestions",
   requireScope("messages:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const highMention = await db

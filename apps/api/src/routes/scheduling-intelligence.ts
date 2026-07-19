@@ -244,7 +244,7 @@ schedulingIntelligenceRouter.post(
   validateBody(ProposeBodySchema),
   async (c) => {
     const body = getValidatedBody<z.infer<typeof ProposeBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const patterns = await db
@@ -293,7 +293,7 @@ schedulingIntelligenceRouter.get(
   validateQuery(ListProposalsQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof ListProposalsQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const conditions = [eq(meetingProposals.accountId, accountId)];
@@ -339,7 +339,7 @@ schedulingIntelligenceRouter.get(
   "/proposals/:id",
   requireScope("messages:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const id = c.req.param("id");
 
@@ -372,7 +372,7 @@ schedulingIntelligenceRouter.put(
   validateBody(UpdateProposalBodySchema),
   async (c) => {
     const body = getValidatedBody<z.infer<typeof UpdateProposalBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const id = c.req.param("id");
 
@@ -413,7 +413,7 @@ schedulingIntelligenceRouter.get(
   "/patterns",
   requireScope("messages:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const patterns = await db
@@ -436,7 +436,7 @@ schedulingIntelligenceRouter.put(
   validateBody(UpdatePatternsBodySchema),
   async (c) => {
     const body = getValidatedBody<z.infer<typeof UpdatePatternsBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const [existing] = await db
@@ -492,7 +492,7 @@ schedulingIntelligenceRouter.post(
   validateBody(LearnPatternsBodySchema),
   async (c) => {
     const body = getValidatedBody<z.infer<typeof LearnPatternsBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const dayBuckets =
@@ -582,7 +582,7 @@ schedulingIntelligenceRouter.get(
   validateQuery(SuggestTimesQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof SuggestTimesQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const patterns = await db
@@ -620,7 +620,7 @@ schedulingIntelligenceRouter.get(
   validateQuery(ConflictsQuerySchema),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof ConflictsQuerySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const startDate = query.date ? new Date(query.date) : new Date();
@@ -690,7 +690,7 @@ schedulingIntelligenceRouter.get(
   "/stats",
   requireScope("messages:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const allProposals = await db
@@ -748,7 +748,7 @@ schedulingIntelligenceRouter.post(
   validateBody(AutoRespondBodySchema),
   async (c) => {
     const body = getValidatedBody<z.infer<typeof AutoRespondBodySchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const [proposal] = await db

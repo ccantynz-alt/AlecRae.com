@@ -142,7 +142,7 @@ contextIntelligenceRouter.post(
   validateBody(ExtractSchema),
   async (c) => {
     const input = getValidatedBody<z.infer<typeof ExtractSchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const now = new Date();
     const threadId = input.threadId ?? input.emailId;
@@ -268,7 +268,7 @@ contextIntelligenceRouter.get(
   validateQuery(ListActionItemsQuery),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof ListActionItemsQuery>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const conditions = [eq(emailActionItems.accountId, accountId)];
@@ -329,7 +329,7 @@ contextIntelligenceRouter.get(
   requireScope("messages:read"),
   async (c) => {
     const id = c.req.param("id");
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const rows = await db
@@ -376,7 +376,7 @@ contextIntelligenceRouter.put(
   async (c) => {
     const id = c.req.param("id");
     const input = getValidatedBody<z.infer<typeof UpdateActionItemSchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const now = new Date();
 
@@ -434,7 +434,7 @@ contextIntelligenceRouter.get(
   validateQuery(ListDeadlinesQuery),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof ListDeadlinesQuery>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const now = new Date();
 
@@ -491,7 +491,7 @@ contextIntelligenceRouter.get(
   "/deadlines/upcoming",
   requireScope("messages:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const now = new Date();
     const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -558,7 +558,7 @@ contextIntelligenceRouter.post(
   async (c) => {
     const id = c.req.param("id");
     const input = getValidatedBody<z.infer<typeof SetReminderSchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const existing = await db
@@ -606,7 +606,7 @@ contextIntelligenceRouter.get(
   validateQuery(ListPromisesQuery),
   async (c) => {
     const query = getValidatedQuery<z.infer<typeof ListPromisesQuery>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     const conditions = [eq(emailPromises.accountId, accountId)];
@@ -673,7 +673,7 @@ contextIntelligenceRouter.put(
   async (c) => {
     const id = c.req.param("id");
     const input = getValidatedBody<z.infer<typeof UpdatePromiseSchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const now = new Date();
 
@@ -720,7 +720,7 @@ contextIntelligenceRouter.get(
   "/promises/follow-up",
   requireScope("messages:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const now = new Date();
 
@@ -775,7 +775,7 @@ contextIntelligenceRouter.get(
   "/dashboard",
   requireScope("messages:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const now = new Date();
     const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -886,7 +886,7 @@ contextIntelligenceRouter.post(
   validateBody(BatchExtractSchema),
   async (c) => {
     const input = getValidatedBody<z.infer<typeof BatchExtractSchema>>(c);
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
     const now = new Date();
 

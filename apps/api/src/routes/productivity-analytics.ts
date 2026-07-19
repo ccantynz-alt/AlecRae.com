@@ -138,7 +138,7 @@ productivityAnalyticsRouter.post(
   requireScope("messages:write"),
   validateBody(TrackActivitySchema),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const body = getValidatedBody<TrackActivityInput>(c);
     const db = getDatabase();
 
@@ -175,7 +175,7 @@ productivityAnalyticsRouter.get(
   requireScope("analytics:read"),
   validateQuery(TimeQuerySchema),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const query = getValidatedQuery<TimeQueryInput>(c);
     const db = getDatabase();
 
@@ -221,7 +221,7 @@ productivityAnalyticsRouter.get(
   requireScope("analytics:read"),
   validateQuery(TimeSummaryQuerySchema),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const query = getValidatedQuery<TimeSummaryQueryInput>(c);
     const db = getDatabase();
 
@@ -272,7 +272,7 @@ productivityAnalyticsRouter.get(
   requireScope("analytics:read"),
   validateQuery(InsightsQuerySchema),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const query = getValidatedQuery<InsightsQueryInput>(c);
     const db = getDatabase();
 
@@ -319,7 +319,7 @@ productivityAnalyticsRouter.get(
   "/insights/:id",
   requireScope("analytics:read"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const id = c.req.param("id");
     const db = getDatabase();
 
@@ -349,7 +349,7 @@ productivityAnalyticsRouter.put(
   requireScope("messages:write"),
   validateBody(UpdateInsightSchema),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const id = c.req.param("id");
     const body = getValidatedBody<UpdateInsightInput>(c);
     const db = getDatabase();
@@ -387,7 +387,7 @@ productivityAnalyticsRouter.post(
   "/insights/generate",
   requireScope("messages:write"),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const db = getDatabase();
 
     // Gather recent time-tracking data for analysis
@@ -504,7 +504,7 @@ productivityAnalyticsRouter.get(
   requireScope("analytics:read"),
   validateQuery(PatternsQuerySchema),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const query = getValidatedQuery<PatternsQueryInput>(c);
     const db = getDatabase();
 
@@ -540,7 +540,7 @@ productivityAnalyticsRouter.get(
   requireScope("analytics:read"),
   validateQuery(PredictQuerySchema),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const query = getValidatedQuery<PredictQueryInput>(c);
     const db = getDatabase();
 
@@ -603,7 +603,7 @@ productivityAnalyticsRouter.get(
   requireScope("analytics:read"),
   validateQuery(ReportQuerySchema),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const query = getValidatedQuery<ReportQueryInput>(c);
     const db = getDatabase();
 
@@ -687,7 +687,7 @@ productivityAnalyticsRouter.get(
   requireScope("analytics:read"),
   validateQuery(ComparisonQuerySchema),
   async (c) => {
-    const accountId = c.get("accountId" as never) as string;
+    const accountId = c.get("auth").accountId;
     const query = getValidatedQuery<ComparisonQueryInput>(c);
     const db = getDatabase();
 
