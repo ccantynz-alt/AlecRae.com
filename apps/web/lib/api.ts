@@ -1599,9 +1599,15 @@ export const snoozeApi = {
   },
 
   list() {
-    return apiFetch<{ data: { id: string; emailId: string; snoozedUntil: string; subject: string }[] }>(
-      "/v1/snooze",
-    );
+    return apiFetch<{
+      data: {
+        id: string;
+        subject: string;
+        from: EmailAddress;
+        snoozedUntil: string | null;
+        updatedAt: string;
+      }[];
+    }>("/v1/snooze");
   },
 };
 

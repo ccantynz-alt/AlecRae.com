@@ -13,7 +13,6 @@ import {
 
 interface SnoozedItem {
   id: string;
-  emailId: string;
   subject: string;
   snoozedUntil: string;
 }
@@ -46,7 +45,13 @@ export default function SnoozedPage(): React.ReactNode {
       setLoading(true);
       setError(null);
       const res = await snoozeApi.list();
-      setItems(res.data);
+      setItems(
+        res.data.map((item) => ({
+          id: item.id,
+          subject: item.subject,
+          snoozedUntil: item.snoozedUntil ?? new Date().toISOString(),
+        })),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load snoozed emails");
     } finally {
@@ -58,10 +63,10 @@ export default function SnoozedPage(): React.ReactNode {
     fetchSnoozed();
   }, [fetchSnoozed]);
 
-  const handleUnsnooze = async (emailId: string): Promise<void> => {
-    setItems((prev) => prev.filter((i) => i.emailId !== emailId));
+  const handleUnsnooze = async (id: string): Promise<void> => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
     try {
-      await snoozeApi.unsnooze(emailId);
+      await snoozeApi.unsnooze(id);
     } catch {
       fetchSnoozed();
     }
@@ -127,7 +132,7 @@ export default function SnoozedPage(): React.ReactNode {
                 </Box>
                 <button
                   type="button"
-                  onClick={() => void handleUnsnooze(item.emailId)}
+                  onClick={() => void handleUnsnooze(item.id)}
                   className="flex-shrink-0 px-3 py-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 hover:bg-brand-50 rounded-lg transition-colors"
                   aria-label="Unsnooze email"
                 >

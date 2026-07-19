@@ -12,7 +12,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, lte, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { getDatabase, emails } from "@alecrae/db";
@@ -82,11 +82,24 @@ snooze.post(
       return c.json({ error: { message: "Snooze time must be in the future", code: "invalid_time" } }, 400);
     }
 
-    // Update the email: remove from inbox, set snooze metadata
+    const [existing] = await db
+      .select({ metadata: emails.metadata })
+      .from(emails)
+      .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!existing) {
+      return c.json({ error: { message: `Email ${emailId} not found`, code: "message_not_found" } }, 404);
+    }
+
+    // Hide from the inbox (folder=inbox is the default GET /v1/messages
+    // filter) and merge — not overwrite — metadata, so this doesn't clobber
+    // AI-triage fields or any other data already stored there.
     await db
       .update(emails)
       .set({
-        metadata: { snoozedUntil: until.toISOString() },
+        folder: "snoozed",
+        metadata: { ...(existing.metadata ?? {}), snoozedUntil: until.toISOString() },
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -110,10 +123,24 @@ snooze.delete(
     const auth = c.get("auth");
     const db = getDatabase();
 
+    const [existing] = await db
+      .select({ metadata: emails.metadata })
+      .from(emails)
+      .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!existing) {
+      return c.json({ error: { message: `Email ${emailId} not found`, code: "message_not_found" } }, 404);
+    }
+
+    const { snoozedUntil: _drop, ...restMetadata } = existing.metadata ?? {};
+    void _drop;
+
     await db
       .update(emails)
       .set({
-        metadata: {} as Record<string, string>,
+        folder: "inbox",
+        metadata: restMetadata,
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));
@@ -121,6 +148,73 @@ snooze.delete(
     return c.json({ data: { emailId, message: "Snooze cancelled" } });
   },
 );
+
+// GET /v1/snooze — List currently snoozed emails
+snooze.get(
+  "/",
+  requireScope("messages:read"),
+  async (c) => {
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const rows = await db
+      .select({
+        id: emails.id,
+        subject: emails.subject,
+        fromAddress: emails.fromAddress,
+        fromName: emails.fromName,
+        metadata: emails.metadata,
+        updatedAt: emails.updatedAt,
+      })
+      .from(emails)
+      .where(and(eq(emails.accountId, auth.accountId), eq(emails.folder, "snoozed")))
+      .orderBy(emails.updatedAt);
+
+    return c.json({
+      data: rows.map((r) => ({
+        id: r.id,
+        subject: r.subject,
+        from: { email: r.fromAddress, name: r.fromName },
+        snoozedUntil: r.metadata?.["snoozedUntil"] ?? null,
+        updatedAt: r.updatedAt.toISOString(),
+      })),
+    });
+  },
+);
+
+/**
+ * Move any email whose snooze time has passed back into the inbox. Called on
+ * an interval from server.ts (server.ts:~snoozeResurfaceInterval) — nothing
+ * previously resurfaced snoozed mail at all; a message snoozed once stayed
+ * hidden from the inbox forever unless manually unsnoozed.
+ */
+export async function resurfaceSnoozedEmails(): Promise<number> {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+
+  const due = await db
+    .select({ id: emails.id, metadata: emails.metadata })
+    .from(emails)
+    .where(
+      and(
+        eq(emails.folder, "snoozed"),
+        sql`${emails.metadata} ->> 'snoozedUntil' IS NOT NULL`,
+        lte(sql`(${emails.metadata} ->> 'snoozedUntil')::timestamptz`, sql`${now}::timestamptz`),
+      ),
+    )
+    .limit(500);
+
+  for (const row of due) {
+    const { snoozedUntil: _drop, ...restMetadata } = row.metadata ?? {};
+    void _drop;
+    await db
+      .update(emails)
+      .set({ folder: "inbox", metadata: restMetadata, updatedAt: new Date() })
+      .where(eq(emails.id, row.id));
+  }
+
+  return due.length;
+}
 
 // ─── Schedule Send ───────────────────────────────────────────────────────────
 
@@ -225,12 +319,21 @@ scheduleSend.post(
       undoableEmails.delete(emailId);
     }
 
-    // Move email back to drafts (and clear the persisted undo marker)
+    // Move email back to drafts and clear just the undo marker — merge, not
+    // overwrite, so this doesn't wipe AI-triage or other metadata fields.
+    const [current] = await db
+      .select({ metadata: emails.metadata })
+      .from(emails)
+      .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+    const { undoableUntil: _drop, ...restMetadata } = current?.metadata ?? {};
+    void _drop;
+
     await db
       .update(emails)
       .set({
         status: "draft",
-        metadata: {} as Record<string, string>,
+        metadata: restMetadata,
         updatedAt: new Date(),
       })
       .where(and(eq(emails.id, emailId), eq(emails.accountId, auth.accountId)));

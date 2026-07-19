@@ -66,7 +66,7 @@ import { recall } from "./routes/recall.js";
 import { translate, emailTranslate } from "./routes/translate.js";
 import { collaborate } from "./routes/collaborate.js";
 import { connect } from "./routes/connect.js";
-import { snooze, scheduleSend } from "./routes/snooze.js";
+import { snooze, scheduleSend, resurfaceSnoozedEmails } from "./routes/snooze.js";
 import { importRouter } from "./routes/import.js";
 import { workspaceImport } from "./routes/workspace-import.js";
 import { aiSearch } from "./routes/ai-search.js";
@@ -928,6 +928,16 @@ const graceExpiryInterval = setInterval(() => {
   });
 }, 24 * 60 * 60 * 1000);
 graceExpiryInterval.unref();
+
+// Resurface snoozed emails whose snooze time has passed. Previously nothing
+// did this at all — a snoozed email stayed hidden from the inbox forever
+// unless manually unsnoozed. Runs every 2 minutes.
+const snoozeResurfaceInterval = setInterval(() => {
+  resurfaceSnoozedEmails().catch((err) => {
+    console.warn("[api] Snooze resurface sweep error:", err);
+  });
+}, 2 * 60 * 1000);
+snoozeResurfaceInterval.unref();
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 
