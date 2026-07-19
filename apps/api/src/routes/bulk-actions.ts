@@ -43,7 +43,7 @@ const MoveSchema = z.object({
     .array(z.string().min(1))
     .min(1, "At least one email ID is required")
     .max(500, "Cannot process more than 500 emails at once"),
-  folder: z.string().min(1),
+  folder: z.enum(["inbox", "archive", "trash"]),
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -62,7 +62,7 @@ function scopedWhere(accountId: string, emailIds: string[]): ReturnType<typeof a
 
 const bulkActionsRouter = new Hono();
 
-// POST /v1/bulk/archive — Archive emails (add "archived" tag)
+// POST /v1/bulk/archive — Archive emails
 bulkActionsRouter.post(
   "/archive",
   requireScope("messages:write"),
@@ -76,15 +76,7 @@ bulkActionsRouter.post(
 
     await db
       .update(emails)
-      .set({
-        tags: sql`(
-          SELECT jsonb_agg(DISTINCT val)
-          FROM jsonb_array_elements(
-            COALESCE(${emails.tags}, '[]'::jsonb) || '["archived"]'::jsonb
-          ) AS val
-        )`,
-        updatedAt: now,
-      })
+      .set({ folder: "archive", updatedAt: now })
       .where(scopedWhere(auth.accountId, input.emailIds));
 
     return c.json({
@@ -97,7 +89,7 @@ bulkActionsRouter.post(
   },
 );
 
-// POST /v1/bulk/delete — Soft-delete emails (set status to "dropped")
+// POST /v1/bulk/delete — Move emails to the trash folder
 bulkActionsRouter.post(
   "/delete",
   requireScope("messages:write"),
@@ -111,15 +103,7 @@ bulkActionsRouter.post(
 
     await db
       .update(emails)
-      .set({
-        tags: sql`(
-          SELECT jsonb_agg(DISTINCT val)
-          FROM jsonb_array_elements(
-            COALESCE(${emails.tags}, '[]'::jsonb) || '["deleted"]'::jsonb
-          ) AS val
-        )`,
-        updatedAt: now,
-      })
+      .set({ folder: "trash", updatedAt: now })
       .where(scopedWhere(auth.accountId, input.emailIds));
 
     return c.json({
@@ -132,7 +116,7 @@ bulkActionsRouter.post(
   },
 );
 
-// POST /v1/bulk/read — Mark emails as read (add "read" tag)
+// POST /v1/bulk/read — Mark emails as read
 bulkActionsRouter.post(
   "/read",
   requireScope("messages:write"),
@@ -146,16 +130,7 @@ bulkActionsRouter.post(
 
     await db
       .update(emails)
-      .set({
-        tags: sql`(
-          SELECT jsonb_agg(DISTINCT val)
-          FROM jsonb_array_elements(
-            COALESCE(${emails.tags}, '[]'::jsonb) || '["read"]'::jsonb
-          ) AS val
-          WHERE val::text != '"unread"'
-        )`,
-        updatedAt: now,
-      })
+      .set({ isRead: true, updatedAt: now })
       .where(scopedWhere(auth.accountId, input.emailIds));
 
     return c.json({
@@ -168,7 +143,7 @@ bulkActionsRouter.post(
   },
 );
 
-// POST /v1/bulk/unread — Mark emails as unread (add "unread" tag, remove "read")
+// POST /v1/bulk/unread — Mark emails as unread
 bulkActionsRouter.post(
   "/unread",
   requireScope("messages:write"),
@@ -182,16 +157,7 @@ bulkActionsRouter.post(
 
     await db
       .update(emails)
-      .set({
-        tags: sql`(
-          SELECT jsonb_agg(DISTINCT val)
-          FROM jsonb_array_elements(
-            COALESCE(${emails.tags}, '[]'::jsonb) || '["unread"]'::jsonb
-          ) AS val
-          WHERE val::text != '"read"'
-        )`,
-        updatedAt: now,
-      })
+      .set({ isRead: false, updatedAt: now })
       .where(scopedWhere(auth.accountId, input.emailIds));
 
     return c.json({
@@ -204,7 +170,7 @@ bulkActionsRouter.post(
   },
 );
 
-// POST /v1/bulk/star — Star emails (add "starred" tag)
+// POST /v1/bulk/star — Star emails
 bulkActionsRouter.post(
   "/star",
   requireScope("messages:write"),
@@ -218,15 +184,7 @@ bulkActionsRouter.post(
 
     await db
       .update(emails)
-      .set({
-        tags: sql`(
-          SELECT jsonb_agg(DISTINCT val)
-          FROM jsonb_array_elements(
-            COALESCE(${emails.tags}, '[]'::jsonb) || '["starred"]'::jsonb
-          ) AS val
-        )`,
-        updatedAt: now,
-      })
+      .set({ isStarred: true, updatedAt: now })
       .where(scopedWhere(auth.accountId, input.emailIds));
 
     return c.json({
@@ -239,7 +197,7 @@ bulkActionsRouter.post(
   },
 );
 
-// POST /v1/bulk/unstar — Unstar emails (remove "starred" tag)
+// POST /v1/bulk/unstar — Unstar emails
 bulkActionsRouter.post(
   "/unstar",
   requireScope("messages:write"),
@@ -253,17 +211,7 @@ bulkActionsRouter.post(
 
     await db
       .update(emails)
-      .set({
-        tags: sql`(
-          SELECT COALESCE(
-            (SELECT jsonb_agg(val)
-             FROM jsonb_array_elements(COALESCE(${emails.tags}, '[]'::jsonb)) AS val
-             WHERE val::text != '"starred"'),
-            '[]'::jsonb
-          )
-        )`,
-        updatedAt: now,
-      })
+      .set({ isStarred: false, updatedAt: now })
       .where(scopedWhere(auth.accountId, input.emailIds));
 
     return c.json({
@@ -313,7 +261,7 @@ bulkActionsRouter.post(
   },
 );
 
-// POST /v1/bulk/move — Move emails to a folder (set folder in metadata)
+// POST /v1/bulk/move — Move emails to a folder
 bulkActionsRouter.post(
   "/move",
   requireScope("messages:write"),
@@ -327,14 +275,7 @@ bulkActionsRouter.post(
 
     await db
       .update(emails)
-      .set({
-        metadata: sql`jsonb_set(
-          COALESCE(${emails.metadata}, '{}'::jsonb),
-          '{folder}',
-          ${JSON.stringify(input.folder)}::jsonb
-        )`,
-        updatedAt: now,
-      })
+      .set({ folder: input.folder, updatedAt: now })
       .where(scopedWhere(auth.accountId, input.emailIds));
 
     return c.json({

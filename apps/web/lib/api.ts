@@ -49,6 +49,9 @@ export interface Message {
   preview: string;
   status: string;
   tags: string[];
+  isRead: boolean;
+  isStarred: boolean;
+  folder: "inbox" | "archive" | "trash" | string;
   hasAttachments: boolean;
   createdAt: string;
   updatedAt: string;
@@ -885,12 +888,13 @@ export const messagesApi = {
     return apiFetch<{ data: MessageDetail }>(`/v1/messages/${id}`);
   },
 
-  list(params?: { cursor?: string; limit?: number; status?: string; tag?: string }) {
+  list(params?: { cursor?: string; limit?: number; status?: string; tag?: string; folder?: "inbox" | "archive" | "trash" | "all" }) {
     const qs = new URLSearchParams();
     if (params?.cursor) qs.set("cursor", params.cursor);
     if (params?.limit) qs.set("limit", String(params.limit));
     if (params?.status) qs.set("status", params.status);
     if (params?.tag) qs.set("tag", params.tag);
+    if (params?.folder) qs.set("folder", params.folder);
     const query = qs.toString();
     return apiFetch<PaginatedResponse<Message>>(
       `/v1/messages${query ? `?${query}` : ""}`,
@@ -900,7 +904,14 @@ export const messagesApi = {
   archive(id: string) {
     return apiFetch<{ data: { id: string; updated: boolean } }>(
       `/v1/messages/${id}`,
-      { method: "PATCH", body: JSON.stringify({ status: "dropped", tags: ["archived"] }) },
+      { method: "PATCH", body: JSON.stringify({ folder: "archive" }) },
+    );
+  },
+
+  unarchive(id: string) {
+    return apiFetch<{ data: { id: string; updated: boolean } }>(
+      `/v1/messages/${id}`,
+      { method: "PATCH", body: JSON.stringify({ folder: "inbox" }) },
     );
   },
 
@@ -912,10 +923,16 @@ export const messagesApi = {
   },
 
   star(id: string, starred: boolean) {
-    const tags = starred ? ["starred"] : [];
     return apiFetch<{ data: { id: string; updated: boolean } }>(
       `/v1/messages/${id}`,
-      { method: "PATCH", body: JSON.stringify({ tags }) },
+      { method: "PATCH", body: JSON.stringify({ isStarred: starred }) },
+    );
+  },
+
+  setRead(id: string, read: boolean) {
+    return apiFetch<{ data: { id: string; updated: boolean } }>(
+      `/v1/messages/${id}`,
+      { method: "PATCH", body: JSON.stringify({ isRead: read }) },
     );
   },
 

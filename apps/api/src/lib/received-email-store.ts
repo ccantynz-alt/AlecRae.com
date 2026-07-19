@@ -38,6 +38,10 @@ export interface ReceivedEmailInput {
   inReplyTo?: string | null;
   references?: string[] | null;
   receivedAt?: Date;
+  /** Provider-reported read/starred state — previously computed by the Gmail/
+   *  Outlook parser and then silently dropped before reaching storage. */
+  isRead?: boolean;
+  isStarred?: boolean;
 }
 
 function genId(): string {
@@ -200,6 +204,9 @@ export async function storeReceivedEmail(
     status: "delivered",
     tags: ["inbox", `import:${input.source}`],
     source: input.source,
+    isRead: input.isRead ?? false,
+    isStarred: input.isStarred ?? false,
+    folder: "inbox",
     metadata: { receivedAt: received.toISOString(), imported: "true" },
     createdAt: received,
     updatedAt: now,

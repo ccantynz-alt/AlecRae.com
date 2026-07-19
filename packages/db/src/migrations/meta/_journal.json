@@ -43,6 +43,13 @@
       "when": 1784476800000,
       "tag": "0005_add_connected_accounts_last_error",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784563200000,
+      "tag": "0006_add_email_read_star_folder_state",
+      "breakpoints": true
     }
   ]
 }

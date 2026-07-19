@@ -86,8 +86,8 @@ function toEmailListItem(msg: Message): EmailListItem {
     subject: msg.subject || "(no subject)",
     preview: msg.preview || "",
     timestamp: formatTimestamp(msg.createdAt),
-    read: msg.status === "delivered" || msg.status === "sent",
-    starred: false,
+    read: msg.isRead,
+    starred: msg.isStarred,
     priority: "normal" as const,
     hasAttachments: msg.hasAttachments,
   };
@@ -259,6 +259,7 @@ export default function InboxPage(): React.ReactNode {
         if (prev.some((e) => e.id === item.id)) return prev;
         return [item, ...prev];
       });
+      messagesApi.unarchive(id).catch(() => { /* no-op */ });
     });
     messagesApi.archive(id).catch(() => { /* no-op */ });
   }, [emailItems, selectedEmailId, addUndoAction]);
@@ -278,6 +279,7 @@ export default function InboxPage(): React.ReactNode {
         if (prev.some((e) => e.id === item.id)) return prev;
         return [item, ...prev];
       });
+      messagesApi.unarchive(id).catch(() => { /* no-op */ });
     });
     messagesApi.delete(id).catch(() => { /* no-op */ });
   }, [emailItems, selectedEmailId, addUndoAction]);
@@ -578,11 +580,17 @@ export default function InboxPage(): React.ReactNode {
       markRead: () => {
         if (selectedEmailId) {
           setEmailItems((prev) => prev.map((e) => e.id === selectedEmailId ? { ...e, read: true } : e));
+          messagesApi.setRead(selectedEmailId, true).catch(() => {
+            setEmailItems((prev) => prev.map((e) => e.id === selectedEmailId ? { ...e, read: false } : e));
+          });
         }
       },
       markUnread: () => {
         if (selectedEmailId) {
           setEmailItems((prev) => prev.map((e) => e.id === selectedEmailId ? { ...e, read: false } : e));
+          messagesApi.setRead(selectedEmailId, false).catch(() => {
+            setEmailItems((prev) => prev.map((e) => e.id === selectedEmailId ? { ...e, read: true } : e));
+          });
         }
       },
       replyEmail: () => {
@@ -695,8 +703,8 @@ export default function InboxPage(): React.ReactNode {
         status: msg.status,
         tags: msg.tags,
         hasAttachments: msg.hasAttachments,
-        starred: msg.tags.includes("starred"),
-        read: msg.status === "delivered" || msg.status === "sent",
+        starred: msg.isStarred,
+        read: msg.isRead,
         createdAt: msg.createdAt,
         updatedAt: msg.updatedAt ?? msg.createdAt,
         sentAt: msg.sentAt ?? null,
@@ -740,9 +748,17 @@ export default function InboxPage(): React.ReactNode {
 
   const handleSelect = (email: EmailListItem) => {
     setSelectedEmailId(email.id);
-    setEmailItems((prev) =>
-      prev.map((e) => (e.id === email.id ? { ...e, read: true } : e)),
-    );
+    if (!email.read) {
+      setEmailItems((prev) =>
+        prev.map((e) => (e.id === email.id ? { ...e, read: true } : e)),
+      );
+      messagesApi.setRead(email.id, true).catch(() => {
+        // Persist failed — revert the optimistic update.
+        setEmailItems((prev) =>
+          prev.map((e) => (e.id === email.id ? { ...e, read: false } : e)),
+        );
+      });
+    }
   };
 
   const handleSearch = useCallback(

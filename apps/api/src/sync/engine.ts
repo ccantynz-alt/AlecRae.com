@@ -453,6 +453,8 @@ async function fetchAndStoreGmailMessage(
     inReplyTo: parsed.inReplyTo ?? null,
     references,
     ...(parsed.receivedAt !== undefined ? { receivedAt: parsed.receivedAt } : {}),
+    ...(parsed.isRead !== undefined ? { isRead: parsed.isRead } : {}),
+    ...(parsed.isStarred !== undefined ? { isStarred: parsed.isStarred } : {}),
   });
 }
 
@@ -702,6 +704,8 @@ export async function syncOutlookMessages(
         inReplyTo: null,
         references: referencesRaw,
         ...(parsed.receivedAt !== undefined ? { receivedAt: parsed.receivedAt } : {}),
+        ...(parsed.isRead !== undefined ? { isRead: parsed.isRead } : {}),
+        ...(parsed.isStarred !== undefined ? { isStarred: parsed.isStarred } : {}),
       });
 
       result.messagesAdded++;

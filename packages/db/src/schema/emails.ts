@@ -99,6 +99,16 @@ export const emails = pgTable(
     tags: jsonb("tags").notNull().$type<string[]>().default([]),
     metadata: jsonb("metadata").$type<Record<string, string>>(),
 
+    // User-facing mailbox state — deliberately separate from `status` above
+    // (the send-pipeline enum: queued/sent/delivered/bounced/dropped/etc).
+    // Archive/delete/star used to overload `status` + overwrite the whole
+    // `tags` array, which meant the inbox query never actually excluded
+    // archived/deleted mail (nothing filtered on it) and starring wiped
+    // labels. These are real, independently-settable columns instead.
+    isRead: boolean("is_read").notNull().default(false),
+    isStarred: boolean("is_starred").notNull().default(false),
+    folder: text("folder").notNull().default("inbox"),
+
     // Scheduling
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
 
@@ -123,6 +133,7 @@ export const emails = pgTable(
     index("emails_created_at_idx").on(table.createdAt),
     index("emails_account_status_idx").on(table.accountId, table.status),
     index("emails_scheduled_at_idx").on(table.scheduledAt),
+    index("emails_account_folder_idx").on(table.accountId, table.folder),
   ],
 );
 

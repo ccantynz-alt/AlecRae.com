@@ -217,6 +217,9 @@ const ListMessagesQuery = PaginationSchema.extend({
     ])
     .optional(),
   tag: z.string().optional(),
+  /** Defaults to "inbox" (excludes trash and archive) — pass "archive",
+   *  "trash", or "all" explicitly to see those. */
+  folder: z.enum(["inbox", "archive", "trash", "all"]).optional(),
 });
 
 // ─── Shared send handler ───────────────────────────────────────────────────
@@ -436,6 +439,7 @@ async function handleSend(c: Context) {
       status: "sent",
       source: connectedAcct.provider,
       tags: input.tags ?? [],
+      isRead: true,
       createdAt: now,
       updatedAt: now,
       sentAt: now,
@@ -728,6 +732,7 @@ async function handleSend(c: Context) {
       Object.keys(sanitizedHeaders).length > 0 ? sanitizedHeaders : null,
     status: "queued",
     tags: input.tags ?? [],
+    isRead: true,
     scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,
     createdAt: now,
     updatedAt: now,
@@ -985,6 +990,9 @@ messages.get(
         preview: (emailRecord.textBody ?? emailRecord.htmlBody ?? "").slice(0, 256).replace(/<[^>]+>/g, ""),
         status: emailRecord.status,
         tags: emailRecord.tags,
+        isRead: emailRecord.isRead,
+        isStarred: emailRecord.isStarred,
+        folder: emailRecord.folder,
         createdAt: emailRecord.createdAt.toISOString(),
         updatedAt: emailRecord.updatedAt.toISOString(),
         sentAt: emailRecord.sentAt?.toISOString() ?? null,
@@ -1010,12 +1018,20 @@ messages.get(
   validateQuery(ListMessagesQuery),
   async (c) => {
     const query = getValidatedQuery<
-      PaginationParams & { status?: string; tag?: string }
+      PaginationParams & { status?: string; tag?: string; folder?: "inbox" | "archive" | "trash" | "all" }
     >(c);
     const auth = c.get("auth");
     const db = getDatabase();
 
     const conditions = [eq(emails.accountId, auth.accountId)];
+
+    // Default to "inbox" — previously nothing filtered on folder/status at
+    // all, so archiving or deleting a message never actually removed it from
+    // the list; it just came back on the next reload marked unread.
+    const folder = query.folder ?? "inbox";
+    if (folder !== "all") {
+      conditions.push(eq(emails.folder, folder));
+    }
 
     if (query.status) {
       conditions.push(
@@ -1059,6 +1075,9 @@ messages.get(
         htmlBody: emails.htmlBody,
         status: emails.status,
         tags: emails.tags,
+        isRead: emails.isRead,
+        isStarred: emails.isStarred,
+        folder: emails.folder,
         createdAt: emails.createdAt,
         updatedAt: emails.updatedAt,
         sentAt: emails.sentAt,
@@ -1086,6 +1105,9 @@ messages.get(
       preview: (row.textBody ?? row.htmlBody ?? "").slice(0, 256).replace(/<[^>]+>/g, ""),
       status: row.status,
       tags: row.tags,
+      isRead: row.isRead,
+      isStarred: row.isStarred,
+      folder: row.folder,
       hasAttachments: false,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -1102,15 +1124,27 @@ messages.get(
   },
 );
 
-// PATCH /v1/messages/:id — Update message (archive, star, status)
+// PATCH /v1/messages/:id — Update message (read/starred/folder state)
+const PatchMessageSchema = z
+  .object({
+    isRead: z.boolean().optional(),
+    isStarred: z.boolean().optional(),
+    /** "inbox" restores from archive/trash; "archive"/"trash" moves it there. */
+    folder: z.enum(["inbox", "archive", "trash"]).optional(),
+  })
+  .refine((v) => v.isRead !== undefined || v.isStarred !== undefined || v.folder !== undefined, {
+    message: "At least one of isRead, isStarred, or folder is required",
+  });
+
 messages.patch(
   "/:id",
   requireScope("messages:read"),
+  validateBody(PatchMessageSchema),
   async (c) => {
     const id = c.req.param("id");
     const auth = c.get("auth");
     const db = getDatabase();
-    const body = await c.req.json() as Record<string, unknown>;
+    const input = getValidatedBody<z.infer<typeof PatchMessageSchema>>(c);
 
     const [existing] = await db
       .select({ id: emails.id })
@@ -1125,22 +1159,21 @@ messages.patch(
       );
     }
 
-    const updates: Record<string, unknown> = { updatedAt: new Date() };
-
-    if (typeof body["status"] === "string") {
-      updates["status"] = body["status"];
-    }
-    if (typeof body["tags"] === "object" && Array.isArray(body["tags"])) {
-      updates["tags"] = body["tags"];
-    }
-
-    await db.update(emails).set(updates).where(eq(emails.id, id));
+    await db
+      .update(emails)
+      .set({
+        ...(input.isRead !== undefined ? { isRead: input.isRead } : {}),
+        ...(input.isStarred !== undefined ? { isStarred: input.isStarred } : {}),
+        ...(input.folder !== undefined ? { folder: input.folder } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(emails.id, id));
 
     return c.json({ data: { id, updated: true } });
   },
 );
 
-// DELETE /v1/messages/:id — Soft-delete a message
+// DELETE /v1/messages/:id — Move a message to the trash folder
 messages.delete(
   "/:id",
   requireScope("messages:read"),
@@ -1162,7 +1195,7 @@ messages.delete(
       );
     }
 
-    await db.update(emails).set({ status: "dropped", updatedAt: new Date() }).where(eq(emails.id, id));
+    await db.update(emails).set({ folder: "trash", updatedAt: new Date() }).where(eq(emails.id, id));
 
     return c.json({ data: { id, deleted: true } });
   },
