@@ -112,9 +112,19 @@ report the running process's own commit SHA, and `scripts/check-deploy-drift.sh`
 `docs/infra/deploy-drift-check.md`) compares box HEAD to `origin/main` every
 15 minutes and writes a status file the API reads back — a drifted box now
 flips `/health`'s status to `degraded` instead of silently serving stale
-code for 10 days again. Timer install on the box is still pending (code +
-docs are done; enabling the systemd unit is an on-box step for the next
-deploy session).
+code for 10 days again. **Timer installed and verified live on Jarvis
+2026-07-20** (Craig-authorized): full deploy ritual run first (box was 31
+commits behind, predating this — git pull, bun install, db:migrate incl.
+migration 0007, web rebuild, service restart, health-checked); then the
+systemd unit installed. Found and fixed two real bugs during the live
+install — status file written 600 root:root, unreadable by the
+`alecrae-api` service which runs as a different user (deployDrift silently
+read null); and a shared fixed `/tmp` path for fetch-error capture broke
+across users. Both fixed, verified via `curl https://api.alecrae.com/v1/health`
+showing a populated `deployDrift`. **Separately confirmed live:** only
+`root`'s SSH agent has GitHub access on Jarvis — the `alecrae` user (which
+`alecrae-api`/`alecrae-web` run as) has none, so the timer must run as
+root; documented in `deploy-drift-check.md`.
 
 ## 2. Route coverage snapshot
 
