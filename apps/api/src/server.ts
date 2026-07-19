@@ -750,12 +750,22 @@ app.route("/v1/knowledge", knowledgeGraphRouter);
 
 // Organizations + Team Management: write-level for mutations, read-level for queries
 app.use("/v1/organizations/invitations/*/accept", writeRateLimit);
+app.use("/v1/organizations/invitations/*/lookup", readRateLimit);
 app.use("/v1/organizations/audit-log", authMiddleware, readRateLimit);
 app.use("/v1/organizations/members/*/role", authMiddleware, writeRateLimit);
 app.use("/v1/organizations/members/*", authMiddleware, writeRateLimit);
 app.use("/v1/organizations/members", authMiddleware, readRateLimit);
 app.use("/v1/organizations/sso", authMiddleware, writeRateLimit);
-app.use("/v1/organizations/*", authMiddleware, writeRateLimit);
+// The invitation accept + lookup endpoints are intentionally public — the
+// signed token in the URL IS the authentication (see organizations.ts).
+// Without this guard, the wildcard below re-applies authMiddleware to those
+// paths and 401s every brand-new invitee before the handler ever runs.
+app.use("/v1/organizations/*", async (c, next) => {
+  if (/^\/v1\/organizations\/invitations\/[^/]+\/(accept|lookup)$/.test(c.req.path)) {
+    return next();
+  }
+  return authMiddleware(c, next);
+}, writeRateLimit);
 app.use("/v1/organizations", authMiddleware, writeRateLimit);
 // Organizations + Team Management + Audit Log
 app.route("/v1/organizations", organizationsRouter);

@@ -363,6 +363,8 @@ function TeamSection(): ReactNode {
   const [inviteRole, setInviteRole] = useState<OrgRole>("member");
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteOk, setInviteOk] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const loadOrg = useCallback(() => {
     setError(null);
@@ -412,15 +414,31 @@ function TeamSection(): ReactNode {
     setBusy(true);
     setInviteError(null);
     setInviteOk(null);
+    setInviteLink(null);
+    setLinkCopied(false);
     try {
-      await organizationsApi.invite({ email: inviteEmail.trim().toLowerCase(), role: inviteRole });
+      const res = await organizationsApi.invite({ email: inviteEmail.trim().toLowerCase(), role: inviteRole });
       setInviteEmail("");
-      setInviteOk("Invitation sent.");
+      setInviteOk(`Invitation created for ${res.data.email}. AlecRae doesn't send invite emails yet — copy this link and send it to them yourself:`);
+      if (res.data.token) {
+        setInviteLink(`${window.location.origin}/invite/${res.data.token}`);
+      }
       loadTeam();
     } catch (e) {
       setInviteError(errMsg(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const copyInviteLink = async (): Promise<void> => {
+    if (!inviteLink) return;
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // Clipboard unavailable (permissions / insecure context) — no-op.
     }
   };
 
@@ -556,7 +574,26 @@ function TeamSection(): ReactNode {
             </Button>
           </Box>
           {inviteError && <Notice tone="error">{inviteError}</Notice>}
-          {inviteOk && <Notice tone="success">{inviteOk}</Notice>}
+          {inviteOk && (
+            <Notice tone="success">
+              <Box className="space-y-2">
+                <Text variant="body-sm">{inviteOk}</Text>
+                {inviteLink && (
+                  <Box className="flex items-center gap-2 flex-wrap">
+                    <Box
+                      as="code"
+                      className="text-xs bg-surface border border-border rounded px-2 py-1 break-all"
+                    >
+                      {inviteLink}
+                    </Box>
+                    <Button variant="ghost" size="sm" onClick={() => void copyInviteLink()}>
+                      {linkCopied ? "Copied" : "Copy link"}
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            </Notice>
+          )}
         </CardContent>
       </Card>
 

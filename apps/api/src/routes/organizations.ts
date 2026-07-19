@@ -44,12 +44,14 @@ import {
   ssoConfigs,
   users,
   workspaceMembers,
+  accounts,
 } from "@alecrae/db";
 import {
   upsertWorkspaceMembership,
   getWorkspaceRole,
   removeWorkspaceMembership,
 } from "../lib/workspace-membership.js";
+import { issueTokenPair, scopesForRole } from "../lib/jwt.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,10 @@ function generateToken(): string {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function hashPassword(password: string): Promise<string> {
+  return Bun.password.hash(password, { algorithm: "argon2id", memoryCost: 19456, timeCost: 2 });
 }
 
 async function logAudit(
@@ -807,21 +813,71 @@ organizationsRouter.delete(
   },
 );
 
-// POST /invitations/:token/accept — Accept invitation (no auth required — token IS the auth)
-organizationsRouter.post("/invitations/:token/accept", async (c) => {
-  const token = c.req.param("token");
+/** Shared lookup used by both the public preview and the accept handler. */
+async function findPendingInvitation(token: string) {
   const db = getDatabase();
-
   const [invitation] = await db
     .select()
     .from(teamInvitations)
-    .where(
-      and(
-        eq(teamInvitations.token, token),
-        eq(teamInvitations.status, "pending"),
-      ),
-    )
+    .where(and(eq(teamInvitations.token, token), eq(teamInvitations.status, "pending")))
     .limit(1);
+  return invitation;
+}
+
+// GET /invitations/:token/lookup — Public preview (no auth required — same
+// "token IS the auth" model as accept, but read-only). Lets the accept page
+// show who's inviting the visitor and to what, and whether they'll need to
+// set a password, before anything is created.
+organizationsRouter.get("/invitations/:token/lookup", async (c) => {
+  const token = c.req.param("token");
+  const db = getDatabase();
+  const invitation = await findPendingInvitation(token);
+
+  if (!invitation) {
+    return c.json(
+      { error: { type: "not_found", message: "This invitation link is invalid or has already been used.", code: "invitation_not_found" } },
+      404,
+    );
+  }
+
+  const expired = new Date() > invitation.expiresAt;
+  const [workspace] = await db
+    .select({ name: accounts.name })
+    .from(accounts)
+    .where(eq(accounts.id, invitation.accountId))
+    .limit(1);
+  const [existingUser] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.email, invitation.email))
+    .limit(1);
+
+  return c.json({
+    data: {
+      email: invitation.email,
+      role: invitation.role,
+      workspaceName: workspace?.name ?? "an AlecRae workspace",
+      expired,
+      /** true when accepting will create a brand-new identity that needs a password. */
+      requiresPassword: !existingUser,
+    },
+  });
+});
+
+const AcceptInvitationSchema = z.object({
+  // Required only when the invitation creates a brand-new identity (see
+  // requiresPassword above) — an existing identity keeps its own password
+  // and just gains membership in this workspace.
+  password: z.string().min(8).max(200).optional(),
+});
+
+// POST /invitations/:token/accept — Accept invitation (no auth required — token IS the auth)
+organizationsRouter.post("/invitations/:token/accept", validateBody(AcceptInvitationSchema), async (c) => {
+  const token = c.req.param("token");
+  const input = getValidatedBody<z.infer<typeof AcceptInvitationSchema>>(c);
+  const db = getDatabase();
+
+  const invitation = await findPendingInvitation(token);
 
   if (!invitation) {
     return c.json(
@@ -862,6 +918,19 @@ organizationsRouter.post("/invitations/:token/accept", async (c) => {
     .where(eq(users.email, invitation.email))
     .limit(1);
 
+  if (!existingUser && !input.password) {
+    return c.json(
+      {
+        error: {
+          type: "validation_error",
+          message: "Set a password to accept this invitation and create your account.",
+          code: "password_required",
+        },
+      },
+      400,
+    );
+  }
+
   const now = new Date();
   let newUserId: string;
   const memberPermissions = {
@@ -878,20 +947,25 @@ organizationsRouter.post("/invitations/:token/accept", async (c) => {
   if (existingUser) {
     // Identity already exists — grant them membership in THIS workspace
     // without touching their home account or any other workspace they
-    // already belong to (an identity can belong to more than one).
+    // already belong to (an identity can belong to more than one). Their
+    // existing password (or passkey) keeps working; we don't touch it.
     newUserId = existingUser.id;
   } else {
     // Create a brand-new identity, home-scoped to this invitation's account
-    // (their "home" workspace default — see workspace-membership.ts).
+    // (their "home" workspace default — see workspace-membership.ts). A
+    // password is required above specifically so this identity is actually
+    // usable afterward — previously it was created with passwordHash: null
+    // and no other credential, so the invitee could never log in.
     newUserId = generateId();
     const emailName = invitation.email.split("@")[0] ?? "User";
+    const passwordHash = await hashPassword(input.password as string);
 
     await db.insert(users).values({
       id: newUserId,
       accountId: invitation.accountId,
       email: invitation.email,
       name: emailName,
-      passwordHash: null,
+      passwordHash,
       role: invitation.role ?? "member",
       emailVerified: true, // Invitation acceptance verifies the email
       permissions: memberPermissions,
@@ -924,6 +998,24 @@ organizationsRouter.post("/invitations/:token/accept", async (c) => {
     userAgent: c.req.header("user-agent") ?? undefined,
   });
 
+  // Log the invitee straight into the workspace they just joined — without
+  // this, accepting created a membership row but no session, so a brand-new
+  // invitee had no way to actually reach the app.
+  const [workspaceAccount] = await db
+    .select({ planTier: accounts.planTier })
+    .from(accounts)
+    .where(eq(accounts.id, invitation.accountId))
+    .limit(1);
+  const role = invitation.role ?? "member";
+  const tokenPair = await issueTokenPair({
+    sub: invitation.accountId,
+    userId: newUserId,
+    email: invitation.email,
+    role,
+    tier: workspaceAccount?.planTier ?? "free",
+    scope: scopesForRole(role),
+  });
+
   return c.json({
     data: {
       accepted: true,
@@ -931,6 +1023,9 @@ organizationsRouter.post("/invitations/:token/accept", async (c) => {
       userId: newUserId,
       email: invitation.email,
       role: invitation.role,
+      token: tokenPair.accessToken,
+      refreshToken: tokenPair.refreshToken,
+      expiresIn: tokenPair.expiresIn,
     },
   });
 });

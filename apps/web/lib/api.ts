@@ -687,6 +687,9 @@ export interface OrgInvitation {
   expiresAt: string;
   acceptedAt?: string | null;
   createdAt: string;
+  /** Only present in the response to invite() — no email is sent, so this is
+   *  the only way to hand the invitee their accept link. */
+  token?: string;
 }
 
 export type OrgRole = "admin" | "member" | "viewer";
@@ -717,6 +720,33 @@ export const organizationsApi = {
   revokeInvitation(invitationId: string): Promise<unknown> {
     return apiFetch(`/v1/organizations/invitations/${encodeURIComponent(invitationId)}`, {
       method: "DELETE",
+    });
+  },
+  /** GET /v1/organizations/invitations/:token/lookup — public, no auth required. */
+  lookupInvite(token: string): Promise<{
+    data: { email: string; role: string; workspaceName: string; expired: boolean; requiresPassword: boolean };
+  }> {
+    return apiFetch(`/v1/organizations/invitations/${encodeURIComponent(token)}/lookup`);
+  },
+  /** POST /v1/organizations/invitations/:token/accept — public, no auth required. */
+  acceptInvite(
+    token: string,
+    password?: string,
+  ): Promise<{
+    data: {
+      accepted: boolean;
+      accountId: string;
+      userId: string;
+      email: string;
+      role: string;
+      token: string;
+      refreshToken: string;
+      expiresIn: number;
+    };
+  }> {
+    return apiFetch(`/v1/organizations/invitations/${encodeURIComponent(token)}/accept`, {
+      method: "POST",
+      body: JSON.stringify(password ? { password } : {}),
     });
   },
   changeRole(userId: string, role: OrgRole): Promise<unknown> {
