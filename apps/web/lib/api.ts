@@ -1004,6 +1004,24 @@ export const domainsApi = {
     });
   },
 
+  /** GET /v1/domains/:id/dns — the real, server-generated record set. */
+  dnsRecords(id: string) {
+    return apiFetch<{
+      data: {
+        domain: string;
+        records: {
+          type: string;
+          name: string;
+          value: string;
+          ttl: number;
+          priority: number | null;
+          verified: boolean;
+          lastCheckedAt: string | null;
+        }[];
+      };
+    }>(`/v1/domains/${id}/dns`);
+  },
+
   autoConfig(
     id: string,
     params:

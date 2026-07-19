@@ -353,6 +353,7 @@ emailTranslate.post(
           and(
             eq(emailTranslations.emailId, emailId),
             eq(emailTranslations.targetLanguage, input.targetLanguage),
+            eq(emailTranslations.accountId, auth.accountId),
           ),
         )
         .limit(1);

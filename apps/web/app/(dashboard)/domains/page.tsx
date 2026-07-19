@@ -14,7 +14,15 @@ import {
 } from "@alecrae/ui";
 import { domainsApi, type Domain, type AutoConfigRecordResult } from "../../../lib/api";
 
-function mapDomain(d: Domain): {
+/**
+ * `dnsRecords` used to be hard-coded here — a plausible-looking record set
+ * that didn't match what the server actually generates (wrong SPF host,
+ * wrong DKIM record type/selector, wrong DMARC policy, no MX/bounce records
+ * at all). A customer following it could never pass verification. Real
+ * records now come from GET /v1/domains/:id/dns (see loadDomains below) and
+ * are passed in here instead of invented.
+ */
+function mapDomain(d: Domain, dnsRecords: DnsRecord[] = []): {
   domain: string;
   id: string;
   verificationState: "pending" | "verified" | "failed" | "expired";
@@ -35,12 +43,7 @@ function mapDomain(d: Domain): {
     id: d.id,
     domain: d.domain,
     verificationState,
-    dnsRecords: [
-      { type: "TXT", name: `_alecrae-verify.${d.domain}`, value: `alecrae-verify=${d.id.slice(0, 8)}`, verified: d.spfVerified },
-      { type: "TXT", name: d.domain, value: `v=spf1 include:spf.alecrae.com ~all`, verified: d.spfVerified },
-      { type: "CNAME", name: `em._domainkey.${d.domain}`, value: "dkim.alecrae.com", verified: d.dkimVerified },
-      { type: "TXT", name: `_dmarc.${d.domain}`, value: `v=DMARC1; p=reject; rua=mailto:dmarc@alecrae.com`, verified: d.dmarcVerified },
-    ],
+    dnsRecords,
     spfVerified: d.spfVerified,
     dkimVerified: d.dkimVerified,
     dmarcVerified: d.dmarcVerified,
@@ -50,6 +53,12 @@ function mapDomain(d: Domain): {
       day: "numeric",
     }),
   };
+}
+
+/** Map the server's DNS-record type union onto the UI component's — the
+ *  server only ever emits TXT/CNAME/MX, all of which DnsRecord accepts. */
+function toUiRecordType(type: string): DnsRecord["type"] {
+  return type === "TXT" || type === "CNAME" || type === "MX" ? type : "TXT";
 }
 
 // ─── Provider configuration ───────────────────────────────────────────────────
@@ -157,7 +166,25 @@ export default function DomainsPage() {
   const loadDomains = useCallback(async () => {
     try {
       const res = await domainsApi.list();
-      const mapped = res.data.map(mapDomain);
+      // Fetch each domain's real DNS records in parallel — a failure on any
+      // one domain falls back to an empty record list for that domain rather
+      // than failing the whole page.
+      const recordLists = await Promise.all(
+        res.data.map((d) =>
+          domainsApi
+            .dnsRecords(d.id)
+            .then((r) =>
+              r.data.records.map((rec) => ({
+                type: toUiRecordType(rec.type),
+                name: rec.name,
+                value: rec.value,
+                verified: rec.verified,
+              })),
+            )
+            .catch(() => [] as DnsRecord[]),
+        ),
+      );
+      const mapped = res.data.map((d, i) => mapDomain(d, recordLists[i]));
       setDomains(mapped);
       setError(null);
       return mapped;
