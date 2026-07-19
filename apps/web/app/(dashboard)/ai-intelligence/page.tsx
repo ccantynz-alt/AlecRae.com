@@ -642,7 +642,7 @@ function PredictivePanel({ emailId }: { emailId: string }): ReactNode {
               Predicted Action
             </Text>
             <Text variant="caption" className="text-content-subtle">
-              Preview — the prediction model is still training.
+              AI-predicted next action for this email, with a confidence score.
             </Text>
           </Box>
           <Button
@@ -1018,8 +1018,7 @@ function WritingCoachSection(): ReactNode {
         </Text>
         <Text variant="body-sm" className="text-content-subtle">
           Paste a draft and get clarity, tone, and persuasiveness scoring with
-          concrete rewrite suggestions. Preview — scoring is indicative while
-          the coach model is finalized.
+          concrete rewrite suggestions.
         </Text>
       </CardHeader>
       <CardContent>

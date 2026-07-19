@@ -39,6 +39,7 @@ import {
 import { scoreEmailPriority } from "@alecrae/ai-engine/intelligence/priority-scorer";
 import { generateSmartReplies } from "@alecrae/ai-engine/intelligence/smart-replies";
 import { analyzeEmailSentiment } from "@alecrae/ai-engine/intelligence/sentiment-analyzer";
+import { aiComplete } from "../lib/ai.js";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -118,6 +119,127 @@ function aiErrorResponse(
       },
     },
   };
+}
+
+function extractJson(text: string): Record<string, unknown> {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end < 0) throw new Error("Claude response did not contain a JSON object");
+  const parsed: unknown = JSON.parse(text.slice(start, end + 1));
+  if (typeof parsed !== "object" || parsed === null) throw new Error("Parsed response was not an object");
+  return parsed as Record<string, unknown>;
+}
+
+function clampScore(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : fallback;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+interface WritingCoachAnalysis {
+  clarityScore: number;
+  toneScore: number;
+  persuasivenessScore: number;
+  suggestions: { type: string; original: string; suggested: string; reason: string }[];
+  overallGrade: "A" | "B" | "C" | "D" | "F";
+}
+
+/** Real Claude-based draft analysis — was previously three Math.random() calls. */
+async function runWritingCoachAnalysis(draftText: string): Promise<WritingCoachAnalysis> {
+  const result = await aiComplete({
+    system: "You are a professional email writing coach. Respond with a single valid JSON object only — no prose, no markdown fences.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          "Analyze this email draft for writing quality. Return JSON only:",
+          "{",
+          '  "clarityScore": <0-100, how easy the draft is to understand>,',
+          '  "toneScore": <0-100, how appropriate the tone is for professional email>,',
+          '  "persuasivenessScore": <0-100, how compelling/actionable the draft is>,',
+          '  "suggestions": [{"type": "clarity"|"tone"|"persuasiveness"|"grammar", "original": "<exact phrase from the draft>", "suggested": "<improved phrase>", "reason": "<one short sentence>"}],',
+          '  "overallGrade": "A"|"B"|"C"|"D"|"F"',
+          "}",
+          "Provide at most 3 suggestions, each referencing a phrase that actually appears in the draft below.",
+          "",
+          "Draft:",
+          draftText.slice(0, 4000),
+        ].join("\n"),
+      },
+    ],
+    maxTokens: 700,
+  });
+
+  const obj = extractJson(result.text);
+  const clarityScore = clampScore(obj["clarityScore"], 70);
+  const toneScore = clampScore(obj["toneScore"], 70);
+  const persuasivenessScore = clampScore(obj["persuasivenessScore"], 70);
+
+  const rawSuggestions = Array.isArray(obj["suggestions"]) ? obj["suggestions"] : [];
+  const suggestions = rawSuggestions
+    .filter((s): s is Record<string, unknown> => typeof s === "object" && s !== null)
+    .slice(0, 3)
+    .map((s) => ({
+      type: typeof s["type"] === "string" ? s["type"] : "clarity",
+      original: typeof s["original"] === "string" ? s["original"] : "",
+      suggested: typeof s["suggested"] === "string" ? s["suggested"] : "",
+      reason: typeof s["reason"] === "string" ? s["reason"] : "",
+    }))
+    .filter((s) => s.original.length > 0 && s.suggested.length > 0);
+
+  const grades = ["A", "B", "C", "D", "F"] as const;
+  const overallGrade = grades.includes(obj["overallGrade"] as (typeof grades)[number])
+    ? (obj["overallGrade"] as (typeof grades)[number])
+    : "C";
+
+  return { clarityScore, toneScore, persuasivenessScore, suggestions, overallGrade };
+}
+
+const PREDICTABLE_ACTIONS = ["reply", "archive", "delete", "forward", "snooze", "read_later"] as const;
+type PredictableAction = (typeof PREDICTABLE_ACTIONS)[number];
+
+interface ActionPrediction {
+  predictedAction: PredictableAction;
+  confidence: number;
+  reasoning: string;
+}
+
+/** Real Claude-based next-action prediction — was previously a random pick
+ *  from the same 6-item list with a templated reasoning string. */
+async function runActionPrediction(email: { subject: string; fromAddress: string; body: string }): Promise<ActionPrediction> {
+  const result = await aiComplete({
+    system: "You predict what a busy professional will most likely do next with an email. Respond with a single valid JSON object only.",
+    messages: [
+      {
+        role: "user",
+        content: [
+          `From: ${email.fromAddress}`,
+          `Subject: ${email.subject}`,
+          "Body:",
+          email.body.slice(0, 2000),
+          "",
+          `Predict the single most likely next action from this exact list: ${PREDICTABLE_ACTIONS.join(", ")}.`,
+          "Return JSON only:",
+          "{",
+          `  "predictedAction": one of [${PREDICTABLE_ACTIONS.map((a) => `"${a}"`).join(", ")}],`,
+          '  "confidence": <0.0-1.0>,',
+          '  "reasoning": "<one sentence explaining why, referencing the actual email content>"',
+          "}",
+        ].join("\n"),
+      },
+    ],
+    maxTokens: 300,
+  });
+
+  const obj = extractJson(result.text);
+  const predictedAction = (PREDICTABLE_ACTIONS as readonly string[]).includes(obj["predictedAction"] as string)
+    ? (obj["predictedAction"] as PredictableAction)
+    : "read_later";
+  const confidence = Math.max(0, Math.min(1, typeof obj["confidence"] === "number" ? obj["confidence"] : 0.5));
+  const reasoning = typeof obj["reasoning"] === "string" && obj["reasoning"].length > 0
+    ? obj["reasoning"]
+    : `Predicted based on the email's subject and content.`;
+
+  return { predictedAction, confidence, reasoning };
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -650,37 +772,32 @@ aiIntelligenceRouter.post(
     const auth = c.get("auth");
     const db = getDatabase();
 
-    // Placeholder AI writing coach — in production this calls Claude
-    const clarityScore = Math.round(Math.random() * 30 + 70);
-    const toneScore = Math.round(Math.random() * 30 + 70);
-    const persuasivenessScore = Math.round(Math.random() * 40 + 60);
-    const avgScore = (clarityScore + toneScore + persuasivenessScore) / 3;
+    let draftText = input.content ?? null;
+    if (draftText === null && input.emailId) {
+      const [emailRow] = await db
+        .select({ textBody: emails.textBody, htmlBody: emails.htmlBody })
+        .from(emails)
+        .where(and(eq(emails.id, input.emailId), eq(emails.accountId, auth.accountId)))
+        .limit(1);
+      if (!emailRow) {
+        return c.json({ error: { type: "not_found", message: `Email ${input.emailId} not found`, code: "email_not_found" } }, 404);
+      }
+      draftText = emailRow.textBody ?? emailRow.htmlBody?.replace(/<[^>]+>/g, " ") ?? "";
+    }
 
-    const overallGrade =
-      avgScore >= 90
-        ? "A"
-        : avgScore >= 80
-          ? "B"
-          : avgScore >= 70
-            ? "C"
-            : avgScore >= 60
-              ? "D"
-              : "F";
+    if (!draftText || draftText.trim().length === 0) {
+      return c.json({ error: { type: "validation_error", message: "No draft content to analyze", code: "empty_draft" } }, 400);
+    }
 
-    const suggestions = [
-      {
-        type: "clarity",
-        original: "Please be advised that",
-        suggested: "Note that",
-        reason: "Simpler phrasing improves clarity",
-      },
-      {
-        type: "tone",
-        original: "ASAP",
-        suggested: "at your earliest convenience",
-        reason: "More professional tone",
-      },
-    ];
+    let analysis: WritingCoachAnalysis;
+    try {
+      analysis = await runWritingCoachAnalysis(draftText);
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+
+    const { clarityScore, toneScore, persuasivenessScore, suggestions, overallGrade } = analysis;
 
     const id = generateId();
     const now = new Date();
@@ -718,9 +835,29 @@ aiIntelligenceRouter.post(
     const auth = c.get("auth");
     const db = getDatabase();
 
-    // Placeholder AI prediction — in production this calls Claude
-    const actions = ["reply", "archive", "delete", "forward", "snooze", "read_later"];
-    const predictedAction = actions[Math.floor(Math.random() * actions.length)] ?? "read_later";
+    const [emailRow] = await db
+      .select({ subject: emails.subject, fromAddress: emails.fromAddress, textBody: emails.textBody, htmlBody: emails.htmlBody })
+      .from(emails)
+      .where(and(eq(emails.id, input.emailId), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!emailRow) {
+      return c.json({ error: { type: "not_found", message: `Email ${input.emailId} not found`, code: "email_not_found" } }, 404);
+    }
+
+    let prediction: ActionPrediction;
+    try {
+      prediction = await runActionPrediction({
+        subject: emailRow.subject,
+        fromAddress: emailRow.fromAddress,
+        body: emailRow.textBody ?? emailRow.htmlBody?.replace(/<[^>]+>/g, " ") ?? "",
+      });
+    } catch (err) {
+      const { status, body } = aiErrorResponse(err);
+      return c.json(body, status);
+    }
+
+    const { predictedAction, confidence, reasoning } = prediction;
 
     const id = generateId();
     const now = new Date();
@@ -730,8 +867,8 @@ aiIntelligenceRouter.post(
       accountId: auth.accountId,
       emailId: input.emailId,
       predictedAction,
-      confidence: Math.round(Math.random() * 40 + 60) / 100,
-      reasoning: `Based on historical user behavior patterns, the most likely action for this email is "${predictedAction}".`,
+      confidence,
+      reasoning,
       userAction: null,
       wasAccurate: null,
       predictedAt: now,
