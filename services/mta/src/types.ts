@@ -89,6 +89,19 @@ export interface SmtpServerConfig {
   tls?: TlsConfig;
   requireAuth: boolean;
   enableStarttls: boolean;
+  /**
+   * Per-source-IP abuse controls (Fail2ban-equivalent). The global
+   * `maxConnections` cap alone doesn't stop a single abusive IP from
+   * consuming a large share of it — this is exactly the gap that let an
+   * unauthenticated scanner/spammer hammer port 25 unchecked for 9 days
+   * (Known Issue #78 incident, 2026-07-20).
+   */
+  maxConnectionsPerIp: number;
+  /** New connections allowed from one IP within `ipRateWindowMs`. */
+  maxNewConnectionsPerIpPerWindow: number;
+  ipRateWindowMs: number;
+  /** How long an IP that exceeds the rate window is refused new connections. */
+  ipBanDurationMs: number;
 }
 
 export interface SmtpClientConfig {

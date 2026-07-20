@@ -36,6 +36,10 @@ const DEFAULT_CONFIG: SmtpServerConfig = {
   banner: "",
   requireAuth: false,
   enableStarttls: true,
+  maxConnectionsPerIp: 20,
+  maxNewConnectionsPerIpPerWindow: 30,
+  ipRateWindowMs: 60_000, // 1 minute
+  ipBanDurationMs: 15 * 60_000, // 15 minutes
 };
 
 export interface SmtpServerEvents {
@@ -59,6 +63,15 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
   private totalMessagesReceived = 0;
   private startedAt: Date | null = null;
 
+  // ── Per-IP abuse tracking (Fail2ban-equivalent) ──────────────────────────
+  /** Current concurrent connection count per source IP. */
+  private readonly concurrentByIp = new Map<string, number>();
+  /** Recent connection timestamps per source IP, for the rate window. */
+  private readonly connectionTimesByIp = new Map<string, number[]>();
+  /** IPs currently banned, mapped to the epoch-ms their ban expires. */
+  private readonly bannedUntilByIp = new Map<string, number>();
+  private throttlePruneTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(config?: Partial<SmtpServerConfig>, tlsManager?: TlsManager) {
     super();
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -69,7 +82,7 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
    * Start the SMTP server listening on the configured host:port.
    */
   async start(): Promise<net.AddressInfo> {
-    return new Promise((resolve, reject) => {
+    return new Promise<net.AddressInfo>((resolve, reject) => {
       this.server = net.createServer((socket) => {
         this.handleConnection(socket);
       });
@@ -88,13 +101,46 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
         this.emit("listening", addr);
         resolve(addr);
       });
+    }).then((addr) => {
+      // Prune stale per-IP throttle entries periodically — otherwise every
+      // distinct IP that has ever connected (including one-off internet
+      // scanners) leaves a Map entry forever.
+      this.throttlePruneTimer = setInterval(() => this.pruneIpThrottleState(), 5 * 60_000);
+      this.throttlePruneTimer.unref();
+      return addr;
     });
+  }
+
+  /** Drop per-IP throttle entries that are no longer meaningful. */
+  private pruneIpThrottleState(): void {
+    const now = Date.now();
+    const windowStart = now - this.config.ipRateWindowMs;
+
+    for (const [ip, times] of this.connectionTimesByIp) {
+      const recent = times.filter((t) => t > windowStart);
+      if (recent.length === 0) {
+        this.connectionTimesByIp.delete(ip);
+      } else if (recent.length !== times.length) {
+        this.connectionTimesByIp.set(ip, recent);
+      }
+    }
+
+    for (const [ip, until] of this.bannedUntilByIp) {
+      if (now >= until) {
+        this.bannedUntilByIp.delete(ip);
+      }
+    }
   }
 
   /**
    * Gracefully stop the server.
    */
   async stop(): Promise<void> {
+    if (this.throttlePruneTimer) {
+      clearInterval(this.throttlePruneTimer);
+      this.throttlePruneTimer = null;
+    }
+
     return new Promise((resolve) => {
       if (!this.server) {
         resolve();
@@ -126,6 +172,44 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
     };
   }
 
+  /**
+   * Check + record this connection attempt against per-IP abuse limits.
+   * Returns null if the connection is allowed, or a reason string if it
+   * should be rejected (already-banned, concurrent cap, or rate cap — the
+   * rate-cap case also starts a new ban).
+   */
+  private checkIpThrottle(ip: string): string | null {
+    const now = Date.now();
+
+    const bannedUntil = this.bannedUntilByIp.get(ip);
+    if (bannedUntil !== undefined) {
+      if (now < bannedUntil) {
+        return "banned";
+      }
+      this.bannedUntilByIp.delete(ip);
+    }
+
+    const concurrent = this.concurrentByIp.get(ip) ?? 0;
+    if (concurrent >= this.config.maxConnectionsPerIp) {
+      return "concurrent_limit";
+    }
+
+    const windowStart = now - this.config.ipRateWindowMs;
+    const recent = (this.connectionTimesByIp.get(ip) ?? []).filter((t) => t > windowStart);
+    recent.push(now);
+    this.connectionTimesByIp.set(ip, recent);
+
+    if (recent.length > this.config.maxNewConnectionsPerIpPerWindow) {
+      this.bannedUntilByIp.set(ip, now + this.config.ipBanDurationMs);
+      console.warn(
+        `[mta] IP ${ip} exceeded ${this.config.maxNewConnectionsPerIpPerWindow} connections/${this.config.ipRateWindowMs}ms — banned for ${this.config.ipBanDurationMs}ms`,
+      );
+      return "rate_limit";
+    }
+
+    return null;
+  }
+
   private handleConnection(socket: net.Socket): void {
     if (this.sessions.size >= this.config.maxConnections) {
       const response = formatResponse(SmtpResponses.serviceUnavailable());
@@ -133,8 +217,20 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
       return;
     }
 
-    const sessionId = crypto.randomUUID();
     const remoteAddress = socket.remoteAddress ?? "unknown";
+
+    const throttleReason = this.checkIpThrottle(remoteAddress);
+    if (throttleReason) {
+      // No greeting at all for a banned/rate-limited IP — matches how a real
+      // Fail2ban-style drop behaves, and avoids giving a scanner a signal to
+      // distinguish "banned" from "just slow" via response timing/content.
+      socket.destroy();
+      return;
+    }
+
+    this.concurrentByIp.set(remoteAddress, (this.concurrentByIp.get(remoteAddress) ?? 0) + 1);
+
+    const sessionId = crypto.randomUUID();
     const remotePort = socket.remotePort ?? 0;
 
     const session: SmtpSession = {
@@ -536,6 +632,15 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
   }
 
   private cleanupSession(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
+    if (session) {
+      const remaining = (this.concurrentByIp.get(session.remoteAddress) ?? 1) - 1;
+      if (remaining <= 0) {
+        this.concurrentByIp.delete(session.remoteAddress);
+      } else {
+        this.concurrentByIp.set(session.remoteAddress, remaining);
+      }
+    }
     this.sessions.delete(sessionId);
     this.socketMap.delete(sessionId);
     this.dataBuffers.delete(sessionId);
