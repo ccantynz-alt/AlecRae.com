@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
@@ -135,14 +135,24 @@ account.get("/passkeys", requireScope("messages:read"), async (c) => {
 });
 
 account.delete("/passkeys/:id", requireScope("messages:read"), async (c) => {
-  const _auth = c.get("auth");
+  const auth = c.get("auth");
   const passkeyId = c.req.param("id");
   const db = getDatabase();
 
+  if (!auth.userId) {
+    return c.json(
+      { error: { type: "not_found", message: "Passkey not found", code: "passkey_not_found" } },
+      404,
+    );
+  }
+
+  // Previously matched by id alone with no ownership check — any
+  // authenticated user could delete any other user's passkey (including
+  // across tenants), a real account-lockout / credential-tampering vector.
   const [existing] = await db
     .select({ id: passkeys.id })
     .from(passkeys)
-    .where(eq(passkeys.id, passkeyId))
+    .where(and(eq(passkeys.id, passkeyId), eq(passkeys.userId, auth.userId)))
     .limit(1);
 
   if (!existing) {
@@ -152,7 +162,7 @@ account.delete("/passkeys/:id", requireScope("messages:read"), async (c) => {
     );
   }
 
-  await db.delete(passkeys).where(eq(passkeys.id, passkeyId));
+  await db.delete(passkeys).where(and(eq(passkeys.id, passkeyId), eq(passkeys.userId, auth.userId)));
 
   return c.json({ data: { deleted: true, id: passkeyId } });
 });
