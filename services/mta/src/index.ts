@@ -11,6 +11,7 @@
 import { getMtaHostname } from "./config.js";
 import { SmtpServer } from "./smtp/server.js";
 import { MtaWorker } from "./worker.js";
+import { TlsManager } from "./tls/manager.js";
 import { createHealthServer, dbCheck, redisCheck } from "./health.js";
 import { getDatabase, closeConnection } from "@alecrae/db";
 import { initTelemetry, shutdownTelemetry } from "@alecrae/shared";
@@ -29,6 +30,23 @@ const WORKER_CONCURRENCY = parseInt(
 );
 const HEALTH_PORT = parseInt(process.env["HEALTH_PORT"] ?? "8082", 10);
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
+
+// TLS was previously hardcoded off entirely — the fully-built TlsManager
+// (tls/manager.ts) was never constructed or passed to SmtpServer, so mail
+// transited in plaintext regardless of what certs existed. This wires it in
+// for real: if TLS_CERT_PATH/TLS_KEY_PATH point at a loadable cert+key pair,
+// STARTTLS is genuinely offered; otherwise it degrades to the previous
+// plaintext-only behavior rather than crashing. Issuing an actual
+// certificate for the MTA hostname is a separate infra task (ACME
+// HTTP-01 needs port 80, which the platform gateway already owns on this
+// box; DNS-01 needs Cloudflare API access) — this only removes the
+// application-code half of the gap.
+const TLS_CERT_PATH = process.env["TLS_CERT_PATH"];
+const TLS_KEY_PATH = process.env["TLS_KEY_PATH"];
+const TLS_CA_PATH = process.env["TLS_CA_PATH"];
+const TLS_MIN_VERSION = (process.env["TLS_MIN_VERSION"] === "TLSv1.3" ? "TLSv1.3" : "TLSv1.2") as
+  | "TLSv1.2"
+  | "TLSv1.3";
 
 // ─── Service state ──────────────────────────────────────────────────────────
 
@@ -95,20 +113,48 @@ async function start(): Promise<void> {
     process.exit(1);
   }
 
-  // ── 3. Start SMTP server (inbound) ─────────────────────────────────
-  console.log(`[mta] Starting SMTP server on ${SMTP_HOST}:${SMTP_PORT}...`);
-  smtpServer = new SmtpServer({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    hostname: SMTP_HOSTNAME,
-    maxMessageSize: 25 * 1024 * 1024,
-    maxRecipients: 100,
-    maxConnections: 500,
-    connectionTimeout: 300_000,
-    socketTimeout: 60_000,
-    requireAuth: false,
-    enableStarttls: false, // Enable when TLS certs are configured
+  // ── 3. Load TLS certificate (if configured) ─────────────────────────
+  const tlsManager = new TlsManager({
+    certsDir: process.env["TLS_CERTS_DIR"] ?? "/etc/alecrae/tls",
+    defaultMinVersion: TLS_MIN_VERSION,
+    autoRenewDays: 30,
   });
+  let starttlsEnabled = false;
+  if (TLS_CERT_PATH && TLS_KEY_PATH) {
+    const loaded = tlsManager.loadCertificate(SMTP_HOSTNAME, TLS_KEY_PATH, TLS_CERT_PATH, TLS_CA_PATH);
+    if (loaded.ok) {
+      starttlsEnabled = true;
+      console.log(
+        `[mta] TLS certificate loaded for ${SMTP_HOSTNAME} (expires ${loaded.value.expiresAt.toISOString()}) — STARTTLS enabled`,
+      );
+    } else {
+      console.error(
+        `[mta] TLS_CERT_PATH/TLS_KEY_PATH set but failed to load: ${loaded.error.message} — starting WITHOUT STARTTLS`,
+      );
+    }
+  } else {
+    console.warn(
+      "[mta] TLS_CERT_PATH/TLS_KEY_PATH not set — SMTP server starting WITHOUT STARTTLS (mail transits in plaintext)",
+    );
+  }
+
+  // ── 4. Start SMTP server (inbound) ─────────────────────────────────
+  console.log(`[mta] Starting SMTP server on ${SMTP_HOST}:${SMTP_PORT}...`);
+  smtpServer = new SmtpServer(
+    {
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      hostname: SMTP_HOSTNAME,
+      maxMessageSize: 25 * 1024 * 1024,
+      maxRecipients: 100,
+      maxConnections: 500,
+      connectionTimeout: 300_000,
+      socketTimeout: 60_000,
+      requireAuth: false,
+      enableStarttls: starttlsEnabled,
+    },
+    starttlsEnabled ? tlsManager : undefined,
+  );
 
   smtpServer.on("listening", (addr) => {
     console.log(`[mta] SMTP server listening on ${addr.address}:${addr.port}`);
@@ -148,7 +194,7 @@ async function start(): Promise<void> {
     smtpServer = null;
   }
 
-  // ── 4. Start outbound queue worker ──────────────────────────────────
+  // ── 5. Start outbound queue worker ──────────────────────────────────
   console.log("[mta] Starting outbound queue worker...");
   mtaWorker = new MtaWorker({
     redisUrl: REDIS_URL,
@@ -159,7 +205,7 @@ async function start(): Promise<void> {
 
   await mtaWorker.start();
 
-  // ── 5. Start health server ──────────────────────────────────────────
+  // ── 6. Start health server ──────────────────────────────────────────
   console.log(`[mta] Starting health server on port ${HEALTH_PORT}...`);
   const redisClient = redis;
   healthServer = createHealthServer({
@@ -178,13 +224,14 @@ async function start(): Promise<void> {
     healthServer = null;
   }
 
-  // ── 6. Register shutdown handlers ───────────────────────────────────
+  // ── 7. Register shutdown handlers ───────────────────────────────────
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
   console.log("=".repeat(60));
   console.log("  AlecRae MTA — Running");
   console.log(`  SMTP:   ${smtpServer ? `${SMTP_HOST}:${SMTP_PORT}` : "disabled"}`);
+  console.log(`  TLS:    ${starttlsEnabled ? "STARTTLS enabled" : "DISABLED — plaintext only"}`);
   console.log(`  Queue:  ${MTA_QUEUE_NAME} (concurrency: ${WORKER_CONCURRENCY})`);
   console.log(`  Health: :${HEALTH_PORT} (/healthz, /readyz)`);
   console.log("=".repeat(60));
