@@ -84,6 +84,24 @@ export const dunningRecords = pgTable(
     /** When the account was downgraded due to dunning failure. */
     downgradedAt: timestamp("downgraded_at", { withTimezone: true }),
 
+    /**
+     * Notification tracking (issue #116c) — dunning previously updated this
+     * table's state machine correctly but never told the customer anything;
+     * a card failure was discoverable only by a Pro feature suddenly
+     * breaking. Each column below is set once the corresponding email has
+     * been sent for the CURRENT cycle, so the sweep/webhook handlers don't
+     * re-send on every retry or interval tick.
+     */
+    paymentFailedEmailSentAt: timestamp("payment_failed_email_sent_at", {
+      withTimezone: true,
+    }),
+    downgradeEmailSentAt: timestamp("downgrade_email_sent_at", {
+      withTimezone: true,
+    }),
+    recoveryEmailSentAt: timestamp("recovery_email_sent_at", {
+      withTimezone: true,
+    }),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

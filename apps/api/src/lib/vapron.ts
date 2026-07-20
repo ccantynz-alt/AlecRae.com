@@ -1,31 +1,38 @@
 /**
- * Vapron Platform Client — typed, dependency-free tRPC wrapper.
+ * Vapron Platform Client — typed, dependency-free wrapper over TWO distinct
+ * transports on the same platform:
  *
- * Vapron (https://api.vapron.ai) is the managed platform AlecRae consumes for
- * transactional email, AI inference, object storage, deploys and more. We talk
- * to its tRPC API over `fetch` rather than importing a vendor SDK so the client
- * stays edge-compatible (Cloudflare Workers) and zero-dependency.
+ *  1. The tRPC admin surface (DNS zone/record management only, below). Kept
+ *     as originally built — no confirmed documentation exists for this one
+ *     (see CLAUDE.md known issue #19), so it stays as-is until it's verified
+ *     independently of the fix in (2).
  *
- * Transport (tRPC + superjson transformer):
- *   Base URL:  https://api.vapron.ai/api/trpc
- *   Auth:      Authorization: Bearer vpk_<key>     (VAPRON_API_KEY)
- *   Mutation:  POST /<procedure>   body { "json": { ...params } }
- *   Query:     GET  /<procedure>?input=<urlenc {"json":{...}}>
- *   Success:   { "result": { "data": { "json": <data> } } }
- *   Error:     { "error":  { "json": { "message", "data": { code, httpStatus } } } }
+ *  2. The plain REST "platform" surface (email, AI, object storage), fixed
+ *     2026-07-21 per issue #83: the client previously guessed a tRPC shape
+ *     for these too (`api.vapron.ai/api/trpc/customerEmail.send` etc.) which
+ *     never matched the real API — every send/AI-call/upload silently 401'd
+ *     or errored in prod. Corrected against Craig-supplied working API docs:
  *
- * NOTE: response schemas below are tolerant (`.passthrough()`, optional fields)
- * because Vapron's full OpenAPI isn't published. They assert the fields we
- * actually read without rejecting extra/unknown keys; tighten as shapes are
- * confirmed against the live API (see CLAUDE.md known issue #19).
+ *       Base URL:  https://vapron.ai/api/platform
+ *       Auth:      Authorization: Bearer <VAPRON_API_KEY>
+ *       Request:   POST <path>   body: plain JSON (no envelope)
+ *       Response:  plain JSON (no unwrap needed)
+ *
+ * Both transports share one fetch-based implementation (no vendor SDK) so
+ * the client stays edge-compatible (Cloudflare Workers) and zero-dependency.
  */
 
 import { z } from "zod";
 
-const DEFAULT_BASE_URL = "https://api.vapron.ai/api/trpc";
+const DEFAULT_TRPC_BASE_URL = "https://api.vapron.ai/api/trpc";
+const DEFAULT_PLATFORM_BASE_URL = "https://vapron.ai/api/platform";
 
 function getBaseUrl(): string {
-  return (process.env["VAPRON_BASE_URL"] ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+  return (process.env["VAPRON_BASE_URL"] ?? DEFAULT_TRPC_BASE_URL).replace(/\/+$/, "");
+}
+
+function getPlatformBaseUrl(): string {
+  return (process.env["VAPRON_PLATFORM_BASE_URL"] ?? DEFAULT_PLATFORM_BASE_URL).replace(/\/+$/, "");
 }
 
 function getApiKey(): string {
@@ -164,6 +171,91 @@ async function request<T>(
   return result.data;
 }
 
+/** Tolerant error-body shape for the plain-REST platform surface. */
+const RestErrorSchema = z.object({
+  error: z.union([z.string(), z.object({ message: z.string().optional() }).passthrough()]).optional(),
+  message: z.string().optional(),
+});
+
+/**
+ * Call a Vapron REST platform endpoint (email/AI/storage — see module header)
+ * and return the schema-validated JSON body. Unlike `request()` above, there
+ * is no envelope to unwrap: the body IS the payload.
+ */
+async function restRequest<T>(
+  method: "GET" | "POST",
+  path: string,
+  schema: z.ZodType<T>,
+  body?: unknown,
+): Promise<T> {
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new VapronError(
+      "Vapron is not configured. Set VAPRON_API_KEY before calling the platform.",
+      "not_configured",
+      0,
+    );
+  }
+
+  const url = `${getPlatformBaseUrl()}${path}`;
+  const headers: Record<string, string> = { Authorization: `Bearer ${apiKey}` };
+  if (method === "POST") headers["Content-Type"] = "application/json";
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      ...(method === "POST" ? { body: JSON.stringify(body ?? {}) } : {}),
+    });
+  } catch (err) {
+    throw new VapronError(
+      `Vapron request failed: ${err instanceof Error ? err.message : "network error"}`,
+      "network_error",
+      0,
+    );
+  }
+
+  const text = await res.text();
+  let json: unknown = undefined;
+  if (text.length > 0) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new VapronError(
+        `Vapron returned a non-JSON response (status ${res.status})`,
+        "invalid_response",
+        res.status,
+      );
+    }
+  }
+
+  if (!res.ok) {
+    const errBody = RestErrorSchema.safeParse(json);
+    const message =
+      errBody.success
+        ? (typeof errBody.data.error === "string"
+            ? errBody.data.error
+            : errBody.data.error?.message ?? errBody.data.message)
+        : undefined;
+    throw new VapronError(
+      message ?? `Vapron request failed with status ${res.status}`,
+      "vapron_error",
+      res.status,
+    );
+  }
+
+  const result = schema.safeParse(json);
+  if (!result.success) {
+    throw new VapronError(
+      `Unexpected Vapron response shape: ${result.error.message}`,
+      "invalid_response",
+      res.status,
+    );
+  }
+  return result.data;
+}
+
 /** Pull the payload out of `{ result: { data: { json } } }`, tolerating plainer shapes. */
 function unwrapResult(json: unknown): unknown {
   if (json && typeof json === "object" && "result" in json) {
@@ -186,6 +278,7 @@ export interface VapronEmailParams {
   to: string;
   subject: string;
   html: string;
+  from?: string;
 }
 
 const EmailSendResponseSchema = z.object({ id: z.string().optional() }).passthrough();
@@ -273,6 +366,14 @@ export interface VapronCreateBucketParams {
   isPublic?: boolean;
 }
 
+export interface VapronUploadUrlParams {
+  bucket: string;
+  path: string;
+  contentType: string;
+}
+
+const UploadUrlResponseSchema = z.object({ uploadUrl: z.string() }).passthrough();
+
 // ─── DNS (authoritative zones on Vapron DNS) ─────────────────────────────────
 // Customer-facing procedures — tenant-scoped to the API key's user on the
 // Vapron side (`dns_zones.user_id`), so this key can only ever touch zones
@@ -329,9 +430,9 @@ export type VapronDeployResult = z.infer<typeof DeploySchema>;
 
 export const vapron = {
   email: {
-    /** Send a transactional email via Vapron. */
+    /** Send a transactional email via Vapron (REST platform surface — see module header). */
     send(params: VapronEmailParams): Promise<VapronEmailResult> {
-      return request("POST", "customerEmail.send", EmailSendResponseSchema, params);
+      return restRequest("POST", "/email/send", EmailSendResponseSchema, params);
     },
   },
 
@@ -343,17 +444,29 @@ export const vapron = {
         messages: params.messages,
       };
       if (params.maxTokens !== undefined) input["max_tokens"] = params.maxTokens;
-      const raw = await request("POST", "aiGateway.complete", AiCompleteSchema, input);
+      const raw = await restRequest("POST", "/ai/chat", AiCompleteSchema, input);
       return { text: extractAiText(raw), raw };
     },
   },
 
   storage: {
-    /** List storage buckets. */
+    /**
+     * Get a presigned upload URL: PUT the file content directly to it from
+     * the caller (server-side or browser), no bytes proxied through our API.
+     * Fixes issue #29's file/voice-message storage stubs.
+     */
+    getUploadUrl(params: VapronUploadUrlParams): Promise<{ uploadUrl: string }> {
+      return restRequest("POST", "/storage/upload-url", UploadUrlResponseSchema, params);
+    },
+    /**
+     * List storage buckets. Not documented on the REST platform surface
+     * (see module header) — kept on the original, unverified tRPC transport
+     * until confirmed. No caller uses this today.
+     */
     listBuckets(): Promise<z.infer<typeof BucketListSchema>> {
       return request("GET", "objectStorage.listBuckets", BucketListSchema);
     },
-    /** Create a storage bucket. */
+    /** Create a storage bucket. Same unverified-tRPC caveat as listBuckets above. */
     createBucket(params: VapronCreateBucketParams): Promise<VapronBucket> {
       return request("POST", "objectStorage.createBucket", BucketSchema, {
         name: params.name,

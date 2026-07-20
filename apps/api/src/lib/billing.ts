@@ -9,6 +9,11 @@ import Stripe from "stripe";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { getDatabase, accounts, dunningRecords, stripeWebhookEvents } from "@alecrae/db";
+import {
+  sendPaymentFailedEmail,
+  sendDowngradedEmail,
+  sendPaymentRecoveredEmail,
+} from "./dunning-emails.js";
 
 // ─── Stripe client ────────────────────────────────────────────────────────
 
@@ -126,6 +131,8 @@ function extractCustomerId(invoice: Stripe.Invoice): string | null {
 interface DunningAccount {
   id: string;
   planTier: PlanId;
+  billingEmail: string;
+  name: string;
 }
 
 /**
@@ -136,13 +143,23 @@ async function findAccountByCustomerId(
 ): Promise<DunningAccount | null> {
   const db = getDatabase();
   const [account] = await db
-    .select({ id: accounts.id, planTier: accounts.planTier })
+    .select({
+      id: accounts.id,
+      planTier: accounts.planTier,
+      billingEmail: accounts.billingEmail,
+      name: accounts.name,
+    })
     .from(accounts)
     .where(eq(accounts.stripeCustomerId, customerId))
     .limit(1);
 
   if (!account) return null;
-  return { id: account.id, planTier: account.planTier as PlanId };
+  return {
+    id: account.id,
+    planTier: account.planTier as PlanId,
+    billingEmail: account.billingEmail,
+    name: account.name,
+  };
 }
 
 /**
@@ -229,6 +246,7 @@ export async function recordPaymentFailure(
       graceExpiresAt,
       recoveredAt: null,
       downgradedAt: null,
+      paymentFailedEmailSentAt: now,
       updatedAt: now,
     })
     .onConflictDoUpdate({
@@ -243,9 +261,18 @@ export async function recordPaymentFailure(
         graceExpiresAt,
         recoveredAt: null,
         downgradedAt: null,
+        paymentFailedEmailSentAt: now,
         updatedAt: now,
       },
     });
+
+  // New cycle — notify the customer immediately. Retries within the same
+  // cycle (the branch above) do not re-notify; the customer already knows.
+  void sendPaymentFailedEmail(
+    { email: account.billingEmail, name: account.name },
+    account.planTier,
+    graceExpiresAt,
+  );
 
   return { state: "past_due", attempt: 1 };
 }
@@ -293,9 +320,15 @@ export async function recordPaymentRecovery(
       planAtRisk: null,
       graceExpiresAt: null,
       recoveredAt: now,
+      recoveryEmailSentAt: now,
       updatedAt: now,
     })
     .where(eq(dunningRecords.accountId, account.id));
+
+  void sendPaymentRecoveredEmail(
+    { email: account.billingEmail, name: account.name },
+    restoredPlan,
+  );
 
   return { state: "active", restoredPlan };
 }
@@ -309,6 +342,16 @@ async function applyDunningDowngrade(accountId: string): Promise<void> {
   const db = getDatabase();
   const now = new Date();
 
+  const [account] = await db
+    .select({
+      planTier: accounts.planTier,
+      billingEmail: accounts.billingEmail,
+      name: accounts.name,
+    })
+    .from(accounts)
+    .where(eq(accounts.id, accountId))
+    .limit(1);
+
   await db
     .update(accounts)
     .set({ planTier: "free", stripeSubscriptionId: null, updatedAt: now })
@@ -316,8 +359,20 @@ async function applyDunningDowngrade(accountId: string): Promise<void> {
 
   await db
     .update(dunningRecords)
-    .set({ state: "downgraded", downgradedAt: now, updatedAt: now })
+    .set({
+      state: "downgraded",
+      downgradedAt: now,
+      downgradeEmailSentAt: now,
+      updatedAt: now,
+    })
     .where(eq(dunningRecords.accountId, accountId));
+
+  if (account && account.planTier !== "free") {
+    void sendDowngradedEmail(
+      { email: account.billingEmail, name: account.name },
+      account.planTier,
+    );
+  }
 }
 
 /**
@@ -602,6 +657,24 @@ export async function handleWebhookEvent(
 
       if (!accountId) return { handled: false };
 
+      // Was this cancellation dunning-driven (payment failure) rather than a
+      // voluntary cancel? Check BEFORE downgrading — a voluntary cancel gets
+      // no "your payment failed" email, only a dunning-cycle cancel does.
+      const dunning = await getDunningRecord(accountId);
+      const wasPastDue = dunning?.state === "past_due";
+
+      const [preDowngradeAccount] = wasPastDue
+        ? await db
+            .select({
+              planTier: accounts.planTier,
+              billingEmail: accounts.billingEmail,
+              name: accounts.name,
+            })
+            .from(accounts)
+            .where(eq(accounts.id, accountId))
+            .limit(1)
+        : [];
+
       await db
         .update(accounts)
         .set({
@@ -613,13 +686,24 @@ export async function handleWebhookEvent(
 
       // Close out any open dunning cycle — the subscription is gone, so the
       // grace window no longer applies. Mark as downgraded if it was past_due.
-      const dunning = await getDunningRecord(accountId);
-      if (dunning && dunning.state === "past_due") {
+      if (wasPastDue) {
         const now = new Date();
         await db
           .update(dunningRecords)
-          .set({ state: "downgraded", downgradedAt: now, updatedAt: now })
+          .set({
+            state: "downgraded",
+            downgradedAt: now,
+            downgradeEmailSentAt: now,
+            updatedAt: now,
+          })
           .where(eq(dunningRecords.accountId, accountId));
+
+        if (preDowngradeAccount && preDowngradeAccount.planTier !== "free") {
+          void sendDowngradedEmail(
+            { email: preDowngradeAccount.billingEmail, name: preDowngradeAccount.name },
+            preDowngradeAccount.planTier,
+          );
+        }
       }
 
       return { handled: true, action: "downgraded_to_free" };
