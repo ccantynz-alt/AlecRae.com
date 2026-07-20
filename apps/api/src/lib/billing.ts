@@ -403,6 +403,7 @@ export async function createCheckoutSession(
   const [account] = await db
     .select({
       stripeCustomerId: accounts.stripeCustomerId,
+      stripeSubscriptionId: accounts.stripeSubscriptionId,
       billingEmail: accounts.billingEmail,
       name: accounts.name,
     })
@@ -412,6 +413,26 @@ export async function createCheckoutSession(
 
   if (!account) {
     throw new Error(`Account ${accountId} not found`);
+  }
+
+  // Previously created a brand-new Checkout Session unconditionally, with
+  // no check for an existing active subscription first — an "Upgrade to
+  // Pro" button that doesn't check current plan risked a second, CONCURRENT
+  // Stripe subscription for an already-subscribed customer (double
+  // billing) rather than an upgrade of the existing one (issue #116a).
+  // Plan changes on an existing subscription belong in the billing portal
+  // (createPortalSession below), which Stripe handles correctly with
+  // proration; Checkout Sessions are for a customer's FIRST subscription.
+  if (account.stripeSubscriptionId) {
+    const existingSub = await stripe.subscriptions
+      .retrieve(account.stripeSubscriptionId)
+      .catch(() => null);
+    const activeStatuses: Stripe.Subscription.Status[] = ["active", "trialing", "past_due"];
+    if (existingSub && activeStatuses.includes(existingSub.status)) {
+      throw new Error(
+        "This account already has an active subscription. Use the billing portal to change plans instead of creating a new checkout session.",
+      );
+    }
   }
 
   let customerId = account.stripeCustomerId;
