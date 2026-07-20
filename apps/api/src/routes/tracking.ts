@@ -10,8 +10,8 @@
  */
 
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
-import { getDatabase, emails, events } from "@alecrae/db";
+import { eq, and } from "drizzle-orm";
+import { getDatabase, emails, events, domains, suppressionLists } from "@alecrae/db";
 import { enqueueWebhookDelivery } from "../lib/webhook-dispatcher.js";
 import { recordEngagementEvent } from "./send-time.js";
 
@@ -176,12 +176,13 @@ tracking.post("/:emailId/unsubscribe", async (c) => {
   const emailId = c.req.param("emailId");
   const db = getDatabase();
 
-  // Look up the email to find the sender domain
+  // Look up the email to find the sender domain + recipient
   const [emailRecord] = await db
     .select({
       id: emails.id,
       fromAddress: emails.fromAddress,
       accountId: emails.accountId,
+      toAddresses: emails.toAddresses,
     })
     .from(emails)
     .where(eq(emails.id, emailId))
@@ -189,6 +190,38 @@ tracking.post("/:emailId/unsubscribe", async (c) => {
 
   if (!emailRecord) {
     return c.text("Not found", 404);
+  }
+
+  // Previously this only recorded an analytics/webhook event — the
+  // suppression list (the thing messages.ts's send path actually checks
+  // before allowing a future send) was never written to. The RFC 8058
+  // headers and one-click endpoint were fully correct; honoring the
+  // opt-out itself was the missing half, a real CAN-SPAM/GDPR exposure.
+  const senderDomain = emailRecord.fromAddress.split("@")[1]?.toLowerCase();
+  // For a multi-recipient send this link can't disambiguate which
+  // recipient clicked it — same known approximation already used for
+  // engagement attribution elsewhere in this file (issue #90): attribute
+  // to the first recipient rather than silently suppressing nobody.
+  const recipientEmail = emailRecord.toAddresses[0]?.address?.toLowerCase();
+
+  if (senderDomain && recipientEmail) {
+    const [domainRecord] = await db
+      .select({ id: domains.id })
+      .from(domains)
+      .where(and(eq(domains.domain, senderDomain), eq(domains.accountId, emailRecord.accountId)))
+      .limit(1);
+
+    if (domainRecord) {
+      await db
+        .insert(suppressionLists)
+        .values({
+          id: generateId(),
+          email: recipientEmail,
+          domainId: domainRecord.id,
+          reason: "unsubscribe",
+        })
+        .onConflictDoNothing();
+    }
   }
 
   // Record unsubscribe event
