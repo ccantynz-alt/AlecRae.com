@@ -9,7 +9,9 @@ import { initLocalAI, grammarCheck as localGrammarCheck } from "../../../lib/loc
 import { RecipientAutocomplete } from "../../../components/RecipientAutocomplete";
 import { SendTimePanel } from "../../../components/SendTimePanel";
 import { AnimatedCompose } from "../../../components/AnimatedCompose";
-import { OfflineComposeBanner } from "../../../components/OfflineComposeBanner";
+import { OfflineComposeBanner, useOnlineStatus } from "../../../components/OfflineComposeBanner";
+import { queueOutboxEmail } from "../../../lib/offline-store";
+import { getSyncEngine } from "../../../lib/sync-engine";
 import { ComposeSpellcheckPanel } from "../../../components/compose-spellcheck-panel";
 import { ComposeAssistPanel, type AssistSlot } from "../../../components/compose-assist-panel";
 import { ComposeRecallPanel } from "../../../components/compose-recall-panel";
@@ -52,6 +54,7 @@ export default function ComposePageWrapper() {
 function ComposePage(): React.ReactNode {
   const searchParams = useSearchParams();
   const reduced = useAlecRaeReducedMotion();
+  const isOnline = useOnlineStatus();
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");
@@ -99,6 +102,14 @@ function ComposePage(): React.ReactNode {
   // cheap and never blocks typing.
   useEffect(() => {
     void initLocalAI({ probeOnly: true });
+  }, []);
+
+  // Ensure the sync engine singleton exists so its online/offline listeners
+  // are registered — without this, a user who lands directly on /compose
+  // (deep link, PWA shortcut) without ever visiting /inbox first would have
+  // no engine running to flush a queued offline send on reconnect.
+  useEffect(() => {
+    getSyncEngine();
   }, []);
 
   const startUndoCountdown = useCallback((id: string, untilIso: string) => {
@@ -336,6 +347,16 @@ function ComposePage(): React.ReactNode {
       };
       const ccList = mergeRecipientLists(data.cc, contactsCc).map((e) => ({ email: e }));
       if (ccList.length > 0) sendPayload.cc = ccList;
+
+      // OfflineComposeBanner tells the user their email "will be queued and
+      // sent automatically when you reconnect" — this used to be false; the
+      // send just failed and the email was lost. Queue for real instead of
+      // even attempting the network call while known offline.
+      if (!isOnline) {
+        await queueForOfflineSend(fromEmail, toList, ccList, data);
+        return;
+      }
+
       const result = await messagesApi.send(sendPayload);
       setLastSentEmailId(result.id);
       if (result.undoableUntil) {
@@ -345,10 +366,44 @@ function ComposePage(): React.ReactNode {
         setStatus(`Email queued successfully (ID: ${result.id})`);
       }
     } catch (err) {
+      // A network-type failure (not a validation/API error) mid-send means
+      // connectivity dropped between the offline check above and the fetch
+      // actually going out — fall back to queueing rather than losing the
+      // email outright.
+      if (err instanceof TypeError && !navigator.onLine) {
+        const fromEmail = data.from || userEmail;
+        const toList = mergeRecipientLists(data.to, contactsTo);
+        const ccList = mergeRecipientLists(data.cc, contactsCc).map((e) => ({ email: e }));
+        if (fromEmail) {
+          await queueForOfflineSend(fromEmail, toList, ccList, data);
+          return;
+        }
+      }
       setStatus(`Error: ${err instanceof Error ? err.message : "Failed to send"}`);
     } finally {
       setSending(false);
     }
+  };
+
+  /** Queue a composed email in the local outbox for automatic send on reconnect. */
+  const queueForOfflineSend = async (
+    fromEmail: string,
+    toList: string[],
+    ccList: { email: string }[],
+    data: ComposeData,
+  ): Promise<void> => {
+    await queueOutboxEmail({
+      id: crypto.randomUUID(),
+      from: { email: fromEmail },
+      to: toList.map((e) => ({ email: e })),
+      ...(ccList.length > 0 ? { cc: ccList } : {}),
+      subject: data.subject,
+      body: data.body,
+      bodyFormat: "html",
+      queuedAt: Date.now(),
+      retryCount: 0,
+    });
+    setStatus("You're offline — this email is queued and will send automatically when you reconnect.");
   };
 
   const contentVariants = withReducedMotion(composeEnter, reduced);

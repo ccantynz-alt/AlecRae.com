@@ -187,9 +187,16 @@ export class SyncEngine {
 
   private handleOnline(): void {
     this.online = true;
-    // Resume sync and flush outbox immediately when coming back online
+    // Flush the outbox unconditionally — queued sends must go out the
+    // moment connectivity returns regardless of whether periodic polling
+    // sync happens to be running. This was previously gated behind
+    // `intervalId !== null` (i.e. startPeriodicSync() having been called),
+    // which nothing in the app ever calls — reconnect never flushed the
+    // outbox at all, silently breaking the "sent automatically when you
+    // reconnect" promise shown in OfflineComposeBanner.
+    void this.flushOutbox();
     if (this.intervalId !== null) {
-      // Periodic sync was active before going offline — trigger immediate sync
+      // Periodic sync was active before going offline — trigger a full sync too.
       void this.syncNow();
     }
   }
@@ -363,7 +370,7 @@ export class SyncEngine {
     for (const email of outboxEmails) {
       try {
         const sendPayload: Parameters<typeof messagesApi.send>[0] = {
-          from: email.to[0] ?? { email: "" },
+          from: email.from,
           to: email.to,
           subject: email.subject,
         };

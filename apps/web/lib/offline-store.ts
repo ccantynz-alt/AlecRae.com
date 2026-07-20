@@ -74,6 +74,7 @@ export interface CachedDraft {
 
 export interface OutboxEmail {
   id: string;
+  from: EmailContact;
   to: EmailContact[];
   cc?: EmailContact[];
   bcc?: EmailContact[];
