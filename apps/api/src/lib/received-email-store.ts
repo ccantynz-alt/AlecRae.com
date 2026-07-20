@@ -18,6 +18,7 @@ import { and, eq } from "drizzle-orm";
 import { getDatabase, emails, events } from "@alecrae/db";
 import type { ParsedEmail } from "@alecrae/email-parser";
 import { aiComplete } from "./ai.js";
+import { redactPii } from "./pii-redact.js";
 import { runRulesForEmail } from "./rule-engine.js";
 import { enqueueEmail } from "@alecrae/ai-engine/embeddings/auto-indexer";
 import { enqueueWebhookDelivery } from "./webhook-dispatcher.js";
@@ -89,7 +90,11 @@ interface TriageResult {
 const TRIAGE_SYSTEM = "You are an email classification assistant. Respond with valid JSON only — no prose, no markdown fences.";
 
 function buildTriagePrompt(input: ReceivedEmailInput): string {
-  const bodyPreview = (input.textBody ?? input.htmlBody ?? "").slice(0, 500);
+  // Every inbound email is triaged automatically — the user never opted
+  // into this specific email going to Claude, unlike the ai-writing.ts
+  // endpoints a user explicitly invokes. Redact high-confidence PII
+  // (SSNs, card numbers, leaked API keys) before it leaves the building.
+  const bodyPreview = redactPii((input.textBody ?? input.htmlBody ?? "").slice(0, 500)).text;
   return [
     'Classify this email. Return JSON only:',
     '{',
