@@ -587,9 +587,13 @@ gamification.get(
     const query = getValidatedQuery<LeaderboardQuery>(c);
     const db = getDatabase();
 
-    // For team leaderboard, we query all streaks.
-    // In production, this would be scoped to the team. For now, we return
-    // all users (team scoping will be added when team management is live).
+    // Was previously unscoped ("team scoping will be added when team
+    // management is live") — queried every account's streaks and returned
+    // their accountIds directly to the caller, leaking every tenant's
+    // streak data and account IDs. Same bug class as the already-fixed
+    // productivity leaderboard (issue #75a): scoped to the caller's own
+    // account until there's a per-user (not per-account) tracking
+    // dimension to build a real cross-member leaderboard on top of.
     const orderColumn =
       query.sortBy === "zeros"
         ? userStreaks.totalZeros
@@ -606,7 +610,7 @@ gamification.get(
         lastZeroDate: userStreaks.lastZeroDate,
       })
       .from(userStreaks)
-      .where(eq(userStreaks.enabled, true))
+      .where(and(eq(userStreaks.enabled, true), eq(userStreaks.accountId, auth.accountId)))
       .orderBy(desc(orderColumn))
       .limit(query.limit);
 
