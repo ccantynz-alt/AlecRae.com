@@ -1,6 +1,6 @@
 # Morning Setup — Get AlecRae Live Today
 
-> **Last updated: 2026-07-13 12:10 UTC**
+> **Last updated: 2026-07-21 08:15 UTC**
 
 This is the single document you follow on the box. Every command is copy-pasteable. No options — one path, start to finish.
 
@@ -133,16 +133,28 @@ You need this so "Sign in with Google" works on the login page.
    - App name: `AlecRae`
    - User support email: `ccantynz@gmail.com`
    - Developer contact: `ccantynz@gmail.com`
-   - Click **Save and Continue** (skip Scopes, skip Test users)
-   - Click **Back to Dashboard**
+   - Click **Save and Continue**
+   - **Scopes** — click **Add or Remove Scopes**, add:
+     - `.../auth/gmail.readonly`
+     - `.../auth/admin.directory.user.readonly` (needed for Google Workspace import)
+     - Click **Update** → **Save and Continue**
+   - **Test users** — click **+ Add Users**, add `ccantynz@gmail.com` (and any
+     other Google accounts you'll test with). **Do not skip this step** — the
+     app stays in "Testing" publishing status until Google verifies it (a
+     separate, slower process), and in Testing status ONLY accounts listed
+     here can complete the OAuth flow. Every other Google account gets
+     `Error 403: access_denied — alecrae.com has not completed the Google
+     verification process`, even though nothing is actually broken in the app.
+   - Click **Save and Continue** → **Back to Dashboard**
 6. Left sidebar → **APIs & Services** → **Credentials**
    - Click **+ Create Credentials** → **OAuth 2.0 Client ID**
    - Application type: **Web application**
    - Name: `AlecRae Web`
-   - Under **Authorized redirect URIs**, add BOTH:
+   - Under **Authorized redirect URIs**, add ALL THREE:
      ```
      https://api.alecrae.com/v1/auth/callback/google
      https://api.alecrae.com/v1/connect/callback/gmail
+     https://api.alecrae.com/v1/import/workspace/callback
      ```
    - Click **Create**
 7. A dialog appears with **Client ID** and **Client Secret** — copy both
