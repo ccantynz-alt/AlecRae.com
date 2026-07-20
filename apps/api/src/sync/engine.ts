@@ -15,7 +15,7 @@
  *   5. Background worker keeps accounts in sync
  */
 
-import { storeReceivedEmail } from "../lib/received-email-store.js";
+import { storeReceivedEmail, applyRemoteDeletion } from "../lib/received-email-store.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -291,7 +291,18 @@ export async function syncGmailMessages(
               }
             }
             if (entry.messagesDeleted) {
-              result.messagesDeleted += entry.messagesDeleted.length;
+              // Previously only counted — nothing ever applied the
+              // deletion locally, so a message deleted on Gmail's side
+              // stayed permanently visible here. Moves the local row to
+              // trash (same convention DELETE /v1/messages/:id uses),
+              // never a hard delete from a remote signal alone. Rows
+              // synced before providerMessageId existed can't be matched
+              // and are silently skipped — a known limitation, not
+              // pretended-away.
+              for (const deleted of entry.messagesDeleted) {
+                const applied = await applyRemoteDeletion(account.userId, deleted.message.id);
+                if (applied) result.messagesDeleted++;
+              }
             }
           }
         }
@@ -450,6 +461,7 @@ async function fetchAndStoreGmailMessage(
     textBody: textBody ?? null,
     htmlBody: htmlBody ?? null,
     messageId: parsed.messageId ?? null,
+    providerMessageId: msg.id,
     inReplyTo: parsed.inReplyTo ?? null,
     references,
     ...(parsed.receivedAt !== undefined ? { receivedAt: parsed.receivedAt } : {}),

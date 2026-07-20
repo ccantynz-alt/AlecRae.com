@@ -7,6 +7,7 @@ import {
   integer,
   jsonb,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { accounts } from "./users.js";
@@ -95,6 +96,17 @@ export const emails = pgTable(
      *  external accounts ("gmail"/"outlook"/"mbox"/"eml"). Null on legacy rows. */
     source: text("source"),
 
+    /** The connected provider's own internal message id (Gmail's `id`,
+     *  Outlook's `id`) — distinct from `messageId` above, which is the
+     *  RFC 822 `Message-ID:` header. Without this there was no way to
+     *  correlate a provider-reported deletion back to a local row: Gmail's
+     *  incremental-sync history API reports deletions by its own internal
+     *  id, which the RFC 822 Message-ID can't be recovered from after the
+     *  fact (the message is already gone server-side by the time the
+     *  deletion event arrives). Null for outbound/inbound-MTA mail and for
+     *  rows synced before this column existed. */
+    providerMessageId: text("provider_message_id"),
+
     // Metadata
     tags: jsonb("tags").notNull().$type<string[]>().default([]),
     metadata: jsonb("metadata").$type<Record<string, string>>(),
@@ -134,6 +146,18 @@ export const emails = pgTable(
     index("emails_account_status_idx").on(table.accountId, table.status),
     index("emails_scheduled_at_idx").on(table.scheduledAt),
     index("emails_account_folder_idx").on(table.accountId, table.folder),
+    index("emails_account_provider_message_id_idx").on(table.accountId, table.providerMessageId),
+    // Dedup was previously a pure application-level SELECT-then-INSERT
+    // check (lib/received-email-store.ts) with no DB-level guarantee — a
+    // classic TOCTOU race: two overlapping syncs for the same account
+    // (a user-triggered "sync now" racing the 5-minute background sweep)
+    // could both pass the existence check and insert duplicate rows.
+    // Synthetic ids for messages with no real Message-ID header are
+    // always fresh UUIDs, so they never collide here; outbound sends
+    // generate a fresh id per send and idempotent retries are deduped
+    // upstream (Redis, before the DB write), so this is safe for both
+    // paths, not just inbound sync.
+    uniqueIndex("emails_account_message_id_idx").on(table.accountId, table.messageId),
   ],
 );
 

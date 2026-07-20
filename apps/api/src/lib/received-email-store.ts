@@ -41,6 +41,10 @@ export interface ReceivedEmailInput {
   inReplyTo?: string | null;
   references?: string[] | null;
   receivedAt?: Date;
+  /** The connected provider's own internal message id (Gmail's `id`,
+   *  Outlook's `id`) — needed to correlate a later provider-reported
+   *  deletion back to this row (see emails.providerMessageId). */
+  providerMessageId?: string | null;
   /** Provider-reported read/starred state — previously computed by the Gmail/
    *  Outlook parser and then silently dropped before reaching storage. */
   isRead?: boolean;
@@ -190,30 +194,51 @@ export async function storeReceivedEmail(
   const cc = input.cc && input.cc.length > 0 ? input.cc.map(normalizeAddr) : null;
   const refs = input.references && input.references.length > 0 ? input.references : null;
 
-  await db.insert(emails).values({
-    id,
-    accountId: input.accountId,
-    domainId: null,
-    messageId,
-    fromAddress: input.from.address || "unknown@unknown",
-    fromName: input.from.name ?? null,
-    toAddresses: input.to.map(normalizeAddr),
-    ccAddresses: cc,
-    subject: input.subject?.trim() || "(no subject)",
-    textBody: input.textBody ?? null,
-    htmlBody: input.htmlBody ?? null,
-    inReplyTo: input.inReplyTo ?? null,
-    references: refs,
-    status: "delivered",
-    tags: ["inbox", `import:${input.source}`],
-    source: input.source,
-    isRead: input.isRead ?? false,
-    isStarred: input.isStarred ?? false,
-    folder: "inbox",
-    metadata: { receivedAt: received.toISOString(), imported: "true" },
-    createdAt: received,
-    updatedAt: now,
-  });
+  // The SELECT above closes most of the race but not all of it — two
+  // overlapping calls (a user-triggered "sync now" racing the 5-minute
+  // background sweep) can both pass the check before either inserts.
+  // onConflictDoNothing against the new (accountId, messageId) unique
+  // index makes the insert itself safe regardless: if a concurrent
+  // insert won, this one silently no-ops instead of duplicating the row.
+  const insertedRows = await db
+    .insert(emails)
+    .values({
+      id,
+      accountId: input.accountId,
+      domainId: null,
+      messageId,
+      providerMessageId: input.providerMessageId ?? null,
+      fromAddress: input.from.address || "unknown@unknown",
+      fromName: input.from.name ?? null,
+      toAddresses: input.to.map(normalizeAddr),
+      ccAddresses: cc,
+      subject: input.subject?.trim() || "(no subject)",
+      textBody: input.textBody ?? null,
+      htmlBody: input.htmlBody ?? null,
+      inReplyTo: input.inReplyTo ?? null,
+      references: refs,
+      status: "delivered",
+      tags: ["inbox", `import:${input.source}`],
+      source: input.source,
+      isRead: input.isRead ?? false,
+      isStarred: input.isStarred ?? false,
+      folder: "inbox",
+      metadata: { receivedAt: received.toISOString(), imported: "true" },
+      createdAt: received,
+      updatedAt: now,
+    })
+    .onConflictDoNothing({ target: [emails.accountId, emails.messageId] })
+    .returning({ id: emails.id });
+
+  if (insertedRows.length === 0) {
+    // Lost the race — a concurrent call already inserted this message.
+    const [existing] = await db
+      .select({ id: emails.id })
+      .from(emails)
+      .where(and(eq(emails.accountId, input.accountId), eq(emails.messageId, messageId)))
+      .limit(1);
+    return { stored: false, id: existing?.id ?? null };
+  }
 
   // AI auto-triage: fire-and-forget — never blocks the caller.
   void runAiTriage(id, input);
@@ -244,6 +269,35 @@ export async function storeReceivedEmail(
   void emitReceivedWebhook(id, input);
 
   return { stored: true, id };
+}
+
+/**
+ * Apply a provider-reported deletion locally (moves the row to the trash
+ * folder, matching the same soft-delete convention `DELETE /v1/messages/:id`
+ * already uses — never a hard delete for a remote signal alone).
+ *
+ * Previously Gmail's incremental-sync history API reported deletions
+ * (`messagesDeleted`) but nothing ever applied them — the count was added
+ * to a result object and discarded. A message deleted on Gmail's side
+ * stayed permanently visible in AlecRae's inbox. Returns true if a local
+ * row was found and updated.
+ */
+export async function applyRemoteDeletion(
+  accountId: string,
+  providerMessageId: string,
+): Promise<boolean> {
+  const db = getDatabase();
+  const result = await db
+    .update(emails)
+    .set({ folder: "trash", updatedAt: new Date() })
+    .where(
+      and(
+        eq(emails.accountId, accountId),
+        eq(emails.providerMessageId, providerMessageId),
+      ),
+    )
+    .returning({ id: emails.id });
+  return result.length > 0;
 }
 
 /** Record an `email.received` event and enqueue webhook delivery. Never throws. */
