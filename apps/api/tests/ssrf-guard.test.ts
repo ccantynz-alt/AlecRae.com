@@ -264,4 +264,41 @@ describe("safeFetch — redirect re-validation", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.reason).toBe("too_many_redirects");
   });
+
+  it("sends method + body on the initial request (needed for POST-based webhook delivery, issue #108)", async () => {
+    lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+
+    const fetchMock = vi.fn(() => Promise.resolve(new Response("ok", { status: 200 })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await safeFetch("https://example.com/webhook", {
+      method: "POST",
+      body: JSON.stringify({ hello: "world" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify({ hello: "world" }));
+  });
+
+  it("does not re-send the body to a redirect target", async () => {
+    lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, { status: 302, headers: { location: "https://example.com/final" } }),
+      )
+      .mockResolvedValueOnce(new Response("OK", { status: 200 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await safeFetch("https://example.com/start", { method: "POST", body: "secret-payload" });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, secondInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(secondInit.body).toBeUndefined();
+  });
 });

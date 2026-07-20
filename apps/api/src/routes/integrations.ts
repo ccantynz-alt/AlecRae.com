@@ -19,6 +19,7 @@ import {
   getValidatedBody,
 } from "../middleware/validator.js";
 import { getDatabase, webhookIntegrations } from "@alecrae/db";
+import { safeFetch } from "../lib/ssrf-guard.js";
 
 function generateId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -253,13 +254,17 @@ integrationsRouter.post(
         headers["X-AlecRae-Signature"] = "sha256=" + hexSig;
       }
 
-      const response = await fetch(integration.webhookUrl, {
+      const result = await safeFetch(integration.webhookUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(testPayload),
         signal: AbortSignal.timeout(10000),
       });
 
+      if (!result.ok) {
+        return c.json({ data: { success: false, error: `Blocked: ${result.error.detail}` } });
+      }
+      const response = result.value;
       return c.json({ data: { success: response.ok, statusCode: response.status, statusText: response.statusText } });
     } catch (err) {
       return c.json({ data: { success: false, error: err instanceof Error ? err.message : "Unknown error" } });

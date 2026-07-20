@@ -21,6 +21,7 @@ import {
   webhookDeliveries,
   events,
 } from "@alecrae/db";
+import { safeFetch } from "./ssrf-guard.js";
 
 // ─── Configuration ─────────────────────────────────────────────────────────
 
@@ -320,7 +321,14 @@ async function processWebhookJob(job: Job<WebhookJobData>): Promise<void> {
   let success = false;
 
   try {
-    const response = await fetch(webhook.url, {
+    // Webhook URLs are user-supplied at registration time — without SSRF
+    // protection, a registered webhook.url of e.g. http://169.254.169.254/
+    // or an internal admin port gets fetched on every real product event,
+    // not just a one-off test (found in the 2026-07-20 audit, issue #108;
+    // the /test endpoint's SSRF gap is fixed separately in integrations.ts —
+    // this is the delivery path that actually matters, since it fires
+    // continuously, not just when a user clicks "test").
+    const result = await safeFetch(webhook.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -333,18 +341,24 @@ async function processWebhookJob(job: Job<WebhookJobData>): Promise<void> {
       signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
     });
 
-    statusCode = response.status;
+    if (!result.ok) {
+      responseBody = `SSRF guard blocked delivery: ${result.error.detail}`.slice(0, 4096);
+      // statusCode remains null — treated the same as a network-level failure below.
+    } else {
+      const response = result.value;
+      statusCode = response.status;
 
-    // Read response body (truncated to 4KB to avoid storing huge responses)
-    try {
-      const text = await response.text();
-      responseBody = text.slice(0, 4096);
-    } catch {
-      // leave responseBody as null
+      // Read response body (truncated to 4KB to avoid storing huge responses)
+      try {
+        const text = await response.text();
+        responseBody = text.slice(0, 4096);
+      } catch {
+        // leave responseBody as null
+      }
+
+      // Consider 2xx as success
+      success = statusCode >= 200 && statusCode < 300;
     }
-
-    // Consider 2xx as success
-    success = statusCode >= 200 && statusCode < 300;
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     responseBody = error.message.slice(0, 4096);

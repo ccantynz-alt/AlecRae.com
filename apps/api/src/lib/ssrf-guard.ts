@@ -329,6 +329,13 @@ export async function validateUrl(rawUrl: string): Promise<SsrfResult<URL>> {
 // ─── Safe fetch ─────────────────────────────────────────────────────────────
 
 export interface SafeFetchOptions {
+  /** HTTP method (default GET). */
+  readonly method?: string;
+  /** Request body — only sent on the initial request, never re-sent to a
+   *  redirect target (matches fetch's own "manual" redirect semantics: we
+   *  re-validate and re-issue each hop ourselves, and forwarding a POST
+   *  body across an attacker-controlled redirect is its own risk). */
+  readonly body?: string;
   /** Standard fetch headers to send. */
   readonly headers?: Record<string, string>;
   /** AbortSignal for timeout/cancellation. */
@@ -365,6 +372,8 @@ export async function safeFetch(
 
     const fetchInit: RequestInit = {
       redirect: "manual",
+      method: options.method ?? "GET",
+      ...(hops === 0 && options.body !== undefined ? { body: options.body } : {}),
       ...(options.headers !== undefined ? { headers: options.headers } : {}),
       ...(options.signal !== undefined ? { signal: options.signal } : {}),
     };

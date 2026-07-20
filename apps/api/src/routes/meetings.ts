@@ -17,6 +17,7 @@ import {
   getValidatedBody,
 } from "../middleware/validator.js";
 import { getDatabase, emails, meetingLinks } from "@alecrae/db";
+import { safeFetch } from "../lib/ssrf-guard.js";
 import { detectMeetingFromThread } from "@alecrae/ai-engine/meetings/transcript-linker";
 import type { LinkerEmail } from "@alecrae/ai-engine/meetings/types";
 
@@ -492,8 +493,26 @@ meetings.post(
       }
 
       try {
-        // Download the audio file
-        const audioRes = await fetch(audioUrl);
+        // Download the audio file. audioUrl can come straight from the
+        // request body (input.audioUrl) — without SSRF protection this is
+        // worse than blind SSRF: the fetched response gets transcribed and
+        // the text handed back to the caller, an exfiltration channel for
+        // internal service responses / cloud metadata, not just a fetch
+        // with no observable result (found in the 2026-07-20 audit, #108).
+        const audioFetch = await safeFetch(audioUrl);
+        if (!audioFetch.ok) {
+          return c.json(
+            {
+              error: {
+                type: "validation_error",
+                message: `Refused to fetch audio from ${audioUrl}: ${audioFetch.error.detail}`,
+                code: "audio_url_blocked",
+              },
+            },
+            400,
+          );
+        }
+        const audioRes = audioFetch.value;
         if (!audioRes.ok) {
           return c.json(
             {
