@@ -16,7 +16,7 @@ import { sql } from "drizzle-orm";
 import Redis from "ioredis";
 import { Queue } from "bullmq";
 import { MeiliSearch } from "meilisearch";
-import { getDeployedCommit, getDriftStatus } from "../lib/deploy-info.js";
+import { getDeployedCommit, getDriftStatus, getServiceDriftStatus } from "../lib/deploy-info.js";
 
 const health = new Hono();
 
@@ -161,6 +161,16 @@ health.get("/", async (c) => {
     overallStatus = "degraded";
   }
 
+  // Service/port drift (Known Issue #112): scripts/check-service-drift.sh —
+  // an unexpected publicly-listening port is exactly issue #105's open-relay
+  // signature. Still 200 (visibility, not an outage signal — the box itself
+  // may be perfectly healthy), but surfaced prominently since this is the
+  // highest-value signal this endpoint can carry.
+  const serviceDriftStatus = getServiceDriftStatus();
+  if (serviceDriftStatus?.drifted && overallStatus === "ok") {
+    overallStatus = "degraded";
+  }
+
   const statusCode = overallStatus === "ok" ? 200 : overallStatus === "degraded" ? 200 : 503;
 
   return c.json(
@@ -172,6 +182,7 @@ health.get("/", async (c) => {
       timestamp: new Date().toISOString(),
       services,
       deployDrift: driftStatus,
+      serviceDrift: serviceDriftStatus,
     },
     statusCode,
   );
@@ -207,6 +218,7 @@ interface DetailedHealthReport {
   missing_optional: string[];
   ready_for_production: boolean;
   deployDrift: ReturnType<typeof getDriftStatus>;
+  serviceDrift: ReturnType<typeof getServiceDriftStatus>;
 }
 
 /** Run a quick Meilisearch health probe. */
@@ -465,6 +477,7 @@ health.get("/detailed", async (c) => {
     missing_optional,
     ready_for_production,
     deployDrift: getDriftStatus(),
+    serviceDrift: getServiceDriftStatus(),
   };
 
   const httpStatus = overallStatus === "critical" ? 503 : 200;

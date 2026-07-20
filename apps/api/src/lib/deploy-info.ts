@@ -66,3 +66,30 @@ export function getDriftStatus(): DriftStatus | null {
     return null;
   }
 }
+
+interface ServiceDriftStatus {
+  checkedAt: string;
+  drifted: boolean;
+  downServices: string[];
+  unexpectedListeningPorts: string[];
+}
+
+const SERVICE_DRIFT_STATUS_FILE =
+  process.env["SERVICE_DRIFT_STATUS_FILE"] ?? "/opt/alecrae/service-drift-status.json";
+
+/**
+ * Reads the status file written by `scripts/check-service-drift.sh`
+ * (Known Issue #112) — catches the class of drift that #78's git-commit
+ * check doesn't: a service running that shouldn't be (an unexpected
+ * public listening port — issue #105's exact signature) or an expected
+ * service that isn't. Returns null if the file doesn't exist yet (e.g.
+ * local dev, or the timer isn't installed on this box) — never throws.
+ */
+export function getServiceDriftStatus(): ServiceDriftStatus | null {
+  try {
+    const raw = readFileSync(SERVICE_DRIFT_STATUS_FILE, "utf-8");
+    return JSON.parse(raw) as ServiceDriftStatus;
+  } catch {
+    return null;
+  }
+}
