@@ -692,6 +692,21 @@ export async function syncOutlookMessages(
     };
 
     for (const msg of data.value) {
+      // Outlook's delta query — which this sync already uses — reports
+      // deletions as items with an "@removed" marker instead of normal
+      // message fields (per Microsoft Graph's documented delta format).
+      // Previously unhandled: every item was parsed as a real message
+      // unconditionally, which for a removed-marker item (no subject/
+      // from/body) would have produced a garbage row, not just silently
+      // missed the deletion. Outlook sync also never attempted to detect
+      // deletions at all, unlike Gmail's history API (fixed earlier this
+      // session) — this closes both gaps (issue #113(e)).
+      if (msg["@removed"]) {
+        const applied = await applyRemoteDeletion(account.userId, msg.id);
+        if (applied) result.messagesDeleted++;
+        continue;
+      }
+
       const parsed = parseOutlookMessage(msg, account.id);
 
       const referencesRaw: string[] = [];
@@ -713,6 +728,7 @@ export async function syncOutlookMessages(
         textBody: parsed.textBody ?? null,
         htmlBody: parsed.htmlBody ?? null,
         messageId: parsed.messageId ?? null,
+        providerMessageId: msg.id,
         inReplyTo: null,
         references: referencesRaw,
         ...(parsed.receivedAt !== undefined ? { receivedAt: parsed.receivedAt } : {}),
@@ -737,6 +753,8 @@ export async function syncOutlookMessages(
 
 interface OutlookMessage {
   id: string;
+  /** Present instead of normal message fields on a delta-query deletion entry. */
+  "@removed"?: { reason: string };
   conversationId: string;
   subject: string;
   bodyPreview: string;
