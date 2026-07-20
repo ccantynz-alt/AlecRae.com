@@ -11,6 +11,7 @@
  */
 
 import { vapron, isVapronConfigured } from "./vapron.js";
+import { globalAiCircuitBreaker } from "./ai-circuit-breaker.js";
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION = "2023-06-01";
@@ -105,6 +106,17 @@ async function callVapron(params: AiCompleteParams): Promise<string> {
  * Throws AiError("no_provider") only when neither provider is available/usable.
  */
 export async function aiComplete(params: AiCompleteParams): Promise<AiCompleteResult> {
+  // Process-wide safety net, independent of the per-account Redis quota
+  // (ai-quota.ts), which deliberately fails open on a Redis outage — see
+  // ai-circuit-breaker.ts. Should only ever trip on a genuine anomaly.
+  const breaker = globalAiCircuitBreaker.checkAndRecord();
+  if (!breaker.allowed) {
+    throw new AiError(
+      "AI call volume circuit breaker is tripped — too many AI calls process-wide in a short window. Retry shortly.",
+      "circuit_breaker_tripped",
+    );
+  }
+
   // Primary: Claude.
   if (getAnthropicKey()) {
     try {
