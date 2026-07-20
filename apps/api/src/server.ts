@@ -150,6 +150,7 @@ import { startMailboxResyncWorker, stopMailboxResyncWorker } from "./lib/mailbox
 import { processDLQ } from "./lib/dlq-processor.js";
 import { reconcileStorageUsage } from "./lib/storage-quota.js";
 import { processExpiredGrace } from "./lib/billing.js";
+import { processScheduledAccountDeletions } from "./lib/account-deletion.js";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -941,6 +942,17 @@ const snoozeResurfaceInterval = setInterval(() => {
   });
 }, 2 * 60 * 1000);
 snoozeResurfaceInterval.unref();
+
+// Permanently delete accounts whose 30-day soft-delete grace window
+// (Forbidden List rule #13) has elapsed. DELETE /v1/account only marks
+// status="scheduled_for_deletion" — this sweep is what actually deletes.
+// Runs daily, same cadence as the grace-expiry sweep above.
+const accountDeletionInterval = setInterval(() => {
+  processScheduledAccountDeletions().catch((err) => {
+    console.warn("[api] Scheduled account deletion sweep error:", err);
+  });
+}, 24 * 60 * 60 * 1000);
+accountDeletionInterval.unref();
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 

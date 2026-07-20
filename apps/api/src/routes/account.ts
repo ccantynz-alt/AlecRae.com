@@ -234,6 +234,8 @@ account.put(
 
 // ─── Account Deletion ────────────────────────────────────────────────────────
 
+const ACCOUNT_DELETION_GRACE_DAYS = 30;
+
 account.delete("/", requireScope("messages:read"), async (c) => {
   const auth = c.get("auth");
   const db = getDatabase();
@@ -255,9 +257,66 @@ account.delete("/", requireScope("messages:read"), async (c) => {
     );
   }
 
-  await db.delete(accounts).where(eq(accounts.id, auth.accountId));
+  // Was an immediate hard delete — direct violation of this project's own
+  // Forbidden List rule #13 ("Never delete user data without explicit user
+  // action AND a 30-day soft-delete window"). The schema already had
+  // status="scheduled_for_deletion" + scheduledDeletionAt sitting unused;
+  // this actually uses them. Real deletion happens via the daily sweep in
+  // lib/account-deletion.ts, wired into server.ts.
+  const scheduledDeletionAt = new Date(Date.now() + ACCOUNT_DELETION_GRACE_DAYS * 24 * 60 * 60 * 1000);
+  await db
+    .update(accounts)
+    .set({ status: "scheduled_for_deletion", scheduledDeletionAt, updatedAt: new Date() })
+    .where(eq(accounts.id, auth.accountId));
 
-  return c.json({ data: { deleted: true } });
+  return c.json({
+    data: {
+      deleted: false,
+      scheduledForDeletionAt: scheduledDeletionAt.toISOString(),
+      message: `Account scheduled for deletion in ${ACCOUNT_DELETION_GRACE_DAYS} days. Cancel any time before then via POST /v1/account/restore.`,
+    },
+  });
+});
+
+// POST /v1/account/restore — cancel a pending scheduled deletion, any time
+// before the grace window's daily sweep (lib/account-deletion.ts) actually
+// deletes the account.
+account.post("/restore", requireScope("messages:read"), async (c) => {
+  const auth = c.get("auth");
+  const db = getDatabase();
+
+  if (auth.role !== "owner") {
+    return c.json(
+      { error: { type: "forbidden", message: "Only account owners can restore accounts", code: "not_owner" } },
+      403,
+    );
+  }
+
+  const [account_] = await db
+    .select({ status: accounts.status })
+    .from(accounts)
+    .where(eq(accounts.id, auth.accountId))
+    .limit(1);
+
+  if (!account_ || account_.status !== "scheduled_for_deletion") {
+    return c.json(
+      {
+        error: {
+          type: "validation_error",
+          message: "This account is not scheduled for deletion.",
+          code: "not_scheduled_for_deletion",
+        },
+      },
+      400,
+    );
+  }
+
+  await db
+    .update(accounts)
+    .set({ status: "active", scheduledDeletionAt: null, updatedAt: new Date() })
+    .where(eq(accounts.id, auth.accountId));
+
+  return c.json({ data: { restored: true } });
 });
 
 export { account };
