@@ -23,6 +23,50 @@ import { RelayClient, relayConfigFromEnv } from "./relay/relay.js";
 import { DeliveryOptimizer } from "./delivery/optimizer.js";
 import { recordEmailSent, recordEmailSendDuration, recordActiveConnection } from "@alecrae/shared";
 import type { QueuedEmail, DkimSignOptions } from "./types.js";
+import { classifyBounce, type BounceVerdict } from "./bounce/classifier.js";
+
+/**
+ * classifier.ts is fully built (DSN enhanced-status + SMTP-code + keyword
+ * classification) and tested, but was dead code — nothing called it, so
+ * events.bounceType/bounceCategory were never populated on any delivery
+ * event and the admin bounce dashboard always showed null (issue #113(d)
+ * — distinct from issue #82(e)/the DSN-suppression gap fixed earlier this
+ * session, which was about async-bounce suppression, not classification
+ * on the synchronous SMTP-time path this file handles).
+ *
+ * classifier.ts is deliberately standalone (no DB/project type deps), so
+ * this mapping — verdict.class -> the DB's bounceType/bounceCategory
+ * enums — lives here rather than coupling that module to @alecrae/db.
+ */
+type DbBounceCategory =
+  | "unknown_user"
+  | "mailbox_full"
+  | "domain_not_found"
+  | "policy_rejection"
+  | "spam_block"
+  | "rate_limited"
+  | "protocol_error"
+  | "content_rejected"
+  | "authentication_failed"
+  | "other";
+
+export function mapVerdictToDbClassification(
+  verdict: BounceVerdict,
+): { bounceType: "hard" | "soft"; bounceCategory: DbBounceCategory } {
+  const bounceType: "hard" | "soft" = verdict.class === "hard" || verdict.class === "block" ? "hard" : "soft";
+
+  const reasonLower = verdict.reason.toLowerCase();
+  let bounceCategory: DbBounceCategory = "other";
+  if (verdict.class === "block") bounceCategory = "spam_block";
+  else if (verdict.class === "policy") bounceCategory = "policy_rejection";
+  else if (reasonLower.includes("mailbox full") || reasonLower.includes("quota")) bounceCategory = "mailbox_full";
+  else if (reasonLower.includes("domain not found") || reasonLower.includes("host not found")) bounceCategory = "domain_not_found";
+  else if (reasonLower.includes("authentication")) bounceCategory = "authentication_failed";
+  else if (reasonLower.includes("throttle") || reasonLower.includes("rate limit")) bounceCategory = "rate_limited";
+  else if (verdict.class === "hard") bounceCategory = "unknown_user";
+
+  return { bounceType, bounceCategory };
+}
 
 // ─── Job payload as stored in Redis ─────────────────────────────────────────
 
@@ -253,6 +297,7 @@ export class MtaWorker {
     let anyDeferred = false;
     let allBounced = true;
     let anyDelivered = false;
+    let lastBounceVerdict: BounceVerdict | null = null;
     const errors: string[] = [];
 
     // ── 4a. Relay path: send through the configured relay provider ──
@@ -464,6 +509,13 @@ export class MtaWorker {
             `[mta-worker] Delivered to ${recipient} via ${attempt.mxHost}`,
           );
         } else if (attempt.status === "bounced") {
+          lastBounceVerdict = classifyBounce({
+            ...(attempt.lastStatusCode !== undefined ? { smtpCode: attempt.lastStatusCode } : {}),
+            ...(attempt.lastError !== undefined ? { diagnosticText: attempt.lastError } : {}),
+            ...(attempt.mxHost !== undefined ? { remoteHost: attempt.mxHost } : {}),
+            attemptCount: attemptNumber + 1,
+          });
+
           await db
             .update(deliveryResults)
             .set({
@@ -573,8 +625,11 @@ export class MtaWorker {
 
       recordEmailSent(email.domain, "bounced");
 
-      // Record bounce event
-      await this.recordDeliveryEvent(db, email, "email.bounced").catch(() => { /* no-op */ });
+      // Record bounce event, classified via bounce/classifier.ts (issue
+      // #113(d) — previously never called, bounceType/bounceCategory were
+      // always null on every delivery event).
+      const classification = lastBounceVerdict ? mapVerdictToDbClassification(lastBounceVerdict) : undefined;
+      await this.recordDeliveryEvent(db, email, "email.bounced", classification).catch(() => { /* no-op */ });
     } else if (anyDelivered && !anyDeferred) {
       await db
         .update(emails)
@@ -622,6 +677,7 @@ export class MtaWorker {
     db: ReturnType<typeof getDatabase>,
     email: QueuedEmail,
     eventType: string,
+    classification?: { bounceType: "hard" | "soft"; bounceCategory: DbBounceCategory },
   ): Promise<void> {
     const eventId = crypto.randomUUID().replace(/-/g, "");
     await db.insert(events).values({
@@ -630,6 +686,7 @@ export class MtaWorker {
       emailId: email.id,
       messageId: email.messageId,
       type: eventType as "email.delivered",
+      ...(classification ? { bounceType: classification.bounceType, bounceCategory: classification.bounceCategory } : {}),
     });
 
     // Enqueue webhook delivery jobs for matching webhooks
