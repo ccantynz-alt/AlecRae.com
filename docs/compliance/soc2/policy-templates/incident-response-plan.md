@@ -87,6 +87,13 @@ This plan covers all security incidents affecting:
 1. Revoke the specific credential immediately
    - API keys: `DELETE /v1/api-keys/:id` or direct DB update
    - JWT secret: rotate `JWT_SECRET` environment variable and redeploy (invalidates all sessions)
+     — **⚠ this ALSO permanently breaks decryption of every stored OAuth access/refresh token and
+     IMAP/SMTP password in `connected_accounts`** (issue #80's encryption is AES-256-GCM keyed off
+     `sha256(JWT_SECRET)`, no versioning or dual-key transition — see `lib/token-crypto.ts`). Every
+     connected Gmail/Outlook mailbox will silently stop syncing/sending and need to be
+     **reconnected by the user** — this is a real, expected side effect of this exact containment
+     step, not a separate incident. Plan for it (user comms, not just "rotate and move on") rather
+     than discovering it mid-response.
    - OAuth token: revoke via Google/Microsoft OAuth revocation endpoint
 2. Revoke all sessions for affected user: `POST /v1/auth/logout` with admin context
 3. Rotate ALL related secrets (see CLAUDE.md Emergency Protocols — "even tangentially related")
@@ -283,4 +290,4 @@ Exercises should be conducted at least annually. Record:
 
 ---
 
-_Last updated: 2026-06-08 23:35 UTC_
+_Last updated: 2026-07-20 00:00 UTC_
