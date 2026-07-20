@@ -24,6 +24,7 @@ import {
   getValidatedQuery,
 } from "../middleware/validator.js";
 import { getDatabase, chatChannels, chatMembers, chatMessages } from "@alecrae/db";
+import { getWorkspaceRole } from "../lib/workspace-membership.js";
 
 function generateId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -31,6 +32,44 @@ function generateId(): string {
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
+
+/**
+ * Every channel route below previously trusted `channelId`/`userId` from the
+ * URL alone — no check that the caller was ever a member of the channel, let
+ * alone the same workspace. Any authenticated user could read, post to,
+ * manage membership of, or mark-read any channel in any tenant by guessing
+ * its id. This is the single membership check every handler must go through.
+ *
+ * Returns the channel row + caller's membership role, or null if the channel
+ * doesn't exist or the caller isn't a member of it (the two cases are
+ * deliberately indistinguishable to the caller — 404 either way — so this
+ * can't be used to enumerate channel ids that belong to other tenants).
+ */
+async function requireChannelMembership(
+  channelId: string,
+  userId: string,
+): Promise<{ channel: typeof chatChannels.$inferSelect; role: string } | null> {
+  const db = getDatabase();
+  const [channel] = await db
+    .select()
+    .from(chatChannels)
+    .where(eq(chatChannels.id, channelId))
+    .limit(1);
+  if (!channel) return null;
+
+  const [membership] = await db
+    .select({ role: chatMembers.role })
+    .from(chatMembers)
+    .where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, userId)))
+    .limit(1);
+  if (!membership) return null;
+
+  return { channel, role: membership.role };
+}
+
+const CHANNEL_NOT_FOUND = {
+  error: { type: "not_found", message: "Channel not found", code: "channel_not_found" },
+} as const;
 
 const CreateChannelSchema = z.object({
   type: z.enum(["direct", "group", "thread"]).optional(),
@@ -68,6 +107,25 @@ chatRouter.post(
     const input = getValidatedBody<z.infer<typeof CreateChannelSchema>>(c);
     const auth = c.get("auth");
     const db = getDatabase();
+
+    // Every invited member must belong to the same workspace as the creator
+    // — otherwise this is a way to hand a channel's contents to an outsider.
+    for (const userId of input.memberIds) {
+      const role = await getWorkspaceRole(userId, auth.accountId);
+      if (!role) {
+        return c.json(
+          {
+            error: {
+              type: "validation_error",
+              message: `User ${userId} is not a member of this workspace.`,
+              code: "member_not_in_workspace",
+            },
+          },
+          400,
+        );
+      }
+    }
+
     const channelId = generateId();
     const now = new Date();
 
@@ -154,12 +212,14 @@ chatRouter.get(
   requireScope("messages:read"),
   async (c) => {
     const channelId = c.req.param("id");
+    const auth = c.get("auth");
     const db = getDatabase();
 
-    const [channel] = await db.select().from(chatChannels).where(eq(chatChannels.id, channelId)).limit(1);
-    if (!channel) {
-      return c.json({ error: { type: "not_found", message: "Channel not found", code: "channel_not_found" } }, 404);
+    const membership = await requireChannelMembership(channelId, auth.userId ?? "");
+    if (!membership) {
+      return c.json(CHANNEL_NOT_FOUND, 404);
     }
+    const { channel } = membership;
 
     const members = await db.select().from(chatMembers).where(eq(chatMembers.channelId, channelId));
 
@@ -205,6 +265,12 @@ chatRouter.post(
     const input = getValidatedBody<z.infer<typeof SendMessageSchema>>(c);
     const auth = c.get("auth");
     const db = getDatabase();
+
+    const membership = await requireChannelMembership(channelId, auth.userId ?? "");
+    if (!membership) {
+      return c.json(CHANNEL_NOT_FOUND, 404);
+    }
+
     const msgId = generateId();
     const now = new Date();
 
@@ -231,7 +297,13 @@ chatRouter.get(
   async (c) => {
     const channelId = c.req.param("id");
     const query = getValidatedQuery<z.infer<typeof PaginationQuery>>(c);
+    const auth = c.get("auth");
     const db = getDatabase();
+
+    const membership = await requireChannelMembership(channelId, auth.userId ?? "");
+    if (!membership) {
+      return c.json(CHANNEL_NOT_FOUND, 404);
+    }
 
     const conditions = [eq(chatMessages.channelId, channelId), isNull(chatMessages.deletedAt)];
     if (query.cursor) {
@@ -325,7 +397,42 @@ chatRouter.post(
   async (c) => {
     const channelId = c.req.param("id");
     const input = getValidatedBody<z.infer<typeof AddMembersSchema>>(c);
+    const auth = c.get("auth");
     const db = getDatabase();
+
+    const membership = await requireChannelMembership(channelId, auth.userId ?? "");
+    if (!membership) {
+      return c.json(CHANNEL_NOT_FOUND, 404);
+    }
+    if (membership.role !== "admin") {
+      return c.json(
+        {
+          error: {
+            type: "forbidden",
+            message: "Only channel admins can add members.",
+            code: "not_channel_admin",
+          },
+        },
+        403,
+      );
+    }
+
+    for (const userId of input.userIds) {
+      const role = await getWorkspaceRole(userId, membership.channel.accountId);
+      if (!role) {
+        return c.json(
+          {
+            error: {
+              type: "validation_error",
+              message: `User ${userId} is not a member of this workspace.`,
+              code: "member_not_in_workspace",
+            },
+          },
+          400,
+        );
+      }
+    }
+
     const now = new Date();
 
     const values = input.userIds.map((userId) => ({
@@ -346,10 +453,29 @@ chatRouter.delete(
   requireScope("messages:write"),
   async (c) => {
     const channelId = c.req.param("id");
-    const userId = c.req.param("userId");
+    const targetUserId = c.req.param("userId");
+    const auth = c.get("auth");
     const db = getDatabase();
 
-    await db.delete(chatMembers).where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, userId)));
+    const membership = await requireChannelMembership(channelId, auth.userId ?? "");
+    if (!membership) {
+      return c.json(CHANNEL_NOT_FOUND, 404);
+    }
+    const isSelf = targetUserId === (auth.userId ?? "");
+    if (!isSelf && membership.role !== "admin") {
+      return c.json(
+        {
+          error: {
+            type: "forbidden",
+            message: "Only channel admins can remove other members.",
+            code: "not_channel_admin",
+          },
+        },
+        403,
+      );
+    }
+
+    await db.delete(chatMembers).where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, targetUserId)));
     return c.json({ deleted: true });
   },
 );
@@ -361,6 +487,11 @@ chatRouter.post(
     const channelId = c.req.param("id");
     const auth = c.get("auth");
     const db = getDatabase();
+
+    const membership = await requireChannelMembership(channelId, auth.userId ?? "");
+    if (!membership) {
+      return c.json(CHANNEL_NOT_FOUND, 404);
+    }
 
     await db.update(chatMembers).set({ lastReadAt: new Date() })
       .where(and(eq(chatMembers.channelId, channelId), eq(chatMembers.userId, auth.userId ?? "")));
