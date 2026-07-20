@@ -5,6 +5,7 @@ import { MailboxRouter } from "./routing/router.js";
 import { InMemoryEmailStore } from "./storage/store.js";
 import { PostgresEmailStore } from "./storage/postgres-store.js";
 import { createHttpInbound } from "./http-inbound.js";
+import { isDsnMessage, processInboundDsn } from "./dsn-suppression.js";
 import {
   initTelemetry,
   shutdownTelemetry,
@@ -81,6 +82,19 @@ async function handleInboundMessage(
   console.log(
     `[Inbound] Parsed message ${parsed.messageId} from ${envelope.mailFrom} (${rawData.length} bytes)`,
   );
+
+  // 1b. Detect + process delivery-status notifications (bounces) — an async
+  // DSN is the common real-world bounce path (the sending MTA already
+  // handles same-connection SMTP-time rejections separately); this is what
+  // actually keeps suppression in sync for bounces that arrive later.
+  // Runs alongside normal storage below, not instead of it — the DSN
+  // itself is still a real message and gets delivered to its mailbox.
+  if (isDsnMessage(parsed.headers)) {
+    const rawText = new TextDecoder().decode(rawData);
+    await processInboundDsn(rawText).catch((err) => {
+      console.error("[Inbound] DSN processing failed:", err instanceof Error ? err.message : String(err));
+    });
+  }
 
   // 2. Run the filter pipeline (pass sender IP for SPF validation, raw data for DKIM)
   const { rawHeaders, rawBody } = splitRawMessage(rawData);

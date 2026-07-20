@@ -16,3 +16,11 @@ export {
 
 export { checkSpf } from "./spf/validator.js";
 export { evaluateDmarc, determineAction } from "./dmarc/enforcer.js";
+
+export {
+  parseBounceMessage,
+  processBounce,
+  type BounceAction,
+  type SuppressionEntry,
+} from "./bounce/processor.js";
+export type { BounceInfo, BounceCategory, BounceType } from "./types.js";
