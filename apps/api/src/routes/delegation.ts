@@ -28,6 +28,7 @@ import {
 } from "../middleware/validator.js";
 import { getDatabase, emailDelegations, sharedDrafts } from "@alecrae/db";
 import type { DelegationPermissions, SharedDraftComment } from "@alecrae/db";
+import { getWorkspaceRole } from "../lib/workspace-membership.js";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -109,6 +110,24 @@ delegationRouter.post(
     const input = getValidatedBody<z.infer<typeof CreateDelegationSchema>>(c);
     const auth = c.get("auth");
     const db = getDatabase();
+
+    // Previously unvalidated — a delegation could be granted to any
+    // userId at all, including someone outside the caller's own
+    // workspace, handing them mail-delegate permissions (reply/archive/
+    // delete/forward per scope) on this account's mail (issue #109).
+    const delegateRole = await getWorkspaceRole(input.delegateUserId, auth.accountId);
+    if (!delegateRole) {
+      return c.json(
+        {
+          error: {
+            type: "validation_error",
+            message: "delegateUserId is not a member of this workspace.",
+            code: "delegate_not_in_workspace",
+          },
+        },
+        400,
+      );
+    }
 
     const id = generateId();
     const now = new Date();
@@ -355,13 +374,18 @@ delegationRouter.get(
     const db = getDatabase();
     const userId = auth.userId ?? auth.accountId;
 
-    // Fetch active delegations where the current user is the delegate
+    // Fetch active delegations where the current user is the delegate.
+    // Previously had no accountId filter — since a single identity can
+    // belong to multiple workspaces (workspace_members), this leaked
+    // delegation metadata from every workspace the user is a member of,
+    // not just the active one this session is scoped to (issue #109).
     const delegations = await db
       .select()
       .from(emailDelegations)
       .where(
         and(
           eq(emailDelegations.delegateUserId, userId),
+          eq(emailDelegations.accountId, auth.accountId),
           eq(emailDelegations.isActive, true),
         ),
       )

@@ -75,17 +75,23 @@ pushNotificationsRouter.post(
 
     // Check if this endpoint is already registered
     const [existing] = await db
-      .select({ id: pushSubscriptions.id })
+      .select({ id: pushSubscriptions.id, userId: pushSubscriptions.userId })
       .from(pushSubscriptions)
       .where(eq(pushSubscriptions.endpoint, input.endpoint))
       .limit(1);
 
     if (existing) {
-      // Update existing subscription (re-subscribe / refresh)
+      // Previously updated by endpoint alone with no owner check — silently
+      // re-parented the subscription to whoever called /subscribe with a
+      // known endpoint string, without ever recording the transfer
+      // (issue #109). Re-parenting itself is legitimate (same browser/
+      // device, different user logs in) — the fix is to make the transfer
+      // explicit (set userId), not to forbid it.
       const now = new Date();
       await db
         .update(pushSubscriptions)
         .set({
+          userId,
           platform: input.platform,
           keys: input.keys ?? null,
           deviceName: input.deviceName ?? null,
