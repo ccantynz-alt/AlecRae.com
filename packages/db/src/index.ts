@@ -743,6 +743,9 @@ export {
   encryptionKeysRelations,
 } from "./schema/encryption-keys.js";
 
+// Schema - Stripe webhook event dedup (idempotency ledger)
+export { stripeWebhookEvents } from "./schema/stripe-events.js";
+
 // Schema - Email Rules (AI/NL-generated + manual email filtering rules)
 export {
   emailRules,

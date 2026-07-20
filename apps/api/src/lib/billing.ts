@@ -8,7 +8,7 @@
 import Stripe from "stripe";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import { getDatabase, accounts, dunningRecords } from "@alecrae/db";
+import { getDatabase, accounts, dunningRecords, stripeWebhookEvents } from "@alecrae/db";
 
 // ─── Stripe client ────────────────────────────────────────────────────────
 
@@ -469,6 +469,35 @@ export async function createPortalSession(
 }
 
 // ─── Webhook event processing ─────────────────────────────────────────────
+
+/**
+ * Record a Stripe webhook event as processed. Returns true if this event
+ * was ALREADY processed (a duplicate delivery — Stripe guarantees
+ * at-least-once delivery, so redeliveries are expected and normal, not an
+ * error). Callers must check this before calling handleWebhookEvent() —
+ * most of that function's branches are idempotent by virtue of a blind
+ * UPDATE, but recordPaymentFailure() increments failedAttemptCount on
+ * every delivery of the same event, which can prematurely trigger
+ * dunning state on a redelivery of the same failure.
+ */
+export async function isDuplicateWebhookEvent(event: Stripe.Event): Promise<boolean> {
+  const db = getDatabase();
+  try {
+    const inserted = await db
+      .insert(stripeWebhookEvents)
+      .values({ id: event.id, type: event.type })
+      .onConflictDoNothing()
+      .returning({ id: stripeWebhookEvents.id });
+    return inserted.length === 0;
+  } catch (err) {
+    // If the dedup table itself is unreachable, fail open (process the
+    // event) rather than silently dropping real billing events — the
+    // worst case is an occasional double-processed redelivery, which is
+    // the status quo this fix improves on, not a new risk introduced by it.
+    console.error("[billing] Failed to check webhook event dedup, processing anyway:", err);
+    return false;
+  }
+}
 
 /**
  * Process a verified Stripe webhook event and update the database

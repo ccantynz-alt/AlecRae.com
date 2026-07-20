@@ -22,6 +22,7 @@ import {
   getUsage,
   constructWebhookEvent,
   handleWebhookEvent,
+  isDuplicateWebhookEvent,
   PLANS,
   isPlanId,
 } from "../lib/billing.js";
@@ -229,6 +230,15 @@ billing.post("/webhook", async (c) => {
   }
 
   try {
+    // Stripe guarantees at-least-once delivery — a redelivery of an event
+    // we already processed is expected, not an error. Previously nothing
+    // deduped this; most handler branches are idempotent by virtue of a
+    // blind UPDATE, but recordPaymentFailure() isn't (see billing.ts).
+    if (await isDuplicateWebhookEvent(event)) {
+      console.log(`[billing/webhook] Duplicate delivery of ${event.type} (${event.id}) — skipping`);
+      return c.json({ received: true, duplicate: true });
+    }
+
     const result = await handleWebhookEvent(event);
 
     if (result.handled) {

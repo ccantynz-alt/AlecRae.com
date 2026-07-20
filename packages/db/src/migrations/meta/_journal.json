@@ -71,6 +71,13 @@
       "when": 1784522301907,
       "tag": "0009_abnormal_bushwacker",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784523299325,
+      "tag": "0010_charming_triathlon",
+      "breakpoints": true
     }
   ]
 }
