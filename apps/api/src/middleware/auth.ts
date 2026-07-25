@@ -86,6 +86,14 @@ async function hashKey(key: string): Promise<string> {
 /**
  * Plan tier mapping. The DB stores plan_tier enum values like "professional",
  * but our API types use "pro". Normalise here.
+ *
+ * Unknown/missing values resolve to "free", NOT a paid tier. This used to
+ * default to "starter", which meant any caller whose tier couldn't be
+ * determined — a JWT with no `tier` claim, an account row that failed to load —
+ * was silently granted a paid tier, defeating middleware/plan-gate.ts for every
+ * `requirePlan("personal")` feature. Plan gating must fail closed: the worst
+ * case of getting this wrong is a paying customer briefly seeing an upgrade
+ * prompt, not a free account with uncapped AI spend.
  */
 function normaliseTier(dbTier: string | null | undefined): PlanTier {
   switch (dbTier) {
@@ -99,9 +107,16 @@ function normaliseTier(dbTier: string | null | undefined): PlanTier {
     case "enterprise":
       return "enterprise";
     default:
-      return "starter";
+      return "free";
   }
 }
+
+/**
+ * Test-only alias for `normaliseTier`. Exported so the fail-closed contract can
+ * be asserted directly (tests/tier-fail-closed.test.ts) rather than inferred
+ * through a full request; not intended for production callers.
+ */
+export const normaliseTierForTest = normaliseTier;
 
 async function resolveApiKeyFromDb(
   rawKey: string,
@@ -150,8 +165,13 @@ async function resolveApiKeyFromDb(
         )
       : [];
 
-    // Look up account to get the real plan tier
-    let tier: PlanTier = "starter";
+    // Look up account to get the real plan tier. Fail CLOSED to "free" if the
+    // account row is missing or the lookup errors — this previously defaulted
+    // to "starter" and, on a DB error, actively escalated a production key to
+    // "pro", i.e. a transient Postgres blip handed out every Pro-gated
+    // Claude-backed endpoint with no spend ceiling. That inverts what
+    // plan-gate.ts exists to do.
+    let tier: PlanTier = "free";
     try {
       const [account] = await db
         .select({ planTier: accounts.planTier })
@@ -161,9 +181,11 @@ async function resolveApiKeyFromDb(
       if (account) {
         tier = normaliseTier(account.planTier);
       }
-    } catch {
-      // Fall back to a safe default if the account lookup fails
-      tier = normaliseTier(record.environment === "test" ? "starter" : "pro");
+    } catch (err) {
+      console.warn(
+        "[auth] Account tier lookup failed; defaulting to free (fail closed):",
+        err instanceof Error ? err.message : String(err),
+      );
     }
 
     return {
