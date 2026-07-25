@@ -17,12 +17,12 @@ function claudeResponse(text: string): Response {
 }
 
 function vapronResponse(text: string): Response {
-  // tRPC/superjson success envelope wrapping an OpenAI-style gateway payload.
+  // Plain-JSON OpenAI-style gateway payload — the REST platform surface has no
+  // envelope to unwrap (issue #83's transport correction).
   return new Response(
     JSON.stringify({
-      result: {
-        data: { json: { id: "cmpl_1", choices: [{ index: 0, message: { role: "assistant", content: text } }] } },
-      },
+      id: "cmpl_1",
+      choices: [{ index: 0, message: { role: "assistant", content: text } }],
     }),
     { status: 200 },
   );
@@ -57,7 +57,7 @@ describe("aiComplete", () => {
     process.env["VAPRON_API_KEY"] = "vpk_test";
     globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
       if (String(url).includes("api.anthropic.com")) return new Response("upstream", { status: 503 });
-      expect(String(url)).toContain("api.vapron.ai");
+      expect(String(url)).toBe("https://vapron.ai/api/platform/ai/chat");
       return vapronResponse("from vapron");
     }) as unknown as typeof fetch;
 

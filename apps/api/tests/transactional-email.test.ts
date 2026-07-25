@@ -24,9 +24,10 @@ describe("sendTransactionalEmail", () => {
 
   it("sends via Vapron when configured", async () => {
     process.env["VAPRON_API_KEY"] = "vpk_test";
+    // Vapron's platform email endpoint answers with plain JSON — no tRPC
+    // envelope (issue #83's transport correction).
     const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ result: { data: { json: { id: "msg_42" } } } }), { status: 200 }),
+      async () => new Response(JSON.stringify({ id: "msg_42" }), { status: 200 }),
     ) as unknown as typeof fetch;
     globalThis.fetch = fetchMock;
 
@@ -37,7 +38,9 @@ describe("sendTransactionalEmail", () => {
     });
 
     expect(result).toEqual({ sent: true, provider: "vapron", id: "msg_42" });
-    expect((fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls.length).toBe(1);
+    const calls = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls.length).toBe(1);
+    expect(String(calls[0]?.[0])).toBe("https://vapron.ai/api/platform/email/send");
   });
 
   it("no-ops without a network call when unconfigured", async () => {

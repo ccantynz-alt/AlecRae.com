@@ -423,8 +423,10 @@ export async function rotateRefreshToken(oldRefreshToken: string): Promise<Token
     throw new TokenError("membership_revoked", "No longer a member of this workspace");
   }
 
-  // Look up account tier
-  let tier = "starter";
+  // Look up account tier. Defaults to "free", never a paid tier — a refresh
+  // that can't resolve the account's plan must not mint a token claiming one
+  // (see normaliseTier in middleware/auth.ts).
+  let tier = "free";
   try {
     const [account] = await db
       .select({ planTier: accounts.planTier })
@@ -432,8 +434,11 @@ export async function rotateRefreshToken(oldRefreshToken: string): Promise<Token
       .where(eq(accounts.id, activeAccountId))
       .limit(1);
     if (account) tier = account.planTier ?? "free";
-  } catch {
-    // fall through
+  } catch (err) {
+    console.warn(
+      "[jwt] Account tier lookup failed on refresh; defaulting to free (fail closed):",
+      err instanceof Error ? err.message : String(err),
+    );
   }
 
   // Issue new pair in the same family
