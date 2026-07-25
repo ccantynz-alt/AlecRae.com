@@ -10,207 +10,207 @@
     ".": {
       "bun": "./src/index.ts",
       "types": "./src/index.ts",
-      "import": "./dist/index.js"
+      "import": "./src/index.ts"
     },
     "./spam": {
       "bun": "./src/spam/classifier.ts",
       "types": "./src/spam/classifier.ts",
-      "import": "./dist/spam/classifier.js"
+      "import": "./src/spam/classifier.ts"
     },
     "./reputation": {
       "bun": "./src/reputation/scorer.ts",
       "types": "./src/reputation/scorer.ts",
-      "import": "./dist/reputation/scorer.js"
+      "import": "./src/reputation/scorer.ts"
     },
     "./content": {
       "bun": "./src/content/analyzer.ts",
       "types": "./src/content/analyzer.ts",
-      "import": "./dist/content/analyzer.js"
+      "import": "./src/content/analyzer.ts"
     },
     "./compose": {
       "bun": "./src/compose/assistant.ts",
       "types": "./src/compose/assistant.ts",
-      "import": "./dist/compose/assistant.js"
+      "import": "./src/compose/assistant.ts"
     },
     "./priority": {
       "bun": "./src/priority/ranker.ts",
       "types": "./src/priority/ranker.ts",
-      "import": "./dist/priority/ranker.js"
+      "import": "./src/priority/ranker.ts"
     },
     "./relationships": {
       "bun": "./src/relationships/graph.ts",
       "types": "./src/relationships/graph.ts",
-      "import": "./dist/relationships/graph.js"
+      "import": "./src/relationships/graph.ts"
     },
     "./classifier": {
       "bun": "./src/classifier.ts",
       "types": "./src/classifier.ts",
-      "import": "./dist/classifier.js"
+      "import": "./src/classifier.ts"
     },
     "./embeddings/voyage": {
       "bun": "./src/embeddings/voyage.ts",
       "types": "./src/embeddings/voyage.ts",
-      "import": "./dist/embeddings/voyage.js"
+      "import": "./src/embeddings/voyage.ts"
     },
     "./embeddings/types": {
       "bun": "./src/embeddings/types.ts",
       "types": "./src/embeddings/types.ts",
-      "import": "./dist/embeddings/types.js"
+      "import": "./src/embeddings/types.ts"
     },
     "./embeddings/local": {
       "bun": "./src/embeddings/local.ts",
       "types": "./src/embeddings/local.ts",
-      "import": "./dist/embeddings/local.js"
+      "import": "./src/embeddings/local.ts"
     },
     "./embeddings/hybrid": {
       "bun": "./src/embeddings/hybrid.ts",
       "types": "./src/embeddings/hybrid.ts",
-      "import": "./dist/embeddings/hybrid.js"
+      "import": "./src/embeddings/hybrid.ts"
     },
     "./embeddings/auto-indexer": {
       "bun": "./src/embeddings/auto-indexer.ts",
       "types": "./src/embeddings/auto-indexer.ts",
-      "import": "./dist/embeddings/auto-indexer.js"
+      "import": "./src/embeddings/auto-indexer.ts"
     },
     "./inbox": {
       "bun": "./src/inbox/smart-inbox.ts",
       "types": "./src/inbox/smart-inbox.ts",
-      "import": "./dist/inbox/smart-inbox.js"
+      "import": "./src/inbox/smart-inbox.ts"
     },
     "./inbox/newsletter-summarizer": {
       "bun": "./src/inbox/newsletter-summarizer.ts",
       "types": "./src/inbox/newsletter-summarizer.ts",
-      "import": "./dist/inbox/newsletter-summarizer.js"
+      "import": "./src/inbox/newsletter-summarizer.ts"
     },
     "./inbox/email-explainer": {
       "bun": "./src/inbox/email-explainer.ts",
       "types": "./src/inbox/email-explainer.ts",
-      "import": "./dist/inbox/email-explainer.js"
+      "import": "./src/inbox/email-explainer.ts"
     },
     "./agent": {
       "bun": "./src/agent/index.ts",
       "types": "./src/agent/index.ts",
-      "import": "./dist/agent/index.js"
+      "import": "./src/agent/index.ts"
     },
     "./todo": {
       "bun": "./src/todo/index.ts",
       "types": "./src/todo/index.ts",
-      "import": "./dist/todo/index.js"
+      "import": "./src/todo/index.ts"
     },
     "./todo/thread-extractor": {
       "bun": "./src/todo/thread-extractor.ts",
       "types": "./src/todo/thread-extractor.ts",
-      "import": "./dist/todo/thread-extractor.js"
+      "import": "./src/todo/thread-extractor.ts"
     },
     "./unsubscribe": {
       "bun": "./src/unsubscribe/index.ts",
       "types": "./src/unsubscribe/index.ts",
-      "import": "./dist/unsubscribe/index.js"
+      "import": "./src/unsubscribe/index.ts"
     },
     "./send-time": {
       "bun": "./src/send-time/predictor.ts",
       "types": "./src/send-time/predictor.ts",
-      "import": "./dist/send-time/predictor.js"
+      "import": "./src/send-time/predictor.ts"
     },
     "./calendar/slot-detector": {
       "bun": "./src/calendar/slot-detector.ts",
       "types": "./src/calendar/slot-detector.ts",
-      "import": "./dist/calendar/slot-detector.js"
+      "import": "./src/calendar/slot-detector.ts"
     },
     "./calendar/slot-suggester": {
       "bun": "./src/calendar/slot-suggester.ts",
       "types": "./src/calendar/slot-suggester.ts",
-      "import": "./dist/calendar/slot-suggester.js"
+      "import": "./src/calendar/slot-suggester.ts"
     },
     "./voice/cloner": {
       "bun": "./src/voice/cloner.ts",
       "types": "./src/voice/cloner.ts",
-      "import": "./dist/voice/cloner.js"
+      "import": "./src/voice/cloner.ts"
     },
     "./voice/voice-message": {
       "bun": "./src/voice/voice-message.ts",
       "types": "./src/voice/voice-message.ts",
-      "import": "./dist/voice/voice-message.js"
+      "import": "./src/voice/voice-message.ts"
     },
     "./voice/style-cloner": {
       "bun": "./src/voice/style-cloner.ts",
       "types": "./src/voice/style-cloner.ts",
-      "import": "./dist/voice/style-cloner.js"
+      "import": "./src/voice/style-cloner.ts"
     },
     "./meetings/transcript-linker": {
       "bun": "./src/meetings/transcript-linker.ts",
       "types": "./src/meetings/transcript-linker.ts",
-      "import": "./dist/meetings/transcript-linker.js"
+      "import": "./src/meetings/transcript-linker.ts"
     },
     "./meetings/transcript-fetcher": {
       "bun": "./src/meetings/transcript-fetcher.ts",
       "types": "./src/meetings/transcript-fetcher.ts",
-      "import": "./dist/meetings/transcript-fetcher.js"
+      "import": "./src/meetings/transcript-fetcher.ts"
     },
     "./meetings/types": {
       "bun": "./src/meetings/types.ts",
       "types": "./src/meetings/types.ts",
-      "import": "./dist/meetings/types.js"
+      "import": "./src/meetings/types.ts"
     },
     "./security/sender-verify": {
       "bun": "./src/security/sender-verify.ts",
       "types": "./src/security/sender-verify.ts",
-      "import": "./dist/security/sender-verify.js"
+      "import": "./src/security/sender-verify.ts"
     },
     "./security/phishing": {
       "bun": "./src/security/phishing.ts",
       "types": "./src/security/phishing.ts",
-      "import": "./dist/security/phishing.js"
+      "import": "./src/security/phishing.ts"
     },
     "./grammar/spellcheck": {
       "bun": "./src/grammar/spellcheck.ts",
       "types": "./src/grammar/spellcheck.ts",
-      "import": "./dist/grammar/spellcheck.js"
+      "import": "./src/grammar/spellcheck.ts"
     },
     "./grammar": {
       "bun": "./src/grammar/agent.ts",
       "types": "./src/grammar/agent.ts",
-      "import": "./dist/grammar/agent.js"
+      "import": "./src/grammar/agent.ts"
     },
     "./dictation": {
       "bun": "./src/dictation/engine.ts",
       "types": "./src/dictation/engine.ts",
-      "import": "./dist/dictation/engine.js"
+      "import": "./src/dictation/engine.ts"
     },
     "./query/email-sql": {
       "bun": "./src/query/email-sql.ts",
       "types": "./src/query/email-sql.ts",
-      "import": "./dist/query/email-sql.js"
+      "import": "./src/query/email-sql.ts"
     },
     "./scripts/snippet-runner": {
       "bun": "./src/scripts/snippet-runner.ts",
       "types": "./src/scripts/snippet-runner.ts",
-      "import": "./dist/scripts/snippet-runner.js"
+      "import": "./src/scripts/snippet-runner.ts"
     },
     "./intelligence/priority-scorer": {
       "bun": "./src/intelligence/priority-scorer.ts",
       "types": "./src/intelligence/priority-scorer.ts",
-      "import": "./dist/intelligence/priority-scorer.js"
+      "import": "./src/intelligence/priority-scorer.ts"
     },
     "./intelligence/smart-replies": {
       "bun": "./src/intelligence/smart-replies.ts",
       "types": "./src/intelligence/smart-replies.ts",
-      "import": "./dist/intelligence/smart-replies.js"
+      "import": "./src/intelligence/smart-replies.ts"
     },
     "./intelligence/sentiment-analyzer": {
       "bun": "./src/intelligence/sentiment-analyzer.ts",
       "types": "./src/intelligence/sentiment-analyzer.ts",
-      "import": "./dist/intelligence/sentiment-analyzer.js"
+      "import": "./src/intelligence/sentiment-analyzer.ts"
     },
     "./intelligence/categorizer": {
       "bun": "./src/intelligence/categorizer.ts",
       "types": "./src/intelligence/categorizer.ts",
-      "import": "./dist/intelligence/categorizer.js"
+      "import": "./src/intelligence/categorizer.ts"
     },
     "./intelligence/context-extractor": {
       "bun": "./src/intelligence/context-extractor.ts",
       "types": "./src/intelligence/context-extractor.ts",
-      "import": "./dist/intelligence/context-extractor.js"
+      "import": "./src/intelligence/context-extractor.ts"
     }
   },
   "scripts": {
