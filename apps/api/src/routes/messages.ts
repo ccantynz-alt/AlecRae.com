@@ -360,7 +360,7 @@ async function handleSend(c: Context) {
     // path used whatever was stored at connect time with no expiry check, so
     // sending broke ~1 hour after connecting and stayed broken until the user
     // manually reconnected the account.
-    let freshAccessToken = connectedAcct.accessToken;
+    let freshAccessToken: string;
     try {
       const fresh = await ensureFreshAccessToken({
         provider: connectedAcct.provider as "gmail" | "outlook",
@@ -847,8 +847,15 @@ async function handleSend(c: Context) {
   // ── 6b. Record send against warm-up counter (fire-and-forget) ────
   warmupOrchestrator.recordSend(domainRecord.id).catch(() => { /* fire-and-forget */ });
 
-  // ── 6c. Increment quota counter in Redis (fire-and-forget) ──────
-  incrementQuota(auth.accountId).catch(() => {
+  // ── 6c. Record the send against the monthly quota (fire-and-forget) ──
+  // Writes both the durable `email.queued` event row (what checkQuota falls
+  // back to when Redis is down) and the Redis month bucket — see quota.ts.
+  const quotaRecipient = allRecipients[0] ?? input.to[0]?.email;
+  incrementQuota(auth.accountId, {
+    emailId: id,
+    messageId,
+    ...(quotaRecipient !== undefined ? { recipient: quotaRecipient } : {}),
+  }).catch(() => {
     /* fire-and-forget */
   });
 

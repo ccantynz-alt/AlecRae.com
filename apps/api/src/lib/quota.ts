@@ -121,6 +121,11 @@ async function getCountFromRedis(accountId: string): Promise<number | null> {
 /**
  * DB fallback: count queued events for this account in the current UTC month.
  * Uses the events table as the source of truth when Redis is unavailable.
+ *
+ * These rows are written by `incrementQuota()` on every enqueue. Until that was
+ * wired, NOTHING in the codebase ever inserted an `email.queued` event, so this
+ * query always returned 0 and the fallback silently disabled quota enforcement
+ * entirely (see incrementQuota's doc comment).
  */
 async function getCountFromDb(accountId: string): Promise<number> {
   const db = getDatabase();
@@ -180,13 +185,59 @@ export async function checkQuota(accountId: string): Promise<QuotaCheckResult> {
   };
 }
 
+/** Optional provenance for the durable `email.queued` row. */
+export interface QueuedEmailRecord {
+  emailId?: string;
+  messageId?: string;
+  recipient?: string;
+}
+
 /**
- * Atomically increment the quota counter AFTER successful enqueue.
- * Fire-and-forget safe — failures are logged but do not block the caller.
+ * Record one queued email against the account's monthly quota, AFTER a
+ * successful enqueue. Fire-and-forget safe — failures are logged, never thrown.
+ *
+ * Writes BOTH counters, deliberately:
+ *
+ *  - A durable `email.queued` event row. This is the source of truth
+ *    `getCountFromDb()` reads whenever Redis is unavailable. It previously
+ *    wrote nothing at all: the only reference to `"email.queued"` anywhere in
+ *    the codebase was quota.ts's own SELECT, so the fallback counted 0 forever
+ *    and `checkQuota()` returned `allowed: true` unconditionally — no account
+ *    could ever exceed its plan limit's enforcement, and the 429 response
+ *    reported "0 sent". That fired on any Redis blip AND on the first send
+ *    after every API restart, because `getRedis()` returns null until the
+ *    async "ready" event lands. The old code's comment here ("DB counter is
+ *    updated separately by the existing code") described code that did not
+ *    exist.
+ *
+ *  - The Redis month bucket, which `checkQuota()` prefers as the fast path.
+ *
+ * Writing both never double-counts: `checkQuota()` reads Redis OR the DB, never
+ * sums them. Because the event row is written on every send regardless of Redis
+ * health, a mid-month Redis outage falls back to a count that covers the whole
+ * month rather than restarting from zero.
  */
-export async function incrementQuota(accountId: string): Promise<void> {
+export async function incrementQuota(
+  accountId: string,
+  record: QueuedEmailRecord = {},
+): Promise<void> {
+  // Durable counter first — it's the one enforcement falls back to.
+  try {
+    const db = getDatabase();
+    await db.insert(events).values({
+      id: crypto.randomUUID().replace(/-/g, ""),
+      accountId,
+      emailId: record.emailId ?? null,
+      messageId: record.messageId ?? null,
+      type: "email.queued",
+      recipient: record.recipient ?? null,
+    });
+  } catch (err) {
+    console.warn("[quota] Failed to record email.queued event:", (err as Error).message);
+  }
+
   const redis = getRedis();
-  if (!redis) return; // DB counter is updated separately by the existing code
+  if (!redis) return;
 
   try {
     const key = currentMonthKey(accountId);
