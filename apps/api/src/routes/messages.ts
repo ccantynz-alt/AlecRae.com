@@ -71,6 +71,14 @@ function domainOf(address: string): string {
   return idx === -1 ? address : address.slice(idx + 1).toLowerCase();
 }
 
+/**
+ * Public base URL embedded in outbound mail — the List-Unsubscribe header and
+ * every click-tracking link. The localhost fallback is for local dev ONLY;
+ * `assertProductionEnv()` (lib/env.ts) requires API_URL to be set to an https,
+ * non-localhost URL in production precisely so this fallback can never reach a
+ * real recipient. A dead one-click unsubscribe is a Gmail/Yahoo bulk-sender
+ * compliance failure, not a cosmetic bug.
+ */
 const API_BASE_URL = process.env["API_URL"] ?? "http://localhost:3001";
 
 /**

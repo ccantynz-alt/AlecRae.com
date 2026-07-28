@@ -25,6 +25,8 @@ import { recordEmailSent, recordEmailSendDuration, recordActiveConnection } from
 import type { QueuedEmail, DkimSignOptions } from "./types.js";
 import { classifyBounce, type BounceVerdict } from "./bounce/classifier.js";
 import { buildReturnPath } from "./bounce/return-path.js";
+import { WarmupGate, warmupGateOptionsFromEnv } from "./delivery/warmup-gate.js";
+import IORedis from "ioredis";
 
 /**
  * classifier.ts is fully built (DSN enhanced-status + SMTP-code + keyword
@@ -102,12 +104,34 @@ export class MtaWorker {
   private readonly config: WorkerConfig;
   private readonly optimizer: DeliveryOptimizer;
   private readonly relayClient: RelayClient | null;
+  /**
+   * Enforces the IP warmup ramp. The optimizer's per-ISP throttles are a
+   * steady-state rate limit; this is the day-by-day volume ceiling that keeps
+   * a cold IP from burning its reputation in the first week.
+   */
+  private readonly warmupGate: WarmupGate;
   private shuttingDown = false;
   private maintenanceInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config?: Partial<WorkerConfig>) {
     this.config = { ...DEFAULT_WORKER_CONFIG, ...config };
     this.optimizer = new DeliveryOptimizer();
+
+    // Counters live in the same Redis the queue already uses, so the caps
+    // hold across every worker process rather than per-process.
+    const warmupOptions = warmupGateOptionsFromEnv(
+      process.env["MTA_PUBLIC_IP"]?.trim() || this.config.localHostname,
+    );
+    this.warmupGate = new WarmupGate({
+      ...warmupOptions,
+      redis: new IORedis(this.config.redisUrl, { maxRetriesPerRequest: null }),
+    });
+    if (!warmupOptions.enabled) {
+      console.warn(
+        "[mta-worker] IP warmup enforcement is DISABLED (MTA_WARMUP_ENABLED=false). " +
+          "Only correct for an IP with established sending reputation.",
+      );
+    }
 
     // Initialise relay client if configured
     if (this.config.useRelay) {
@@ -339,9 +363,35 @@ export class MtaWorker {
                 eq(deliveryResults.recipientAddress, recipient),
               ),
             );
-        } else {
-          activeRecipients.push(recipient);
+          continue;
         }
+
+        // Warmup ramp: over-cap recipients are DEFERRED, never dropped —
+        // quota returns at UTC midnight, so the message is still deliverable.
+        const warmup = await this.warmupGate.reserve(recipient);
+        if (!warmup.allow) {
+          console.log(
+            `[mta-worker] Deferring ${recipient} — ${warmup.reason ?? "warmup cap"}`,
+          );
+          anyDeferred = true;
+          allBounced = false;
+          await db
+            .update(deliveryResults)
+            .set({
+              status: "deferred",
+              remoteResponse: `Deferred by IP warmup pacing: ${warmup.reason ?? "cap reached"}`,
+              lastAttemptAt: new Date(),
+            })
+            .where(
+              and(
+                eq(deliveryResults.emailId, email.id),
+                eq(deliveryResults.recipientAddress, recipient),
+              ),
+            );
+          continue;
+        }
+
+        activeRecipients.push(recipient);
       }
 
       if (activeRecipients.length > 0) {
@@ -474,6 +524,33 @@ export class MtaWorker {
             status: "dropped",
             remoteResponse: "Recipient is on the suppression list",
             attemptCount: 1,
+            lastAttemptAt: new Date(),
+          })
+          .where(
+            and(
+              eq(deliveryResults.emailId, email.id),
+              eq(deliveryResults.recipientAddress, recipient),
+            ),
+          );
+
+        continue;
+      }
+
+      // Warmup ramp: defer rather than drop — the cap resets at UTC midnight,
+      // so an over-cap message is still perfectly deliverable tomorrow.
+      const warmup = await this.warmupGate.reserve(recipient);
+      if (!warmup.allow) {
+        console.log(
+          `[mta-worker] Deferring ${recipient} — ${warmup.reason ?? "warmup cap"}`,
+        );
+        anyDeferred = true;
+        allBounced = false;
+
+        await db
+          .update(deliveryResults)
+          .set({
+            status: "deferred",
+            remoteResponse: `Deferred by IP warmup pacing: ${warmup.reason ?? "cap reached"}`,
             lastAttemptAt: new Date(),
           })
           .where(
