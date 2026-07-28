@@ -36,6 +36,11 @@
       "types": "./src/relationships/graph.ts",
       "import": "./dist/relationships/graph.js"
     },
+    "./types": {
+      "bun": "./src/types.ts",
+      "types": "./src/types.ts",
+      "import": "./dist/types.js"
+    },
     "./classifier": {
       "bun": "./src/classifier.ts",
       "types": "./src/classifier.ts",

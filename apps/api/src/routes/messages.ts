@@ -45,6 +45,7 @@ import {
   HEADER_INJECTION_REJECTED,
 } from "@alecrae/mta/lib";
 import { scanAttachment, isSafe } from "@alecrae/security";
+import { checkOutboundSpam } from "../lib/outbound-spam-gate.js";
 import {
   renderTemplate,
   validateVariables,
@@ -98,6 +99,22 @@ function injectTracking(html: string, emailId: string): string {
  * Build an RFC 5322 raw message from the API input.
  * Produces headers + body separated by a blank line.
  */
+/**
+ * Strip CR/LF/NUL from a value before it is written into a header line.
+ *
+ * Defence in depth. SendMessageSchema already rejects these characters in
+ * `subject` and display names (see apps/api/src/types.ts), which is the real
+ * gate — a caller gets a clear 422 rather than silently mangled output. This
+ * exists so that any future caller reaching buildRawMessage by another route
+ * still cannot inject a header. Without both, a subject like
+ * "Hi\r\nBcc: victim@example.com" became a genuine Bcc header on a
+ * DKIM-signed message sent from our own IP.
+ */
+function headerValue(raw: string): string {
+  // eslint-disable-next-line no-control-regex -- deliberately stripping CR/LF/NUL from a header value
+  return raw.replace(/[\r\n\u0000]/g, " ").trim();
+}
+
 function buildRawMessage(
   input: SendMessageInput,
   messageId: string,
@@ -105,28 +122,22 @@ function buildRawMessage(
 ): string {
   const lines: string[] = [];
 
+  const display = (r: { email: string; name?: string | undefined }): string =>
+    r.name ? `${headerValue(r.name)} <${r.email}>` : r.email;
+
   // From
-  const fromStr = input.from.name
-    ? `${input.from.name} <${input.from.email}>`
-    : input.from.email;
-  lines.push(`From: ${fromStr}`);
+  lines.push(`From: ${display(input.from)}`);
 
   // To
-  const toStr = input.to
-    .map((r) => (r.name ? `${r.name} <${r.email}>` : r.email))
-    .join(", ");
-  lines.push(`To: ${toStr}`);
+  lines.push(`To: ${input.to.map(display).join(", ")}`);
 
   // Cc
   if (input.cc && input.cc.length > 0) {
-    const ccStr = input.cc
-      .map((r) => (r.name ? `${r.name} <${r.email}>` : r.email))
-      .join(", ");
-    lines.push(`Cc: ${ccStr}`);
+    lines.push(`Cc: ${input.cc.map(display).join(", ")}`);
   }
 
   // Subject
-  lines.push(`Subject: ${input.subject ?? ""}`);
+  lines.push(`Subject: ${headerValue(input.subject ?? "")}`);
 
   // Message-ID
   lines.push(`Message-ID: ${messageId}`);
@@ -611,6 +622,41 @@ async function handleSend(c: Context) {
           message: `Email blocked: ${violations.map((v) => v.description ?? v.rule).join("; ")}`,
           code: "compliance_violation",
           violations,
+        },
+      },
+      422,
+    );
+  }
+
+  // ── 1b3. Outbound spam gate (reputation protection) ───────────────
+  // Every check above protects the recipient or the customer; none of them
+  // look at what the message actually says. An authenticated account — a
+  // customer's own or a compromised one — could otherwise push phishing/419
+  // content through this API and we would DKIM-sign it and relay it from our
+  // sending IP. That is how the sending domain gets blocklisted, which is
+  // slow and expensive to undo (cf. issue #105's open relay).
+  const spamVerdict = await checkOutboundSpam({
+    messageId,
+    accountId: auth.accountId,
+    from: input.from.email,
+    to: allRecipientAddresses,
+    subject: resolvedSubject,
+    text: input.text,
+    html: input.html,
+  });
+
+  if (!spamVerdict.allowed) {
+    return c.json(
+      {
+        error: {
+          type: "spam_content_rejected",
+          message:
+            "This message was refused because its content scored as spam. " +
+            "If you believe this is wrong, contact support — sending it would " +
+            "put the delivery reputation of every account on this platform at risk.",
+          code: "outbound_spam_rejected",
+          score: spamVerdict.score,
+          reasons: spamVerdict.reasons,
         },
       },
       422,
