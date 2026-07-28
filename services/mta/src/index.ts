@@ -13,7 +13,8 @@ import { SmtpServer } from "./smtp/server.js";
 import { MtaWorker } from "./worker.js";
 import { TlsManager } from "./tls/manager.js";
 import { createHealthServer, dbCheck, redisCheck } from "./health.js";
-import { getDatabase, closeConnection } from "@alecrae/db";
+import { getDatabase, closeConnection, domains } from "@alecrae/db";
+import { eq } from "drizzle-orm";
 import { initTelemetry, shutdownTelemetry } from "@alecrae/shared";
 import Redis from "ioredis";
 
@@ -30,6 +31,44 @@ const WORKER_CONCURRENCY = parseInt(
 );
 const HEALTH_PORT = parseInt(process.env["HEALTH_PORT"] ?? "8082", 10);
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
+
+/** How often the accepted-recipient domain list is refreshed from the DB. */
+const LOCAL_DOMAIN_REFRESH_MS = 5 * 60 * 1000;
+let localDomainTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Domains this server will accept mail FOR — the relay control.
+ *
+ * Combines active, verified customer domains with any set explicitly in
+ * MTA_LOCAL_DOMAINS (the service's own infrastructure addresses, e.g. the
+ * bounce host, which has no `domains` row).
+ *
+ * Returns the env list alone if the DB is unreachable. That degrades to
+ * refusing customer mail, which is the correct direction to fail: a relay
+ * control that opens up when its data source is down is not a control.
+ */
+async function loadLocalDomains(): Promise<string[]> {
+  const fromEnv = (process.env["MTA_LOCAL_DOMAINS"] ?? "")
+    .split(",")
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+
+  try {
+    const db = getDatabase();
+    const rows = await db
+      .select({ domain: domains.domain })
+      .from(domains)
+      .where(eq(domains.isActive, true));
+    return [...new Set([...fromEnv, ...rows.map((r) => r.domain.toLowerCase())])];
+  } catch (err) {
+    console.error(
+      `[mta] Could not load hosted domains for the relay control: ${
+        err instanceof Error ? err.message : String(err)
+      } — accepting only MTA_LOCAL_DOMAINS (${fromEnv.length} entries)`,
+    );
+    return fromEnv;
+  }
+}
 
 // TLS was previously hardcoded off entirely — the fully-built TlsManager
 // (tls/manager.ts) was never constructed or passed to SmtpServer, so mail
@@ -139,6 +178,19 @@ async function start(): Promise<void> {
   }
 
   // ── 4. Start SMTP server (inbound) ─────────────────────────────────
+  // The relay control (localDomains) is loaded BEFORE the listener starts, so
+  // there is no window in which the server is up and accepting anything.
+  const initialLocalDomains = await loadLocalDomains();
+  if (initialLocalDomains.length === 0) {
+    console.warn(
+      "[mta] No hosted domains resolved — the SMTP server will refuse every recipient. " +
+        "Set MTA_LOCAL_DOMAINS or verify a domain. (Refusing is deliberate: an " +
+        "unconfigured relay control must never accept mail — see Known Issue #105.)",
+    );
+  } else {
+    console.log(`[mta] Relay control: accepting mail for ${initialLocalDomains.length} domain(s)`);
+  }
+
   console.log(`[mta] Starting SMTP server on ${SMTP_HOST}:${SMTP_PORT}...`);
   smtpServer = new SmtpServer(
     {
@@ -152,9 +204,18 @@ async function start(): Promise<void> {
       socketTimeout: 60_000,
       requireAuth: false,
       enableStarttls: starttlsEnabled,
+      localDomains: initialLocalDomains,
     },
     starttlsEnabled ? tlsManager : undefined,
   );
+
+  // Customer domains are onboarded while the server runs; without this a newly
+  // verified domain would be refused until the next restart.
+  localDomainTimer = setInterval(() => {
+    void loadLocalDomains().then((list) => {
+      smtpServer?.updateLocalDomains(list);
+    });
+  }, LOCAL_DOMAIN_REFRESH_MS);
 
   smtpServer.on("listening", (addr) => {
     console.log(`[mta] SMTP server listening on ${addr.address}:${addr.port}`);
@@ -249,6 +310,11 @@ async function shutdown(signal: string): Promise<void> {
     console.error("[mta] Shutdown timed out after 30s — forcing exit");
     process.exit(1);
   }, 30_000);
+
+  if (localDomainTimer) {
+    clearInterval(localDomainTimer);
+    localDomainTimer = null;
+  }
 
   try {
     // Stop the health server first — signals the load balancer to stop
