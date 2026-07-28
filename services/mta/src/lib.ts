@@ -23,4 +23,13 @@ export {
   type BounceAction,
   type SuppressionEntry,
 } from "./bounce/processor.js";
+
+// VERP envelope-sender construction/parsing. `parseReturnPath` is what lets
+// the inbound service attribute an incoming DSN to the exact message that
+// bounced, without a lookup table.
+export {
+  buildReturnPath,
+  parseReturnPath,
+  type ParsedReturnPath,
+} from "./bounce/return-path.js";
 export type { BounceInfo, BounceCategory, BounceType } from "./types.js";

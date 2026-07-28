@@ -91,7 +91,12 @@ async function handleInboundMessage(
   // itself is still a real message and gets delivered to its mailbox.
   if (isDsnMessage(parsed.headers)) {
     const rawText = new TextDecoder().decode(rawData);
-    await processInboundDsn(rawText).catch((err) => {
+    // The envelope recipient is our VERP return path
+    // (bounces+<emailId>@bounce.<domain>), which attributes the bounce to the
+    // exact message rather than guessing from recency. A DSN is addressed to a
+    // single recipient, so the first entry is the one.
+    const dsnEnvelopeTo = Array.isArray(envelope.rcptTo) ? envelope.rcptTo[0] : envelope.rcptTo;
+    await processInboundDsn(rawText, dsnEnvelopeTo).catch((err) => {
       console.error("[Inbound] DSN processing failed:", err instanceof Error ? err.message : String(err));
     });
   }

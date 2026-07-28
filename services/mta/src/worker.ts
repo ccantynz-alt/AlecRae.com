@@ -24,6 +24,7 @@ import { DeliveryOptimizer } from "./delivery/optimizer.js";
 import { recordEmailSent, recordEmailSendDuration, recordActiveConnection } from "@alecrae/shared";
 import type { QueuedEmail, DkimSignOptions } from "./types.js";
 import { classifyBounce, type BounceVerdict } from "./bounce/classifier.js";
+import { buildReturnPath } from "./bounce/return-path.js";
 
 /**
  * classifier.ts is fully built (DSN enhanced-status + SMTP-code + keyword
@@ -289,6 +290,23 @@ export class MtaWorker {
       }
     }
 
+    // ── 3c. Envelope sender (Return-Path) ─────────────────────────────
+    // MAIL FROM was the message's own From: address, so asynchronous bounce
+    // DSNs went to the CUSTOMER's inbox and never reached our bounce
+    // processor — suppression only ever learned about synchronous rejections,
+    // and we would keep mailing addresses already reported dead. That is the
+    // clearest blocklisting signal there is. See bounce/return-path.ts for why
+    // the address is per-customer rather than one shared bounce domain
+    // (SPF + DMARC alignment). The From: header is untouched: only the SMTP
+    // envelope changes, which is exactly what Return-Path means.
+    const returnPath = buildReturnPath(email.id, domainRecord?.domain ?? email.domain, email.from);
+    if (returnPath === email.from) {
+      console.warn(
+        `[mta-worker] No bounce domain resolved for email ${email.id} (domain=${email.domain}) — ` +
+          `sending with From: as envelope sender, so async bounces will NOT be captured`,
+      );
+    }
+
     // ── 4. Deliver to each recipient ──────────────────────────────────
     //   When a relay is configured, bypass the delivery optimizer and send
     //   directly through the relay (SES / MailChannels / SMTP relay).
@@ -328,7 +346,7 @@ export class MtaWorker {
 
       if (activeRecipients.length > 0) {
         const relayResult = await this.relayClient.send(
-          email.from,
+          returnPath,
           activeRecipients,
           signedMessage,
         );
@@ -472,7 +490,7 @@ export class MtaWorker {
         email.id,
         recipient,
         signedMessage,
-        email.from,
+        returnPath,
         transport,
         attemptNumber,
       );
