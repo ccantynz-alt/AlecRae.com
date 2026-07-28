@@ -200,7 +200,7 @@ Track progress here directly; check items off as they ship (this replaces trusti
 - [ ] Contacts Groups — one-line `authMiddleware` fix.
 
 ### Phase 5 — Cosmetic / trivial
-- [ ] Sent — wire open-tracking to actually flip the "opened" tag.
+- [x] Sent — **DONE 2026-07-29, and it was worse than recorded.** The page was rated "partial — real list/send", but its list request was REJECTED: `ListMessagesQuery`'s status enum had drifted from the DB's `email_status`, accepting "sending" (not a DB value, matched nothing) while refusing "sent" — the exact status the page filters on. It 422'd on every load. Fixed to mirror the DB enum, with a test walking every value the database can hold. The "Opened" badge separately read a tag nothing writes; it now reports a real `openedAt` derived from the tracking `events` rows, kept as the single source of truth rather than denormalised into a tag that could drift. **Method note for the next audit: this one traced response shapes but not whether the REQUEST was accepted.**
 - [ ] Settings — wire 2FA/Sessions buttons (or remove), fix email-change persistence, fix notification-preference save.
 - [ ] Billing — compute real Domains/Webhooks usage counts instead of hardcoded 0.
 - [ ] Templates — return full row on create so the UI doesn't need a reload.
