@@ -482,6 +482,16 @@ export default function InboxPage(): React.ReactNode {
         tone: "professional",
         length: "short",
       });
+      // When Claude is unavailable the endpoint returns a canned placeholder
+      // that reads "[AI-composed content would appear here ...]". Inserting
+      // that into the reply box presented it as an AI draft the user could
+      // send to a real recipient. Refuse instead of quietly drafting nonsense.
+      if (res.data.degraded === true) {
+        setAiError(
+          "AI reply isn't available right now, so nothing was drafted. Write your reply manually or try again shortly.",
+        );
+        return;
+      }
       setQuickReplyDraft(res.data.body);
       setQuickReplyDraftVersion((v) => v + 1);
       setQuickReplyOpen(true);
@@ -508,6 +518,10 @@ export default function InboxPage(): React.ReactNode {
           bodyText,
         maxLength: 100,
       });
+      if (res.data.degraded === true) {
+        setAiError("AI summaries aren't available right now — nothing was generated.");
+        return;
+      }
       setThreadSummary(res.data.summary);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "AI summarize failed");

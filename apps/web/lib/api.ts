@@ -1616,12 +1616,25 @@ export type AIWritingTone =
 
 export type AIWritingLength = "short" | "medium" | "long";
 
+/**
+ * `degraded` means Claude was unavailable and the endpoint returned a canned
+ * placeholder instead of generated text — the compose fallback literally reads
+ * "[AI-composed content would appear here ... when Claude API is configured.]".
+ *
+ * It was added server-side (issue #99) precisely so callers could tell the two
+ * apart, and then no caller read it: the inbox inserted the placeholder
+ * straight into the reply box as though it were an AI draft, where a user
+ * could send it to a real recipient. Declared here so that is a type error
+ * rather than a silent omission.
+ */
 export interface AIComposeResult {
   subject: string;
   body: string;
   tone: AIWritingTone;
   length: AIWritingLength;
   confidence: number;
+  /** True when the text is a placeholder, not model output. */
+  degraded?: boolean;
   wordCount: number;
   profileUsed: string | null;
 }
@@ -1633,6 +1646,8 @@ export interface AISummarizeResult {
   summaryWordCount: number;
   compressionRatio: number;
   confidence: number;
+  /** True when the summary is a placeholder, not model output. */
+  degraded?: boolean;
 }
 
 export const aiWritingApi = {

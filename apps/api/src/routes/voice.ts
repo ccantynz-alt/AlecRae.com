@@ -338,7 +338,13 @@ voice.post(
           body: fallbackBody,
           tone: input.tone,
           aiUnavailable: true,
-          confidence: 0.3,
+          // Zero, not 0.3. A fallback that never reached a model has no
+          // confidence to report, and a plausible-looking number invites the
+          // UI to render it as a real score. Issue #99 zeroed exactly this on
+          // every ai-writing fallback; issue #98 fixed only the
+          // compose-in-voice path and left these two behind.
+          confidence: 0,
+          degraded: true,
         },
       });
     }
@@ -400,7 +406,13 @@ voice.post(
           body: input.body,
           tone: input.tone,
           aiUnavailable: true,
-          confidence: 0.3,
+          // Zero, not 0.3. A fallback that never reached a model has no
+          // confidence to report, and a plausible-looking number invites the
+          // UI to render it as a real score. Issue #99 zeroed exactly this on
+          // every ai-writing fallback; issue #98 fixed only the
+          // compose-in-voice path and left these two behind.
+          confidence: 0,
+          degraded: true,
         },
       });
     }
