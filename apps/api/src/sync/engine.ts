@@ -286,7 +286,7 @@ export async function syncGmailMessages(
           for (const entry of historyData.history) {
             if (entry.messagesAdded) {
               for (const added of entry.messagesAdded) {
-                await fetchAndStoreGmailMessage(added.message.id, account.userId, token);
+                await fetchAndStoreGmailMessage(added.message.id, account.userId, token, false);
                 result.messagesAdded++;
               }
             }
@@ -358,7 +358,10 @@ async function fullGmailSync(
   // Fetch each message (batch in production)
   for (const msg of listData.messages) {
     try {
-      await fetchAndStoreGmailMessage(msg.id, accountId, token);
+      // Full-list path: this only runs when the account has no syncState, i.e.
+      // the initial backfill of an existing mailbox. Marked as such so per-email
+      // AI work is skipped for it (see ReceivedEmailInput.backfill).
+      await fetchAndStoreGmailMessage(msg.id, accountId, token, true);
       result.messagesAdded++;
     } catch (err) {
       result.errors.push(`Failed to fetch message ${msg.id}: ${err}`);
@@ -422,6 +425,8 @@ async function fetchAndStoreGmailMessage(
   messageId: string,
   accountId: string,
   token: string,
+  /** True when backfilling historical mail rather than receiving new mail. */
+  backfill: boolean,
 ): Promise<void> {
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -464,6 +469,7 @@ async function fetchAndStoreGmailMessage(
     providerMessageId: msg.id,
     inReplyTo: parsed.inReplyTo ?? null,
     references,
+    backfill,
     ...(parsed.receivedAt !== undefined ? { receivedAt: parsed.receivedAt } : {}),
     ...(parsed.isRead !== undefined ? { isRead: parsed.isRead } : {}),
     ...(parsed.isStarred !== undefined ? { isStarred: parsed.isStarred } : {}),
@@ -721,6 +727,9 @@ export async function syncOutlookMessages(
       await storeReceivedEmail({
         accountId: account.userId,
         source: "outlook",
+        // No deltaLink yet means this is the initial pull of an existing
+        // mailbox, not new mail — skip per-email AI work for it.
+        backfill: !account.syncState,
         from: parsed.from ? toAddr(parsed.from) : { address: "unknown" },
         to: (parsed.to ?? []).map(toAddr),
         cc: (parsed.cc ?? []).map(toAddr),
