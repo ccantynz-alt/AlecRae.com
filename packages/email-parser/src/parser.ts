@@ -345,20 +345,76 @@ function extractFilename(disposition: string): string | undefined {
 // Content-Transfer-Encoding decoding
 // ---------------------------------------------------------------------------
 
+/**
+ * Decode bytes using a declared charset, falling back to UTF-8.
+ *
+ * Every decode path in this file previously used a bare `new TextDecoder()`,
+ * which always decodes UTF-8 regardless of what the message declared. A
+ * message stating `charset=iso-8859-1` or `shift_jis` — routine in archives
+ * old enough to be worth importing — came out mojibake, silently, with the
+ * declared charset parsed and then thrown away a few lines later.
+ *
+ * An unknown or misspelled label makes `TextDecoder` throw, so it is caught:
+ * a charset we do not recognise must degrade to a best-effort read, never
+ * abort an import mid-mailbox.
+ *
+ * `fatal` is deliberately left off. Bytes that are invalid in the declared
+ * charset become U+FFFD rather than throwing, because a partly-garbled body
+ * is still worth importing and a thrown error would lose the whole message.
+ */
+function decodeBytes(bytes: Uint8Array, charset: string | undefined): string {
+  const label = charset?.trim().toLowerCase();
+  if (label && label !== "utf-8" && label !== "utf8") {
+    try {
+      return new TextDecoder(label).decode(bytes);
+    } catch {
+      // Unrecognised label — fall through to UTF-8.
+    }
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+/** Pull the charset parameter out of a Content-Type header value. */
+function charsetOf(contentType: string): string | undefined {
+  const match = /;\s*charset\s*=\s*"?([^";\s]+)"?/i.exec(contentType);
+  return match?.[1];
+}
+
 function decodeBody(
   body: string,
   encoding: string,
-  _contentType: string,
+  contentType: string,
 ): string {
   const enc = encoding.toLowerCase();
+  const charset = charsetOf(contentType);
+
   if (enc === "base64") {
-    const bytes = decodeBase64(body);
-    return new TextDecoder().decode(bytes);
+    return decodeBytes(decodeBase64(body), charset);
   }
   if (enc === "quoted-printable") {
-    return decodeQuotedPrintable(body);
+    // Quoted-printable yields BYTES, not characters — `=C3=A9` is two bytes
+    // that mean "é" only once decoded as UTF-8. Reading them as code points
+    // (which is what the string-returning path did) produced mojibake for
+    // every non-ASCII character in a QP body, the single most common
+    // encoding for European-language mail.
+    return decodeBytes(quotedPrintableToBytes(body), charset);
+  }
+  // 7bit/8bit bodies are raw bytes that arrived as a latin1-ish string; only
+  // re-decode when a non-UTF-8 charset was declared, so the common case is
+  // untouched.
+  if (charset !== undefined) {
+    return decodeBytes(latin1ToBytes(body), charset);
   }
   return body;
+}
+
+/** Reinterpret a byte-per-code-unit string back into the bytes it represents. */
+function latin1ToBytes(input: string): Uint8Array {
+  const bytes = new Uint8Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    bytes[i] = input.charCodeAt(i) & 0xff;
+  }
+  return bytes;
 }
 
 function decodeTransferEncoding(
@@ -395,6 +451,18 @@ function decodeQuotedPrintable(input: string): string {
     );
 }
 
+/**
+ * Quoted-printable to raw bytes.
+ *
+ * `decodeQuotedPrintable` returns a string with one code unit per byte, which
+ * is only the right answer when the charset happens to be latin1. Callers
+ * that know the declared charset need the bytes so they can decode them
+ * properly — `=C3=A9` is two bytes meaning "é" in UTF-8, not two characters.
+ */
+function quotedPrintableToBytes(input: string): Uint8Array {
+  return latin1ToBytes(decodeQuotedPrintable(input));
+}
+
 // ---------------------------------------------------------------------------
 // RFC 2047 encoded word decoding
 // ---------------------------------------------------------------------------
@@ -405,18 +473,25 @@ function decodeQuotedPrintable(input: string): string {
 export function decodeEncodedWords(input: string): string {
   return input.replace(
     /=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g,
-    (_match, _charset: string, encoding: string, text: string) => {
+    (_match, charset: string, encoding: string, text: string) => {
+      // The charset is right here in the encoded word, and was being ignored
+      // — the parameter was even named `_charset` to mark it unused. Subject
+      // lines are the most visible field in the product, so a mis-decoded one
+      // is the most visible possible corruption.
       if (encoding.toUpperCase() === "B") {
-        // Base64
-        const bytes = decodeBase64(text);
-        return new TextDecoder().decode(bytes);
+        return decodeBytes(decodeBase64(text), charset);
       }
-      // Q-encoding (like quoted-printable but _ = space)
-      return text
-        .replace(/_/g, " ")
-        .replace(/=([0-9A-Fa-f]{2})/g, (_, hex: string) =>
-          String.fromCharCode(parseInt(hex, 16)),
-        );
+      // Q-encoding: like quoted-printable, but `_` means space. The hex
+      // escapes are BYTES — decoding them as code points read a UTF-8
+      // subject as latin1, which is the mojibake case that actually shows up.
+      const bytes = latin1ToBytes(
+        text
+          .replace(/_/g, " ")
+          .replace(/=([0-9A-Fa-f]{2})/g, (_, hex: string) =>
+            String.fromCharCode(parseInt(hex, 16)),
+          ),
+      );
+      return decodeBytes(bytes, charset);
     },
   );
 }
