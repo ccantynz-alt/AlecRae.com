@@ -12,7 +12,7 @@
  * (.limit(), .returning(), or a bare .where()) — all three must be awaitable.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 
 interface FakeAccount {
   id: string;
@@ -100,6 +100,16 @@ vi.mock("@alecrae/db", async () => {
 });
 
 describe("billing.ts dunning notification wiring", () => {
+  // billing.ts pulls in a large module graph (Stripe, db, email) and takes
+  // ~1s to load cold. Every test below imports it, but only the first one
+  // pays that cost, which under a parallel full-suite run pushed that single
+  // test past the 5s default and reddened CI at random. Warm the cache here
+  // instead: the module is not reset between tests (only mocks are cleared),
+  // so this is a one-time cost that belongs to no individual test.
+  beforeAll(async () => {
+    await import("../src/lib/billing.js");
+  }, 30_000);
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockAccount = null;

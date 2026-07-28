@@ -17,6 +17,9 @@ import { z } from "zod";
 // written above that comment. Enforced here, at the schema boundary, so every
 // send path and every future caller inherits it rather than each remembering.
 /** Matches only strings free of CR, LF and NUL — i.e. safe on one header line. */
+// Matching control characters is the entire purpose of this pattern — they are
+// exactly what a header-injection payload uses — so the rule does not apply.
+// eslint-disable-next-line no-control-regex
 const HEADER_SAFE_RE = /^[^\r\n\u0000]*$/;
 
 function headerSafeString(max: number, label: string): z.ZodString {

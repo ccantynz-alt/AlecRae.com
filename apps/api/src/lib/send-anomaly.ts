@@ -132,7 +132,9 @@ async function getBaseline(accountId: string, now: Date): Promise<number> {
   }
 
   const since = new Date(now.getTime() - BASELINE_HOURS * 3600_000);
-  let mean = 0;
+  // No initializer: both branches below assign, so a default here would only
+  // hide which one actually ran.
+  let mean: number;
   try {
     const db = getDatabase();
     const [row] = await db

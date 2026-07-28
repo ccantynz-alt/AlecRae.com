@@ -394,7 +394,10 @@ async function handleSend(c: Context) {
     // path used whatever was stored at connect time with no expiry check, so
     // sending broke ~1 hour after connecting and stayed broken until the user
     // manually reconnected the account.
-    let freshAccessToken = connectedAcct.accessToken;
+    // No initializer: the catch below returns, so the only way past this block
+    // is with a genuinely refreshed token. Seeding it with the stored one would
+    // reintroduce the stale-token bug this exists to fix.
+    let freshAccessToken: string;
     try {
       const fresh = await ensureFreshAccessToken({
         provider: connectedAcct.provider as "gmail" | "outlook",

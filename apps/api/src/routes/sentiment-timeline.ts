@@ -23,6 +23,9 @@ async function runSentimentAnalysis(content: string): Promise<EmailSentiment> {
       err instanceof Error && err.message.includes("ANTHROPIC_API_KEY")
         ? "Sentiment analysis is unavailable — no AI provider configured."
         : `Sentiment analysis failed: ${err instanceof Error ? err.message : String(err)}`,
+      // Keep the provider error attached — the message above is for the user,
+      // the cause is what makes a failure diagnosable in logs.
+      { cause: err },
     );
   }
 }
