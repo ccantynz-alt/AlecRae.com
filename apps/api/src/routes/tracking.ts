@@ -15,6 +15,7 @@ import { getDatabase, emails, events, domains, suppressionLists } from "@alecrae
 import { enqueueWebhookDelivery } from "../lib/webhook-dispatcher.js";
 import { recordEngagementEvent } from "./send-time.js";
 import { verifyTrackedUrl, SIGNATURE_PARAM } from "../lib/tracking-link.js";
+import { shouldRecordTrackingEvent } from "../lib/tracking-throttle.js";
 
 const tracking = new Hono();
 
@@ -41,6 +42,15 @@ async function recordEvent(
   eventType: string,
   extra: { url?: string; userAgent?: string; ipAddress?: string } = {},
 ): Promise<void> {
+  // Bail before touching the database. Each recorded event costs an insert
+  // AND a webhook delivery to the customer's own endpoint, so an unthrottled
+  // public endpoint lets anyone holding one tracking URL drive unlimited
+  // outbound calls at that customer's receiver. See lib/tracking-throttle.ts
+  // for why this is measured per email rather than per IP.
+  if (!(await shouldRecordTrackingEvent(emailId, eventType))) {
+    return;
+  }
+
   const db = getDatabase();
 
   // Look up the email to get account context
@@ -187,6 +197,17 @@ tracking.get("/:emailId/click", async (c) => {
 
 tracking.post("/:emailId/unsubscribe", async (c) => {
   const emailId = c.req.param("emailId");
+
+  // Repeat unsubscribes carry no information — the insert below is already
+  // idempotent — but they still cost a lookup and a write on an endpoint
+  // anyone can call. Past the limit we answer 200 without re-doing the work,
+  // because by then the address genuinely IS suppressed: reporting a failure
+  // to a mail client's one-click unsubscribe would be both wrong and a
+  // compliance risk.
+  if (!(await shouldRecordTrackingEvent(emailId, "email.unsubscribed.request"))) {
+    return c.text("Unsubscribed", 200);
+  }
+
   const db = getDatabase();
 
   // Look up the email to find the sender domain + recipient
