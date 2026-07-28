@@ -3183,10 +3183,39 @@ export const autoResponderApi = {
     );
   },
 
-  preview(sampleEmailBody: string): Promise<{ reply: string }> {
-    return apiFetch<{ reply: string }>("/v1/auto-responder/preview", {
+  /**
+   * POST /v1/auto-responder/preview — render the auto-reply for a sample email.
+   *
+   * This sent `{ sampleEmailBody }` — a field the endpoint's schema does not
+   * declare — while the schema REQUIRES senderEmail, subject and body. Every
+   * preview 422'd. It also expected a bare `{ reply }`, where the endpoint
+   * returns an enveloped preview object.
+   *
+   * `aiGenerated` is surfaced deliberately: the reply is currently templated,
+   * not AI-written, and the endpoint says so. Callers should not present it as
+   * an AI draft while that flag is false.
+   */
+  preview(sample: {
+    senderEmail: string;
+    senderName?: string;
+    subject: string;
+    body: string;
+  }): Promise<{
+    data: {
+      preview: { to: string; subject: string; htmlBody: string; textBody: string };
+      aiGenerated: boolean;
+      note: string;
+    };
+  }> {
+    return apiFetch<{
+      data: {
+        preview: { to: string; subject: string; htmlBody: string; textBody: string };
+        aiGenerated: boolean;
+        note: string;
+      };
+    }>("/v1/auto-responder/preview", {
       method: "POST",
-      body: JSON.stringify({ sampleEmailBody }),
+      body: JSON.stringify(sample),
     });
   },
 };

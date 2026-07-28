@@ -295,10 +295,13 @@ function WebhooksSection(): ReactNode {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<Webhook[]>("/v1/webhooks");
-      // NB: the Webhooks section is the genuinely working part of this page —
-      // webhook-dispatcher.ts really delivers these, HMAC-signed and retried.
-      setWebhooks(data);
+      // Enveloped, like every other list endpoint. This page read it bare, so
+      // `setWebhooks` received the envelope object and the list never rendered
+      // — even though webhook-dispatcher.ts genuinely delivers these,
+      // HMAC-signed and retried. lib/api.ts had it right all along; this page
+      // hand-rolls its own call instead of using that client.
+      const res = await apiFetch<{ data: Webhook[] }>("/v1/webhooks");
+      setWebhooks(res.data);
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -328,11 +331,11 @@ function WebhooksSection(): ReactNode {
     setCreating(true);
     setCreateError(null);
     try {
-      const created = await apiFetch<Webhook>("/v1/webhooks", {
+      const created = await apiFetch<{ data: Webhook }>("/v1/webhooks", {
         method: "POST",
         body: JSON.stringify({ url: newUrl.trim(), events: Array.from(selectedEvents) }),
       });
-      setWebhooks((prev) => [created, ...prev]);
+      setWebhooks((prev) => [created.data, ...prev]);
       setNewUrl("");
       setSelectedEvents(new Set());
       setShowForm(false);

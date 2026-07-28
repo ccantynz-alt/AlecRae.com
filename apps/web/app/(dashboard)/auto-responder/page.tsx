@@ -396,18 +396,32 @@ SendLog.displayName = "SendLog";
 
 function AIPreview(): React.ReactNode {
   const [sampleBody, setSampleBody] = useState("");
+  // The endpoint requires the sender address and subject — the reply it
+  // renders addresses the sender and quotes the subject back. This form used
+  // to collect only a body and send it under a field name the schema does not
+  // declare, so every preview 422'd.
+  const [senderEmail, setSenderEmail] = useState("");
+  const [subject, setSubject] = useState("");
   const [previewReply, setPreviewReply] = useState<string | null>(null);
+  const [aiGenerated, setAiGenerated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const canPreview = sampleBody.trim() !== "" && senderEmail.trim() !== "" && subject.trim() !== "";
+
   const handlePreview = async (): Promise<void> => {
-    if (!sampleBody.trim()) return;
+    if (!canPreview) return;
     setLoading(true);
     setError(null);
     setPreviewReply(null);
     try {
-      const res = await autoResponderApi.preview(sampleBody.trim());
-      setPreviewReply(res.reply);
+      const res = await autoResponderApi.preview({
+        senderEmail: senderEmail.trim(),
+        subject: subject.trim(),
+        body: sampleBody.trim(),
+      });
+      setPreviewReply(res.data.preview.textBody);
+      setAiGenerated(res.data.aiGenerated);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Preview failed");
     } finally {
@@ -419,15 +433,58 @@ function AIPreview(): React.ReactNode {
     <Card>
       <CardContent>
         <Box className="mb-3">
-          <Text variant="heading-sm">AI Reply Preview</Text>
+          {/* Renamed from "AI Reply Preview": the endpoint returns
+              aiGenerated: false and says so in its own response — the reply is
+              templated, not written by a model. Calling it AI was a claim the
+              backend contradicts. */}
+          <Text variant="heading-sm">Reply Preview</Text>
           <Text variant="body-sm" muted className="mt-0.5">
-            Paste a sample incoming email to see how AlecRae AI would respond.
+            See the auto-reply a sender would receive.
           </Text>
         </Box>
 
         {error && <ErrorBanner message={error} />}
 
         <Box className="space-y-3">
+          <Box className="grid gap-3 sm:grid-cols-2">
+            <Box>
+              <Text
+                as="label"
+                variant="body-sm"
+                className="mb-1 block font-medium text-content"
+                htmlFor="preview-sender"
+              >
+                Sender email
+              </Text>
+              <input
+                id="preview-sender"
+                type="email"
+                className="w-full rounded-md border border-border bg-surface p-2 text-sm text-content placeholder:text-content-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder="sender@example.com"
+                value={senderEmail}
+                onChange={(e) => setSenderEmail(e.target.value)}
+              />
+            </Box>
+            <Box>
+              <Text
+                as="label"
+                variant="body-sm"
+                className="mb-1 block font-medium text-content"
+                htmlFor="preview-subject"
+              >
+                Subject
+              </Text>
+              <input
+                id="preview-subject"
+                type="text"
+                className="w-full rounded-md border border-border bg-surface p-2 text-sm text-content placeholder:text-content-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+                placeholder="Project proposal"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+              />
+            </Box>
+          </Box>
+
           <Box>
             <Text
               as="label"
@@ -452,15 +509,15 @@ function AIPreview(): React.ReactNode {
             variant="secondary"
             size="sm"
             onClick={handlePreview}
-            disabled={loading || !sampleBody.trim()}
+            disabled={loading || !canPreview}
           >
-            {loading ? "Generating..." : "Preview AI Reply"}
+            {loading ? "Generating…" : "Preview reply"}
           </Button>
 
           {previewReply && (
             <Box className="rounded-md border border-accent/30 bg-accent/5 p-4">
               <Text variant="body-sm" className="mb-1 font-semibold text-content">
-                AI-generated reply:
+                {aiGenerated ? "AI-generated reply:" : "Templated reply (not AI-generated):"}
               </Text>
               <Text variant="body-sm" className="whitespace-pre-wrap text-content-secondary">
                 {previewReply}
