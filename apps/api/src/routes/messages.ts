@@ -9,7 +9,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, desc, and, lt, sql } from "drizzle-orm";
+import { eq, desc, and, lt, sql, inArray } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -46,6 +46,7 @@ import {
 } from "@alecrae/mta/lib";
 import { scanAttachment, isSafe } from "@alecrae/security";
 import { checkOutboundSpam } from "../lib/outbound-spam-gate.js";
+import { checkSendAnomaly, recordSend } from "../lib/send-anomaly.js";
 import {
   renderTemplate,
   validateVariables,
@@ -404,6 +405,111 @@ async function handleSend(c: Context) {
       );
     }
 
+    // ── Abuse checks that apply even though the provider owns the IP ──
+    //
+    // This fast path returns before the domain-based pipeline's gates, which
+    // is right for warm-up and per-ISP throttling — Google/Microsoft own the
+    // sending IP and its reputation, not us. It is NOT right for these two:
+    //
+    //   * Spam content. If a compromised account blasts phishing through its
+    //     connected Gmail using our API, Google can suspend OUR OAuth client
+    //     — which would break Gmail for every customer at once. Our exposure
+    //     here is the app registration, not an IP.
+    //   * Hard bounces and complaints. A recipient who bounced or reported us
+    //     is objectively undeliverable or hostile, whatever the transport.
+    //
+    // Deliberately NOT applied here: unsubscribe suppression, which is
+    // list-scoped consent and should not silently block a personal 1:1 reply;
+    // and per-account quota, which is a billing behaviour change and Craig's
+    // call, not a side effect of a security fix. Both are flagged rather than
+    // changed. Header-injection safety needs nothing here — it is enforced in
+    // SendMessageSchema, so this path inherits it.
+    const connectedRecipients = [
+      ...input.to.map((r) => r.email),
+      ...(input.cc ?? []).map((r) => r.email),
+      ...(input.bcc ?? []).map((r) => r.email),
+    ];
+
+    const connectedSpamVerdict = await checkOutboundSpam({
+      messageId,
+      accountId: auth.accountId,
+      from: input.from.email,
+      to: connectedRecipients,
+      subject: resolvedSubject,
+      text: input.text,
+      html: input.html,
+    });
+
+    if (!connectedSpamVerdict.allowed) {
+      return c.json(
+        {
+          error: {
+            type: "spam_content_rejected",
+            message:
+              "This message was refused because its content scored as spam. " +
+              "Sending it would risk this platform's access to your mail provider.",
+            code: "outbound_spam_rejected",
+            score: connectedSpamVerdict.score,
+            reasons: connectedSpamVerdict.reasons,
+          },
+        },
+        422,
+      );
+    }
+
+    // Bounce/complaint suppression across every domain this account owns.
+    // suppression_lists.domain_id is NOT NULL, so there is no account-level
+    // row to read — join through the caller's own domains instead.
+    const hardSuppressed = await db
+      .select({ email: suppressionLists.email, reason: suppressionLists.reason })
+      .from(suppressionLists)
+      .innerJoin(domains, eq(suppressionLists.domainId, domains.id))
+      .where(
+        and(
+          eq(domains.accountId, auth.accountId),
+          inArray(
+            suppressionLists.email,
+            connectedRecipients.map((e) => e.toLowerCase()),
+          ),
+          inArray(suppressionLists.reason, ["bounce", "complaint"]),
+        ),
+      )
+      .limit(1);
+
+    const blocked = hardSuppressed[0];
+    if (blocked) {
+      return c.json(
+        {
+          error: "RECIPIENT_SUPPRESSED",
+          reason: blocked.reason === "bounce" ? "hard_bounce" : "complaint",
+          address: blocked.email,
+        },
+        422,
+      );
+    }
+
+    // Volume anomaly applies here too: a compromised account blasting through
+    // its connected Gmail is exactly the pattern that gets our OAuth client
+    // suspended, which would break Gmail for every customer at once.
+    const connectedAnomaly = await checkSendAnomaly(auth.accountId);
+    if (!connectedAnomaly.allowed) {
+      return c.json(
+        {
+          error: {
+            type: "send_volume_anomaly",
+            message:
+              "Sending is paused on this account: volume this hour is far above its " +
+              "normal rate, which usually means credentials have been compromised. " +
+              "Contact support to resume.",
+            code: "send_volume_anomaly",
+            sentThisHour: connectedAnomaly.currentHour,
+            threshold: connectedAnomaly.threshold,
+          },
+        },
+        429,
+      );
+    }
+
     let providerMessageId: string | undefined;
 
     if (connectedAcct.provider === "gmail") {
@@ -474,6 +580,9 @@ async function handleSend(c: Context) {
     // Semantic search indexing — the MTA send path below already does this
     // via indexEmail() (Meilisearch); this fast-path skipped it entirely.
     enqueueEmail(id, auth.accountId);
+
+    // Feed the volume-anomaly counter. Best-effort: the send already happened.
+    void recordSend(auth.accountId);
 
     return c.json({ id, messageId: providerMessageId ?? messageId, status: "sent" as const }, 202);
   }
@@ -660,6 +769,29 @@ async function handleSend(c: Context) {
         },
       },
       422,
+    );
+  }
+
+  // ── 1b4. Send-volume anomaly (compromised-account detection) ──────
+  // Content scoring above misses a blast of individually-bland messages.
+  // This compares the account against its own recent history rather than a
+  // flat ceiling — see lib/send-anomaly.ts and Known Issue #117.
+  const anomaly = await checkSendAnomaly(auth.accountId);
+  if (!anomaly.allowed) {
+    return c.json(
+      {
+        error: {
+          type: "send_volume_anomaly",
+          message:
+            "Sending is paused on this account: volume this hour is far above its " +
+            "normal rate, which usually means credentials have been compromised. " +
+            "Contact support to resume.",
+          code: "send_volume_anomaly",
+          sentThisHour: anomaly.currentHour,
+          threshold: anomaly.threshold,
+        },
+      },
+      429,
     );
   }
 
@@ -894,6 +1026,9 @@ async function handleSend(c: Context) {
 
   // ── 6b. Record send against warm-up counter (fire-and-forget) ────
   warmupOrchestrator.recordSend(domainRecord.id).catch(() => { /* fire-and-forget */ });
+
+  // ── 6b2. Record against the send-volume anomaly counter ─────────
+  void recordSend(auth.accountId);
 
   // ── 6c. Increment quota counter in Redis (fire-and-forget) ──────
   incrementQuota(auth.accountId).catch(() => {
