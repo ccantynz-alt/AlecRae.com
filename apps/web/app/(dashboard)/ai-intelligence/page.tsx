@@ -1137,7 +1137,7 @@ export default function AiIntelligencePage(): ReactNode {
       title="AI Intelligence"
       description="Priority scoring, sentiment, smart replies, action prediction, relationship insights, and a writing coach — all in one workbench."
     >
-      <PlanGate feature="context_intelligence" required="pro">
+      <PlanGate feature="context_intelligence">
         <AiIntelligenceContent />
       </PlanGate>
     </PageLayout>

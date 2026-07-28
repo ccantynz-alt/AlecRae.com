@@ -317,7 +317,7 @@ export default function TranslatePage(): React.JSX.Element {
       title="Translation"
       description="Translate emails instantly across 35+ languages with AI that understands context, not just words."
     >
-      <PlanGate feature="translation" required="personal">
+      <PlanGate feature="translation">
         <Box className="space-y-8">
           {/* Live Translation */}
           <Card>

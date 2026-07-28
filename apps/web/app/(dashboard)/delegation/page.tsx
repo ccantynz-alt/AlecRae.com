@@ -1739,7 +1739,7 @@ export default function DelegationPage(): ReactNode {
       title="Delegation"
       description="Delegate email handling to teammates, work delegated inboxes, and co-write drafts with a review workflow."
     >
-      <PlanGate feature="delegation" required="team">
+      <PlanGate feature="delegation">
         <DelegationContent />
       </PlanGate>
     </PageLayout>

@@ -1074,7 +1074,7 @@ export default function ProductivityPage(): ReactNode {
       title="Productivity"
       description="Where your time goes in email, when you're at your best, and how to reclaim hours — measured by AlecRae."
     >
-      <PlanGate feature="productivity_analytics" required="pro">
+      <PlanGate feature="productivity_analytics">
         <ProductivityContent />
       </PlanGate>
     </PageLayout>

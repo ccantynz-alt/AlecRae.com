@@ -76,7 +76,7 @@ export default function SearchPage(): React.ReactNode {
           onSearched={handleSearched}
         />
 
-        <PlanGate feature="semantic_search" required="pro">
+        <PlanGate feature="semantic_search">
           <SemanticSearchSection />
         </PlanGate>
 

@@ -438,7 +438,7 @@ export default function FilesPage(): React.ReactNode {
   };
 
   return (
-    <PlanGate feature="files" required="personal">
+    <PlanGate feature="files">
       <PageLayout
         title="Files"
         description="All attachments from your emails, organised in one place."

@@ -1,16 +1,33 @@
 "use client";
 import { useEffect, useState } from "react";
-import { isPlanAtLeast, normalizeApiPlanTier, type PlanTier, PLAN_LABELS } from "../lib/plan";
+import {
+  isPlanAtLeast,
+  normalizeApiPlanTier,
+  type PlanTier,
+  type FeatureKey,
+  FEATURE_PLANS,
+  PLAN_LABELS,
+} from "../lib/plan";
 import { getAccessToken } from "../lib/auth-token";
 
 interface PlanGateProps {
-  feature: string;
-  required: PlanTier;
+  /** Gateable feature name. The required tier is looked up in FEATURE_PLANS. */
+  feature: FeatureKey;
   children: React.ReactNode;
   showUpgrade?: boolean;
 }
 
-export function PlanGate({ feature: _feature, required, children, showUpgrade = true }: PlanGateProps) {
+/**
+ * Gates children behind the plan tier that FEATURE_PLANS assigns to `feature`.
+ *
+ * There is deliberately no `required` override prop. This component previously
+ * ignored `feature` entirely and trusted a hand-passed `required`, which let
+ * each call site drift from both FEATURE_PLANS and the server's matching
+ * `requirePlan(...)` — and one had: AI Triage admitted Personal-tier users to a
+ * page whose every request the server then 403'd.
+ */
+export function PlanGate({ feature, children, showUpgrade = true }: PlanGateProps) {
+  const required: PlanTier = FEATURE_PLANS[feature];
   const [plan, setPlan] = useState<PlanTier | null>(null);
   const [loading, setLoading] = useState(true);
 

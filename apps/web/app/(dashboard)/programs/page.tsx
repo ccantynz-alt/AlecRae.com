@@ -94,7 +94,7 @@ export default function ProgramsPage(): React.ReactNode {
       title="Programs"
       description="Programmable email — TypeScript snippets that run in a secure sandbox on every message. Apps Script, but type-safe."
     >
-      <PlanGate feature="programs" required="pro">
+      <PlanGate feature="programs">
         <ProgramsManager />
       </PlanGate>
     </PageLayout>

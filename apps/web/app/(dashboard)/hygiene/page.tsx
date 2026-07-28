@@ -1374,7 +1374,7 @@ export default function HygienePage(): ReactNode {
       title="Email Hygiene"
       description="Track your email habits, manage subscriptions, and keep your inbox healthy."
     >
-      <PlanGate feature="email_hygiene" required="personal">
+      <PlanGate feature="email_hygiene">
         <HygieneContent />
       </PlanGate>
     </PageLayout>

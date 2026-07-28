@@ -679,7 +679,7 @@ export default function IntegrationsPage(): ReactNode {
         </Box>
 
         {/* Webhooks + API Access — Pro plan and above */}
-        <PlanGate feature="ai_agent" required="pro" showUpgrade={false}>
+        <PlanGate feature="ai_agent" showUpgrade={false}>
           <Box className="space-y-6">
             <WebhooksSection />
             <ApiAccessSection />

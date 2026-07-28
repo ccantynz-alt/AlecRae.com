@@ -181,7 +181,7 @@ export default function AiTriagePage() {
   };
 
   return (
-    <PlanGate feature="ai_categorization" required="personal">
+    <PlanGate feature="ai_categorization">
       <PageLayout
         title="AI Triage"
         description="AlecRae automatically categorizes every email so you always know what needs attention."

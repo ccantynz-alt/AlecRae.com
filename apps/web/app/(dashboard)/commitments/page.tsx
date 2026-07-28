@@ -1342,7 +1342,7 @@ export default function CommitmentsPage(): ReactNode {
       title="Commitments"
       description="Every promise, action item, and deadline in your email — tracked by AI so nothing slips."
     >
-      <PlanGate feature="context_intelligence" required="pro">
+      <PlanGate feature="context_intelligence">
         <CommitmentsContent />
       </PlanGate>
     </PageLayout>

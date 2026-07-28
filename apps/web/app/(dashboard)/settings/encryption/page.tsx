@@ -44,7 +44,7 @@ export default function EncryptionSettingsPage(): React.ReactNode {
       description="Zero-knowledge encryption for your email. Your private key never leaves this device."
     >
       <Box className="max-w-3xl">
-        <PlanGate feature="e2e_encryption" required="personal">
+        <PlanGate feature="e2e_encryption">
           <EncryptionPanel />
         </PlanGate>
       </Box>

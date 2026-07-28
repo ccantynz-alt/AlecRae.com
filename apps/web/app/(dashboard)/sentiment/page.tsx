@@ -1059,7 +1059,7 @@ export default function SentimentPage(): ReactNode {
       title="Sentiment Timeline"
       description="How every relationship is trending — sentiment tracked over time, with alerts before a relationship goes cold."
     >
-      <PlanGate feature="sentiment_timeline" required="pro">
+      <PlanGate feature="sentiment_timeline">
         <SentimentContent />
       </PlanGate>
     </PageLayout>

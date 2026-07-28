@@ -1228,7 +1228,7 @@ export default function SchedulingPage(): ReactNode {
       title="Scheduling"
       description="AI meeting proposals, availability, and the best times to send — so your calendar and your inbox both run on evidence."
     >
-      <PlanGate feature="scheduling_intelligence" required="pro">
+      <PlanGate feature="scheduling_intelligence">
         <SchedulingContent />
       </PlanGate>
     </PageLayout>

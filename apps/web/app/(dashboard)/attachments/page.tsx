@@ -1176,7 +1176,7 @@ export default function AttachmentsPage(): ReactNode {
       title="Attachment Intelligence"
       description="Every attachment analyzed by AI — virus scanned, PII flagged, and smartly organized."
     >
-      <PlanGate feature="attachment_intelligence" required="pro">
+      <PlanGate feature="attachment_intelligence">
         <AttachmentsContent />
       </PlanGate>
     </PageLayout>

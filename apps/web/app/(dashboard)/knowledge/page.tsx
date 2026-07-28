@@ -1196,7 +1196,7 @@ export default function KnowledgePage(): ReactNode {
       title="Knowledge Graph"
       description="People, companies, projects, and topics AlecRae has learned from your email — and how they connect."
     >
-      <PlanGate feature="knowledge_graph" required="pro">
+      <PlanGate feature="knowledge_graph">
         <KnowledgeContent />
       </PlanGate>
     </PageLayout>

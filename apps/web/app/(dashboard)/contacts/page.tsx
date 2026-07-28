@@ -347,7 +347,7 @@ export default function ContactsPage(): React.ReactNode {
                 </Box>
 
                 <Box className="mb-6">
-                  <PlanGate feature="contact_enrichment" required="personal">
+                  <PlanGate feature="contact_enrichment">
                     <ContactEnrichmentCard contactId={selected.id} />
                   </PlanGate>
                 </Box>

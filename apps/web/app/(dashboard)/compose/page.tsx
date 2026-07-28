@@ -591,14 +591,14 @@ function ComposePage(): React.ReactNode {
 
         {/* Compose power tools — AI assist + spellcheck (personal tier) */}
         <Box className="mt-4 space-y-3">
-          <PlanGate feature="grammar_full" required="personal" showUpgrade={false}>
+          <PlanGate feature="grammar_full" showUpgrade={false}>
             <ComposeAssistPanel
               text={bodyDraft}
               onRequestSlots={handleAssistRequestSlots}
               onInsert={handleAssistInsert}
             />
           </PlanGate>
-          <PlanGate feature="grammar_full" required="personal" showUpgrade={false}>
+          <PlanGate feature="grammar_full" showUpgrade={false}>
             <ComposeSpellcheckPanel
               text={bodyDraft.replace(/<[^>]*>/g, "")}
               onApplyCorrection={handleSpellcheckCorrection}
@@ -606,7 +606,7 @@ function ComposePage(): React.ReactNode {
           </PlanGate>
           {/* Email recall — only available once a message has been sent */}
           {lastSentEmailId && (
-            <PlanGate feature="email_recall" required="personal">
+            <PlanGate feature="email_recall">
               <ComposeRecallPanel emailId={lastSentEmailId} />
             </PlanGate>
           )}

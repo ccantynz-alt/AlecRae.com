@@ -41,7 +41,7 @@ export default function VoicePage(): React.ReactNode {
             Train AI on your sent email so drafts sound exactly like you —
             rhythm, vocabulary, punctuation, and all.
           </Text>
-          <PlanGate feature="voice_clone" required="pro">
+          <PlanGate feature="voice_clone">
             <VoiceCloneManager />
           </PlanGate>
         </Box>
