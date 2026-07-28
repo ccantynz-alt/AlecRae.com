@@ -57,19 +57,30 @@ import {
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-interface TrustSettings {
-  linkScanning: boolean;
-  attachmentScanning: boolean;
-  blockExternalImages: boolean;
-  senderVerification: boolean;
-}
-
+/**
+ * Mirrors `data` from GET /v1/security.
+ *
+ * That endpoint did not exist — the default Overview tab, the first thing
+ * every user sees, 404'd on load for everyone. It now returns counts taken
+ * from real rows.
+ *
+ * `score` is deliberately null: nothing in the product computes a security
+ * score, and rendering an invented number in a gauge is the same fabrication
+ * already removed from the threat-scanning endpoints.
+ *
+ * The four "trust settings" toggles that used to sit here are gone. They were
+ * never stored anywhere (PATCH /v1/security/settings also did not exist), and
+ * more importantly they controlled nothing: attachment scanning already runs
+ * unconditionally on send, and the inbox strips all HTML, so external images
+ * can never load regardless of a toggle. Adding a store for switches that no
+ * code reads would have been theatre.
+ */
 interface SecurityOverview {
-  score: number;
-  phishingBlocked: number;
-  suspiciousSenders: number;
+  score: number | null;
+  scoreAvailable: boolean;
   threatsDetected: number;
-  trustSettings: TrustSettings;
+  phishingReported: number;
+  suspiciousSenders: number;
 }
 
 interface SecurityEvent {
@@ -80,11 +91,29 @@ interface SecurityEvent {
   createdAt: string;
 }
 
+/**
+ * Mirrors `data` from POST /v1/security/verify-sender.
+ *
+ * The previous shape here (`score` / `risk` / `details[]`) matched nothing the
+ * endpoint returns, and the fetch also treated the `{ data }` envelope as the
+ * result — so every field read was undefined. The real verification is far
+ * richer than what the page was trying to show: live SPF/DKIM/DMARC lookups,
+ * typosquat detection against known brands, and per-signal indicators.
+ */
 interface SenderVerificationResult {
   email: string;
-  score: number;
-  risk: "low" | "medium" | "high";
-  details: string[];
+  domain: string;
+  spfPass: boolean;
+  dkimPass: boolean;
+  dmarcPass: boolean;
+  reputationScore: number;
+  trustLevel: "high" | "medium" | "low" | "suspicious";
+  isKnownService: boolean;
+  knownServiceName: string | null;
+  isFreeEmailProvider: boolean;
+  hasMxRecords: boolean;
+  indicators: { type: "positive" | "negative" | "neutral"; message: string }[];
+  typosquatMatch: { brand: string; legitimateDomain: string } | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -146,13 +175,20 @@ function severityBadgeClass(severity: SecurityEvent["severity"]): string {
   }
 }
 
-function riskBadgeClass(risk: SenderVerificationResult["risk"]): string {
-  switch (risk) {
-    case "high":
+/**
+ * Colour for a sender's trust level. Note the scale runs the opposite way to
+ * the old `risk` field this replaced: HIGH trust is good, where high risk was
+ * bad. Getting that backwards would paint a trustworthy sender red.
+ */
+function riskBadgeClass(trust: SenderVerificationResult["trustLevel"]): string {
+  switch (trust) {
+    case "suspicious":
       return "bg-red-100 text-red-800 border border-red-200";
+    case "low":
+      return "bg-orange-100 text-orange-800 border border-orange-200";
     case "medium":
       return "bg-yellow-100 text-yellow-800 border border-yellow-200";
-    case "low":
+    case "high":
     default:
       return "bg-green-100 text-green-700 border border-green-200";
   }
@@ -202,8 +238,9 @@ ErrorBanner.displayName = "ErrorBanner";
 // ─── Score Card ────────────────────────────────────────────────────────────────
 
 function ScoreCard({ overview }: { overview: SecurityOverview }): ReactNode {
-  const grade = gradeFromScore(overview.score);
-  const color = scoreColorClass(overview.score);
+  const hasScore = overview.scoreAvailable && overview.score !== null;
+  const grade = hasScore ? gradeFromScore(overview.score as number) : "—";
+  const color = hasScore ? scoreColorClass(overview.score as number) : "text-content-subtle";
 
   return (
     <Card>
@@ -212,11 +249,14 @@ function ScoreCard({ overview }: { overview: SecurityOverview }): ReactNode {
           {/* Big score + grade */}
           <Box className="flex items-center gap-5">
             <Box className="flex flex-col items-center justify-center w-24 h-24 rounded-2xl bg-surface-raised border border-border">
+              {/* No score is computed anywhere in the product. This used to
+                  render a number the API never returned; showing a dash beats
+                  inventing a grade for a security posture nobody measured. */}
               <Text variant="heading-lg" className={`font-bold leading-none ${color}`}>
-                {overview.score}
+                {hasScore ? overview.score : "—"}
               </Text>
               <Text variant="caption" className="text-content-subtle mt-0.5">
-                / 100
+                {hasScore ? "/ 100" : "no score"}
               </Text>
             </Box>
             <Box>
@@ -226,6 +266,11 @@ function ScoreCard({ overview }: { overview: SecurityOverview }): ReactNode {
               <Text variant="heading-lg" className={`font-bold leading-none ${color}`}>
                 {grade}
               </Text>
+              {!hasScore && (
+                <Text variant="caption" className="text-content-subtle mt-1 block max-w-[22ch]">
+                  Scoring isn&apos;t implemented yet — the counts beside this are real.
+                </Text>
+              )}
             </Box>
           </Box>
 
@@ -233,9 +278,9 @@ function ScoreCard({ overview }: { overview: SecurityOverview }): ReactNode {
           <Box className="flex flex-wrap gap-4 flex-1">
             {(
               [
-                { label: "Phishing Blocked", value: overview.phishingBlocked },
-                { label: "Suspicious Senders", value: overview.suspiciousSenders },
                 { label: "Threats Detected", value: overview.threatsDetected },
+                { label: "Phishing Reported", value: overview.phishingReported },
+                { label: "Suspicious Senders", value: overview.suspiciousSenders },
               ] as const
             ).map(({ label, value }) => (
               <Box
@@ -350,98 +395,6 @@ function EventsTable({
 }
 EventsTable.displayName = "EventsTable";
 
-// ─── Trust Settings ────────────────────────────────────────────────────────────
-
-const TRUST_TOGGLES: {
-  key: keyof TrustSettings;
-  label: string;
-  description: string;
-}[] = [
-  {
-    key: "linkScanning",
-    label: "Link scanning",
-    description: "Scan all URLs in emails for phishing and malware.",
-  },
-  {
-    key: "attachmentScanning",
-    label: "Attachment scanning",
-    description: "Check attachments for viruses and malicious content.",
-  },
-  {
-    key: "blockExternalImages",
-    label: "Block external images",
-    description: "Prevent remote images from loading (stops tracking pixels).",
-  },
-  {
-    key: "senderVerification",
-    label: "Sender verification",
-    description: "Verify SPF/DKIM/DMARC and flag suspicious senders.",
-  },
-];
-
-function TrustSettingsCard({
-  settings,
-  onChange,
-  saving,
-}: {
-  settings: TrustSettings;
-  onChange: (key: keyof TrustSettings, value: boolean) => void;
-  saving: boolean;
-}): ReactNode {
-  return (
-    <Card>
-      <CardHeader>
-        <Text variant="heading-sm" className="font-semibold">
-          Trust Settings
-        </Text>
-      </CardHeader>
-      <CardContent>
-        <Box className="divide-y divide-border">
-          {TRUST_TOGGLES.map(({ key, label, description }) => (
-            <Box
-              key={key}
-              className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
-            >
-              <Box className="flex-1 min-w-0">
-                <Text variant="body-sm" className="font-medium text-content">
-                  {label}
-                </Text>
-                <Text variant="caption" className="text-content-subtle">
-                  {description}
-                </Text>
-              </Box>
-              <Box
-                as="button"
-                role="switch"
-                aria-checked={settings[key]}
-                aria-label={label}
-                disabled={saving}
-                onClick={() => onChange(key, !settings[key])}
-                className={[
-                  "relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2",
-                  settings[key] ? "bg-brand-600" : "bg-surface-raised border border-border",
-                  saving ? "opacity-50 cursor-not-allowed" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-              >
-                <Box
-                  as="span"
-                  aria-hidden="true"
-                  className={[
-                    "inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
-                    settings[key] ? "translate-x-5" : "translate-x-0",
-                  ].join(" ")}
-                />
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      </CardContent>
-    </Card>
-  );
-}
-TrustSettingsCard.displayName = "TrustSettingsCard";
 
 // ─── Sender Verification ───────────────────────────────────────────────────────
 
@@ -459,11 +412,11 @@ function SenderVerificationCard(): ReactNode {
     setResult(null);
     setCheckError(null);
     try {
-      const data = await apiFetch<SenderVerificationResult>("/v1/security/verify-sender", {
-        method: "POST",
-        body: JSON.stringify({ email: trimmed }),
-      });
-      setResult(data);
+      const res = await apiFetch<{ data: SenderVerificationResult }>(
+        "/v1/security/verify-sender",
+        { method: "POST", body: JSON.stringify({ email: trimmed }) },
+      );
+      setResult(res.data);
     } catch (err) {
       setCheckError(errMsg(err));
     } finally {
@@ -526,27 +479,71 @@ function SenderVerificationCard(): ReactNode {
                   {result.email}
                 </Text>
                 <Text variant="caption" className="text-content-subtle">
-                  Reputation score: {result.score}/100
+                  Reputation score: {result.reputationScore}/100
+                  {result.knownServiceName ? ` · ${result.knownServiceName}` : ""}
+                  {result.isFreeEmailProvider ? " · free email provider" : ""}
                 </Text>
               </Box>
               <Box
                 as="span"
-                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${riskBadgeClass(result.risk)}`}
+                className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${riskBadgeClass(result.trustLevel)}`}
               >
-                {result.risk} risk
+                {result.trustLevel} trust
               </Box>
             </Box>
 
-            {result.details.length > 0 && (
+            {/* Real authentication results from live DNS lookups — the most
+                useful part of this check, and previously not rendered at all. */}
+            <Box className="flex flex-wrap gap-2" aria-label="Authentication results">
+              {(
+                [
+                  { label: "SPF", pass: result.spfPass },
+                  { label: "DKIM", pass: result.dkimPass },
+                  { label: "DMARC", pass: result.dmarcPass },
+                  { label: "MX", pass: result.hasMxRecords },
+                ] as const
+              ).map(({ label, pass }) => (
+                <Box
+                  key={label}
+                  as="span"
+                  className={`rounded-md px-2 py-1 text-xs font-medium ${
+                    pass ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  {label} {pass ? "pass" : "fail"}
+                </Box>
+              ))}
+            </Box>
+
+            {result.typosquatMatch && (
+              <Box
+                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2"
+                role="alert"
+              >
+                <Text variant="body-sm" className="text-red-800">
+                  This domain closely resembles{" "}
+                  <strong>{result.typosquatMatch.legitimateDomain}</strong> (
+                  {result.typosquatMatch.brand}) — a common impersonation tactic.
+                </Text>
+              </Box>
+            )}
+
+            {result.indicators.length > 0 && (
               <Box as="ul" className="space-y-1 pl-1" aria-label="Verification details">
-                {result.details.map((detail, idx) => (
+                {result.indicators.map((indicator, idx) => (
                   <Box key={idx} as="li" className="flex items-start gap-2">
                     <Box
                       as="span"
-                      className="mt-1.5 w-1.5 h-1.5 rounded-full bg-content-subtle flex-shrink-0"
+                      className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        indicator.type === "positive"
+                          ? "bg-green-500"
+                          : indicator.type === "negative"
+                            ? "bg-red-500"
+                            : "bg-content-subtle"
+                      }`}
                     />
                     <Text variant="body-sm" className="text-content">
-                      {detail}
+                      {indicator.message}
                     </Text>
                   </Box>
                 ))}
@@ -647,14 +644,13 @@ export default function SecurityPage(): ReactNode {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
 
-  const [savingSettings, setSavingSettings] = useState(false);
 
   const loadOverview = useCallback(async (): Promise<void> => {
     setLoadingOverview(true);
     setOverviewError(null);
     try {
-      const data = await apiFetch<SecurityOverview>("/v1/security");
-      setOverview(data);
+      const res = await apiFetch<{ data: SecurityOverview }>("/v1/security");
+      setOverview(res.data);
     } catch (err) {
       setOverviewError(errMsg(err));
     } finally {
@@ -666,8 +662,8 @@ export default function SecurityPage(): ReactNode {
     setLoadingEvents(true);
     setEventsError(null);
     try {
-      const data = await apiFetch<SecurityEvent[]>("/v1/security/events");
-      setEvents(data);
+      const res = await apiFetch<{ data: SecurityEvent[] }>("/v1/security/events");
+      setEvents(res.data);
     } catch (err) {
       setEventsError(errMsg(err));
     } finally {
@@ -680,24 +676,6 @@ export default function SecurityPage(): ReactNode {
     void loadEvents();
   }, [loadOverview, loadEvents]);
 
-  async function handleToggle(key: keyof TrustSettings, value: boolean): Promise<void> {
-    if (!overview) return;
-    const prev = overview;
-    // Optimistic update
-    setOverview({ ...overview, trustSettings: { ...overview.trustSettings, [key]: value } });
-    setSavingSettings(true);
-    try {
-      await apiFetch<unknown>("/v1/security/settings", {
-        method: "PATCH",
-        body: JSON.stringify({ [key]: value }),
-      });
-    } catch {
-      // Roll back on failure
-      setOverview(prev);
-    } finally {
-      setSavingSettings(false);
-    }
-  }
 
   return (
     <PageLayout
@@ -731,14 +709,14 @@ export default function SecurityPage(): ReactNode {
               onRetry={() => void loadEvents()}
             />
 
-            {/* Trust settings — only when overview loaded */}
-            {!loadingOverview && overview && (
-              <TrustSettingsCard
-                settings={overview.trustSettings}
-                onChange={(key, value) => void handleToggle(key, value)}
-                saving={savingSettings}
-              />
-            )}
+            {/*
+              The Trust Settings card was removed rather than repaired. Its four
+              toggles had no backing store (PATCH /v1/security/settings never
+              existed) and, more to the point, controlled nothing: attachment
+              scanning already runs unconditionally on send, and the inbox
+              strips all HTML so external images cannot load either way.
+              Switches that change no behaviour are worse than no switches.
+            */}
 
             {/* Sender verification */}
             <SenderVerificationCard />
