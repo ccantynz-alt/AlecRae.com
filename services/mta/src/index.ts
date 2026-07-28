@@ -32,6 +32,15 @@ const WORKER_CONCURRENCY = parseInt(
 const HEALTH_PORT = parseInt(process.env["HEALTH_PORT"] ?? "8082", 10);
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
 
+/**
+ * Whether this OUTBOUND service also opens an SMTP listener.
+ *
+ * Default false. See the long note at the call site: the port-25 receiver is
+ * `services/inbound`'s job, this process shipped an unfinished duplicate, and
+ * that duplicate is what ran as an open relay for 9 days (Known Issue #105).
+ */
+const ENABLE_SMTP_RECEIVER = process.env["MTA_ENABLE_SMTP_RECEIVER"] === "true";
+
 /** How often the accepted-recipient domain list is refreshed from the DB. */
 const LOCAL_DOMAIN_REFRESH_MS = 5 * 60 * 1000;
 let localDomainTimer: ReturnType<typeof setInterval> | null = null;
@@ -171,88 +180,126 @@ async function start(): Promise<void> {
         `[mta] TLS_CERT_PATH/TLS_KEY_PATH set but failed to load: ${loaded.error.message} — starting WITHOUT STARTTLS`,
       );
     }
-  } else {
+  } else if (ENABLE_SMTP_RECEIVER) {
+    // Only meaningful when a receiver is actually running — this TlsManager
+    // serves STARTTLS to inbound connections, not outbound delivery (the
+    // SmtpClient negotiates its own opportunistic TLS).
     console.warn(
-      "[mta] TLS_CERT_PATH/TLS_KEY_PATH not set — SMTP server starting WITHOUT STARTTLS (mail transits in plaintext)",
+      "[mta] TLS_CERT_PATH/TLS_KEY_PATH not set — SMTP receiver starting WITHOUT STARTTLS (mail transits in plaintext)",
     );
   }
 
-  // ── 4. Start SMTP server (inbound) ─────────────────────────────────
-  // The relay control (localDomains) is loaded BEFORE the listener starts, so
-  // there is no window in which the server is up and accepting anything.
-  const initialLocalDomains = await loadLocalDomains();
-  if (initialLocalDomains.length === 0) {
-    console.warn(
-      "[mta] No hosted domains resolved — the SMTP server will refuse every recipient. " +
-        "Set MTA_LOCAL_DOMAINS or verify a domain. (Refusing is deliberate: an " +
-        "unconfigured relay control must never accept mail — see Known Issue #105.)",
-    );
-  } else {
-    console.log(`[mta] Relay control: accepting mail for ${initialLocalDomains.length} domain(s)`);
-  }
-
-  console.log(`[mta] Starting SMTP server on ${SMTP_HOST}:${SMTP_PORT}...`);
-  smtpServer = new SmtpServer(
-    {
-      host: SMTP_HOST,
-      port: SMTP_PORT,
-      hostname: SMTP_HOSTNAME,
-      maxMessageSize: 25 * 1024 * 1024,
-      maxRecipients: 100,
-      maxConnections: 500,
-      connectionTimeout: 300_000,
-      socketTimeout: 60_000,
-      requireAuth: false,
-      enableStarttls: starttlsEnabled,
-      localDomains: initialLocalDomains,
-    },
-    starttlsEnabled ? tlsManager : undefined,
-  );
-
-  // Customer domains are onboarded while the server runs; without this a newly
-  // verified domain would be refused until the next restart.
-  localDomainTimer = setInterval(() => {
-    void loadLocalDomains().then((list) => {
-      smtpServer?.updateLocalDomains(list);
-    });
-  }, LOCAL_DOMAIN_REFRESH_MS);
-
-  smtpServer.on("listening", (addr) => {
-    console.log(`[mta] SMTP server listening on ${addr.address}:${addr.port}`);
-  });
-
-  smtpServer.on("connection", (session) => {
+  // ── 4. SMTP receiver — OFF unless explicitly enabled ───────────────
+  //
+  // This service is the OUTBOUND MTA: a BullMQ consumer that delivers queued
+  // mail (docs/infra/multi-platform-mail-plan.md, Phase 1). The port-25
+  // listener that receives mail is a different service, `services/inbound`
+  // (Phase 2, `alecrae-inbound`), which has the real pipeline — MIME parsing,
+  // DKIM/DMARC verification, a relay control, routing and Postgres storage.
+  //
+  // This process nonetheless shipped its own SMTP receiver, bound to port 25
+  // by default, whose message handler logged an envelope and discarded it. It
+  // duplicated a service that already exists, did it incompletely, and had no
+  // relay control — and it is exactly what ran as an open relay for 9 days
+  // (Known Issue #105). The architecture never called for it.
+  //
+  // So it is now opt-in and off by default: the outbound MTA opens no listening
+  // socket at all unless someone deliberately sets MTA_ENABLE_SMTP_RECEIVER=true.
+  // Removing the attack surface beats guarding it. The relay control added to
+  // SmtpServer stays as defence in depth for anyone who does enable it.
+  if (!ENABLE_SMTP_RECEIVER) {
     console.log(
-      `[mta] SMTP connection from ${session.remoteAddress}:${session.remotePort}`,
+      "[mta] SMTP receiver disabled (default). This service delivers outbound mail only; " +
+        "inbound mail is handled by services/inbound. Set MTA_ENABLE_SMTP_RECEIVER=true to " +
+        "override — but see Known Issue #105 first.",
     );
-  });
+  } else {
+    console.warn(
+      "[mta] MTA_ENABLE_SMTP_RECEIVER=true — starting an SMTP receiver in the OUTBOUND service. " +
+        "This duplicates services/inbound and its message handler does not deliver mail anywhere. " +
+        "Prefer running services/inbound instead.",
+    );
+    // The relay control (localDomains) is loaded BEFORE the listener starts, so
+    // there is no window in which the server is up and accepting anything.
+    const initialLocalDomains = await loadLocalDomains();
+    if (initialLocalDomains.length === 0) {
+      console.warn(
+        "[mta] No hosted domains resolved — the SMTP server will refuse every recipient. " +
+          "Set MTA_LOCAL_DOMAINS or verify a domain. (Refusing is deliberate: an " +
+          "unconfigured relay control must never accept mail — see Known Issue #105.)",
+      );
+    } else {
+      console.log(`[mta] Relay control: accepting mail for ${initialLocalDomains.length} domain(s)`);
+    }
+
+    console.log(`[mta] Starting SMTP server on ${SMTP_HOST}:${SMTP_PORT}...`);
+    smtpServer = new SmtpServer(
+      {
+        host: SMTP_HOST,
+        port: SMTP_PORT,
+        hostname: SMTP_HOSTNAME,
+        maxMessageSize: 25 * 1024 * 1024,
+        maxRecipients: 100,
+        maxConnections: 500,
+        connectionTimeout: 300_000,
+        socketTimeout: 60_000,
+        requireAuth: false,
+        enableStarttls: starttlsEnabled,
+        localDomains: initialLocalDomains,
+      },
+      starttlsEnabled ? tlsManager : undefined,
+    );
+
+    // Customer domains are onboarded while the server runs; without this a newly
+    // verified domain would be refused until the next restart.
+    localDomainTimer = setInterval(() => {
+      void loadLocalDomains().then((list) => {
+        smtpServer?.updateLocalDomains(list);
+      });
+    }, LOCAL_DOMAIN_REFRESH_MS);
+
+    smtpServer.on("listening", (addr) => {
+      console.log(`[mta] SMTP server listening on ${addr.address}:${addr.port}`);
+    });
+
+    smtpServer.on("connection", (session) => {
+      console.log(
+        `[mta] SMTP connection from ${session.remoteAddress}:${session.remotePort}`,
+      );
+    });
 
   smtpServer.on("message", (envelope, _session) => {
-    console.log(
-      `[mta] Received message from ${envelope.mailFrom?.address ?? "unknown"} ` +
-        `to ${envelope.rcptTo.map((r) => r.address).join(", ")} ` +
-        `(${envelope.data.length} bytes)`,
-    );
-    // In production: route to inbound processing pipeline
-    // (spam filtering, mailbox routing, storage)
-  });
+      // This handler accepts a message and does nothing with it — it never
+      // delivered mail anywhere. That is why the receiver is opt-in: rather
+      // than build a second, competing inbound pipeline here, received mail
+      // belongs to services/inbound, which parses MIME, verifies DKIM/DMARC,
+      // routes to a mailbox and stores it. Anything accepted here is dropped,
+      // and saying so plainly beats a "in production this would..." comment.
+      console.warn(
+        `[mta] DISCARDING message from ${envelope.mailFrom?.address ?? "unknown"} ` +
+          `to ${envelope.rcptTo.map((r) => r.address).join(", ")} ` +
+          `(${envelope.data.length} bytes) — this service has no inbound pipeline. ` +
+          `Run services/inbound to actually receive mail.`,
+      );
+    });
 
-  smtpServer.on("error", (error, session) => {
-    console.error(
-      `[mta] SMTP error${session ? ` (session ${session.id})` : ""}: ${error.message}`,
-    );
-  });
+    smtpServer.on("error", (error, session) => {
+      console.error(
+        `[mta] SMTP error${session ? ` (session ${session.id})` : ""}: ${error.message}`,
+      );
+    });
 
-  try {
-    await smtpServer.start();
-  } catch (error) {
-    console.error("[mta] Failed to start SMTP server:", error);
-    // Non-fatal: the outbound worker can still run without the SMTP receiver
-    // if port 25 is not available (common in development).
-    console.warn(
-      "[mta] SMTP server failed to start — outbound-only mode enabled",
-    );
-    smtpServer = null;
+    try {
+      await smtpServer.start();
+    } catch (error) {
+      console.error("[mta] Failed to start SMTP server:", error);
+      // Non-fatal: the outbound worker can still run without the SMTP receiver
+      // if port 25 is not available (common in development).
+      console.warn(
+        "[mta] SMTP server failed to start — outbound-only mode enabled",
+      );
+      smtpServer = null;
+    }
   }
 
   // ── 5. Start outbound queue worker ──────────────────────────────────
@@ -291,8 +338,22 @@ async function start(): Promise<void> {
 
   console.log("=".repeat(60));
   console.log("  AlecRae MTA — Running");
-  console.log(`  SMTP:   ${smtpServer ? `${SMTP_HOST}:${SMTP_PORT}` : "disabled"}`);
-  console.log(`  TLS:    ${starttlsEnabled ? "STARTTLS enabled" : "DISABLED — plaintext only"}`);
+  console.log(
+    `  SMTP:   ${
+      smtpServer
+        ? `receiving on ${SMTP_HOST}:${SMTP_PORT}`
+        : "receiver OFF (outbound only — inbound is services/inbound)"
+    }`,
+  );
+  console.log(
+    `  TLS:    ${
+      smtpServer
+        ? starttlsEnabled
+          ? "STARTTLS enabled"
+          : "DISABLED — plaintext only"
+        : "n/a (no receiver)"
+    }`,
+  );
   console.log(`  Queue:  ${MTA_QUEUE_NAME} (concurrency: ${WORKER_CONCURRENCY})`);
   console.log(`  Health: :${HEALTH_PORT} (/healthz, /readyz)`);
   console.log("=".repeat(60));

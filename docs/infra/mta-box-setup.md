@@ -49,6 +49,19 @@ No configuration needed — BullMQ uses `redis://localhost:6379` by default. **B
 
 ## Step 2 — Create the MTA systemd service
 
+> **This service is outbound-only.** It is a BullMQ consumer that delivers
+> queued mail; it does **not** listen on port 25. Receiving mail is
+> `services/inbound` (`alecrae-inbound`, Phase 2), which has the real pipeline —
+> MIME parsing, DKIM/DMARC verification, relay control, routing and storage.
+>
+> The MTA used to start its own SMTP receiver on port 25 by default, whose
+> handler logged an accepted message and discarded it, with no relay control.
+> That receiver is what ran as an open relay for nine days and was actively
+> abused (Known Issue #105). It is now **off unless `MTA_ENABLE_SMTP_RECEIVER=true`**.
+>
+> **Do not set that variable.** There is no reason to run a second, incomplete
+> SMTP receiver alongside `services/inbound`, and anything it accepts is dropped.
+
 ```bash
 cat > /etc/systemd/system/alecrae-mta.service << 'EOF'
 [Unit]
