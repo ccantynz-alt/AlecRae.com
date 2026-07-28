@@ -585,11 +585,24 @@ app.use("/v1/workflows/*", authMiddleware, writeRateLimit);
 app.use("/v1/workflows", authMiddleware, writeRateLimit);
 // AI Categorization: write-level for categorize/train, read-level for listing
 // Pro-gated (FEATURE_PLANS.ai_categorization — batch Claude calls, cost risk)
-app.use("/v1/ai/categorize/feedback", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
-app.use("/v1/ai/categorize/batch", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
-app.use("/v1/ai/categorize/smart-labels/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
-app.use("/v1/ai/categorize/smart-labels", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
-app.use("/v1/ai/categorize/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+// Only /categorize and /categorize/batch actually call Claude — the other ten
+// endpoints on this router are database reads and CRUD. AI quota is therefore
+// mounted on exactly those two, not on the wildcard, which used to charge a
+// user's monthly AI allowance for merely listing their smart rules.
+//
+// The router is mounted at /v1/ai/categorize AND registers "/categorize", so
+// the real path is the doubled one below. That is what the web app calls; the
+// previous `/v1/ai/categorize/batch` mount matched nothing.
+app.use("/v1/ai/categorize/categorize/batch", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai/categorize/categorize", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai/categorize/feedback", authMiddleware, writeRateLimit, requirePlan("pro"));
+// The router registers these as `/smart-rules`, not `/smart-labels` — the old
+// middleware named a path that does not exist, so it never matched and
+// smart-rule WRITES (POST/PUT/DELETE) fell through to the read-tier limiter
+// beneath instead of the write-tier one.
+app.use("/v1/ai/categorize/smart-rules/*", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/ai/categorize/smart-rules", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/ai/categorize/*", authMiddleware, readRateLimit, requirePlan("pro"));
 app.use("/v1/ai/categorize", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
 // Search Intelligence: search-level for queries, write-level for bookmarks
 app.use("/v1/search-intelligence/bookmarks/*", authMiddleware, writeRateLimit);
