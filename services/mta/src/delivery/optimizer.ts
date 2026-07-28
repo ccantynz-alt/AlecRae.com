@@ -12,6 +12,7 @@
 
 import { randomUUID, randomInt } from "node:crypto";
 import { boundedDns as dns } from "../dns/resolver.js";
+import { toAsciiDomain } from "../address/idna.js";
 import {
   type DeliveryAttempt,
   type IspProfile,
@@ -365,7 +366,13 @@ export class DeliveryOptimizer {
    *
    * Falls back to A/AAAA records per RFC 5321 §5 when no MX records exist.
    */
-  async resolveMx(domain: string): Promise<Result<MxRecord[]>> {
+  async resolveMx(rawDomain: string): Promise<Result<MxRecord[]>> {
+    // A-label before DNS or cache lookup: an internationalized domain
+    // resolves to nothing in its native form, and normalizing before the
+    // cache key means the two spellings share one entry rather than one of
+    // them permanently missing.
+    const domain = toAsciiDomain(rawDomain);
+
     // Check cache
     const cached = this.mxCache.get(domain);
     if (cached && cached.expiresAt > Date.now()) {
