@@ -1,6 +1,26 @@
 # Full Journey Audit & Build Plan — 2026-07-22
 
-> **Last updated: 2026-07-22 09:00 UTC**
+> **Last updated: 2026-07-28 23:10 UTC**
+
+> **2026-07-28 re-audit in progress.** Craig asked for a fresh brutal pass over
+> all code, explicitly distrusting the markdown. Findings so far, against this
+> document:
+>
+> - **The verdicts below held up on re-verification.** Every Phase 1 item
+>   re-checked against current source was still broken exactly as described.
+>   This audit is trustworthy; treat it as current except where ticked off.
+> - **It under-reported in one place.** Translation had a *fourth* break it did
+>   not catch: the page ignored `wasTranslated`/`translationUnavailable`, so an
+>   AI outage would have rendered untranslated text as a successful
+>   translation. Method note: this audit traced request/response *plumbing*
+>   well, but did not systematically check whether pages honour the honest-
+>   degradation flags the backends return. Worth adding to the next pass.
+> - **It could not see build/packaging defects.** `@alecrae/ai-engine` shipped
+>   40+ subpath exports pointing at a `dist` its no-op build never produced, so
+>   25 tests covering the core send path had never executed. A per-journey
+>   source trace cannot find that class of bug; running the gates does.
+>
+> Fixed since (see git log): AI Triage, Translation, Files, Drafts.
 
 **This is the source of truth for "does it actually work," superseding any status claims in CLAUDE.md's Known Issues table for the 49 journeys covered below.** It was produced by 49 independent, code-grounded audits — one per sidebar tab — each explicitly instructed to trust nothing in any markdown doc and verify directly against current source (frontend → API route → database/AI call). This is the audit Craig asked for after the previous one (2026-07-19) was never saved anywhere and got lost. It will not happen again — this file stays in the repo, gets checked off as items ship, and gets re-run periodically rather than trusted forever.
 
@@ -146,13 +166,13 @@ Track progress here directly; check items off as they ship (this replaces trusti
 - [ ] **Domains/Vapron DNS** — get real Vapron DNS API docs from Craig (same category as the email fix), correct `dns.*` transport in `lib/vapron.ts`, add a background re-check job for pending domains.
 
 ### Phase 1 — Broken today (crashes/fails for a real user, not a missing-feature question)
-- [ ] Drafts — wire Compose's "Save Draft" to a real API call; fix the Drafts page's status filter.
-- [ ] Files — align frontend/backend response envelope and field names (page currently crashes).
+- [x] Drafts — **DONE 2026-07-28.** Root cause ran deeper than described: `ComposeEditor` typed `onSaveDraft` as taking no arguments, so it *could not* save whatever was in the editor. Added POST/PUT `/v1/messages/drafts`, fixed the list's status filter and the folder default, and made reopening a draft carry its id + body instead of dropping both.
+- [x] Files — **DONE 2026-07-28.** Envelope and four field names aligned. Two things this audit missed: the filter tabs and search box sent query params the route never declared (Zod stripped them — every tab returned the same list), and `lib/storage-quota.ts` had **zero production callers**, so uploads enforced no plan limit and deletes never freed space. Both fixed; the weekly reconciler no longer wipes uploaded-file accounting either.
 - [ ] Achievements — add missing `/streak` endpoint; align response shapes.
-- [ ] Translation — align field names and add/remove the `/history` call.
+- [x] Translation — **DONE 2026-07-28.** Field names and response shape fixed; `GET /v1/translate/history` built over the `email_translations` table it was always meant to read. Two extras found: the page ignored the backend's honest-degradation flags, and `/v1/translate/*` charged AI quota for reads that make no AI call.
 - [ ] Security (Overview tab) — add the three missing endpoints; fix the sender-verification response shape.
 - [ ] Integrations — fix Connected Apps envelope + decide whether to build real app-connect or remove the section; fix API-key generation's missing `permissions` field.
-- [ ] AI Triage — fix the plan-gate mismatch (trivial, one-line).
+- [x] AI Triage — **DONE 2026-07-28.** Not the one-liner it looked like: `PlanGate` discarded its `feature` prop entirely and gated on a hand-passed `required`, so every one of its 24 call sites could drift from `FEATURE_PLANS` and the server's `requirePlan`. It now derives the tier from the map and the override prop is removed, so the drift is unexpressible.
 
 ### Phase 2 — Fabricated/dishonest claims (worse than broken — actively misleading)
 - [ ] **Encryption** — either wire real client-key storage + an actual encrypt/decrypt pipeline, or remove the "encrypted automatically" claim until it's real. This is a security promise currently being made falsely.
