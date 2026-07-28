@@ -209,7 +209,25 @@ function parseContentType(header: string): {
   };
 }
 
-function parseMultipart(body: string, boundary: string): MimePart[] {
+/**
+ * Deepest `multipart/*` nesting to descend into, and the widest single level.
+ *
+ * Recursion here was unbounded and each level re-splits the body it was
+ * handed, so a message nesting multiparts hundreds deep costs work
+ * superlinear in its own size. On the import path that means one crafted
+ * `.eml` in an archive can stall a whole mailbox import; the same parser
+ * shape on the receive side (services/inbound) faces anonymous senders.
+ * Legitimate mail is a handful of levels — mixed wrapping alternative
+ * wrapping the bodies is three.
+ */
+const MAX_MULTIPART_DEPTH = 20;
+const MAX_PARTS_PER_LEVEL = 500;
+
+function parseMultipart(
+  body: string,
+  boundary: string,
+  depth = 0,
+): MimePart[] {
   const delimiter = `--${boundary}`;
   const parts: MimePart[] = [];
 
@@ -242,10 +260,15 @@ function parseMultipart(body: string, boundary: string): MimePart[] {
       encoding,
       body: partBody,
       ...(charset !== undefined ? { charset } : {}),
-      ...(subBoundary ? { parts: parseMultipart(partBody, subBoundary) } : {}),
+      ...(subBoundary && depth < MAX_MULTIPART_DEPTH
+        ? { parts: parseMultipart(partBody, subBoundary, depth + 1) }
+        : {}),
     };
 
     parts.push(part);
+    // Stop at the width limit — a single level with tens of thousands of
+    // siblings is the flat version of the same attack.
+    if (parts.length >= MAX_PARTS_PER_LEVEL) break;
   }
 
   return parts;
