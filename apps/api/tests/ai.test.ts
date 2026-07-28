@@ -17,12 +17,12 @@ function claudeResponse(text: string): Response {
 }
 
 function vapronResponse(text: string): Response {
-  // tRPC/superjson success envelope wrapping an OpenAI-style gateway payload.
+  // Plain-JSON REST payload (OpenAI-style) — the Vapron AI gateway speaks the
+  // REST platform surface, not tRPC. See src/lib/vapron.ts header.
   return new Response(
     JSON.stringify({
-      result: {
-        data: { json: { id: "cmpl_1", choices: [{ index: 0, message: { role: "assistant", content: text } }] } },
-      },
+      id: "cmpl_1",
+      choices: [{ index: 0, message: { role: "assistant", content: text } }],
     }),
     { status: 200 },
   );
@@ -57,7 +57,7 @@ describe("aiComplete", () => {
     process.env["VAPRON_API_KEY"] = "vpk_test";
     globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
       if (String(url).includes("api.anthropic.com")) return new Response("upstream", { status: 503 });
-      expect(String(url)).toContain("api.vapron.ai");
+      expect(String(url)).toBe("https://vapron.ai/api/platform/ai/chat");
       return vapronResponse("from vapron");
     }) as unknown as typeof fetch;
 
@@ -66,6 +66,24 @@ describe("aiComplete", () => {
       messages: [{ role: "user", content: "hi" }],
     });
     expect(result).toEqual({ text: "from vapron", provider: "vapron" });
+  });
+
+  it("treats an unrecognised Vapron gateway shape as a provider failure, not empty success", async () => {
+    // vapron.ai.complete() deliberately returns text: "" for a shape it cannot
+    // parse (the gateway response format is undocumented). aiComplete must NOT
+    // hand that back to callers as a successful completion — "never silently
+    // fail". Pairs with the matching assertion in vapron.test.ts.
+    process.env["ANTHROPIC_API_KEY"] = "sk-ant-test";
+    process.env["VAPRON_API_KEY"] = "vpk_test";
+    globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes("api.anthropic.com")) return new Response("upstream", { status: 503 });
+      return new Response(JSON.stringify({ unexpected: "shape" }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await expect(aiComplete({ messages: [{ role: "user", content: "hi" }] })).rejects.toMatchObject({
+      name: "AiError",
+      code: "vapron_empty",
+    });
   });
 
   it("throws no_provider when neither is configured", async () => {
