@@ -105,6 +105,13 @@ async function main() {
       verifiedAt: new Date(),
       spfVerified: true,
       spfRecord: "v=spf1 include:_spf.alecrae.dev ~all",
+      // NOTE: these keys are truncated placeholders and cannot actually sign.
+      // `dkimVerified: true` beside them describes the fixture's intent, not
+      // its data. Seeded rows therefore exercise the MTA's "no valid
+      // signature" path: the worker now HOLDS such a message rather than
+      // sending it unsigned (MTA_REQUIRE_DKIM), which is the correct outcome
+      // for a domain whose key does not work. Do not read a deferred send
+      // against seed data as a bug.
       dkimVerified: true,
       dkimSelector: "default",
       dkimPublicKey: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...(placeholder)",

@@ -89,6 +89,17 @@ export interface WorkerConfig {
   useRelay: boolean;
 }
 
+/**
+ * Whether an unsigned message may leave the building.
+ *
+ * Explicit opt-out only — an unset variable means DKIM is required, because
+ * the dangerous default is the permissive one. Read per call rather than
+ * captured at module load so an operator can change it without a redeploy.
+ */
+export function requireDkim(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env["MTA_REQUIRE_DKIM"]?.trim().toLowerCase() !== "false";
+}
+
 const DEFAULT_WORKER_CONFIG: WorkerConfig = {
   redisUrl: process.env["REDIS_URL"] ?? "redis://localhost:6379",
   queueName: process.env["MTA_QUEUE_NAME"] ?? "alecrae-outbound",
@@ -258,8 +269,17 @@ export class MtaWorker {
       .where(eq(domains.domain, email.domain))
       .limit(1);
 
-    // ── 3. Sign with DKIM if keys are available ─────────────────────────
+    // ── 3. Sign with DKIM ───────────────────────────────────────────────
+    // Signing used to fail OPEN: a domain with no key, or a signing error,
+    // logged a warning and sent the message unsigned anyway. That is not a
+    // survivable default. Gmail and Yahoo require DKIM from bulk senders
+    // outright, and alecrae.com publishes DMARC p=quarantine — under which an
+    // unsigned message has only SPF to fall back on, and SPF breaks on any
+    // forwarded path (mailing lists, .forward rules) where DKIM would have
+    // survived. Unsigned mail damages the reputation of every customer on the
+    // IP, not just the one message.
     let signedMessage = email.rawMessage;
+    let dkimSigned = false;
 
     if (domainRecord?.dkimPrivateKey && domainRecord?.dkimSelector) {
       const dkimOptions: DkimSignOptions = {
@@ -286,19 +306,46 @@ export class MtaWorker {
           signedMessage,
           signResult.value,
         );
+        dkimSigned = true;
         console.log(
           `[mta-worker] DKIM signed for ${domainRecord.domain} ` +
             `(selector=${domainRecord.dkimSelector})`,
         );
       } else {
-        console.warn(
-          `[mta-worker] DKIM signing failed, sending unsigned: ${signResult.error.message}`,
+        console.error(
+          `[mta-worker] DKIM signing FAILED for ${domainRecord.domain}: ${signResult.error.message}`,
         );
       }
     } else {
-      console.warn(
-        `[mta-worker] No DKIM keys for domain ${email.domain}, sending unsigned`,
+      console.error(
+        `[mta-worker] No DKIM keys configured for domain ${email.domain}`,
       );
+    }
+
+    if (!dkimSigned && requireDkim()) {
+      // DEFERRED, not bounced: the message is still perfectly deliverable once
+      // a key is configured, and a bounce would lose it. This is retryable by
+      // an operator action, which is exactly what deferral is for.
+      console.error(
+        `[mta-worker] Refusing to send email ${email.id} unsigned (domain=${email.domain}). ` +
+          `Configure DKIM for this domain, or set MTA_REQUIRE_DKIM=false to send unsigned ` +
+          `— which risks the sending reputation of every domain on this IP.`,
+      );
+      const now = new Date();
+      await db
+        .update(deliveryResults)
+        .set({
+          status: "deferred",
+          remoteResponse:
+            "Held: no valid DKIM signature. Sending unsigned would fail DMARC on forwarded paths and breaches Gmail/Yahoo bulk-sender requirements.",
+          lastAttemptAt: now,
+        })
+        .where(eq(deliveryResults.emailId, email.id));
+      await db
+        .update(emails)
+        .set({ status: "queued", updatedAt: now })
+        .where(eq(emails.id, email.id));
+      return;
     }
 
     // ── 3b. Check suppression list — skip recipients who have bounced/complained
