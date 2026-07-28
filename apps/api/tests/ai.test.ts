@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { aiComplete } from "../src/lib/ai.js";
+import { aiComplete, shortRetryDelayMs } from "../src/lib/ai.js";
 
 const realFetch = globalThis.fetch;
 
@@ -110,5 +110,48 @@ describe("aiComplete", () => {
     expect(userMessage).toContain("--- END CONTENT ---");
     expect(userMessage).toContain(malicious);
     expect(capturedBody?.system ?? "").toContain("never a set of instructions");
+  });
+});
+
+// ─── Retry-After handling (Known Issue #111, AI half) ──────────────────────
+//
+// A 429 or 529 from Claude used to be indistinguishable from a genuine
+// failure, so the Vapron fallback fired silently and the user received an
+// answer from a different model with nothing recorded. These pin the parsing
+// that decides whether waiting inline is the right answer at all.
+
+describe("shortRetryDelayMs", () => {
+  const NOW = Date.parse("2026-03-02T09:00:00.000Z");
+
+  it("accepts a short delta-seconds wait", () => {
+    expect(shortRetryDelayMs("1", NOW)).toBe(1000);
+    expect(shortRetryDelayMs("2", NOW)).toBe(2000);
+  });
+
+  it("refuses a wait longer than the cloud-AI performance budget", () => {
+    // This runs inside a user's request; a longer wait is a hang, not a
+    // retry. The caller fails over instead.
+    expect(shortRetryDelayMs("3", NOW)).toBeNull();
+    expect(shortRetryDelayMs("60", NOW)).toBeNull();
+  });
+
+  it("handles the HTTP-date form", () => {
+    const soon = new Date(NOW + 1500).toUTCString();
+    // toUTCString has second granularity, so this lands on 1000 or 2000.
+    const parsed = shortRetryDelayMs(soon, NOW);
+    expect(parsed).not.toBeNull();
+    expect(parsed).toBeLessThanOrEqual(2000);
+  });
+
+  it("returns null for an absent or unparseable header", () => {
+    expect(shortRetryDelayMs(null, NOW)).toBeNull();
+    expect(shortRetryDelayMs(undefined, NOW)).toBeNull();
+    expect(shortRetryDelayMs("", NOW)).toBeNull();
+    expect(shortRetryDelayMs("in a bit", NOW)).toBeNull();
+  });
+
+  it("treats a date already past as no wait rather than a negative one", () => {
+    const past = new Date(NOW - 5000).toUTCString();
+    expect(shortRetryDelayMs(past, NOW)).toBe(0);
   });
 });
