@@ -123,6 +123,34 @@ export interface SyncResult {
   newAccessToken?: string;
   newRefreshToken?: string;
   newTokenExpiresAt?: Date;
+  /**
+   * Set when the provider rate-limited us, carrying its `Retry-After` header
+   * (which may be absent). The caller must back this account off rather than
+   * retrying on the next sweep — see lib/provider-backoff.ts for why ignoring
+   * a 429 endangers the OAuth client for every customer, not just this one.
+   */
+  rateLimited?: { retryAfter: string | null };
+}
+
+/**
+ * Did the provider rate-limit this response, and if so, on what terms?
+ *
+ * Google answers 429, but also 403 with a `rateLimitExceeded` /
+ * `userRateLimitExceeded` reason — treating that as an ordinary auth failure
+ * would keep us hammering a quota we have already exhausted. The body is not
+ * read here: these call sites go on to consume it, and a Response body can
+ * only be read once.
+ */
+function detectRateLimit(res: Response): { retryAfter: string | null } | null {
+  if (res.status === 429) {
+    return { retryAfter: res.headers.get("Retry-After") };
+  }
+  // Google signals quota exhaustion as 403 with a machine-readable reason;
+  // the header is usually absent there, so the caller's default applies.
+  if (res.status === 403 && /rateLimitExceeded/i.test(res.headers.get("X-Goog-Error") ?? "")) {
+    return { retryAfter: res.headers.get("Retry-After") };
+  }
+  return null;
 }
 
 export interface Folder {
@@ -309,8 +337,19 @@ export async function syncGmailMessages(
 
         result.newSyncState = historyData.historyId;
       } else {
-        // History expired, fall back to full sync
-        await fullGmailSync(account.userId, token, maxResults, result);
+        // A 429 here is NOT an expired history cursor. Falling through to a
+        // full sync would immediately issue another request — and a much more
+        // expensive one — against a quota we have just been told we exhausted,
+        // which is how a single throttled account turns into a throttled
+        // OAuth client.
+        const limited = detectRateLimit(historyRes);
+        if (limited) {
+          result.rateLimited = limited;
+          result.errors.push(`Gmail history rate-limited: ${historyRes.status}`);
+        } else {
+          // History expired, fall back to full sync
+          await fullGmailSync(account.userId, token, maxResults, result);
+        }
       }
     } else {
       // First sync — full sync
@@ -344,6 +383,8 @@ async function fullGmailSync(
   );
 
   if (!listRes.ok) {
+    const limited = detectRateLimit(listRes);
+    if (limited) result.rateLimited = limited;
     result.errors.push(`Gmail list failed: ${listRes.status}`);
     return;
   }
@@ -686,6 +727,8 @@ export async function syncOutlookMessages(
 
     const res = await fetch(url, { headers });
     if (!res.ok) {
+      const limited = detectRateLimit(res);
+      if (limited) result.rateLimited = limited;
       result.errors.push(`Outlook sync failed: ${res.status}`);
       result.syncDurationMs = performance.now() - start;
       return result;

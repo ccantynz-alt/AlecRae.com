@@ -27,6 +27,10 @@ import { getDatabase, connectedAccounts } from "@alecrae/db";
 import { syncAccount, type EmailAccount, type SyncResult } from "../sync/engine.js";
 import { isRedisConfigured } from "./queue.js";
 import { decryptSecretOrNull, encryptSecret } from "./token-crypto.js";
+import {
+  recordProviderRateLimit,
+  getProviderBackoffUntil,
+} from "./provider-backoff.js";
 
 type ConnectedAccountRow = typeof connectedAccounts.$inferSelect;
 
@@ -72,6 +76,17 @@ export async function syncAndPersist(row: ConnectedAccountRow): Promise<SyncResu
   const account = rowToEmailAccount(row);
   const result = await syncAccount(account);
 
+  // Honour a provider rate-limit before anything else. Retrying a 429 on the
+  // next sweep — which is what happened before — risks throttling applied to
+  // the OAuth *client*, breaking Gmail for every customer at once.
+  if (result.rateLimited) {
+    const seconds = await recordProviderRateLimit(row.id, result.rateLimited.retryAfter);
+    console.warn(
+      `[mailbox-sync] ${row.provider} rate-limited ${row.email}; ` +
+        `pausing sync for this account for ${seconds}s`,
+    );
+  }
+
   const db = getDatabase();
   const now = new Date();
 
@@ -104,7 +119,7 @@ export async function syncAndPersist(row: ConnectedAccountRow): Promise<SyncResu
  * Outlook (generic IMAP has no polling sync implementation yet — see
  * syncAccount()'s "imap" branch), and not synced within the last few minutes.
  */
-export async function resyncEligibleAccounts(): Promise<{ attempted: number; failed: number }> {
+export async function resyncEligibleAccounts(): Promise<{ attempted: number; failed: number; rateLimited: number }> {
   const db = getDatabase();
   const cutoff = new Date(Date.now() - MIN_RESYNC_GAP_MS);
 
@@ -120,9 +135,20 @@ export async function resyncEligibleAccounts(): Promise<{ attempted: number; fai
 
   let attempted = 0;
   let failed = 0;
+  let rateLimited = 0;
 
   for (const row of rows) {
     if (row.provider !== "gmail" && row.provider !== "outlook") continue;
+
+    // Skip accounts the provider has told us to leave alone. Counted
+    // separately from `attempted` so a paused account never reads as a
+    // failure — it is the system working, not breaking.
+    const backoffUntil = await getProviderBackoffUntil(row.id);
+    if (backoffUntil !== null) {
+      rateLimited++;
+      continue;
+    }
+
     attempted++;
     try {
       const result = await syncAndPersist(row);
@@ -135,7 +161,7 @@ export async function resyncEligibleAccounts(): Promise<{ attempted: number; fai
     }
   }
 
-  return { attempted, failed };
+  return { attempted, failed, rateLimited };
 }
 
 let resyncTimer: ReturnType<typeof setInterval> | null = null;
