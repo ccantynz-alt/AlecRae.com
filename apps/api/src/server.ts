@@ -356,6 +356,29 @@ app.use("/v1/semantic", authMiddleware, searchRateLimit, requirePlan("pro"), req
 // Contacts: read-level (600 req/min)
 app.use("/v1/contacts/*", authMiddleware, readRateLimit);
 app.use("/v1/contacts", authMiddleware, readRateLimit);
+// ─── Routers that were mounted with app.route() and NO middleware ──────────
+//
+// Each of these calls requireScope() and reads c.get("auth"), but no
+// authMiddleware ever ran for them, so the auth context was undefined and
+// EVERY request 401'd — for every caller, including owners. Same class as
+// issue #87 (/v1/ai-intelligence), repeated four more times.
+//
+// Their unit tests all pass because those tests mock requireScope, so nothing
+// caught it. Found by diffing every app.route() mount against the set of
+// paths covered by an authMiddleware prefix.
+//
+// This contradicts several standing claims: the journey audit lists
+// Signatures as "real CRUD" and says Auto-Responder's "config genuinely
+// saves" (neither could), and CLAUDE.md records push notifications as wired
+// in tranche 5. Only the Contacts Groups instance had been spotted.
+app.use("/v1/contact-groups/*", authMiddleware, writeRateLimit);
+app.use("/v1/contact-groups", authMiddleware, writeRateLimit);
+app.use("/v1/signatures/*", authMiddleware, writeRateLimit);
+app.use("/v1/signatures", authMiddleware, writeRateLimit);
+app.use("/v1/auto-responder/*", authMiddleware, writeRateLimit);
+app.use("/v1/auto-responder", authMiddleware, writeRateLimit);
+app.use("/v1/push/*", authMiddleware, writeRateLimit);
+app.use("/v1/push", authMiddleware, writeRateLimit);
 // Contacts Extended (CRM-lite): read + write level
 app.use("/v1/contacts-extended/interactions/*", authMiddleware, readRateLimit);
 app.use("/v1/contacts-extended/interactions", authMiddleware, writeRateLimit);
@@ -424,6 +447,17 @@ app.use("/v1/query", authMiddleware, searchRateLimit, requirePlan("pro"), requir
 // which is enforced inside the route via requireScope("admin:write").
 app.use("/v1/changelog", readRateLimit);
 app.use("/v1/changelog/*", readRateLimit);
+// The changelog is a MIXED router: GET is genuinely public (it backs the
+// public changelog page), but POST/PUT/DELETE call requireScope("admin:write")
+// and had no authMiddleware, so every admin write 401'd — the same class as
+// the four routers above. A blanket app.use() would authenticate the public
+// reads too, so this is scoped by method rather than path alone.
+app.on(
+  ["POST", "PUT", "DELETE"],
+  ["/v1/changelog", "/v1/changelog/*"],
+  authMiddleware,
+  writeRateLimit,
+);
 // Voice Messages (B8): write-level (200 req/min — audio upload + transcription)
 app.use("/v1/voice-messages/*", authMiddleware, writeRateLimit);
 app.use("/v1/voice-messages", authMiddleware, writeRateLimit);
