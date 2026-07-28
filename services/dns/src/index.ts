@@ -1,4 +1,4 @@
-export { getDnsConfig, type DnsServiceConfig, type MxHost } from "./config";
+export { getDnsConfig, deriveDmarcReportAuthorization, type DnsServiceConfig, type MxHost, type DmarcReportAuthorization } from "./config";
 export { AuthoritativeDnsServer, parseDnsMessage, serializeDnsMessage, encodeName, decodeName, encodeRdata } from "./authoritative/server";
 export { DnsRecordManager } from "./records/manager";
 export { DnsHealthMonitor, type HealthMonitorConfig, type HealthAlert } from "./monitoring/health";
@@ -17,6 +17,7 @@ export {
 export {
   runLivenessCheck,
   checkDomainLiveness,
+  checkDmarcReportAuthorization,
   type LivenessResult,
   type LivenessReport,
 } from "./liveness-checker";
