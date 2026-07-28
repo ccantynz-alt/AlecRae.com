@@ -94,12 +94,24 @@ async function importRoute(): Promise<{ encryption: import("hono").Hono }> {
   return import("../src/routes/encryption.js");
 }
 
-async function generateKeys(passphrase: string): Promise<Response> {
+/** A base64-shaped public key of realistic length for RSA-4096 SPKI. */
+function clientPublicKey(seed = "A"): string {
+  return seed.repeat(736);
+}
+
+/**
+ * Register a CLIENT-generated public key.
+ *
+ * The server used to generate the keypair itself and accept a passphrase. It
+ * now does neither — see the route's module header for why that was not merely
+ * wrong but non-functional (the registered key never matched the user's).
+ */
+async function generateKeys(publicKey: string = clientPublicKey()): Promise<Response> {
   const { encryption } = await importRoute();
   return encryption.request("/keys/generate", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ passphrase }),
+    body: JSON.stringify({ publicKey }),
   });
 }
 
@@ -121,7 +133,7 @@ beforeEach(() => {
 
 describe("Encryption key store (DB-persisted)", () => {
   it("stores a keypair on generate and exposes only the public key", async () => {
-    const res = await generateKeys("super-secret-pass");
+    const res = await generateKeys();
     expect(res.status).toBe(201);
 
     // One row persisted for the account.
@@ -140,24 +152,71 @@ describe("Encryption key store (DB-persisted)", () => {
     // setup, which can exceed the 5s default on a loaded CI runner.
   }, 30_000);
 
-  it("ZERO-KNOWLEDGE: persists only wrapped (client-encrypted) private key, never plaintext", async () => {
-    await generateKeys("another-secret");
+  it("ZERO-KNOWLEDGE: stores exactly the client's key and no private key at all", async () => {
+    const pub = clientPublicKey("B");
+    await generateKeys(pub);
     const row = mockKeyRows.get("acct_enc_001");
     expect(row).toBeDefined();
 
-    // Wrapped form is `<iv-b64>.<ciphertext-b64>` — opaque ciphertext, not a key.
-    expect(row?.encryptedPrivateKey).toContain(".");
-    // A plaintext PKCS#8 export would be importable; the wrapped value is not a
-    // bare base64 PKCS#8 blob — it carries the IV prefix + AES-GCM ciphertext.
-    const [iv, ciphertext] = (row?.encryptedPrivateKey ?? "").split(".");
-    expect(iv?.length).toBeGreaterThan(0);
-    expect(ciphertext?.length).toBeGreaterThan(0);
-    expect(ciphertext).not.toBe(iv);
-    // RSA-4096 keygen can exceed the 5s default on a loaded CI runner.
-  }, 30_000);
+    // The stored key must be the one the CLIENT sent. Previously the server
+    // generated its own pair and stored THAT public key, so the registered key
+    // and the user's private key were unrelated — nothing encrypted to the
+    // user could ever have been decrypted by them.
+    expect(row?.publicKey).toBe(pub);
+
+    // No private key is stored when the client keeps it on-device (the default).
+    expect(row?.encryptedPrivateKey).toBe("");
+  });
+
+  it("stores an opaque client-encrypted private key blob when one is supplied", async () => {
+    // For cross-device recovery the client may upload a blob IT encrypted. The
+    // server stores it verbatim and cannot decrypt it — the wrapping key is
+    // derived on the client and never transmitted.
+    const { encryption } = await importRoute();
+    const blob = "ZmFrZS1pdg==.ZmFrZS1jaXBoZXJ0ZXh0";
+    const res = await encryption.request("/keys/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ publicKey: clientPublicKey(), encryptedPrivateKey: blob }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(mockKeyRows.get("acct_enc_001")?.encryptedPrivateKey).toBe(blob);
+  });
+
+  it("rejects a request that omits the public key — the server never mints one", async () => {
+    const { encryption } = await importRoute();
+    const res = await encryption.request("/keys/generate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ passphrase: "the-old-contract" }),
+    });
+
+    expect(res.status).toBe(422);
+    expect(mockKeyRows.size).toBe(0);
+  });
+
+  it("rejects a public key that is not base64", async () => {
+    const res = await generateKeys(`not base64!${"x".repeat(400)}`);
+    expect(res.status).toBe(422);
+    expect(mockKeyRows.size).toBe(0);
+  });
+
+  it("tells the caller that registering a key does not encrypt their mail", async () => {
+    // Pinned on the API itself so no future UI can imply otherwise without
+    // contradicting the endpoint it calls — the settings page previously
+    // claimed mail was "encrypted automatically" when nothing encrypted it.
+    const res = await generateKeys();
+    const body = (await res.json()) as {
+      data: { messageEncryptionActive: boolean; notice: string };
+    };
+
+    expect(body.data.messageEncryptionActive).toBe(false);
+    expect(body.data.notice).toMatch(/not implemented yet/i);
+  });
 
   it("retrieves the stored public key (persists across a fresh read)", async () => {
-    await generateKeys("pass-one");
+    await generateKeys();
 
     const res = await getPublicKey();
     expect(res.status).toBe(200);
@@ -175,13 +234,15 @@ describe("Encryption key store (DB-persisted)", () => {
   });
 
   it("overwrites the existing keypair on regeneration (upsert, one row)", async () => {
-    await generateKeys("first-pass");
+    await generateKeys(clientPublicKey("A"));
     const first = mockKeyRows.get("acct_enc_001");
     expect(first).toBeDefined();
     const firstPublicKey = first?.publicKey;
     const firstCreatedAt = first?.createdAt;
 
-    await generateKeys("second-pass");
+    // A distinct key, because the CLIENT now supplies it — regenerating in the
+    // browser produces a new pair and re-registers its public half.
+    await generateKeys(clientPublicKey("C"));
 
     // Still exactly one row for the account (upsert, not insert).
     expect(mockKeyRows.size).toBe(1);
@@ -200,7 +261,7 @@ describe("Encryption key store (DB-persisted)", () => {
     expect(beforeBody.data.hasKeys).toBe(false);
     expect(beforeBody.data.keyCreatedAt).toBeNull();
 
-    await generateKeys("status-pass");
+    await generateKeys();
 
     const after = await getStatus();
     const afterBody = (await after.json()) as { data: { enabled: boolean; hasKeys: boolean; keyCreatedAt: string | null } };

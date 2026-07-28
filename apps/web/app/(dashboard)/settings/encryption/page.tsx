@@ -26,14 +26,6 @@ import {
 // device), so a stable key is sufficient and keeps the key off the wire.
 const LOCAL_KEY = "primary";
 
-// The server schema requires a passphrase (min 8). In the zero-knowledge flow
-// the browser-held key is the real one, so we hand the endpoint a throwaway.
-function generateThrowawayPassphrase(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(24));
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
 
 type LoadState = "loading" | "ready" | "error";
 
@@ -41,7 +33,7 @@ export default function EncryptionSettingsPage(): React.ReactNode {
   return (
     <PageLayout
       title="End-to-End Encryption"
-      description="Zero-knowledge encryption for your email. Your private key never leaves this device."
+      description="Set up your encryption key. Your private key never leaves this device. Message encryption is not active yet — see below."
     >
       <Box className="max-w-3xl">
         <PlanGate feature="e2e_encryption">
@@ -92,8 +84,11 @@ function EncryptionPanel(): React.ReactNode {
       const keypair = await generateClientKeypair();
       // 2. Persist the private key locally FIRST (never uploaded).
       await storePrivateKey(LOCAL_KEY, keypair.privateKey);
-      // 3. Publish the public key (+ throwaway passphrase to satisfy schema).
-      await encryptionApi.generateKeys(generateThrowawayPassphrase());
+      // 3. Register THIS keypair's public key. Previously a throwaway
+      //    passphrase was sent and the server minted its own unrelated pair,
+      //    so the registered public key never matched the private key held
+      //    here — nothing encrypted to this user could have been decrypted.
+      await encryptionApi.registerPublicKey(keypair.publicKeyB64);
       setHasLocalKey(true);
       setJustEnabled(true);
       // 4. Refresh server-reported status.
@@ -159,7 +154,7 @@ function EncryptionPanel(): React.ReactNode {
       <Card>
         <CardHeader>
           <Text variant="heading-sm">
-            {fullyEnabled ? "Encryption is active" : "Enable encryption"}
+            {fullyEnabled ? "Your key is set up" : "Set up your key"}
           </Text>
           <Text variant="body-sm" muted>
             {status?.algorithm ?? "RSA-OAEP-4096 + AES-256-GCM"}
@@ -169,10 +164,31 @@ function EncryptionPanel(): React.ReactNode {
           {fullyEnabled ? (
             <Box className="space-y-2">
               <Text variant="body-sm">
-                Emails you send to other AlecRae users who have keys are encrypted
-                automatically. Your private key is stored only in this browser and
-                never touches our servers.
+                Your key is registered. The private key is stored only in this
+                browser and is never sent to us.
               </Text>
+              {/*
+                This panel used to say mail was "encrypted automatically". That
+                was false: there is no encryption step anywhere in the send path
+                and no decryption step on read. Registering a key is a
+                prerequisite for end-to-end encryption, not end-to-end
+                encryption — and a false security promise is worse than a
+                missing feature, so it says so plainly until the pipeline is
+                real.
+              */}
+              <Box
+                className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-4"
+                role="note"
+              >
+                <Text variant="body-sm" className="font-medium">
+                  Your email is not encrypted yet
+                </Text>
+                <Text variant="body-sm" muted className="mt-1">
+                  Setting up a key does not encrypt anything on its own. Message
+                  encryption is still being built, so treat mail sent and received
+                  today as unencrypted.
+                </Text>
+              </Box>
             </Box>
           ) : (
             <Box className="space-y-3">
@@ -192,10 +208,11 @@ function EncryptionPanel(): React.ReactNode {
                 </Box>
               )}
               <Text variant="body-sm">
-                Generate an encryption keypair to turn on zero-knowledge email
-                encryption. The keypair is created inside your browser: the public
-                key is published so others can encrypt to you, and the private key
-                is stored securely on this device and never uploaded.
+                Generate an encryption keypair. It is created inside your browser:
+                the public key is published so others can encrypt to you, and the
+                private key is stored on this device and never uploaded. This sets
+                up the key — it does not encrypt your mail on its own, and message
+                encryption is not active yet.
               </Text>
             </Box>
           )}
@@ -340,8 +357,14 @@ function HowItWorksCard(): React.ReactNode {
             IndexedDB. We never see it, so we can never read your encrypted mail.
           </HowItWorksItem>
           <HowItWorksItem>
-            Because the private key is device-local, you will need to enable
-            encryption again on each browser or device you use.
+            Because the private key is device-local, you will need to set up a key
+            again on each browser or device you use.
+          </HowItWorksItem>
+          <HowItWorksItem>
+            <strong>Not yet active:</strong> your mail is not encrypted with this
+            key today. The key exchange above is real and working; the step that
+            encrypts a message when you send it, and decrypts it when you read it,
+            is still being built.
           </HowItWorksItem>
         </Box>
       </CardContent>
