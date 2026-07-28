@@ -226,8 +226,10 @@ const ListMessagesQuery = PaginationSchema.extend({
     .optional(),
   tag: z.string().optional(),
   /** Defaults to "inbox" (excludes trash and archive) — pass "archive",
-   *  "trash", or "all" explicitly to see those. */
-  folder: z.enum(["inbox", "archive", "trash", "all"]).optional(),
+   *  "trash", "drafts", or "all" explicitly to see those. When `status=draft`
+   *  is requested the default becomes "drafts", since drafts are never in the
+   *  inbox and the old default silently returned nothing for them. */
+  folder: z.enum(["inbox", "archive", "trash", "drafts", "all"]).optional(),
 });
 
 // ─── Shared send handler ───────────────────────────────────────────────────
@@ -922,6 +924,168 @@ messages.post("/send", ...sendMiddleware, handleSend);
 // POST /v1/messages — Alias for /send
 messages.post("/", ...sendMiddleware, handleSend);
 
+// ─── Drafts ─────────────────────────────────────────────────────────────────
+//
+// There was no draft persistence anywhere in the API. Compose's "Save Draft"
+// button only set the string "Draft saved locally" — nothing was written, not
+// even locally, so a user's unsent work was silently lost. The Drafts page
+// meanwhile listed `status: "queued"`, which is outbound mail waiting to go
+// out, not drafts.
+//
+// Drafts are ordinary `emails` rows with status "draft" and folder "drafts"
+// (`folder` is a plain text column, and the email_status enum has always had
+// "draft" — CLAUDE.md known issue #8 says otherwise and is stale). They never
+// enter the send pipeline: nothing queues, signs or delivers a draft row.
+
+const DraftRecipient = z.object({
+  email: z.string().email(),
+  name: z.string().max(255).optional(),
+});
+
+const DraftSchema = z
+  .object({
+    /** Sender address. Falls back to the account's first verified mailbox. */
+    from: DraftRecipient.optional(),
+    to: z.array(DraftRecipient).max(100).default([]),
+    cc: z.array(DraftRecipient).max(100).default([]),
+    bcc: z.array(DraftRecipient).max(100).default([]),
+    subject: z.string().max(998).default(""),
+    text: z.string().max(1_000_000).optional(),
+    html: z.string().max(1_000_000).optional(),
+  })
+  .refine(
+    (v) =>
+      v.to.length > 0 ||
+      v.cc.length > 0 ||
+      v.bcc.length > 0 ||
+      v.subject.trim().length > 0 ||
+      (v.text ?? "").trim().length > 0 ||
+      (v.html ?? "").trim().length > 0,
+    { message: "A draft needs at least one recipient, a subject, or a body" },
+  );
+
+type DraftInput = z.infer<typeof DraftSchema>;
+
+function draftAddresses(list: DraftInput["to"]): { name?: string; address: string }[] {
+  return list.map((r) => ({ address: r.email, ...(r.name !== undefined ? { name: r.name } : {}) }));
+}
+
+/** Column values shared by draft create and update. */
+function draftValues(
+  input: DraftInput,
+  now: Date,
+): {
+  toAddresses: { name?: string; address: string }[];
+  ccAddresses: { name?: string; address: string }[] | null;
+  bccAddresses: { name?: string; address: string }[] | null;
+  subject: string;
+  textBody: string | null;
+  htmlBody: string | null;
+  updatedAt: Date;
+} {
+  return {
+    toAddresses: draftAddresses(input.to),
+    ccAddresses: input.cc.length > 0 ? draftAddresses(input.cc) : null,
+    bccAddresses: input.bcc.length > 0 ? draftAddresses(input.bcc) : null,
+    subject: input.subject,
+    textBody: input.text ?? null,
+    htmlBody: input.html ?? null,
+    updatedAt: now,
+  };
+}
+
+// POST /v1/messages/drafts — Create a draft
+messages.post(
+  "/drafts",
+  requireScope("messages:write"),
+  validateBody(DraftSchema),
+  async (c) => {
+    const input = getValidatedBody<DraftInput>(c);
+    const auth = c.get("auth");
+    const db = getDatabase();
+    const now = new Date();
+    const id = crypto.randomUUID();
+
+    await db.insert(emails).values({
+      id,
+      accountId: auth.accountId,
+      domainId: null,
+      // messageId is NOT NULL and unique per (accountId, messageId). A draft
+      // has no RFC 822 Message-ID yet; a synthetic, always-fresh one satisfies
+      // the constraint without colliding.
+      messageId: `draft-${id}@drafts.alecrae.local`,
+      fromAddress: input.from?.email ?? "",
+      fromName: input.from?.name ?? null,
+      status: "draft",
+      folder: "drafts",
+      source: "outbound",
+      isRead: true,
+      tags: [],
+      createdAt: now,
+      ...draftValues(input, now),
+    });
+
+    return c.json(
+      { data: { id, createdAt: now.toISOString(), updatedAt: now.toISOString() } },
+      201,
+    );
+  },
+);
+
+// PUT /v1/messages/drafts/:id — Update an existing draft
+messages.put(
+  "/drafts/:id",
+  requireScope("messages:write"),
+  validateBody(DraftSchema),
+  async (c) => {
+    const id = c.req.param("id");
+    const input = getValidatedBody<DraftInput>(c);
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const [existing] = await db
+      .select({ id: emails.id, status: emails.status })
+      .from(emails)
+      .where(and(eq(emails.id, id), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!existing) {
+      return c.json(
+        { error: { type: "not_found", message: `Draft ${id} not found`, code: "draft_not_found" } },
+        404,
+      );
+    }
+
+    // Refuse to rewrite a message that has already entered the send pipeline —
+    // otherwise this endpoint could mutate sent or in-flight mail.
+    if (existing.status !== "draft") {
+      return c.json(
+        {
+          error: {
+            type: "conflict",
+            message: `Message ${id} is not a draft (status: ${existing.status}) and cannot be edited`,
+            code: "not_a_draft",
+          },
+        },
+        409,
+      );
+    }
+
+    const now = new Date();
+    await db
+      .update(emails)
+      .set({
+        ...draftValues(input, now),
+        ...(input.from !== undefined
+          ? { fromAddress: input.from.email, fromName: input.from.name ?? null }
+          : {}),
+      })
+      .where(and(eq(emails.id, id), eq(emails.accountId, auth.accountId)));
+
+    return c.json({ data: { id, updatedAt: now.toISOString() } });
+  },
+);
+
 // GET /v1/messages/search — Full-text email search via Meilisearch
 messages.get(
   "/search",
@@ -1073,7 +1237,7 @@ messages.get(
     // Default to "inbox" — previously nothing filtered on folder/status at
     // all, so archiving or deleting a message never actually removed it from
     // the list; it just came back on the next reload marked unread.
-    const folder = query.folder ?? "inbox";
+    const folder = query.folder ?? (query.status === "draft" ? "drafts" : "inbox");
     if (folder !== "all") {
       conditions.push(eq(emails.folder, folder));
     }

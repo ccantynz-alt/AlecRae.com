@@ -896,7 +896,45 @@ export const messagesApi = {
     return apiFetch<{ data: MessageDetail }>(`/v1/messages/${id}`);
   },
 
-  list(params?: { cursor?: string; limit?: number; status?: string; tag?: string; folder?: "inbox" | "archive" | "trash" | "all" }) {
+  /**
+   * Create a draft. Drafts are never queued or sent — they are `emails` rows
+   * with status "draft" in the "drafts" folder.
+   */
+  createDraft(payload: {
+    from?: EmailAddress;
+    to?: EmailAddress[];
+    cc?: EmailAddress[];
+    bcc?: EmailAddress[];
+    subject?: string;
+    text?: string;
+    html?: string;
+  }) {
+    return apiFetch<{ data: { id: string; createdAt: string; updatedAt: string } }>(
+      "/v1/messages/drafts",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** Update an existing draft in place. 409s if the message is no longer a draft. */
+  updateDraft(
+    id: string,
+    payload: {
+      from?: EmailAddress;
+      to?: EmailAddress[];
+      cc?: EmailAddress[];
+      bcc?: EmailAddress[];
+      subject?: string;
+      text?: string;
+      html?: string;
+    },
+  ) {
+    return apiFetch<{ data: { id: string; updatedAt: string } }>(
+      `/v1/messages/drafts/${encodeURIComponent(id)}`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    );
+  },
+
+  list(params?: { cursor?: string; limit?: number; status?: string; tag?: string; folder?: "inbox" | "archive" | "trash" | "drafts" | "all" }) {
     const qs = new URLSearchParams();
     if (params?.cursor) qs.set("cursor", params.cursor);
     if (params?.limit) qs.set("limit", String(params.limit));

@@ -56,6 +56,19 @@ function ComposePage(): React.ReactNode {
   const reduced = useAlecRaeReducedMotion();
   const isOnline = useOnlineStatus();
   const [sending, setSending] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  /**
+   * Set once a draft exists for this compose session — either opened from the
+   * Drafts page (`?draftId=`) or created by the first "Save Draft". Subsequent
+   * saves update that row instead of creating a new draft each time.
+   */
+  const [draftId, setDraftId] = useState<string | null>(null);
+  /** Recipients/subject of a draft opened via `?draftId=`, once fetched. */
+  const [loadedDraft, setLoadedDraft] = useState<{
+    to: string;
+    cc: string;
+    subject: string;
+  } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");
   const [recipientForPrediction, setRecipientForPrediction] = useState("");
@@ -204,6 +217,38 @@ function ComposePage(): React.ReactNode {
   const dictationReplyContext =
     dictationMode === "reply" ? { from: replyTo, subject: replySubject, body: replyBody } : undefined;
   const replyCc = searchParams.get("cc") ?? "";
+  const openedDraftId = searchParams.get("draftId");
+
+  // Opening a saved draft: adopt its id so "Save Draft" updates it in place
+  // rather than creating a second copy, and load its real contents. The Drafts
+  // page passes only the id — an email body does not belong in a query string.
+  useEffect(() => {
+    if (!openedDraftId) return;
+    setDraftId(openedDraftId);
+
+    let cancelled = false;
+    messagesApi
+      .get(openedDraftId)
+      .then((res) => {
+        if (cancelled) return;
+        const d = res.data;
+        setLoadedDraft({
+          to: d.to.map((r) => r.email).join(", "),
+          cc: (d.cc ?? []).map((r) => r.email).join(", "),
+          subject: d.subject ?? "",
+        });
+        setBodyDraft(d.htmlBody ?? d.textBody ?? "");
+        // Remount the editor so it picks up the loaded values as its initial state.
+        setEditorKey((k) => k + 1);
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("Could not load that draft.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [openedDraftId]);
 
   useEffect(() => {
     authApi.me().then((res) => {
@@ -316,6 +361,46 @@ function ComposePage(): React.ReactNode {
     },
     [applyBody, bodyDraft],
   );
+
+  /**
+   * Persist the current compose contents as a real draft.
+   *
+   * This used to be `() => setStatus("Draft saved locally")` — nothing was
+   * written anywhere, locally or otherwise, so clicking "Save Draft" silently
+   * lost the user's work. The first save creates a draft; subsequent saves
+   * update the same row rather than piling up duplicates.
+   */
+  const handleSaveDraft = async (data: ComposeData) => {
+    if (savingDraft) return;
+    setSavingDraft(true);
+    setStatus(null);
+
+    try {
+      const fromEmail = data.from || userEmail;
+      const payload = {
+        ...(fromEmail ? { from: { email: fromEmail } } : {}),
+        to: mergeRecipientLists(data.to, contactsTo).map((e) => ({ email: e })),
+        cc: mergeRecipientLists(data.cc, contactsCc).map((e) => ({ email: e })),
+        subject: data.subject,
+        html: data.body,
+        text: data.body.replace(/<[^>]*>/g, ""),
+      };
+
+      if (draftId) {
+        await messagesApi.updateDraft(draftId, payload);
+      } else {
+        const created = await messagesApi.createDraft(payload);
+        setDraftId(created.data.id);
+      }
+      setStatus("Draft saved");
+    } catch (err) {
+      setStatus(
+        `Could not save draft: ${err instanceof Error ? err.message : "unknown error"}`,
+      );
+    } finally {
+      setSavingDraft(false);
+    }
+  };
 
   const handleSend = async (data: ComposeData) => {
     if (sending) return;
@@ -571,13 +656,13 @@ function ComposePage(): React.ReactNode {
           <ComposeEditor
             key={editorKey}
             from={userEmail}
-            to={replyTo}
-            cc={mode === "replyAll" ? replyCc : ""}
-            subject={initialSubject}
+            to={loadedDraft?.to ?? replyTo}
+            cc={loadedDraft?.cc ?? (mode === "replyAll" ? replyCc : "")}
+            subject={loadedDraft?.subject ?? initialSubject}
             body={editorKey === 0 ? initialBody : bodyDraft}
             onSend={handleSend}
-            onSaveDraft={() => {
-              setStatus("Draft saved locally");
+            onSaveDraft={(data) => {
+              void handleSaveDraft(data);
             }}
             onDiscard={() => {
               setStatus(null);
