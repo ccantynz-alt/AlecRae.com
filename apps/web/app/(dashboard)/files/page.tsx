@@ -14,20 +14,39 @@ import { PlanGate } from "../../../components/plan-gate";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/**
+ * Mirrors one item from GET /v1/files (`data[]`).
+ *
+ * This interface previously described fields the API has never returned
+ * (`filename`, `createdAt`, `downloadUrl`) and the fetch treated the
+ * `{ data, cursor, hasMore }` envelope as a bare array, so `files.map()` threw
+ * and the page crashed on load for every user.
+ */
 interface AttachmentFile {
   id: string;
-  filename: string;
+  name: string;
   mimeType: string;
   size: number;
-  emailSubject: string;
-  createdAt: string;
-  downloadUrl: string;
+  source: "attachment" | "upload" | "drive";
+  emailId: string | null;
+  emailSubject: string | null;
+  threadId: string | null;
+  uploadedAt: string;
+  /** False until a presigned-GET path exists server-side — see the route's note. */
+  downloadAvailable: boolean;
+}
+
+interface FilesListResponse {
+  data: AttachmentFile[];
+  cursor: string | null;
+  hasMore: boolean;
 }
 
 interface FileStats {
   totalFiles: number;
   totalSize: number;
   maxSize: number;
+  planTier: string;
 }
 
 type FileFilterTab = "all" | "images" | "documents" | "spreadsheets" | "archives";
@@ -255,16 +274,20 @@ function FileCard({
             <Text
               variant="body-sm"
               className="truncate font-medium text-content"
-              title={file.filename}
+              title={file.name}
             >
-              {file.filename}
+              {file.name}
             </Text>
+            {/*
+              Directly-uploaded files have no source email, so emailSubject is
+              null for them — show how the file got here instead of an empty row.
+            */}
             <Text
               variant="caption"
               className="truncate text-content-subtle"
-              title={file.emailSubject}
+              title={file.emailSubject ?? undefined}
             >
-              {file.emailSubject}
+              {file.emailSubject ?? (file.source === "upload" ? "Uploaded directly" : "—")}
             </Text>
             <Box className="mt-1.5 flex items-center gap-2">
               <Text variant="caption" className="text-content-subtle">
@@ -272,7 +295,7 @@ function FileCard({
               </Text>
               <Box className="h-1 w-1 rounded-full bg-border" aria-hidden="true" />
               <Text variant="caption" className="text-content-subtle">
-                {formatDate(file.createdAt)}
+                {formatDate(file.uploadedAt)}
               </Text>
             </Box>
           </Box>
@@ -280,12 +303,21 @@ function FileCard({
 
         {/* Actions */}
         <Box className="mt-3 flex items-center gap-2">
+          {/*
+            Downloads are not available yet: the API exposes no presigned-GET
+            path (see the note on formatFile in routes/files.ts), and this page
+            used to link to a `downloadUrl` field the API has never returned —
+            an href of `undefined`, i.e. a link that reloads the page. Rendered
+            as an explicitly disabled control until the server can issue a real
+            URL, rather than an affordance that silently does nothing.
+          */}
           <Box
-            as="a"
-            href={file.downloadUrl}
-            download={file.filename}
-            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-content transition-colors hover:bg-surface-raised focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-1"
-            aria-label={`Download ${file.filename}`}
+            as="button"
+            type="button"
+            disabled
+            title="Downloads aren't available yet"
+            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-content-subtle opacity-60"
+            aria-label={`Download ${file.name} — not available yet`}
           >
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -301,7 +333,7 @@ function FileCard({
                 className="text-red-600 hover:bg-red-50"
                 onClick={() => onDelete(file.id)}
                 disabled={isDeleting}
-                aria-label={`Confirm delete ${file.filename}`}
+                aria-label={`Confirm delete ${file.name}`}
               >
                 {isDeleting ? "Deleting…" : "Confirm"}
               </Button>
@@ -321,7 +353,7 @@ function FileCard({
               size="sm"
               className="text-red-600 hover:bg-red-50"
               onClick={() => onRequestDelete(file.id)}
-              aria-label={`Delete ${file.filename}`}
+              aria-label={`Delete ${file.name}`}
             >
               Delete
             </Button>
@@ -343,12 +375,13 @@ const FILTER_TABS: { id: FileFilterTab; label: string }[] = [
   { id: "archives", label: "Archives" },
 ];
 
+/** Tab -> the `category` value declared by GET /v1/files. */
 const FILTER_QUERY_MAP: Record<FileFilterTab, string> = {
   all: "",
-  images: "image",
-  documents: "document",
-  spreadsheets: "spreadsheet",
-  archives: "archive",
+  images: "images",
+  documents: "documents",
+  spreadsheets: "spreadsheets",
+  archives: "archives",
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -376,17 +409,20 @@ export default function FilesPage(): React.ReactNode {
     setLoading(true);
     setError(null);
     try {
-      const typeParam = FILTER_QUERY_MAP[activeTab];
+      const categoryParam = FILTER_QUERY_MAP[activeTab];
       const params = new URLSearchParams();
-      if (typeParam) params.set("type", typeParam);
+      // `category` and `q` are the names the API actually declares. The page
+      // previously sent `type`/`q`, neither of which the route's schema knew,
+      // so Zod stripped them and every tab returned the same unfiltered list.
+      if (categoryParam) params.set("category", categoryParam);
       if (debouncedSearch) params.set("q", debouncedSearch);
       const qs = params.toString();
-      const [filesData, statsData] = await Promise.all([
-        apiFetch<AttachmentFile[]>(`/v1/files${qs ? `?${qs}` : ""}`),
-        apiFetch<FileStats>("/v1/files/stats").catch(() => null),
+      const [filesRes, statsRes] = await Promise.all([
+        apiFetch<FilesListResponse>(`/v1/files${qs ? `?${qs}` : ""}`),
+        apiFetch<{ data: FileStats }>("/v1/files/stats").catch(() => null),
       ]);
-      setFiles(filesData);
-      if (statsData) setStats(statsData);
+      setFiles(filesRes.data);
+      if (statsRes) setStats(statsRes.data);
     } catch (e: unknown) {
       setError(errMsg(e));
     } finally {

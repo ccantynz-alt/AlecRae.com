@@ -11,7 +11,7 @@
  */
 
 import { eq, sql } from "drizzle-orm";
-import { getDatabase, accounts, attachments, emails } from "@alecrae/db";
+import { getDatabase, accounts, attachments, emails, files } from "@alecrae/db";
 
 // ─── Storage limits per plan (in bytes) ──────────────────────────────────────
 
@@ -136,7 +136,7 @@ export async function reconcileStorageUsage(): Promise<number> {
 
   for (const acct of allAccounts) {
     // Sum attachment sizes for this account by joining emails -> attachments
-    const [result] = await db
+    const [attachmentTotal] = await db
       .select({
         totalSize: sql<number>`COALESCE(SUM(${attachments.size}), 0)`,
       })
@@ -144,7 +144,18 @@ export async function reconcileStorageUsage(): Promise<number> {
       .innerJoin(emails, eq(attachments.emailId, emails.id))
       .where(eq(emails.accountId, acct.id));
 
-    const actualSize = Number(result?.totalSize ?? 0);
+    // ...plus directly-uploaded files, which live in their own table. This was
+    // previously omitted, so every weekly run silently reset an account's usage
+    // to attachments-only and wiped the accounting for uploaded files.
+    const [fileTotal] = await db
+      .select({
+        totalSize: sql<number>`COALESCE(SUM(${files.size}), 0)`,
+      })
+      .from(files)
+      .where(eq(files.accountId, acct.id));
+
+    const actualSize =
+      Number(attachmentTotal?.totalSize ?? 0) + Number(fileTotal?.totalSize ?? 0);
     const recorded = Number(acct.storageUsedBytes ?? 0);
 
     if (actualSize !== recorded) {

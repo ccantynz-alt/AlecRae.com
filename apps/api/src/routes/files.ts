@@ -11,7 +11,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, lt, sql, count } from "drizzle-orm";
+import { eq, and, or, desc, lt, sql, count, ilike } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -19,10 +19,25 @@ import {
   validateQuery,
   getValidatedQuery,
 } from "../middleware/validator.js";
-import { getDatabase, files } from "@alecrae/db";
+import { getDatabase, files, emails } from "@alecrae/db";
 import { vapron, isVapronConfigured, VapronError } from "../lib/vapron.js";
+import {
+  checkStorageQuota,
+  incrementStorageUsage,
+  decrementStorageUsage,
+} from "../lib/storage-quota.js";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
+
+const FILE_CATEGORIES = [
+  "images",
+  "documents",
+  "spreadsheets",
+  "archives",
+  "audio",
+  "video",
+] as const;
+type FileCategory = (typeof FILE_CATEGORIES)[number];
 
 const ListFilesQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -30,7 +45,45 @@ const ListFilesQuery = z.object({
   mimeType: z.string().optional(),
   source: z.enum(["attachment", "upload", "drive"]).optional(),
   emailId: z.string().optional(),
+  /** Free-text match on the file name. */
+  q: z.string().trim().min(1).max(200).optional(),
+  /**
+   * Coarse type filter backing the Files page's tabs. The page has always sent
+   * a filter and a search term; neither was declared here, so Zod stripped both
+   * and every tab silently returned the same unfiltered list.
+   */
+  category: z.enum(FILE_CATEGORIES).optional(),
 });
+
+/** MIME patterns per coarse category, matched case-insensitively against mime_type. */
+const CATEGORY_MIME_PATTERNS: Record<FileCategory, string[]> = {
+  images: ["image/%"],
+  documents: [
+    "application/pdf",
+    "text/%",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessing%",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentation%",
+    "application/vnd.oasis.opendocument.text",
+  ],
+  spreadsheets: [
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheet%",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "text/csv",
+  ],
+  archives: [
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/x-tar",
+    "application/gzip",
+    "application/x-rar-compressed",
+    "application/x-7z-compressed",
+  ],
+  audio: ["audio/%"],
+  video: ["video/%"],
+};
 
 const UploadFileSchema = z.object({
   name: z.string().min(1).max(512),
@@ -62,6 +115,8 @@ function formatFile(row: {
   threadId: string | null;
   thumbnailKey: string | null;
   uploadedAt: Date;
+  /** Subject of the email this file came from, when joined in. */
+  emailSubject?: string | null;
 }): Record<string, unknown> {
   return {
     id: row.id,
@@ -71,9 +126,16 @@ function formatFile(row: {
     storageKey: row.storageKey,
     source: row.source,
     emailId: row.emailId,
+    emailSubject: row.emailSubject ?? null,
     threadId: row.threadId,
     thumbnailKey: row.thumbnailKey,
     uploadedAt: row.uploadedAt.toISOString(),
+    // There is no download path yet: Vapron's documented REST surface exposes
+    // an upload-URL endpoint but no presigned GET, and guessing one would
+    // repeat the transport mistake of issue #83. Callers must not synthesise a
+    // URL from storageKey — this flag is the contract, and the UI disables its
+    // download affordance on it rather than offering a link that 404s.
+    downloadAvailable: false,
   };
 }
 
@@ -137,10 +199,17 @@ filesRouter.get(
       }
     }
 
+    // The Files page shows a usage bar, which needs the plan's ceiling. Derived
+    // from the same storage-quota source the upload path enforces, so the bar
+    // and the 413 can never disagree.
+    const quota = await checkStorageQuota(auth.accountId, 0);
+
     return c.json({
       data: {
         totalFiles: totals?.totalFiles ?? 0,
         totalSize: Number(totals?.totalSize ?? 0),
+        maxSize: quota.limitBytes,
+        planTier: quota.planTier,
         breakdown: categories,
       },
     });
@@ -175,9 +244,37 @@ filesRouter.get(
       conditions.push(eq(files.emailId, query.emailId));
     }
 
+    if (query.q) {
+      // Escape LIKE wildcards so a literal % or _ in the search box matches itself.
+      const escaped = query.q.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+      conditions.push(ilike(files.name, `%${escaped}%`));
+    }
+
+    if (query.category) {
+      const patterns = CATEGORY_MIME_PATTERNS[query.category];
+      const matches = patterns.map((p) => ilike(files.mimeType, p));
+      const combined = matches.length === 1 ? matches[0] : or(...matches);
+      if (combined) conditions.push(combined);
+    }
+
+    // Left-join the source email so the list can show which message a file
+    // arrived on — the UI renders that column and the API never returned it.
     const rows = await db
-      .select()
+      .select({
+        id: files.id,
+        name: files.name,
+        mimeType: files.mimeType,
+        size: files.size,
+        storageKey: files.storageKey,
+        source: files.source,
+        emailId: files.emailId,
+        threadId: files.threadId,
+        thumbnailKey: files.thumbnailKey,
+        uploadedAt: files.uploadedAt,
+        emailSubject: emails.subject,
+      })
       .from(files)
+      .leftJoin(emails, eq(files.emailId, emails.id))
       .where(and(...conditions))
       .orderBy(desc(files.uploadedAt))
       .limit(query.limit + 1);
@@ -263,6 +360,30 @@ filesRouter.post(
       );
     }
 
+    // Enforce the account's plan storage limit BEFORE issuing an upload URL.
+    // lib/storage-quota.ts was fully built and unit-tested but had no
+    // production caller at all, so uploads were unbounded — a direct object-
+    // storage cost exposure, not just a policy gap.
+    const quota = await checkStorageQuota(auth.accountId, body.size);
+    if (!quota.allowed) {
+      return c.json(
+        {
+          error: {
+            type: "storage_quota_exceeded",
+            message:
+              `This upload would exceed your plan's storage limit ` +
+              `(${quota.currentUsageBytes} of ${quota.limitBytes} bytes used). ` +
+              `Delete some files or upgrade your plan.`,
+            code: "storage_quota_exceeded",
+            currentUsageBytes: quota.currentUsageBytes,
+            limitBytes: quota.limitBytes,
+            planTier: quota.planTier,
+          },
+        },
+        413,
+      );
+    }
+
     const id = crypto.randomUUID();
     const storageKey = `${auth.accountId}/${id}/${sanitizeFilename(body.name)}`;
 
@@ -308,6 +429,11 @@ filesRouter.post(
       return c.json({ error: { type: "internal_error", message: "Failed to record file", code: "insert_failed" } }, 500);
     }
 
+    // Counted at the same moment the row becomes real. The weekly reconciler
+    // (reconcileStorageUsage) corrects any drift from uploads that never
+    // completed their PUT.
+    await incrementStorageUsage(auth.accountId, body.size);
+
     return c.json({ data: { file: formatFile(file), uploadUrl } }, 201);
   },
 );
@@ -322,7 +448,7 @@ filesRouter.delete(
     const db = getDatabase();
 
     const [existing] = await db
-      .select({ id: files.id })
+      .select({ id: files.id, size: files.size })
       .from(files)
       .where(and(eq(files.id, id), eq(files.accountId, auth.accountId)))
       .limit(1);
@@ -343,6 +469,10 @@ filesRouter.delete(
     await db
       .delete(files)
       .where(and(eq(files.id, id), eq(files.accountId, auth.accountId)));
+
+    // Give the space back. Without this, deletes never freed quota and an
+    // account's recorded usage only ever grew.
+    await decrementStorageUsage(auth.accountId, existing.size);
 
     return c.json({ deleted: true, id });
   },
