@@ -14,6 +14,7 @@ import { eq, and } from "drizzle-orm";
 import { getDatabase, emails, events, domains, suppressionLists } from "@alecrae/db";
 import { enqueueWebhookDelivery } from "../lib/webhook-dispatcher.js";
 import { recordEngagementEvent } from "./send-time.js";
+import { verifyTrackedUrl, SIGNATURE_PARAM } from "../lib/tracking-link.js";
 
 const tracking = new Hono();
 
@@ -150,7 +151,19 @@ tracking.get("/:emailId/click", async (c) => {
     return c.text("Missing url parameter", 400);
   }
 
-  // Validate URL to prevent open redirect
+  // A protocol check alone is NOT open-redirect protection, which is what the
+  // comment here used to claim. Anyone could hand this endpoint any https URL
+  // and get a 302 to it from our own domain — the exact primitive phishers
+  // harvest to launder links past reputation filters, and a fast route to
+  // having api.alecrae.com flagged by Safe Browsing and blocklisted.
+  //
+  // The signature is over (emailId, url) and only this server can produce it,
+  // so the endpoint can only ever redirect to a link we ourselves put in that
+  // message. Verified BEFORE parsing or recording anything.
+  if (!verifyTrackedUrl(emailId, targetUrl, c.req.query(SIGNATURE_PARAM))) {
+    return c.text("Invalid or missing link signature", 400);
+  }
+
   try {
     const parsed = new URL(targetUrl);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {

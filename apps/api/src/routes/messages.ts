@@ -46,6 +46,7 @@ import {
 } from "@alecrae/mta/lib";
 import { scanAttachment, isSafe } from "@alecrae/security";
 import { checkOutboundSpam } from "../lib/outbound-spam-gate.js";
+import { buildTrackedUrl } from "../lib/tracking-link.js";
 import { checkSendAnomaly, recordSend } from "../lib/send-anomaly.js";
 import {
   renderTemplate,
@@ -98,7 +99,10 @@ function injectTracking(html: string, emailId: string): string {
       if (url.startsWith("mailto:") || url.startsWith("tel:") || url.startsWith("#")) {
         return `<a ${prefix}href="${url}"`;
       }
-      const trackedUrl = `${API_BASE_URL}/t/${emailId}/click?url=${encodeURIComponent(url)}`;
+      // Signed, so the redirect endpoint can refuse a URL we never sent —
+      // see lib/tracking-link.ts for why an open redirect here would be a
+      // self-inflicted blocklisting.
+      const trackedUrl = buildTrackedUrl(API_BASE_URL, emailId, url);
       return `<a ${prefix}href="${trackedUrl}"`;
     },
   );
