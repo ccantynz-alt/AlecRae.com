@@ -18,92 +18,62 @@ import { getAccessToken } from "../../../lib/auth-token";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/**
+ * View models for this page, derived from the real gamification API.
+ *
+ * This page used to call GET /v1/gamification/streak, which has never existed
+ * (404 on every load), and typed the other two responses as shapes the server
+ * does not return. The streak lives inside /stats — there is no separate
+ * endpoint and no reason to add one.
+ */
 interface StreakData {
   currentStreak: number;
   longestStreak: number;
-  lastZeroAt: string | null;
+  totalZeros: number;
+  lastZeroDate: string | null;
 }
 
 interface Achievement {
-  id: string;
+  /** The server's stable identifier is `key`, not `id`. */
+  key: string;
   name: string;
   description: string;
   unlocked: boolean;
   unlockedAt: string | null;
   icon: string;
+  progress: number;
+  target: number;
 }
 
 interface GamificationStats {
   emailsThisWeek: number;
-  avgResponseHours: number;
+  /** Null when no response times have been recorded — never shown as 0. */
+  avgResponseHours: number | null;
   inboxZeroDaysThisWeek: number;
   totalAchievements: number;
   unlockedAchievements: number;
+}
+
+/** Raw `data` from GET /v1/gamification/stats?days=7. */
+interface StatsResponse {
+  streak: { current: number; longest: number; totalZeros: number; lastZeroDate: string | null };
+  period: { emailsProcessed: number; avgResponseTimeSec: number | null };
+  achievementsUnlocked: number;
+  achievementsTotal: number;
+  dailyStats: { date: string; reachedZero: boolean }[];
+}
+
+/** Raw `data` from GET /v1/gamification/achievements. */
+interface AchievementsResponse {
+  achievements: Achievement[];
+  unlocked: number;
+  total: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "https://api.alecrae.com";
 
-/** Fallback achievement definitions rendered when the API returns an empty list. */
-const DEFAULT_ACHIEVEMENTS: Achievement[] = [
-  {
-    id: "first-zero",
-    name: "First Zero",
-    description: "Reach inbox zero for the first time",
-    unlocked: false,
-    unlockedAt: null,
-    icon: "🎯",
-  },
-  {
-    id: "3-day-streak",
-    name: "3-Day Streak",
-    description: "Maintain inbox zero for 3 days in a row",
-    unlocked: false,
-    unlockedAt: null,
-    icon: "🔥",
-  },
-  {
-    id: "week-warrior",
-    name: "Week Warrior",
-    description: "7-day inbox zero streak",
-    unlocked: false,
-    unlockedAt: null,
-    icon: "⚔️",
-  },
-  {
-    id: "month-master",
-    name: "Month Master",
-    description: "30-day inbox zero streak",
-    unlocked: false,
-    unlockedAt: null,
-    icon: "👑",
-  },
-  {
-    id: "speed-demon",
-    name: "Speed Demon",
-    description: "Reply to 10 emails in under 5 minutes",
-    unlocked: false,
-    unlockedAt: null,
-    icon: "⚡",
-  },
-  {
-    id: "clean-inbox",
-    name: "Clean Inbox",
-    description: "Archive 100+ emails in one session",
-    unlocked: false,
-    unlockedAt: null,
-    icon: "🧹",
-  },
-  {
-    id: "productivity-pro",
-    name: "Productivity Pro",
-    description: "Complete all daily goals",
-    unlocked: false,
-    unlockedAt: null,
-    icon: "🏆",
-  },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -136,7 +106,7 @@ function formatDate(iso: string): string {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StreakCard({ streak }: { streak: StreakData }): React.JSX.Element {
-  const { currentStreak, longestStreak, lastZeroAt } = streak;
+  const { currentStreak, longestStreak, lastZeroDate } = streak;
 
   return (
     <Card>
@@ -156,7 +126,7 @@ function StreakCard({ streak }: { streak: StreakData }): React.JSX.Element {
           {currentStreak > 0 ? (
             <Text variant="body-sm" muted>
               Keep it up! Best: {longestStreak} days
-              {lastZeroAt ? ` · Last zero: ${formatDate(lastZeroAt)}` : ""}
+              {lastZeroDate ? ` · Last zero: ${formatDate(lastZeroDate)}` : ""}
             </Text>
           ) : (
             <Box className="mt-2 rounded-xl border border-brand-600/20 bg-brand-100 px-5 py-3">
@@ -258,18 +228,38 @@ export default function AchievementsPage(): React.JSX.Element {
     setLoading(true);
     setError(null);
     try {
-      const [streakData, achievementData, statsData] = await Promise.all([
-        apiFetch<{ data: StreakData }>("/v1/gamification/streak").then((r) => r.data),
-        apiFetch<{ data: Achievement[] }>("/v1/gamification/achievements").then((r) => r.data),
-        apiFetch<{ data: GamificationStats }>("/v1/gamification/stats").then((r) => r.data),
+      // Two calls, not three: /stats carries the streak, the weekly period
+      // totals and the achievement counts in one response.
+      const [statsData, achievementData] = await Promise.all([
+        apiFetch<{ data: StatsResponse }>("/v1/gamification/stats?days=7").then((r) => r.data),
+        apiFetch<{ data: AchievementsResponse }>("/v1/gamification/achievements").then(
+          (r) => r.data,
+        ),
       ]);
-      setStreak(streakData);
-      setAchievements(achievementData.length > 0 ? achievementData : DEFAULT_ACHIEVEMENTS);
-      setStats(statsData);
+
+      setStreak({
+        currentStreak: statsData.streak.current,
+        longestStreak: statsData.streak.longest,
+        totalZeros: statsData.streak.totalZeros,
+        lastZeroDate: statsData.streak.lastZeroDate,
+      });
+      setAchievements(achievementData.achievements);
+      setStats({
+        emailsThisWeek: statsData.period.emailsProcessed,
+        avgResponseHours:
+          statsData.period.avgResponseTimeSec === null
+            ? null
+            : statsData.period.avgResponseTimeSec / 3600,
+        inboxZeroDaysThisWeek: statsData.dailyStats.filter((d) => d.reachedZero).length,
+        totalAchievements: achievementData.total,
+        unlockedAchievements: achievementData.unlocked,
+      });
     } catch (e) {
-      // Show default UI so the page is never blank, even if the API is unreachable
-      setStreak({ currentStreak: 0, longestStreak: 0, lastZeroAt: null });
-      setAchievements(DEFAULT_ACHIEVEMENTS);
+      // Fail visibly. This used to fall back to a hardcoded achievement list,
+      // which showed invented badges as if they were the user's real progress —
+      // the same fabrication problem this audit is closing elsewhere.
+      setStreak(null);
+      setAchievements([]);
       setStats(null);
       setError(errMsg(e));
     } finally {
@@ -331,14 +321,24 @@ export default function AchievementsPage(): React.JSX.Element {
           ) : stats ? (
             <Box className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <StatItem label="Emails processed" value={stats.emailsThisWeek} />
+              {/* Null when nothing has been measured yet — an em dash, not a
+                  fabricated 0, which would read as "you reply instantly". */}
               <StatItem
                 label="Avg response time"
                 value={
-                  stats.avgResponseHours < 1
-                    ? String(Math.round(stats.avgResponseHours * 60))
-                    : stats.avgResponseHours.toFixed(1)
+                  stats.avgResponseHours === null
+                    ? "—"
+                    : stats.avgResponseHours < 1
+                      ? String(Math.round(stats.avgResponseHours * 60))
+                      : stats.avgResponseHours.toFixed(1)
                 }
-                unit={stats.avgResponseHours < 1 ? "min" : "hrs"}
+                unit={
+                  stats.avgResponseHours === null
+                    ? ""
+                    : stats.avgResponseHours < 1
+                      ? "min"
+                      : "hrs"
+                }
               />
               <StatItem
                 label="Inbox zero days"
@@ -376,7 +376,7 @@ export default function AchievementsPage(): React.JSX.Element {
           ) : (
             <Box className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {achievements.map((a) => (
-                <AchievementBadgeCard key={a.id} achievement={a} />
+                <AchievementBadgeCard key={a.key} achievement={a} />
               ))}
             </Box>
           )}
