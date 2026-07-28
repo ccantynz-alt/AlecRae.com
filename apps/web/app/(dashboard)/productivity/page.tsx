@@ -254,7 +254,7 @@ function ActivityBars({
     return (
       <EmptyState
         title="No time tracked yet."
-        hint="Time is tracked automatically as you read and compose email."
+        hint="Automatic time tracking isn't finished — nothing is being recorded yet."
       />
     );
   }

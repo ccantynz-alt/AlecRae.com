@@ -262,9 +262,14 @@ function GraphCard({
         {!loading && error && <ErrorBanner message={error} onRetry={onRetry} />}
         {!loading && !error && nodes.length === 0 && (
           <Box className="py-12 text-center">
+            {/* Said AlecRae "builds it automatically as your emails are
+                analyzed". Nothing calls the extraction endpoint from the mail
+                pipeline, so the graph stays empty forever — see CLAUDE.md
+                issue #132 for why the dispatcher that would fill it is a
+                pending product decision rather than a missing line of code. */}
             <Text variant="body-sm" className="text-content-subtle">
-              No entities in your knowledge graph yet. AlecRae builds it
-              automatically as your emails are analyzed.
+              Your knowledge graph is empty. Automatic entity extraction from
+              your email isn&apos;t finished, so nothing will be added yet.
             </Text>
           </Box>
         )}

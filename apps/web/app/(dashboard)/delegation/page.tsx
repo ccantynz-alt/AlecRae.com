@@ -1059,7 +1059,7 @@ function DelegatedInboxSection(): ReactNode {
               <Text variant="body-sm" className="text-content-subtle">
                 {data.delegations.length === 0
                   ? "Once someone delegates their inbox to you, their emails will show up here."
-                  : "No delegated emails yet — new mail matching your delegations will appear here as it arrives."}
+                  : "Delegated mail isn't being routed here yet — this part isn't finished."}
               </Text>
             </Box>
           ) : (

@@ -699,8 +699,8 @@ function AttachmentListSection({
           }
           hint={
             mode === "threats"
-              ? "Suspicious and dangerous files will appear here as attachments are analyzed."
-              : "Attachments are analyzed automatically as email syncs."
+              ? "Nothing flagged. Note that automatic analysis isn't running yet."
+              : "Automatic attachment analysis isn't finished — files won't be analyzed on their own yet."
           }
         />
       )}
