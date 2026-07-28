@@ -141,27 +141,34 @@ function analyzeAttachment(
   };
 }
 
-/** Placeholder virus scan — in production this calls ClamAV or similar. */
-function performVirusScan(
-  _fileName: string,
-  _fileSize: number,
-): {
-  status: "clean" | "infected" | "error";
-  result: string;
-} {
-  // Simulated scan result
-  const roll = Math.random();
-  if (roll > 0.95) {
-    return {
-      status: "infected",
-      result: "Trojan.GenericKD.46542893 detected by heuristic scan",
-    };
-  }
-  if (roll > 0.9) {
-    return { status: "error", result: "Scan engine timeout — retry recommended" };
-  }
-  return { status: "clean", result: "No threats detected" };
-}
+/**
+ * No virus scanner is wired up.
+ *
+ * This used to be `Math.random()`: 90% of the time it reported "No threats
+ * detected" for a file nothing had scanned, and 5% of the time it invented a
+ * specific, real-sounding malware name ("Trojan.GenericKD.46542893") for a
+ * file that was almost certainly fine. Both verdicts were persisted and
+ * rendered to the user as a scan result. Telling someone an attachment is
+ * clean when nothing looked at it is the more dangerous of the two.
+ *
+ * Same class as issue #84 (security-intelligence fabricating threat data) and
+ * fixed the same way: report honestly that the capability is unavailable
+ * rather than inventing an answer. Wiring a real scanner (ClamAV or a hosted
+ * equivalent) means a new dependency, which is Craig's call per Boss Rule #12.
+ *
+ * The `attachment_virus_scan_status` enum has no "unavailable" value, so the
+ * row keeps its truthful `pending` — no scan has happened — instead of gaining
+ * a value that would need a migration.
+ */
+const VIRUS_SCAN_UNAVAILABLE = {
+  error: {
+    type: "not_implemented" as const,
+    message:
+      "Virus scanning is not available — no scanning engine is configured. " +
+      "The attachment has not been scanned, and no result has been recorded.",
+    code: "virus_scan_unavailable" as const,
+  },
+};
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
@@ -337,25 +344,9 @@ attachmentIntelligenceRouter.post(
       );
     }
 
-    const scanResult = performVirusScan(existing.fileName, existing.fileSize);
-
-    await db
-      .update(attachmentAnalysis)
-      .set({
-        virusScanStatus: scanResult.status,
-        virusScanResult: scanResult.result,
-        isSafe:
-          scanResult.status === "clean" && existing.threatLevel === "safe",
-      })
-      .where(eq(attachmentAnalysis.id, input.attachmentId));
-
-    const [updated] = await db
-      .select()
-      .from(attachmentAnalysis)
-      .where(eq(attachmentAnalysis.id, input.attachmentId))
-      .limit(1);
-
-    return c.json({ data: updated });
+    // The attachment was found and belongs to the caller — the 404 above still
+    // matters, so ownership is checked before reporting the capability gap.
+    return c.json(VIRUS_SCAN_UNAVAILABLE, 501);
   },
 );
 
@@ -366,60 +357,10 @@ attachmentIntelligenceRouter.post(
   requireScope("messages:write"),
   validateBody(BatchScanSchema),
   async (c) => {
-    const input = getValidatedBody<z.infer<typeof BatchScanSchema>>(c);
-    const auth = c.get("auth");
-    const db = getDatabase();
-
-    const results: {
-      attachmentId: string;
-      status: "scanned" | "not_found";
-      virusScanStatus?: string;
-      virusScanResult?: string;
-    }[] = [];
-
-    for (const attachmentId of input.attachmentIds) {
-      const [existing] = await db
-        .select()
-        .from(attachmentAnalysis)
-        .where(
-          and(
-            eq(attachmentAnalysis.id, attachmentId),
-            eq(attachmentAnalysis.accountId, auth.accountId),
-          ),
-        )
-        .limit(1);
-
-      if (!existing) {
-        results.push({ attachmentId, status: "not_found" });
-        continue;
-      }
-
-      const scanResult = performVirusScan(existing.fileName, existing.fileSize);
-
-      await db
-        .update(attachmentAnalysis)
-        .set({
-          virusScanStatus: scanResult.status,
-          virusScanResult: scanResult.result,
-          isSafe:
-            scanResult.status === "clean" && existing.threatLevel === "safe",
-        })
-        .where(eq(attachmentAnalysis.id, attachmentId));
-
-      results.push({
-        attachmentId,
-        status: "scanned",
-        virusScanStatus: scanResult.status,
-        virusScanResult: scanResult.result,
-      });
-    }
-
-    return c.json({
-      data: results,
-      total: results.length,
-      scanned: results.filter((r) => r.status === "scanned").length,
-      notFound: results.filter((r) => r.status === "not_found").length,
-    });
+    // Same capability gap as POST /scan. Refusing the whole batch is
+    // deliberate: a partial response would have to say something about each
+    // attachment, and there is nothing true to say.
+    return c.json(VIRUS_SCAN_UNAVAILABLE, 501);
   },
 );
 

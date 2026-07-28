@@ -17,7 +17,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, inArray } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -29,6 +29,7 @@ import {
   smartLabelRules,
   categoryFeedback,
   emails,
+  attachments,
 } from "@alecrae/db";
 import { categorizeEmail } from "@alecrae/ai-engine/intelligence/categorizer";
 
@@ -153,6 +154,73 @@ function mapToDbCategory(
     return lower as (typeof PRIMARY_CATEGORIES)[number];
   }
   return mapped[lower] ?? "important";
+}
+
+/** How many of the account's most recent emails a rule test is run against. */
+const RULE_TEST_SAMPLE_SIZE = 200;
+
+/**
+ * Evaluate a smart-label rule's conditions against one email.
+ *
+ * All listed conditions must hold (AND); within a condition, any pattern
+ * matching is enough (OR). Patterns are plain case-insensitive substrings —
+ * that is what the rule builder's UI describes, and treating them as regexes
+ * would let a user's stray `(` throw on every message in the sample.
+ *
+ * `minImportance` is deliberately not handled: emails have no importance
+ * column, so there is nothing to compare against. The caller reports it as
+ * unevaluated rather than silently ignoring it.
+ */
+function matchesSmartLabelRule(
+  conditions: {
+    senderPatterns?: string[];
+    subjectPatterns?: string[];
+    bodyKeywords?: string[];
+    hasAttachment?: boolean;
+  },
+  email: {
+    id: string;
+    fromAddress: string;
+    subject: string;
+    textBody: string | null;
+    htmlBody: string | null;
+  },
+  idsWithAttachments: ReadonlySet<string>,
+): boolean {
+  const contains = (haystack: string, needles: string[]): boolean => {
+    const lower = haystack.toLowerCase();
+    return needles.some((n) => {
+      const trimmed = n.trim().toLowerCase();
+      return trimmed.length > 0 && lower.includes(trimmed);
+    });
+  };
+
+  if (
+    conditions.senderPatterns?.length &&
+    !contains(email.fromAddress, conditions.senderPatterns)
+  ) {
+    return false;
+  }
+
+  if (
+    conditions.subjectPatterns?.length &&
+    !contains(email.subject, conditions.subjectPatterns)
+  ) {
+    return false;
+  }
+
+  if (conditions.bodyKeywords?.length) {
+    const body = email.textBody ?? email.htmlBody ?? "";
+    if (!contains(body, conditions.bodyKeywords)) return false;
+  }
+
+  if (conditions.hasAttachment !== undefined) {
+    if (idsWithAttachments.has(email.id) !== conditions.hasAttachment) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
@@ -734,16 +802,63 @@ aiCategorizationRouter.post(
       );
     }
 
-    // Placeholder: In production this scans recent emails against rule conditions
-    const matchedCount = Math.floor(Math.random() * 50) + 1;
+    // This used to be `Math.floor(Math.random() * 50) + 1` alongside a
+    // hardcoded `sampleSize: 200` — a user testing whether their rule was any
+    // good got a number with no relationship to their mail. The conditions are
+    // stored and the emails are in the database, so the test is a real query.
+    const sample = await db
+      .select({
+        id: emails.id,
+        fromAddress: emails.fromAddress,
+        subject: emails.subject,
+        textBody: emails.textBody,
+        htmlBody: emails.htmlBody,
+      })
+      .from(emails)
+      .where(eq(emails.accountId, auth.accountId))
+      .orderBy(desc(emails.createdAt))
+      .limit(RULE_TEST_SAMPLE_SIZE);
+
+    // Attachment presence is a join, not a column — fetch it once for the
+    // whole sample rather than per email.
+    let idsWithAttachments = new Set<string>();
+    if (rule.conditions.hasAttachment !== undefined && sample.length > 0) {
+      const rows = await db
+        .selectDistinct({ emailId: attachments.emailId })
+        .from(attachments)
+        .where(
+          inArray(
+            attachments.emailId,
+            sample.map((e) => e.id),
+          ),
+        );
+      idsWithAttachments = new Set(rows.map((r) => r.emailId));
+    }
+
+    const matches = sample.filter((email) =>
+      matchesSmartLabelRule(rule.conditions, email, idsWithAttachments),
+    );
+
+    // `minImportance` has no backing column on emails, so it cannot be
+    // evaluated. Saying so is the difference between a number that is
+    // incomplete and a number that is wrong.
+    const unevaluatedConditions =
+      rule.conditions.minImportance !== undefined ? ["minImportance"] : [];
 
     return c.json({
       data: {
         ruleId: id,
         ruleName: rule.ruleName,
-        matchedCount,
-        sampleSize: 200,
-        estimatedAccuracy: rule.accuracy,
+        matchedCount: matches.length,
+        sampleSize: sample.length,
+        /** Example subjects, so the count can be sanity-checked by eye. */
+        sampleMatches: matches.slice(0, 5).map((m) => ({
+          subject: m.subject,
+          from: m.fromAddress,
+        })),
+        /** The rule's running accuracy from past applications — not measured by this test. */
+        recordedAccuracy: rule.accuracy,
+        unevaluatedConditions,
         testedAt: new Date().toISOString(),
       },
     });
