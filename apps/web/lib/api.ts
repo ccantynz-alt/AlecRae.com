@@ -53,6 +53,12 @@ export interface Message {
   isStarred: boolean;
   folder: "inbox" | "archive" | "trash" | string;
   hasAttachments: boolean;
+  /**
+   * When the recipient first opened this message, from the real tracking
+   * events; null if never opened. The Sent page previously inferred this from
+   * an "opened" tag that nothing writes.
+   */
+  openedAt: string | null;
   createdAt: string;
   updatedAt: string;
   sentAt: string | null;

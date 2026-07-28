@@ -23,7 +23,7 @@ import type {
   PaginationParams,
   PaginatedResponse,
 } from "../types.js";
-import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts } from "@alecrae/db";
+import { getDatabase, emails, events, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
 import { ensureFreshAccessToken } from "../sync/engine.js";
 import { registerUndoable } from "./snooze.js";
@@ -224,14 +224,26 @@ function buildRawMessage(
 // ─── Query schemas ──────────────────────────────────────────────────────────
 
 const ListMessagesQuery = PaginationSchema.extend({
+  /**
+   * Must mirror the DB's `email_status` enum exactly.
+   *
+   * It did not. The list accepted "sending", which is not a database value and
+   * therefore matched nothing, while REJECTING "sent", "processing" and
+   * "dropped", which are. The practical effect: the Sent page calls
+   * `?status=sent` and got a 422 on every load — the list it is built around
+   * could not be requested at all. Found by a test written for a different bug
+   * on the same page.
+   */
   status: z
     .enum([
       "draft",
       "queued",
-      "sending",
+      "processing",
+      "sent",
       "delivered",
       "bounced",
       "deferred",
+      "dropped",
       "complained",
       "failed",
     ])
@@ -1485,6 +1497,51 @@ messages.get(
         ? lastPageItem.createdAt.toISOString()
         : null;
 
+    // First-open time per message, from the real tracking events.
+    //
+    // The Sent page's "Opened" badge read `tags.includes("opened")`, and
+    // nothing has ever written that tag — the tracking pixel records an
+    // `events` row of type "email.opened" instead. So the badge said "Not
+    // opened" for every message forever, including ones that had been.
+    //
+    // Resolved with one extra query per page rather than a join on the hot
+    // list query: bounded by page size, and it keeps `events` as the single
+    // source of truth instead of denormalising an "opened" tag that could
+    // then drift.
+    const openedAtByEmail = new Map<string, string>();
+    if (page.length > 0) {
+      try {
+        const openRows = await db
+          .select({
+            emailId: events.emailId,
+            firstOpenedAt: sql<Date>`min(${events.createdAt})`,
+          })
+          .from(events)
+          .where(
+            and(
+              eq(events.type, "email.opened"),
+              inArray(
+                events.emailId,
+                page.map((r) => r.id),
+              ),
+            ),
+          )
+          .groupBy(events.emailId);
+
+        for (const r of openRows) {
+          if (r.emailId && r.firstOpenedAt) {
+            openedAtByEmail.set(r.emailId, new Date(r.firstOpenedAt).toISOString());
+          }
+        }
+      } catch (err) {
+        // Open data is supplementary — a failure here must not break the list.
+        console.error(
+          "[messages] Failed to load open events:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+
     const data = page.map((row) => ({
       id: row.id,
       messageId: row.messageId,
@@ -1499,6 +1556,8 @@ messages.get(
       isStarred: row.isStarred,
       folder: row.folder,
       hasAttachments: false,
+      /** When the recipient first opened this message, or null if never. */
+      openedAt: openedAtByEmail.get(row.id) ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       sentAt: row.sentAt?.toISOString() ?? null,
