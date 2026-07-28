@@ -24,6 +24,11 @@ import {
 } from "../lib/jwt.js";
 import { upsertWorkspaceMembership, getWorkspaceRole } from "../lib/workspace-membership.js";
 import {
+  checkLoginAllowed,
+  recordLoginFailure,
+  recordLoginSuccess,
+} from "../lib/login-protection.js";
+import {
   getGoogleSignInUrl,
   exchangeGoogleSignInCode,
   isGoogleSignInConfigured,
@@ -113,6 +118,34 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
   const input = getValidatedBody<z.infer<typeof LoginSchema>>(c);
   const db = getDatabase();
 
+  // Per-account and per-IP failure counters. The route's existing rate limit
+  // is per-IP request volume, which cannot see a botnet trying one password
+  // against one account from a thousand addresses (Known Issue #117). Checked
+  // BEFORE the password comparison so a locked account costs no Argon2 work.
+  const clientIp =
+    c.req.header("cf-connecting-ip") ??
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "unknown";
+
+  const gate = await checkLoginAllowed(input.email, clientIp);
+  if (!gate.allowed) {
+    return c.json(
+      {
+        error: {
+          type: "rate_limit_error",
+          // Deliberately does not say whether the account exists or whether it
+          // was the account or the IP that tripped — either would help an
+          // attacker tune. The lockout always expires; a permanent one would
+          // hand them a denial-of-service against any address they know.
+          message: "Too many failed sign-in attempts. Try again shortly.",
+          code: "too_many_failed_logins",
+        },
+      },
+      429,
+      { "Retry-After": String(gate.retryAfterSeconds) },
+    );
+  }
+
   const [user] = await db
     .select()
     .from(users)
@@ -120,6 +153,9 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
     .limit(1);
 
   if (!user) {
+    // Counted: enumerating addresses is itself an attack, and not counting
+    // unknown-user attempts would leave a free channel to probe with.
+    await recordLoginFailure(input.email, clientIp);
     return c.json(
       {
         error: {
@@ -134,6 +170,7 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
 
   const valid = user.passwordHash ? await verifyPassword(input.password, user.passwordHash) : false;
   if (!valid) {
+    await recordLoginFailure(input.email, clientIp);
     return c.json(
       {
         error: {
@@ -145,6 +182,11 @@ auth.post("/login", validateBody(LoginSchema), async (c) => {
       401,
     );
   }
+
+  // Clears the account counter only — the IP counter deliberately survives, so
+  // an attacker who guesses one password out of hundreds of attempts cannot
+  // reset their own spray counter and carry on against the next account.
+  await recordLoginSuccess(input.email);
 
   // Transparent upgrade: legacy SHA-256 hashes migrate to Argon2id on successful login
   const updates: Record<string, unknown> = { lastLoginAt: new Date() };
