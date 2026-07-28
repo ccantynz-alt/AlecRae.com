@@ -4,7 +4,7 @@
  */
 
 import * as net from "node:net";
-import * as dns from "node:dns/promises";
+import { boundedDns as dns } from "../dns/resolver.js";
 
 /** RFC 5321 MX record shape. node:dns/promises doesn't re-export MxRecord. */
 interface MxRecord {

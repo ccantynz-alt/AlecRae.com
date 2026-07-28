@@ -15,6 +15,9 @@ export {
 } from "./smtp/header-validator.js";
 
 export { checkSpf } from "./spf/validator.js";
+// Shared so the inbound service's DKIM key lookups get the same bound as the
+// delivery path — an unbounded resolver stalls whichever side reaches it.
+export { boundedDns, getBoundedResolver } from "./dns/resolver.js";
 export { evaluateDmarc, determineAction } from "./dmarc/enforcer.js";
 
 export {

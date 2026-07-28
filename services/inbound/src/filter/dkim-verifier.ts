@@ -11,7 +11,7 @@
  */
 
 import * as crypto from "node:crypto";
-import * as dns from "node:dns/promises";
+import { boundedDns as dns } from "@alecrae/mta/lib";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

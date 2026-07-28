@@ -11,7 +11,7 @@
  */
 
 import { randomUUID, randomInt } from "node:crypto";
-import { promises as dns } from "node:dns";
+import { boundedDns as dns } from "../dns/resolver.js";
 import {
   type DeliveryAttempt,
   type IspProfile,
