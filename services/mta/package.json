@@ -4,12 +4,13 @@
   "private": true,
   "description": "Mail Transfer Agent - Custom SMTP server and outbound delivery engine",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "//": "Run directly from TypeScript by Bun (systemd runs src/index.ts); there is no build step, so nothing here may reference ./dist. It previously did — main, types and the \".\" export all pointed at a dist that the echo build script never produced, so any bare `@alecrae/mta` import would have failed under every resolver. No caller used it; consumers import @alecrae/mta/lib.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
     },
     "./lib": {
       "types": "./src/lib.ts",

@@ -325,6 +325,12 @@ app.use("/v1/recall/status/*", authMiddleware, readRateLimit);
 app.use("/v1/recall/self-destruct", authMiddleware, writeRateLimit);
 // Recall view is PUBLIC (no auth — recipients access via link)
 // Translation: read-level (600 req/min)
+// `/languages` (a static list) and `/history` (a plain DB read) make no AI
+// call, so they are mounted BEFORE the wildcard without requireAiQuota —
+// otherwise merely opening the Translation Center would spend the account's
+// monthly AI budget. Same reasoning that exempts core search (issue #102).
+app.use("/v1/translate/languages", authMiddleware, readRateLimit);
+app.use("/v1/translate/history", authMiddleware, readRateLimit);
 app.use("/v1/translate/*", authMiddleware, readRateLimit, requireAiQuota);
 app.use("/v1/translate", authMiddleware, readRateLimit, requireAiQuota);
 // Collaboration: write-level (200 req/min)

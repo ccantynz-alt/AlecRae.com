@@ -6,6 +6,7 @@
  *   POST /v1/translate/email        — Translate a full email (subject + body)
  *   POST /v1/translate/detect       — Detect language of text
  *   GET  /v1/translate/languages    — List supported languages
+ *   GET  /v1/translate/history      — Recent per-email translations for the account
  *
  * Per-email convenience endpoint (mounted separately on emails router):
  *   POST /v1/emails/:id/translate   — Auto-translate an email with badge metadata
@@ -14,7 +15,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { getDatabase, emailTranslations, emails } from "@alecrae/db";
@@ -320,6 +321,75 @@ translate.get(
   requireScope("translate:read"),
   (c) => {
     return c.json({ data: SUPPORTED_LANGUAGES });
+  },
+);
+
+/**
+ * GET /v1/translate/history — Recent email translations for this account.
+ *
+ * The Translation Center has always called this endpoint; it did not exist, so
+ * the page's history panel and its "translated this month" stat errored on
+ * every load. The `email_translations` table it reads was clearly designed for
+ * exactly this (it carries both language names and already has an otherwise
+ * unused `created_at` index) — the endpoint was simply never written.
+ *
+ * Scope note: this covers per-email translations only. Ad-hoc text typed into
+ * the Translation Center's own box is not persisted anywhere — `email_translations`
+ * requires a non-null `email_id` FK, so it cannot hold one. That is a real
+ * product gap, surfaced honestly in the UI rather than papered over here.
+ */
+const HistoryQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+
+translate.get(
+  "/history",
+  requireScope("translate:read"),
+  async (c) => {
+    const parsed = HistoryQuerySchema.safeParse({ limit: c.req.query("limit") ?? undefined });
+    if (!parsed.success) {
+      return c.json({ error: { code: "invalid_query", message: "limit must be 1-100" } }, 400);
+    }
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const rows = await db
+      .select({
+        id: emailTranslations.id,
+        emailId: emailTranslations.emailId,
+        sourceLanguage: emailTranslations.sourceLanguage,
+        sourceLanguageName: emailTranslations.sourceLanguageName,
+        targetLanguage: emailTranslations.targetLanguage,
+        targetLanguageName: emailTranslations.targetLanguageName,
+        originalContent: emailTranslations.originalContent,
+        autoTranslated: emailTranslations.autoTranslated,
+        createdAt: emailTranslations.createdAt,
+      })
+      .from(emailTranslations)
+      .where(eq(emailTranslations.accountId, auth.accountId))
+      .orderBy(desc(emailTranslations.createdAt))
+      .limit(parsed.data.limit);
+
+    return c.json({
+      data: rows.map((r) => {
+        const subject = r.originalContent?.subject ?? "";
+        const body = r.originalContent?.body ?? "";
+        const snippet = (subject || body).slice(0, 160);
+        return {
+          id: r.id,
+          emailId: r.emailId,
+          sourceLanguage: r.sourceLanguage,
+          sourceLanguageName: r.sourceLanguageName,
+          targetLanguage: r.targetLanguage,
+          targetLanguageName: r.targetLanguageName,
+          snippet,
+          // Word count of the ORIGINAL content — what the user actually had translated.
+          wordCount: `${subject} ${body}`.trim().split(/\s+/).filter(Boolean).length,
+          autoTranslated: r.autoTranslated,
+          createdAt: r.createdAt.toISOString(),
+        };
+      }),
+    });
   },
 );
 
