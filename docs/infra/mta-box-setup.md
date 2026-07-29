@@ -8,7 +8,7 @@ The MTA worker (`services/mta`) must be running on the **dedicated mail box — 
 
 > **158 box specifics:** `vapron-bun-gateway` owns ports 80/443 on this box, so the MTA's health server must not collide — the default `HEALTH_PORT` is `8082` (do not set it to 80/443/8080). (The Coolify/Traefik port-collision warning applies to Jarvis, not 158.)
 >
-> **Shared queue note:** the API (on Jarvis) enqueues sends and the MTA (on 158) consumes them, so **both must point `REDIS_URL` at the same Redis** — either a shared/hosted Redis (Upstash) or one box's Redis reachable over the tailnet. A Redis local-only to 158 that the API doesn't use means jobs are never seen.
+> **⚠ Shared queue — do this BEFORE starting the MTA:** the API (on Jarvis) enqueues sends and the MTA (on 158) consumes them, so **both must point `REDIS_URL` at the same Redis**. Production does not yet: Redis runs on Jarvis bound to `127.0.0.1` only, which 158 cannot reach. Start the MTA in that state and **every send silently disappears** — the API enqueues, returns success, and the MTA watches a queue that never fills. No bounce, no error, no log line. **Decided 2026-07-29 (Craig): bind Redis to the tailnet — follow [`redis-tailnet-setup.md`](./redis-tailnet-setup.md) first**, including its Step 6, which proves the two boxes see the *same* queue rather than merely that each can reach *a* Redis.
 
 **Two delivery modes — pick one:**
 
@@ -43,7 +43,14 @@ systemctl start redis-server
 redis-cli ping  # should return PONG
 ```
 
-No configuration needed — BullMQ uses `redis://localhost:6379` by default. **But** in the split-box layout (API on Jarvis, MTA on 158) a localhost Redis on 158 only works if the API's `REDIS_URL` points at it too (over the tailnet) — otherwise use a shared Redis (Upstash) and set the same `REDIS_URL` on both boxes.
+**A local Redis on 158 is NOT what this box should use.** The default
+`redis://localhost:6379` would give the MTA its own private queue that the API
+never writes to — the silent-vanishing failure described at the top of this
+doc. In the split-box layout both services share Jarvis's Redis over the
+tailnet: set `REDIS_URL` per [`redis-tailnet-setup.md`](./redis-tailnet-setup.md)
+and do not rely on the default. Installing `redis-server` locally on 158 is
+unnecessary; if it is already installed, leave it stopped so it cannot be
+reached by accident.
 
 ---
 
