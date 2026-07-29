@@ -2,18 +2,18 @@
  * Attachment Intelligence — AI-powered attachment analysis, virus scanning,
  * and smart file management.
  *
- * POST /v1/attachment-intelligence/analyze              — Analyze an attachment
- * GET  /v1/attachment-intelligence/analysis              — List analyzed attachments (cursor pagination)
- * GET  /v1/attachment-intelligence/analysis/:id          — Get specific analysis result
- * POST /v1/attachment-intelligence/scan                  — Trigger virus scan for attachment
- * POST /v1/attachment-intelligence/batch-scan            — Batch scan attachments (max 25)
- * GET  /v1/attachment-intelligence/threats                — List detected threats
- * GET  /v1/attachment-intelligence/organize               — Get AI file organization suggestions
- * POST /v1/attachment-intelligence/organize/:id/action    — Mark suggestion as actioned
- * GET  /v1/attachment-intelligence/stats                  — Attachment statistics
- * GET  /v1/attachment-intelligence/pii-report             — PII detection report
- * POST /v1/attachment-intelligence/extract-text           — Extract text from attachment
- * GET  /v1/attachment-intelligence/duplicates             — Find duplicate attachments
+ * POST /v1/attachments/intelligence/analyze              — Analyze an attachment
+ * GET  /v1/attachments/intelligence/analysis              — List analyzed attachments (cursor pagination)
+ * GET  /v1/attachments/intelligence/analysis/:id          — Get specific analysis result
+ * POST /v1/attachments/intelligence/scan                  — Trigger virus scan for attachment
+ * POST /v1/attachments/intelligence/batch-scan            — Batch scan attachments (max 25)
+ * GET  /v1/attachments/intelligence/threats                — List detected threats
+ * GET  /v1/attachments/intelligence/organize               — Get AI file organization suggestions
+ * POST /v1/attachments/intelligence/organize/:id/action    — Mark suggestion as actioned
+ * GET  /v1/attachments/intelligence/stats                  — Attachment statistics
+ * GET  /v1/attachments/intelligence/pii-report             — PII detection report
+ * POST /v1/attachments/intelligence/extract-text           — Extract text from attachment
+ * GET  /v1/attachments/intelligence/duplicates             — Find duplicate attachments
  */
 
 import { Hono } from "hono";

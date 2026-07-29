@@ -1,11 +1,11 @@
 /**
  * Email Delegation & Shared Drafts Routes
  *
- * POST   /v1/delegations              — Create a delegation
- * GET    /v1/delegations              — List delegations (for delegator or delegate)
- * PUT    /v1/delegations/:id          — Update delegation (permissions, scope, isActive)
- * DELETE /v1/delegations/:id          — Revoke delegation
- * GET    /v1/delegations/inbox        — Get emails delegated to current user (placeholder)
+ * POST   /v1/delegation              — Create a delegation
+ * GET    /v1/delegation              — List delegations (for delegator or delegate)
+ * PUT    /v1/delegation/:id          — Update delegation (permissions, scope, isActive)
+ * DELETE /v1/delegation/:id          — Revoke delegation
+ * GET    /v1/delegation/inbox        — Get emails delegated to current user (placeholder)
  *
  * POST   /v1/shared-drafts            — Create a shared draft
  * GET    /v1/shared-drafts            — List shared drafts (filter by status)
@@ -101,7 +101,7 @@ function generateId(): string {
 
 const delegationRouter = new Hono();
 
-// POST /v1/delegations — Create a delegation
+// POST /v1/delegation — Create a delegation
 delegationRouter.post(
   "/",
   requireScope("messages:write"),
@@ -167,7 +167,7 @@ delegationRouter.post(
   },
 );
 
-// GET /v1/delegations — List delegations (for delegator or delegate)
+// GET /v1/delegation — List delegations (for delegator or delegate)
 delegationRouter.get(
   "/",
   requireScope("messages:read"),
@@ -224,7 +224,7 @@ delegationRouter.get(
   },
 );
 
-// PUT /v1/delegations/:id — Update delegation (permissions, scope, isActive)
+// PUT /v1/delegation/:id — Update delegation (permissions, scope, isActive)
 delegationRouter.put(
   "/:id",
   requireScope("messages:write"),
@@ -314,7 +314,7 @@ delegationRouter.put(
   },
 );
 
-// DELETE /v1/delegations/:id — Revoke delegation
+// DELETE /v1/delegation/:id — Revoke delegation
 delegationRouter.delete(
   "/:id",
   requireScope("messages:write"),
@@ -365,7 +365,7 @@ delegationRouter.delete(
   },
 );
 
-// GET /v1/delegations/inbox — Get emails delegated to current user (placeholder)
+// GET /v1/delegation/inbox — Get emails delegated to current user (placeholder)
 delegationRouter.get(
   "/inbox",
   requireScope("messages:read"),

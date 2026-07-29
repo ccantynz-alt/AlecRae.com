@@ -1,18 +1,18 @@
 /**
  * AI Categorization & Smart Labels Route
  *
- * POST   /v1/ai-categorization/categorize              — Categorize a single email
- * POST   /v1/ai-categorization/categorize/batch         — Batch categorize (max 100)
- * GET    /v1/ai-categorization/categories/:emailId      — Get category for an email
- * POST   /v1/ai-categorization/feedback                 — Submit category correction
- * GET    /v1/ai-categorization/stats                    — Category distribution stats
- * GET    /v1/ai-categorization/smart-rules              — List smart label rules
- * POST   /v1/ai-categorization/smart-rules              — Create smart label rule
- * PUT    /v1/ai-categorization/smart-rules/:id          — Update rule
- * DELETE /v1/ai-categorization/smart-rules/:id          — Delete rule
- * POST   /v1/ai-categorization/smart-rules/:id/test     — Test rule against recent emails
- * GET    /v1/ai-categorization/insights                 — AI categorization insights
- * POST   /v1/ai-categorization/retrain                  — Trigger retraining from feedback
+ * POST   /v1/ai/categorize/categorize              — Categorize a single email
+ * POST   /v1/ai/categorize/categorize/batch         — Batch categorize (max 100)
+ * GET    /v1/ai/categorize/categories/:emailId      — Get category for an email
+ * POST   /v1/ai/categorize/feedback                 — Submit category correction
+ * GET    /v1/ai/categorize/stats                    — Category distribution stats
+ * GET    /v1/ai/categorize/smart-rules              — List smart label rules
+ * POST   /v1/ai/categorize/smart-rules              — Create smart label rule
+ * PUT    /v1/ai/categorize/smart-rules/:id          — Update rule
+ * DELETE /v1/ai/categorize/smart-rules/:id          — Delete rule
+ * POST   /v1/ai/categorize/smart-rules/:id/test     — Test rule against recent emails
+ * GET    /v1/ai/categorize/insights                 — AI categorization insights
+ * POST   /v1/ai/categorize/retrain                  — Trigger retraining from feedback
  */
 
 import { Hono } from "hono";

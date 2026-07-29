@@ -1,18 +1,18 @@
 /**
  * Scheduling Intelligence Route
  *
- * POST   /v1/scheduling-intelligence/detect          — Detect scheduling intent in email
- * POST   /v1/scheduling-intelligence/propose         — Generate meeting proposal
- * GET    /v1/scheduling-intelligence/proposals        — List proposals (cursor pagination)
- * GET    /v1/scheduling-intelligence/proposals/:id    — Get specific proposal
- * PUT    /v1/scheduling-intelligence/proposals/:id    — Accept/decline proposal
- * GET    /v1/scheduling-intelligence/patterns         — Get availability patterns
- * PUT    /v1/scheduling-intelligence/patterns         — Update preferences
- * POST   /v1/scheduling-intelligence/patterns/learn   — Learn from calendar data
- * GET    /v1/scheduling-intelligence/suggest-times    — Suggest available times
- * GET    /v1/scheduling-intelligence/conflicts        — Detect scheduling conflicts
- * GET    /v1/scheduling-intelligence/stats            — Scheduling stats
- * POST   /v1/scheduling-intelligence/auto-respond     — Generate scheduling response
+ * POST   /v1/scheduling/detect          — Detect scheduling intent in email
+ * POST   /v1/scheduling/propose         — Generate meeting proposal
+ * GET    /v1/scheduling/proposals        — List proposals (cursor pagination)
+ * GET    /v1/scheduling/proposals/:id    — Get specific proposal
+ * PUT    /v1/scheduling/proposals/:id    — Accept/decline proposal
+ * GET    /v1/scheduling/patterns         — Get availability patterns
+ * PUT    /v1/scheduling/patterns         — Update preferences
+ * POST   /v1/scheduling/patterns/learn   — Learn from calendar data
+ * GET    /v1/scheduling/suggest-times    — Suggest available times
+ * GET    /v1/scheduling/conflicts        — Detect scheduling conflicts
+ * GET    /v1/scheduling/stats            — Scheduling stats
+ * POST   /v1/scheduling/auto-respond     — Generate scheduling response
  */
 
 import { Hono } from "hono";
