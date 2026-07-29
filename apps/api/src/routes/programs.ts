@@ -29,7 +29,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
@@ -345,16 +345,19 @@ programs.post(
       error: result.error ?? null,
     };
 
-    const db = getDatabase();
-    await db.insert(programRuns).values(runRow);
-    await db
-      .update(programsTable)
-      .set({
-        runCount: sql`${programsTable.runCount} + 1`,
-        ...(result.error ? { errorCount: sql`${programsTable.errorCount} + 1` } : {}),
-      })
-      .where(eq(programsTable.id, program.id));
-
+    // A dry run leaves no trace (issue #76g). This used to insert a
+    // `program_runs` row AND increment the program's real runCount and
+    // errorCount, while returning `dryRun: true` in the same breath — so
+    // testing a program twenty times reported twenty executions, and a
+    // deliberately-broken test script drove up errorCount indistinguishably
+    // from genuine failures. The statistics the user relies on to judge a
+    // program were made of their own experiments.
+    //
+    // Not written-and-tagged instead, because `program_runs` has no dry-run
+    // column and adding one is a migration (Boss Rule #7). Recording an
+    // untagged test row would move the same lie one level down into the run
+    // history. Nothing is lost: the full result and the run object are
+    // returned below, which is what the caller actually asked for.
     return c.json({
       data: {
         dryRun: true,
