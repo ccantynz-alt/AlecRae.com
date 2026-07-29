@@ -39,7 +39,6 @@ import {
   writeRateLimit,
   webhookRateLimit,
   searchRateLimit,
-  closeRateLimitRedis,
 } from "./middleware/rate-limit.js";
 import { messages, unifiedSend } from "./routes/messages.js";
 import { domains } from "./routes/domains.js";
@@ -142,7 +141,7 @@ import { organizationsRouter } from "./routes/organizations.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 import { dpaRouter } from "./routes/dpa.js";
 import { closeConnection } from "@alecrae/db";
-import { closeIdempotencyRedis } from "./middleware/idempotency.js";
+import { closeAllRedis } from "./lib/redis.js";
 import { closeSendQueue, isRedisConfigured } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
 import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@alecrae/shared";
@@ -1049,13 +1048,13 @@ async function shutdown(signal: string): Promise<void> {
     await shutdownTelemetry();
     console.log("[api] Telemetry shut down");
 
-    // Close rate-limit Redis connection
-    await closeRateLimitRedis();
-    console.log("[api] Rate-limit Redis closed");
-
-    // Close idempotency Redis connection
-    await closeIdempotencyRedis();
-    console.log("[api] Idempotency Redis closed");
+    // Close every Redis connection. This replaced two per-module close calls
+    // that covered rate-limit and idempotency only — quota, ai-quota,
+    // login-protection, send-anomaly, the tracking throttle, provider backoff
+    // and the uptime ledger all survived shutdown, two of them behind close
+    // functions that were exported and never called.
+    await closeAllRedis();
+    console.log("[api] Redis connections closed");
 
     // Close the database connection pool
     await closeConnection();

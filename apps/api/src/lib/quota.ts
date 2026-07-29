@@ -8,7 +8,7 @@
  * Increment happens at enqueue time (the commitment point), not on send.
  */
 
-import Redis from "ioredis";
+import { getRedis } from "./redis.js";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { getDatabase, accounts, events } from "@alecrae/db";
 import { PLANS } from "./billing.js";
@@ -16,51 +16,6 @@ import type { PlanId } from "./billing.js";
 
 // ─── Redis connection (singleton, lazy) ────────────────────────────────────
 
-const REDIS_URL =
-  process.env["REDIS_URL"] ??
-  process.env["UPSTASH_REDIS_URL"] ??
-  "redis://localhost:6379";
-
-let redisClient: Redis | null = null;
-// True only once the socket is "ready" to accept commands. Command issuance is
-// gated on this so we never send before the connection is writeable — otherwise
-// the first command races the connect and ioredis rejects it with "Stream isn't
-// writeable" (enableOfflineQueue: false). ioredis reconnects in the background
-// and re-fires "ready" when Redis returns, so no manual retry loop is needed.
-let redisReady = false;
-
-function getRedis(): Redis | null {
-  if (!redisClient) {
-    try {
-      const client = new Redis(REDIS_URL, {
-        maxRetriesPerRequest: 1,
-        connectTimeout: 3000,
-        enableOfflineQueue: false,
-      });
-
-      client.on("ready", () => {
-        redisReady = true;
-      });
-      client.on("error", (err) => {
-        // Log only the first transition to down; ioredis retries quietly.
-        if (redisReady) {
-          console.warn("[quota] Redis error, falling back to DB:", err.message);
-        }
-        redisReady = false;
-      });
-      client.on("end", () => {
-        redisReady = false;
-      });
-
-      redisClient = client;
-    } catch {
-      return null;
-    }
-  }
-
-  // Until the connection is ready, callers fall back to the database.
-  return redisReady ? redisClient : null;
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -199,14 +154,7 @@ export async function incrementQuota(accountId: string): Promise<void> {
   }
 }
 
-/**
- * Gracefully close the quota Redis connection. Call during app shutdown.
- */
-export async function closeQuotaRedis(): Promise<void> {
-  if (redisClient) {
-    await redisClient.quit().catch(() => {
-      /* intentional no-op: best-effort shutdown */
-    });
-    redisClient = null;
-  }
-}
+// `closeQuotaRedis()` used to live here. It was exported, documented as "call
+// during app shutdown", and called by nothing — server.ts's shutdown sequence
+// closed only rate-limit and idempotency. It read as coverage while providing
+// none. The connection is now the shared one, closed by `closeAllRedis()`.

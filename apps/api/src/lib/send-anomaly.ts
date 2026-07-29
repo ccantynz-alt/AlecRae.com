@@ -38,14 +38,9 @@
  * throttles, spam gate) still apply regardless.
  */
 
-import Redis from "ioredis";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { getDatabase, emails } from "@alecrae/db";
-
-const REDIS_URL =
-  process.env["REDIS_URL"] ??
-  process.env["UPSTASH_REDIS_URL"] ??
-  "redis://localhost:6379";
+import { getRedis } from "./redis.js";
 
 /** Never trip below this many sends in one hour, whatever the baseline. */
 const DEFAULT_FLOOR = 200;
@@ -56,34 +51,6 @@ const BASELINE_DAYS = 7;
 const BASELINE_HOURS = BASELINE_DAYS * 24;
 /** How long a computed baseline is cached, in seconds. */
 const BASELINE_TTL = 3600;
-
-let redisClient: Redis | null = null;
-let redisReady = false;
-
-function getRedis(): Redis | null {
-  if (!redisClient) {
-    try {
-      const client = new Redis(REDIS_URL, {
-        maxRetriesPerRequest: 1,
-        connectTimeout: 3000,
-        enableOfflineQueue: false,
-      });
-      client.on("ready", () => {
-        redisReady = true;
-      });
-      client.on("error", () => {
-        redisReady = false;
-      });
-      client.on("end", () => {
-        redisReady = false;
-      });
-      redisClient = client;
-    } catch {
-      return null;
-    }
-  }
-  return redisReady ? redisClient : null;
-}
 
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];

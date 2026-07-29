@@ -16,7 +16,7 @@
  * bounds the retry rate — the failure mode to avoid is not backing off at all.
  */
 
-import Redis from "ioredis";
+import { getRedis, __resetRedisForTests } from "./redis.js";
 
 /**
  * Never retry sooner than this even if the provider says we may. A tighter
@@ -34,31 +34,6 @@ const MAX_BACKOFF_SECONDS = 60 * 60;
 
 /** Used when a 429 arrives with no usable `Retry-After`. */
 const DEFAULT_BACKOFF_SECONDS = 15 * 60;
-
-let redis: Redis | null = null;
-let redisUnavailable = false;
-
-function getRedis(): Redis | null {
-  if (redisUnavailable) return null;
-  if (redis) return redis;
-
-  const url = process.env["REDIS_URL"];
-  if (!url) {
-    redisUnavailable = true;
-    return null;
-  }
-  try {
-    redis = new Redis(url, { maxRetriesPerRequest: 1 });
-    redis.on("error", () => {
-      // Handled per call; this listener only prevents an unhandled 'error'
-      // event from taking the process down.
-    });
-    return redis;
-  } catch {
-    redisUnavailable = true;
-    return null;
-  }
-}
 
 /** Fallback store: connected-account id → epoch ms when sync may resume. */
 const memoryBackoff = new Map<string, number>();
@@ -165,6 +140,6 @@ export async function getProviderBackoffUntil(
 /** Test seam: clear cached state between cases. */
 export function resetProviderBackoffForTests(): void {
   memoryBackoff.clear();
-  redis = null;
-  redisUnavailable = false;
+  // The client is shared now, so the reset must reach the module that owns it.
+  __resetRedisForTests();
 }

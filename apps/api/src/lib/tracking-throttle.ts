@@ -27,7 +27,7 @@
  * own analytics would be a far worse trade than losing a duplicate open event.
  */
 
-import Redis from "ioredis";
+import { getRedis, __resetRedisForTests } from "./redis.js";
 
 /**
  * Opens per email per hour before we stop recording. A person genuinely
@@ -40,30 +40,6 @@ const UNSUBSCRIBE_LIMIT_PER_HOUR = 10;
 
 const WINDOW_SECONDS = 60 * 60;
 
-let redis: Redis | null = null;
-let redisUnavailable = false;
-
-function getRedis(): Redis | null {
-  if (redisUnavailable) return null;
-  if (redis) return redis;
-
-  const url = process.env["REDIS_URL"];
-  if (!url) {
-    redisUnavailable = true;
-    return null;
-  }
-  try {
-    redis = new Redis(url, { maxRetriesPerRequest: 1, lazyConnect: false });
-    redis.on("error", () => {
-      // Handled per call; the listener only stops an unhandled 'error' event
-      // from taking the process down.
-    });
-    return redis;
-  } catch {
-    redisUnavailable = true;
-    return null;
-  }
-}
 
 /** Per-process fallback counters, keyed the same way as the Redis keys. */
 const memoryCounters = new Map<string, { count: number; expiresAt: number }>();
@@ -126,6 +102,8 @@ export async function shouldRecordTrackingEvent(
 /** Test seam: drop cached state so counters and the client start clean. */
 export function resetTrackingThrottleForTests(): void {
   memoryCounters.clear();
-  redis = null;
-  redisUnavailable = false;
+  // The client used to live here; it is shared now, so the reset has to reach
+  // into the module that owns it or a suite forcing the in-memory path would
+  // still see a cached connection.
+  __resetRedisForTests();
 }

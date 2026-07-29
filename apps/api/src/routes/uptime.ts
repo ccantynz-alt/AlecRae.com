@@ -25,17 +25,14 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getDatabase } from "@alecrae/db";
 import { sql } from "drizzle-orm";
-import Redis from "ioredis";
+import type Redis from "ioredis";
+import { getRedis, createProbeRedis } from "../lib/redis.js";
 
 const uptime = new Hono();
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
-const REDIS_URL =
-  process.env["REDIS_URL"] ??
-  process.env["UPSTASH_REDIS_URL"] ??
-  "redis://localhost:6379";
 const MEILISEARCH_URL =
   process.env["MEILISEARCH_URL"] ?? "http://localhost:7700";
 const ANTHROPIC_API_KEY =
@@ -129,11 +126,13 @@ async function probeRedis(): Promise<ProbeResult> {
   const start = Date.now();
   let client: Redis | null = null;
   try {
-    client = new Redis(REDIS_URL, {
-      connectTimeout: 3000,
-      maxRetriesPerRequest: 1,
-      lazyConnect: true,
-    });
+    // A probe deliberately uses its OWN connection rather than the shared
+    // client: answered from a pooled socket it would report that socket's
+    // cached readiness instead of testing whether Redis is reachable, and the
+    // latency it publishes — which feeds this very ledger — includes the
+    // connect handshake.
+    client = createProbeRedis({ connectTimeout: 3000 });
+    if (!client) throw new Error("Redis is not configured");
     await client.connect();
     await client.ping();
     const latencyMs = Date.now() - start;
@@ -259,34 +258,21 @@ interface Sample {
 // In-memory fallback. Lost on restart — that's fine, we report "unknown" then.
 const memoryLedger = new Map<ComponentKey, Sample[]>();
 
-let ledgerRedis: Redis | null = null;
-let ledgerRedisAvailable = true;
-
+/**
+ * The ledger's Redis handle.
+ *
+ * This used to own a client behind an `ledgerRedisAvailable` flag that was set
+ * `true` exactly once, at module load, and `false` in three places — never back
+ * again. So the FIRST transient error, a reconnect or a brief network blip,
+ * permanently downgraded the uptime ledger to in-process memory for the whole
+ * life of the process. Samples would silently stop being durable, and the one
+ * thing an uptime ledger must not do is quietly stop recording.
+ *
+ * The shared client's readiness gate reopens on reconnect, so the outage now
+ * lasts as long as the outage.
+ */
 function getLedgerRedis(): Redis | null {
-  if (!ledgerRedisAvailable) return null;
-  if (ledgerRedis) return ledgerRedis;
-  try {
-    ledgerRedis = new Redis(REDIS_URL, {
-      maxRetriesPerRequest: 1,
-      connectTimeout: 3000,
-      lazyConnect: true,
-      enableOfflineQueue: false,
-    });
-    ledgerRedis.on("error", () => {
-      ledgerRedisAvailable = false;
-      ledgerRedis?.disconnect();
-      ledgerRedis = null;
-    });
-    ledgerRedis.connect().catch(() => {
-      ledgerRedisAvailable = false;
-      ledgerRedis = null;
-    });
-    return ledgerRedis;
-  } catch {
-    ledgerRedisAvailable = false;
-    ledgerRedis = null;
-    return null;
-  }
+  return getRedis();
 }
 
 function statusToUp(status: ProbeStatus): 0 | 1 {

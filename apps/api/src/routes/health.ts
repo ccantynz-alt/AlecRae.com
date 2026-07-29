@@ -13,7 +13,8 @@
 import { Hono } from "hono";
 import { getDatabase } from "@alecrae/db";
 import { sql } from "drizzle-orm";
-import Redis from "ioredis";
+import type Redis from "ioredis";
+import { createProbeRedis } from "../lib/redis.js";
 import { Queue } from "bullmq";
 import { MeiliSearch } from "meilisearch";
 import { getDeployedCommit, getDriftStatus, getServiceDriftStatus } from "../lib/deploy-info.js";
@@ -65,11 +66,9 @@ async function checkRedis(): Promise<ServiceStatus> {
   const start = Date.now();
   let client: Redis | null = null;
   try {
-    client = new Redis(REDIS_URL, {
-      connectTimeout: PROBE_TIMEOUT_MS,
-      maxRetriesPerRequest: 1,
-      lazyConnect: true,
-    });
+    // Own connection, not the shared client — see lib/redis.ts.
+    client = createProbeRedis({ connectTimeout: PROBE_TIMEOUT_MS });
+    if (!client) throw new Error("Redis is not configured");
     const redis = client;
     await Promise.race([
       (async () => {
@@ -292,11 +291,8 @@ async function checkRedisDetailed(): Promise<ConfigCheck> {
   const start = Date.now();
   let client: Redis | null = null;
   try {
-    client = new Redis(process.env["REDIS_URL"], {
-      connectTimeout: PROBE_TIMEOUT_MS,
-      maxRetriesPerRequest: 1,
-      lazyConnect: true,
-    });
+    client = createProbeRedis({ connectTimeout: PROBE_TIMEOUT_MS });
+    if (!client) throw new Error("Redis is not configured");
     const redisClient = client;
     await Promise.race([
       (async () => {

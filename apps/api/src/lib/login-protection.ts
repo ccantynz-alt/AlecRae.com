@@ -40,13 +40,8 @@
  * trade: some protection everywhere beats none.
  */
 
-import Redis from "ioredis";
 import { createHash } from "node:crypto";
-
-const REDIS_URL =
-  process.env["REDIS_URL"] ??
-  process.env["UPSTASH_REDIS_URL"] ??
-  "redis://localhost:6379";
+import { getRedis } from "./redis.js";
 
 /** Failures against one account before it is temporarily locked. */
 const DEFAULT_ACCOUNT_THRESHOLD = 10;
@@ -54,34 +49,6 @@ const DEFAULT_ACCOUNT_THRESHOLD = 10;
 const DEFAULT_IP_THRESHOLD = 30;
 /** Window over which failures accumulate, and how long a lockout lasts. */
 const DEFAULT_WINDOW_SECONDS = 900; // 15 minutes
-
-let redisClient: Redis | null = null;
-let redisReady = false;
-
-function getRedis(): Redis | null {
-  if (!redisClient) {
-    try {
-      const client = new Redis(REDIS_URL, {
-        maxRetriesPerRequest: 1,
-        connectTimeout: 3000,
-        enableOfflineQueue: false,
-      });
-      client.on("ready", () => {
-        redisReady = true;
-      });
-      client.on("error", () => {
-        redisReady = false;
-      });
-      client.on("end", () => {
-        redisReady = false;
-      });
-      redisClient = client;
-    } catch {
-      return null;
-    }
-  }
-  return redisReady ? redisClient : null;
-}
 
 function envInt(name: string, fallback: number): number {
   const raw = process.env[name];
