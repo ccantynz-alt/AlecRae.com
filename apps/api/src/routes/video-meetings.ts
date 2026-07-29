@@ -583,38 +583,39 @@ videoMeetingsRouter.post(
       );
     }
 
-    // In production, this would:
-    // 1. Fetch the transcript from R2 using transcriptKey
-    // 2. Send to Claude for summarization
-    // 3. Extract action items
-    // For now, return a placeholder summary
-    const summary = "Meeting summary will be generated when Claude API is configured. " +
-      "The transcript will be processed to extract key discussion points, decisions made, " +
-      "and action items assigned to participants.";
-    const actionItems = [
-      "Review meeting notes and follow up on open items",
-      "Schedule follow-up meeting for unresolved topics",
-    ];
-
-    const now = new Date();
-
-    await db
-      .update(meetingRecordings)
-      .set({
-        aiSummary: summary,
-        aiActionItems: actionItems,
-      })
-      .where(eq(meetingRecordings.id, id));
-
-    return c.json({
-      data: {
-        id,
-        aiSummary: summary,
-        aiActionItems: actionItems,
-        confidence: 0.85,
-        generatedAt: now.toISOString(),
+    // Meeting summarisation is not implemented, and this used to pretend
+    // otherwise in the most damaging way available (issue #73a): it WROTE a
+    // canned summary and two invented action items — "Review meeting notes and
+    // follow up on open items", "Schedule follow-up meeting for unresolved
+    // topics" — into `aiSummary`/`aiActionItems`, so the recording carried
+    // them permanently as though extracted from that meeting. It then returned
+    // `confidence: 0.85` for content no model had produced.
+    //
+    // Generic action items are worse than none: a user can act on them
+    // believing they came from the transcript, and nothing distinguishes them
+    // from real ones once persisted.
+    //
+    // It cannot be made real here. `transcriptKey` is only ever read back in
+    // responses — nothing anywhere writes it, so no transcript exists — and
+    // the storage client has no download method. Summarisation needs the
+    // recording and transcription pipeline built first; that is a scoped
+    // project, not something to fake in the meantime.
+    //
+    // Nothing is written to the database. Same precedent as issues #84 and
+    // #141: report the capability gap rather than persist an invention.
+    return c.json(
+      {
+        error: {
+          type: "not_implemented",
+          message:
+            "Meeting summarisation is not available yet — recordings are not " +
+            "transcribed, so there is nothing to summarise. No summary or " +
+            "action items have been generated or saved.",
+          code: "summarization_unavailable",
+        },
       },
-    });
+      501,
+    );
   },
 );
 
