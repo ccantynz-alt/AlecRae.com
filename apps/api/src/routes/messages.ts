@@ -48,6 +48,7 @@ import { scanAttachment, isSafe } from "@alecrae/security";
 import { checkOutboundSpam } from "../lib/outbound-spam-gate.js";
 import { buildTrackedUrl } from "../lib/tracking-link.js";
 import { threadKeyFor } from "../lib/thread-key.js";
+import { headerValue } from "../lib/header-safety.js";
 import { checkSendAnomaly, recordSend } from "../lib/send-anomaly.js";
 import {
   renderTemplate,
@@ -124,10 +125,9 @@ function injectTracking(html: string, emailId: string): string {
  * "Hi\r\nBcc: victim@example.com" became a genuine Bcc header on a
  * DKIM-signed message sent from our own IP.
  */
-function headerValue(raw: string): string {
-  // eslint-disable-next-line no-control-regex -- deliberately stripping CR/LF/NUL from a header value
-  return raw.replace(/[\r\n\u0000]/g, " ").trim();
-}
+// Implementation lives in lib/header-safety.ts and is shared with
+// lib/agent-send.ts, which has its own RFC-5322 builder and was missed by the
+// original fix. A second private copy is how the agent path stayed exposed.
 
 function buildRawMessage(
   input: SendMessageInput,
