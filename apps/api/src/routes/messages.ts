@@ -23,7 +23,7 @@ import type {
   PaginationParams,
   PaginatedResponse,
 } from "../types.js";
-import { getDatabase, emails, events, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts } from "@alecrae/db";
+import { getDatabase, emails, events, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts, emailLabels, labels } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
 import { ensureFreshAccessToken } from "../sync/engine.js";
 import { registerUndoable } from "./snooze.js";
@@ -1565,11 +1565,51 @@ messages.get(
       }
     }
 
+    // Labels were write-only: two endpoints applied them and NO endpoint ever
+    // returned which labels an email had, so applying one had no visible
+    // effect anywhere (issue #76c). One bounded query per page, same shape as
+    // the openedAt lookup above, rather than a join on the hot list query.
+    const labelsByEmail = new Map<string, { id: string; name: string; color: string }[]>();
+    if (page.length > 0) {
+      try {
+        const labelRows = await db
+          .select({
+            emailId: emailLabels.emailId,
+            id: labels.id,
+            name: labels.name,
+            color: labels.color,
+          })
+          .from(emailLabels)
+          .innerJoin(labels, eq(emailLabels.labelId, labels.id))
+          .where(
+            inArray(
+              emailLabels.emailId,
+              page.map((row) => row.id),
+            ),
+          );
+
+        for (const row of labelRows) {
+          const list = labelsByEmail.get(row.emailId) ?? [];
+          list.push({ id: row.id, name: row.name, color: row.color });
+          labelsByEmail.set(row.emailId, list);
+        }
+      } catch (err) {
+        // Wrapped for the same reason as openedAt: label data is useful, but
+        // losing it must never take down the inbox itself.
+        console.warn(
+          "[messages] label lookup failed, returning messages without labels:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+
     const data = page.map((row) => ({
       id: row.id,
       messageId: row.messageId,
       /** Conversation key — shared by every message in a reply chain. */
       threadId: threadKeyFor(row),
+      /** Labels applied to this message, empty when none. */
+      labels: labelsByEmail.get(row.id) ?? [],
       from: { email: row.fromAddress, name: row.fromName },
       to: row.toAddresses,
       cc: row.ccAddresses,
