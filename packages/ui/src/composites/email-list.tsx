@@ -17,6 +17,14 @@ export interface EmailListItem {
   read: boolean;
   starred: boolean;
   priority: "high" | "normal" | "low";
+  /**
+   * Conversation key, shared by every message in a reply chain.
+   *
+   * Optional because not every caller has one, but thread-level features need
+   * it: muting used to compare against the message id, so a muted thread only
+   * ever matched the single message it was muted from.
+   */
+  threadId?: string;
   labels?: string[];
   hasAttachments?: boolean;
   threadCount?: number;

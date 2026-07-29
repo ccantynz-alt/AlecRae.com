@@ -42,6 +42,12 @@ export interface EmailAddress {
 export interface Message {
   id: string;
   messageId: string;
+  /**
+   * Conversation key, shared by every message in a reply chain. Derived from
+   * the RFC 5322 reference headers server-side (lib/thread-key.ts) — optional
+   * because a cached response from before it existed won't carry it.
+   */
+  threadId?: string;
   from: EmailAddress;
   to: EmailAddress[];
   cc?: EmailAddress[];

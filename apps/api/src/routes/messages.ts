@@ -47,6 +47,7 @@ import {
 import { scanAttachment, isSafe } from "@alecrae/security";
 import { checkOutboundSpam } from "../lib/outbound-spam-gate.js";
 import { buildTrackedUrl } from "../lib/tracking-link.js";
+import { threadKeyFor } from "../lib/thread-key.js";
 import { checkSendAnomaly, recordSend } from "../lib/send-anomaly.js";
 import {
   renderTemplate,
@@ -1395,6 +1396,8 @@ messages.get(
       data: {
         id: emailRecord.id,
         messageId: emailRecord.messageId,
+        /** Same derivation as the list, so the two never disagree. */
+        threadId: threadKeyFor(emailRecord),
         from: {
           email: emailRecord.fromAddress,
           name: emailRecord.fromName,
@@ -1483,6 +1486,11 @@ messages.get(
       .select({
         id: emails.id,
         messageId: emails.messageId,
+        // Needed to derive the conversation key — see lib/thread-key.ts. The
+        // list previously exposed no threading at all, so the inbox muted
+        // threads by message id and every reply arrived unmuted.
+        inReplyTo: emails.inReplyTo,
+        references: emails.references,
         fromAddress: emails.fromAddress,
         fromName: emails.fromName,
         toAddresses: emails.toAddresses,
@@ -1560,6 +1568,8 @@ messages.get(
     const data = page.map((row) => ({
       id: row.id,
       messageId: row.messageId,
+      /** Conversation key — shared by every message in a reply chain. */
+      threadId: threadKeyFor(row),
       from: { email: row.fromAddress, name: row.fromName },
       to: row.toAddresses,
       cc: row.ccAddresses,

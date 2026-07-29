@@ -38,7 +38,11 @@ export function InboxSelectableList({
     <ul role="list" className="flex flex-col divide-y divide-border">
       {emails.map((email) => {
         const checked = checkedIds.has(email.id);
-        const muted = mutedIds.has(email.id);
+        // Match on the CONVERSATION, not the message. This compared
+        // `email.id` against a set of thread ids, so a muted thread only ever
+        // matched the one message it was muted from and every reply arrived
+        // unmuted — the feature could not do the thing it is named after.
+        const muted = mutedIds.has(email.threadId ?? email.id);
         const selected = email.id === selectedId;
         return (
           <li
