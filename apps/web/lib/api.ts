@@ -646,12 +646,23 @@ export interface Mailbox {
   forwardTo: string[] | null;
   isActive: boolean;
   createdAt?: string;
+  updatedAt?: string;
 }
 
+/**
+ * NOTE the envelope asymmetry below — it mirrors what
+ * `apps/api/src/routes/mailboxes.ts` actually returns rather than what would be
+ * tidiest: the LIST is enveloped as `{ data }` while the single-resource writes
+ * return the object bare. Unwrapping a bare response as `{ data }` (or the
+ * reverse) is the defect class of issue #136, where the Integrations page
+ * silently rendered an empty list because it unwrapped an envelope that was not
+ * there. Each signature here was checked against the route.
+ */
 export const mailboxesApi = {
   list(): Promise<{ data: Mailbox[] }> {
     return apiFetch("/v1/mailboxes");
   },
+  /** The domain must already be verified AND active, or the API answers 409. */
   create(payload: {
     address: string;
     displayName?: string;
@@ -659,6 +670,24 @@ export const mailboxesApi = {
   }): Promise<Mailbox> {
     return apiFetch("/v1/mailboxes", {
       method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  /**
+   * `address` is deliberately absent from the payload: inbound routing resolves
+   * recipients by exact address, so a rename in place would strand mail already
+   * delivered to the old one. Changing an address is a remove plus a create.
+   */
+  update(
+    id: string,
+    payload: {
+      displayName?: string | null;
+      forwardTo?: string[] | null;
+      isActive?: boolean;
+    },
+  ): Promise<Mailbox> {
+    return apiFetch(`/v1/mailboxes/${encodeURIComponent(id)}`, {
+      method: "PATCH",
       body: JSON.stringify(payload),
     });
   },

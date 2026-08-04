@@ -3,6 +3,7 @@
  *
  * POST   /v1/mailboxes      — Provision a mailbox (e.g. info@bookaride.co.nz)
  * GET    /v1/mailboxes      — List mailboxes for the account
+ * PATCH  /v1/mailboxes/:id  — Update displayName / forwardTo / isActive
  * DELETE /v1/mailboxes/:id  — Remove a mailbox
  *
  * A mailbox can only be created on a domain that is registered AND verified for
@@ -153,6 +154,88 @@ mailboxes.get("/", requireScope("domains:manage"), async (c) => {
     .orderBy(desc(mailboxesTable.createdAt));
   return c.json({ data: rows });
 });
+
+// PATCH /v1/mailboxes/:id — update a mailbox's mutable fields
+//
+// `address` (and its derived `localPart`/`domainId`) is deliberately NOT
+// editable. Inbound routing resolves recipients by exact address
+// (services/inbound/src/routing/router.ts `lookupMailbox`), and mail already
+// delivered references the old one — renaming in place would silently strand
+// anything still addressed to it. Changing an address is a delete plus a
+// create, which makes that consequence visible.
+//
+// `isActive: false` is the reversible alternative to DELETE: the router treats
+// an inactive mailbox as absent and falls through to the domain's catch-all,
+// so mail keeps arriving at the account rather than bouncing.
+const UpdateMailboxSchema = z
+  .object({
+    displayName: z.string().min(1).max(200).nullable().optional(),
+    forwardTo: z.array(z.string().email()).max(20).nullable().optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine(
+    (v) =>
+      v.displayName !== undefined ||
+      v.forwardTo !== undefined ||
+      v.isActive !== undefined,
+    {
+      message:
+        "At least one of displayName, forwardTo, or isActive is required",
+    },
+  );
+
+mailboxes.patch(
+  "/:id",
+  requireScope("domains:manage"),
+  validateBody(UpdateMailboxSchema),
+  async (c) => {
+    const auth = c.get("auth");
+    const id = c.req.param("id");
+    const input = getValidatedBody<z.infer<typeof UpdateMailboxSchema>>(c);
+    const db = getDatabase();
+
+    // Resolve through the caller's own account, so a guessed id from another
+    // tenant is a 404 rather than an update.
+    const [row] = await db
+      .select()
+      .from(mailboxesTable)
+      .where(
+        and(eq(mailboxesTable.id, id), eq(mailboxesTable.accountId, auth.accountId)),
+      )
+      .limit(1);
+
+    if (!row) {
+      return c.json(
+        {
+          error: {
+            type: "not_found_error",
+            message: "Mailbox not found.",
+            code: "mailbox_not_found",
+          },
+        },
+        404,
+      );
+    }
+
+    await db
+      .update(mailboxesTable)
+      .set({
+        ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+        ...(input.forwardTo !== undefined ? { forwardTo: input.forwardTo } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(mailboxesTable.id, id));
+
+    const [updated] = await db
+      .select()
+      .from(mailboxesTable)
+      .where(eq(mailboxesTable.id, id))
+      .limit(1);
+
+    return c.json(updated ?? row);
+  },
+);
 
 // DELETE /v1/mailboxes/:id — remove a mailbox
 mailboxes.delete("/:id", requireScope("domains:manage"), async (c) => {

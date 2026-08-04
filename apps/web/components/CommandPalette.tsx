@@ -34,6 +34,7 @@ function getDefaultCommands(router: ReturnType<typeof useRouter>): CommandItem[]
     { id: "templates", label: "Templates", category: "navigation", action: () => router.push("/templates") },
     { id: "analytics", label: "Analytics", category: "navigation", action: () => router.push("/analytics") },
     { id: "domains", label: "Domains", category: "navigation", action: () => router.push("/domains") },
+    { id: "mailboxes", label: "Mailboxes", category: "navigation", action: () => router.push("/mailboxes") },
     { id: "settings", label: "Settings", category: "navigation", shortcut: "G ,", action: () => router.push("/settings") },
     { id: "ai-compose", label: "AI Compose", description: "Let AI write an email for you", category: "ai", shortcut: "Cmd+Shift+C", action: () => router.push("/compose") },
     { id: "search", label: "Search Emails", description: "Full-text search across all emails", category: "search", shortcut: "/", action: () => { router.push("/inbox"); setTimeout(() => document.querySelector<HTMLInputElement>('input[type="search"], input[placeholder*="Search"]')?.focus(), 100); } },
