@@ -1,6 +1,19 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  // Class strategy, not the `media` default.
+  //
+  // 24 stray `dark:` utilities exist in components (EmailScriptManager,
+  // VoiceCloneManager, VoiceReplyComposer and others). Under Tailwind's default
+  // `media` strategy those fire on the visitor's OS preference, so a handful of
+  // elements flipped to dark while the light-only page around them did not —
+  // partial dark rendering nobody asked for and nobody could switch off.
+  //
+  // AlecRae is a light, warm-ivory product. Under `class` those utilities are
+  // inert unless a `.dark` ancestor exists, which nothing sets. If a real dark
+  // theme ships later this is also the strategy it needs, so this is the
+  // forward-compatible setting rather than a workaround.
+  darkMode: "class",
   content: [
     "./app/**/*.{ts,tsx}",
     "./components/**/*.{ts,tsx}",
@@ -25,11 +38,34 @@ const config: Config = {
           950: "#0a1510",
         },
         // Warm ivory surfaces matching the marketing identity (#f5f4ef).
+        //
+        // `raised` through `inverted` were being USED before they were
+        // DEFINED. `bg-surface-raised` appears 154 times and `text-content-subtle`
+        // 364 times, and neither existed here — Tailwind emits no rule for an
+        // undefined name, so ~573 class usages compiled to nothing and failed
+        // silently. The visible result was the whole reason the app looked
+        // broken: every card marked `bg-surface-raised` rendered TRANSPARENT
+        // and dissolved into the ivory page behind it, and every element marked
+        // `text-content-subtle` inherited the near-black default, so there was
+        // no muted tier and no visual hierarchy anywhere.
         surface: {
           DEFAULT: "#ffffff",
+          /** Cards and panels lifted off the ivory page. White is the lift. */
+          raised: "#ffffff",
+          /** A hair off white — for nested blocks inside a raised card. */
+          subtle: "#faf9f6",
           secondary: "#f5f4ef",
           tertiary: "#efede5",
+          /** Row/list hover. Distinct from tertiary so hover reads as a change. */
+          hover: "#eceae1",
+          /** Pressed / currently-selected row. */
+          active: "#e3dfd3",
           inverse: "#1c1a17",
+          // Synonyms used by packages/ui, which grew a third vocabulary of its
+          // own. Aliased rather than renamed so the library keeps rendering;
+          // the names are consolidated in the component migration, not here.
+          primary: "#ffffff",
+          inverted: "#1c1a17",
         },
         border: {
           DEFAULT: "#e3dfd3",
@@ -39,9 +75,22 @@ const config: Config = {
         content: {
           DEFAULT: "#1c1a17",
           secondary: "#57534a",
+          /**
+           * The muted tier, and the most-used colour in the app (364 uses).
+           * #6f6a5e is deliberately darker than `tertiary`: it lands on real
+           * body and caption text, so it has to clear WCAG AA — it measures
+           * 5.35:1 on white, where `tertiary` (#8a8475) is only ~3.4:1 and
+           * would have failed for anything but large text.
+           */
+          subtle: "#6f6a5e",
+          muted: "#6f6a5e",
+          /** Labels, timestamps, disabled — decorative, large, or non-essential. */
           tertiary: "#8a8475",
           inverse: "#f5f4ef",
           brand: "#1f3d2e",
+          // Synonyms used by packages/ui — see the note on `surface` above.
+          primary: "#1c1a17",
+          inverted: "#f5f4ef",
         },
         status: {
           success: "#10b981",

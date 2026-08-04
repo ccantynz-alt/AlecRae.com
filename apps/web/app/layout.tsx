@@ -82,7 +82,12 @@ export default function RootLayout({
       lang="en"
       className={`h-full antialiased ${italianno.variable} ${inter.variable} ${playfair.variable}`}
     >
-      <body className="h-full bg-[#f5f4ef] text-neutral-900 font-sans">
+      {/* Tokens, not literals. This was `bg-[#f5f4ef] text-neutral-900` — an
+          arbitrary hex duplicating `surface-secondary`, and `neutral-900`,
+          which is a COOL grey (#171717) sitting at the root of a warm-ivory
+          palette. Every element that inherited body colour picked up that cool
+          cast, fighting the warm `content` scale used everywhere else. */}
+      <body className="h-full bg-surface-secondary text-content font-sans">
         {children}
         <ConsentBanner />
       </body>
