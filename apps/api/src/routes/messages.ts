@@ -33,19 +33,15 @@ import { decryptSecretOrNull, encryptSecret } from "../lib/token-crypto.js";
  *  during which POST /v1/send/undo/:id can cancel it. registerUndoable()
  *  existed but had zero callers anywhere — undo-send was pure dead code. */
 const UNDO_SEND_WINDOW_SECONDS = 10;
-import { checkQuota, incrementQuota } from "../lib/quota.js";
+import { incrementQuota } from "../lib/quota.js";
 import { indexEmail, searchEmails } from "@alecrae/shared";
 import { enqueueEmail } from "@alecrae/ai-engine/embeddings/auto-indexer";
 import { usageEnforcement } from "../middleware/usage.js";
 import { idempotency } from "../middleware/idempotency.js";
-import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED, ComplianceEngine } from "@alecrae/reputation";
-import type { EmailMetadata } from "@alecrae/reputation";
-import {
-  validateCustomHeaders,
-  HEADER_INJECTION_REJECTED,
-} from "@alecrae/mta/lib";
+import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED } from "@alecrae/reputation";
 import { scanAttachment, isSafe } from "@alecrae/security";
 import { checkOutboundSpam } from "../lib/outbound-spam-gate.js";
+import { runPreSendGate, classifyContent } from "../lib/pre-send-gate.js";
 import { buildTrackedUrl } from "../lib/tracking-link.js";
 import { threadKeyFor } from "../lib/thread-key.js";
 import { headerValue } from "../lib/header-safety.js";
@@ -660,195 +656,43 @@ async function handleSend(c: Context) {
     );
   }
 
-  // ── 1a. Hard quota enforcement ────────────────────────────────────
-  // Must be checked BEFORE warmup, suppression, and enqueue so that
-  // over-quota accounts cannot consume warmup slots or queue capacity.
-  const quota = await checkQuota(auth.accountId);
-  if (!quota.allowed) {
-    return c.json(
-      {
-        error: "QUOTA_EXCEEDED",
-        message: `Monthly email limit reached (${quota.sent}/${quota.limit}). Upgrade your plan or wait until next billing cycle.`,
-        plan: quota.plan,
-        limit: quota.limit,
-        sent: quota.sent,
-        resetsAt: quota.resetsAt,
-      },
-      429,
-    );
-  }
-
-  // ── 1b. Suppression list check ────────────────────────────────────
-  // Reject sends to suppressed recipients BEFORE warmup and enqueue
-  // so a suppressed address cannot waste a warmup slot or quota count.
+  // ── 1a-1c. The pre-send gate ──────────────────────────────────────
+  // Quota, suppression, compliance, outbound spam scoring, send-volume
+  // anomaly and custom-header validation, in that order, all in
+  // lib/pre-send-gate.ts.
+  //
+  // This stack used to be written inline here, which is exactly why the other
+  // three outbound-queue producers ran none of it (issue #151) — a long
+  // handler is not something another caller can reuse. It now lives in one
+  // callable gate that every producer shares, with the response bodies
+  // unchanged so no API contract moved.
   const allRecipientAddresses = [
     ...input.to.map((r) => r.email),
     ...(input.cc ?? []).map((r) => r.email),
     ...(input.bcc ?? []).map((r) => r.email),
   ];
 
-  for (const recipientEmail of allRecipientAddresses) {
-    const [suppressed] = await db
-      .select({
-        email: suppressionLists.email,
-        reason: suppressionLists.reason,
-      })
-      .from(suppressionLists)
-      .where(
-        and(
-          eq(suppressionLists.email, recipientEmail.toLowerCase()),
-          eq(suppressionLists.domainId, domainRecord.id),
-        ),
-      )
-      .limit(1);
-
-    if (suppressed) {
-      return c.json(
-        {
-          error: "RECIPIENT_SUPPRESSED",
-          reason: suppressed.reason === "bounce" ? "hard_bounce"
-            : suppressed.reason === "complaint" ? "complaint"
-            : suppressed.reason === "unsubscribe" ? "manual_unsubscribe"
-            : suppressed.reason,
-          address: suppressed.email,
-        },
-        422,
-      );
-    }
-  }
-
-  // ── 1b2. Compliance check (CAN-SPAM / GDPR / CASL) ────────────────
-  // Transactional emails (password reset, verification) are exempt from
-  // marketing-only rules but must still pass basic compliance. The engine
-  // is configured to exempt transactional by default.
-  const complianceEngine = new ComplianceEngine({ exemptTransactional: true });
-  const isTransactional = (input.tags ?? []).includes("transactional") ||
-    (input.template_id ?? "").includes("verify") ||
-    (input.template_id ?? "").includes("password-reset") ||
-    (input.template_id ?? "").includes("magic-link");
-  const headersMap = new Map<string, string>(
-    Object.entries(input.headers ?? {}).map(([k, v]) => [k, String(v)]),
-  );
-  const complianceMeta: EmailMetadata = {
-    from: input.from.email,
-    to: allRecipientAddresses[0] ?? input.from.email,
-    subject: resolvedSubject,
-    headers: headersMap,
-    hasUnsubscribeHeader: headersMap.has("list-unsubscribe"),
-    hasUnsubscribeLink: false,
-    hasPhysicalAddress: false,
-    contentType: isTransactional ? "transactional" : "marketing",
-    senderDomain: domainOf(input.from.email),
-  };
-  const complianceResult = complianceEngine.checkAll(complianceMeta);
-  if (!complianceResult.ok) {
-    return c.json(
-      {
-        error: {
-          type: "compliance_error",
-          message: complianceResult.error instanceof Error
-            ? complianceResult.error.message
-            : "Compliance check failed",
-          code: "compliance_violation",
-        },
-      },
-      422,
-    );
-  }
-  const violations = complianceResult.value.flatMap((r) => r.violations ?? []);
-  if (violations.length > 0) {
-    return c.json(
-      {
-        error: {
-          type: "compliance_error",
-          message: `Email blocked: ${violations.map((v) => v.description ?? v.rule).join("; ")}`,
-          code: "compliance_violation",
-          violations,
-        },
-      },
-      422,
-    );
-  }
-
-  // ── 1b3. Outbound spam gate (reputation protection) ───────────────
-  // Every check above protects the recipient or the customer; none of them
-  // look at what the message actually says. An authenticated account — a
-  // customer's own or a compromised one — could otherwise push phishing/419
-  // content through this API and we would DKIM-sign it and relay it from our
-  // sending IP. That is how the sending domain gets blocklisted, which is
-  // slow and expensive to undo (cf. issue #105's open relay).
-  const spamVerdict = await checkOutboundSpam({
-    messageId,
+  const gate = await runPreSendGate({
     accountId: auth.accountId,
+    domainId: domainRecord.id,
+    messageId,
     from: input.from.email,
-    to: allRecipientAddresses,
+    recipients: allRecipientAddresses,
     subject: resolvedSubject,
     text: input.text,
     html: input.html,
+    headers: (input.headers ?? null) as Record<string, unknown> | null,
+    contentClass: classifyContent({
+      tags: input.tags,
+      templateId: input.template_id,
+    }),
   });
 
-  if (!spamVerdict.allowed) {
-    return c.json(
-      {
-        error: {
-          type: "spam_content_rejected",
-          message:
-            "This message was refused because its content scored as spam. " +
-            "If you believe this is wrong, contact support — sending it would " +
-            "put the delivery reputation of every account on this platform at risk.",
-          code: "outbound_spam_rejected",
-          score: spamVerdict.score,
-          reasons: spamVerdict.reasons,
-        },
-      },
-      422,
-    );
+  if (!gate.allowed) {
+    return c.json(gate.body as Record<string, unknown>, gate.status);
   }
 
-  // ── 1b4. Send-volume anomaly (compromised-account detection) ──────
-  // Content scoring above misses a blast of individually-bland messages.
-  // This compares the account against its own recent history rather than a
-  // flat ceiling — see lib/send-anomaly.ts and Known Issue #117.
-  const anomaly = await checkSendAnomaly(auth.accountId);
-  if (!anomaly.allowed) {
-    return c.json(
-      {
-        error: {
-          type: "send_volume_anomaly",
-          message:
-            "Sending is paused on this account: volume this hour is far above its " +
-            "normal rate, which usually means credentials have been compromised. " +
-            "Contact support to resume.",
-          code: "send_volume_anomaly",
-          sentThisHour: anomaly.currentHour,
-          threshold: anomaly.threshold,
-        },
-      },
-      429,
-    );
-  }
-
-  // ── 1c. Validate customer-supplied custom headers ─────────────────
-  // Reputation-protection: Bcc/CRLF injection and platform-controlled
-  // headers (DKIM-Signature, Authentication-Results, etc) must never
-  // reach the SMTP DATA stream. Hard-reject at queue-accept time so
-  // the customer gets a clear error and no bad send is enqueued.
-  const headerCheck = validateCustomHeaders(
-    (input.headers ?? null) as Record<string, unknown> | null,
-  );
-  if (!headerCheck.ok) {
-    return c.json(
-      {
-        error: {
-          type: "validation_error",
-          message: headerCheck.reason,
-          code: HEADER_INJECTION_REJECTED,
-        },
-      },
-      400,
-    );
-  }
-  const sanitizedHeaders = headerCheck.sanitized;
+  const sanitizedHeaders = gate.sanitizedHeaders;
 
   // ── 1d. Auto-enrol the domain in warm-up + hard-enforce day limit ─
   // `ensureWarmupAndCheck` creates a session on-the-fly for any domain

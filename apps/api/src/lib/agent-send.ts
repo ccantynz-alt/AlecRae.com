@@ -24,6 +24,9 @@ import {
   type AgentDraft,
 } from "@alecrae/db";
 import { getSendQueue } from "./queue.js";
+import { runPreSendGate, PreSendGateError } from "./pre-send-gate.js";
+import { recordSend } from "./send-anomaly.js";
+import { incrementQuota } from "./quota.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -183,6 +186,42 @@ export async function enqueueAgentDraftForSend(
   const now = new Date();
   const delayMs = Math.max(0, scheduledFor.getTime() - now.getTime());
 
+  // 2b. Pre-send gate — quota, suppression, compliance, spam scoring, volume
+  //     anomaly, headers (issue #151).
+  //
+  //     This path had none of it. That mattered more here than on any other
+  //     producer: the body is written by a model from the content of an
+  //     INCOMING message, so what gets sent is influenced by something an
+  //     outsider wrote. Unscored, that is a prompt-injection route straight
+  //     onto our own IP — the same reachability that made #124's second
+  //     header-injection builder urgent.
+  //
+  //     Runs BEFORE the `emails` insert below, deliberately: a refused draft
+  //     must leave no row, no delivery_results, and no queue job behind. It is
+  //     also after the domain resolution above, because suppression is scoped
+  //     to the sending domain's id and there is nothing to scope to until a
+  //     domain has been chosen.
+  const gate = await runPreSendGate({
+    accountId: draft.accountId,
+    domainId: preferred.id,
+    messageId,
+    from: fromAddress,
+    recipients: draft.toAddresses,
+    subject: draft.subject,
+    text: effectiveBody,
+    headers: null,
+    // An agent reply to an incoming message is ordinary correspondence: not a
+    // transactional notification, and not commercial bulk mail. Classifying it
+    // as "marketing" — which the old `isTransactional ? … : "marketing"` rule
+    // would have done — makes the compliance engine demand a physical postal
+    // address and an unsubscribe link on a one-to-one reply, and refuse it.
+    contentClass: "correspondence",
+  });
+
+  if (!gate.allowed) {
+    throw new PreSendGateError(gate);
+  }
+
   // 3. Persist the email record
   await db.insert(emails).values({
     id: emailId,
@@ -247,6 +286,19 @@ export async function enqueueAgentDraftForSend(
     },
     delayMs > 0 ? { delay: delayMs } : {},
   );
+
+  // 5b. Record the send against the anomaly baseline and the quota counter.
+  //
+  //     Without these an agent send was invisible to both: it never counted
+  //     toward the monthly allowance the plan sells, and it never moved the
+  //     account's own hourly baseline — so a compromised account could blast
+  //     through this path while the anomaly detector on the ordinary send path
+  //     saw a flat, quiet history. Fire-and-forget, matching messages.ts: a
+  //     Redis outage must not fail a send that has already been queued.
+  void recordSend(draft.accountId);
+  incrementQuota(draft.accountId).catch(() => {
+    /* fire-and-forget */
+  });
 
   // 6. Record the link back on the draft
   await db

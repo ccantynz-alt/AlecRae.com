@@ -27,7 +27,6 @@ import {
   type UnsubscribeOption,
   type ExtractEmailInput,
 } from "@alecrae/ai-engine/unsubscribe";
-import { getSendQueue } from "../lib/queue.js";
 import { getDatabase, unsubscribeHistory, emails } from "@alecrae/db";
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
@@ -147,17 +146,32 @@ async function executeOption(
   }
 
   if (option.method === "mailto") {
-    const result = await sendUnsubscribeMailto(option.target, async (msg) => {
-      const queue = getSendQueue();
-      await queue.add("send", {
-        from: userEmail ?? "",
-        to: msg.to,
-        cc: msg.cc,
-        bcc: msg.bcc,
-        subject: msg.subject,
-        text: msg.body,
-        kind: "unsubscribe",
-      });
+    // The mailto branch reported SUCCESS for a send that could never happen.
+    //
+    // It enqueued `{ from, to, cc, bcc, subject, text, kind }` directly, but
+    // the MTA worker reads `job.data.email` (an `EmailJobData` wrapping a
+    // `QueuedEmail` with `rawMessage`, `accountId`, `domain`, `messageId`).
+    // There was no `email` key at all, so every such job threw on the first
+    // property access and retried its way to the DLQ. Nothing was ever
+    // delivered — and because `sendUnsubscribeMailto` treats "the callback did
+    // not throw" as success, the history row and the UI both said the
+    // unsubscribe had gone through. A user would believe they were off a list
+    // they are still on, which is worse than a visible failure.
+    //
+    // Two further problems sat behind it, which is why this is not a
+    // shape-only fix and is deliberately not half-built here: `from` was
+    // caller-supplied and never checked against a domain the account owns (a
+    // spoofing vector the moment the job shape was corrected), and the send
+    // needs an accountId + verified domain to pass the pre-send gate — neither
+    // of which `executeOption` currently receives.
+    //
+    // Failing honestly, so the user can act on the truth. Tracked as issue
+    // #151's fourth producer.
+    const result = await sendUnsubscribeMailto(option.target, async () => {
+      throw new Error(
+        "Email-based (mailto:) unsubscribe is not available yet — nothing was sent. " +
+          "Use the unsubscribe link in the message, or contact the sender directly.",
+      );
     });
     return {
       status: result.success ? "success" : "failed",

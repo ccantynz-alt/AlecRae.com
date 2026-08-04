@@ -41,7 +41,6 @@ import {
   type AgentEmail,
   type AgentReport,
 } from "@alecrae/ai-engine/agent";
-import { getSendQueue } from "../lib/queue.js";
 import {
   getDatabase,
   emails,
@@ -59,6 +58,7 @@ import {
   enqueueAgentDraftForSend,
   AgentSendError,
 } from "../lib/agent-send.js";
+import { PreSendGateError } from "../lib/pre-send-gate.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -298,65 +298,34 @@ function getAgent(): InboxAgent {
     }));
   };
 
-  // Draft queueing is intentionally omitted from the agent factory. Agent drafts
-  // ALWAYS require explicit user approval (DraftedReply.requiresApproval
-  // is hard-coded to true), so the queueDraft hook would only fire for drafts
-  // the user has *not* yet approved. The real send path lives in the
-  // /drafts/:id/approve and /runs/:id/approve routes below, which call
-  // enqueueAgentDraftForSend() once the user has confirmed.
+  // `queueDraft` is deliberately NOT supplied.
+  //
+  // The comment that used to sit here said draft queueing was "intentionally
+  // omitted" because drafts always require approval — while the hook was
+  // passed in directly beneath it. The code, not the comment, was what ran:
+  // `InboxAgent.run()` calls `queueDraft` for EVERY drafted reply whenever
+  // `dryRun` is false (inbox-agent.ts), and it consults `requiresApproval`
+  // nowhere. `dryRun` defaults to false on the run route. So every AI-drafted
+  // reply went straight onto the real outbound send queue at the moment the
+  // agent ran, with no user approval anywhere in the path.
+  //
+  // The job it built could not have sent correctly either — `accountId` was
+  // set to the RECIPIENT'S address, `from` to the literal string
+  // "agent-draft", `domain` hard-coded to "alecrae.com", and `rawMessage` to
+  // the bare draft body rather than an RFC-5322 message. Nothing has actually
+  // gone out only because the MTA is stopped (issue #105).
+  //
+  // Removing the hook is the fix rather than gating it: the approval path this
+  // duplicated already exists and is correct — /drafts/:id/approve and
+  // /runs/:id/approve call `enqueueAgentDraftForSend()` once the user has
+  // confirmed, which builds a real message and now runs the full pre-send gate
+  // (issue #151). A second, unapproved producer of malformed jobs has no
+  // correct version to gate it into.
   _agent = new InboxAgent({
     ai,
     loadEmails,
     persistReport: async (report) => {
       await persistReportToDb(report);
-    },
-    queueDraft: async (draft) => {
-      const queue = getSendQueue();
-      const jobId = generateId("agdraft");
-      const now = new Date();
-
-      let delay: number | undefined;
-      if (draft.scheduledFor) {
-        const delayMs = draft.scheduledFor.getTime() - Date.now();
-        if (delayMs > 0) {
-          delay = delayMs;
-        }
-      }
-
-      await queue.add(
-        jobId,
-        {
-          email: {
-            id: jobId,
-            accountId: draft.to[0] ?? "unknown",
-            messageId: `<${jobId}@alecrae.com>`,
-            from: "agent-draft",
-            to: draft.to,
-            rawMessage: draft.draft,
-            priority: 5 as const,
-            attempts: 0,
-            maxAttempts: 8,
-            scheduledAt: draft.scheduledFor ?? now,
-            createdAt: now,
-            domain: "alecrae.com",
-            metadata: {
-              source: "inbox-agent",
-              emailId: draft.emailId,
-              threadId: draft.threadId ?? "",
-              subject: draft.subject,
-            },
-          },
-          addedAt: now.toISOString(),
-        },
-        {
-          priority: 5,
-          attempts: 8,
-          backoff: { type: "exponential" as const, delay: 60_000 },
-          removeOnComplete: true,
-          removeOnFail: false,
-          ...(delay !== undefined ? { delay } : {}),
-        },
-      );
     },
   });
 
@@ -744,6 +713,13 @@ agent.post(
         const result = await enqueueAgentDraftForSend(approvedRow);
         sendResult = { emailId: result.emailId, delayMs: result.delayMs };
       } catch (err) {
+        // A pre-send gate refusal carries its own status and body — surface
+        // them verbatim so an over-quota or spam-scored draft reads the same
+        // here as it does on the ordinary send path, instead of collapsing
+        // into a generic 422 or, worse, an unhandled 500.
+        if (err instanceof PreSendGateError) {
+          return c.json(err.body as Record<string, unknown>, err.status);
+        }
         if (err instanceof AgentSendError) {
           return c.json(
             {
