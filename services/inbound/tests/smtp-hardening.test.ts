@@ -112,7 +112,22 @@ describe("SMTP Inbound Open Relay Hardening", () => {
       expect(response.message).toContain("not active");
     });
 
-    it("should accept any domain when no verifier is configured", async () => {
+    /**
+     * This assertion is INVERTED from what it used to be.
+     *
+     * It previously read "should accept any domain when no verifier is
+     * configured" and expected 250 — an open relay, written down as intended
+     * behaviour and pinned by a passing test. It was not hypothetical: the
+     * check was written `if (this.config.domainVerifier)` and `index.ts` never
+     * supplied one, so accept-anything was the shipped behaviour of the
+     * service meant to sit on port 25. That is the shape of the defect that
+     * ran on this box for nine days and was actively abused (issue #105).
+     *
+     * An unconfigured relay control now refuses. A deployment that forgets to
+     * wire the verifier must reject mail, never relay it — the same
+     * fail-closed posture issue #127 established on the MTA side.
+     */
+    it("refuses every recipient when no verifier is configured (fails closed)", async () => {
       const handler = createHandler(undefined); // No verifier
 
       handler.getGreeting();
@@ -120,7 +135,43 @@ describe("SMTP Inbound Open Relay Hardening", () => {
       await handler.processCommand("MAIL FROM:<sender@sender.com>");
 
       const response = await handler.processCommand("RCPT TO:<user@any-domain.com>");
-      expect(response.code).toBe(250);
+      expect(response.code).toBe(550);
+      expect(response.message).toContain("Relay not permitted");
+    });
+
+    it("refuses a subdomain of a hosted domain — no implicit inheritance", async () => {
+      // Hosting example.com must not make us the relay for
+      // anything.example.com; the lookup is exact.
+      const verifier: DomainVerifier = async (domain): Promise<DomainCheckResult> =>
+        domain === "example.com"
+          ? { registered: true, active: true, dnsStale: false }
+          : { registered: false, active: false, dnsStale: false };
+
+      const handler = createHandler(verifier);
+      handler.getGreeting();
+      await handler.processCommand("EHLO test.sender.com");
+      await handler.processCommand("MAIL FROM:<sender@sender.com>");
+
+      const response = await handler.processCommand(
+        "RCPT TO:<user@mail.example.com>",
+      );
+      expect(response.code).toBe(550);
+    });
+
+    it("temp-fails rather than relaying when the verifier throws", async () => {
+      // A database blip must not become either a permanent rejection of
+      // legitimate mail or an accepted relay. 450 lets the sender retry.
+      const verifier: DomainVerifier = async () => {
+        throw new Error("connection refused");
+      };
+
+      const handler = createHandler(verifier);
+      handler.getGreeting();
+      await handler.processCommand("EHLO test.sender.com");
+      await handler.processCommand("MAIL FROM:<sender@sender.com>");
+
+      const response = await handler.processCommand("RCPT TO:<user@example.com>");
+      expect(response.code).toBe(450);
     });
   });
 

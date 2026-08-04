@@ -2,6 +2,7 @@ import { SmtpReceiver } from "./receiver/smtp-receiver.js";
 import { MimeParser } from "./parser/mime-parser.js";
 import { FilterPipeline } from "./filter/pipeline.js";
 import { MailboxRouter } from "./routing/router.js";
+import { createDomainVerifier } from "./routing/domain-verifier.js";
 import { InMemoryEmailStore } from "./storage/store.js";
 import { PostgresEmailStore } from "./storage/postgres-store.js";
 import { createHttpInbound } from "./http-inbound.js";
@@ -164,6 +165,9 @@ const enableHttp = process.env["DISABLE_HTTP"] !== "true";
 const receiver = new SmtpReceiver({
   hostname,
   port: smtpPort,
+  // The relay control. Without this the receiver answers 250 to any recipient
+  // on any domain — see routing/domain-verifier.ts and issue #105.
+  domainVerifier: createDomainVerifier(),
   onMessage: handleInboundMessage,
 });
 
