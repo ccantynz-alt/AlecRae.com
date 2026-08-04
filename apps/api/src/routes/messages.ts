@@ -262,11 +262,16 @@ const ListMessagesQuery = PaginationSchema.extend({
     ])
     .optional(),
   tag: z.string().optional(),
-  /** Defaults to "inbox" (excludes trash and archive) — pass "archive",
-   *  "trash", "drafts", or "all" explicitly to see those. When `status=draft`
-   *  is requested the default becomes "drafts", since drafts are never in the
-   *  inbox and the old default silently returned nothing for them. */
-  folder: z.enum(["inbox", "archive", "trash", "drafts", "all"]).optional(),
+  /** Defaults to "inbox" (excludes trash, archive and spam) — pass "archive",
+   *  "trash", "spam", "drafts", or "all" explicitly to see those. When
+   *  `status=draft` is requested the default becomes "drafts", since drafts are
+   *  never in the inbox and the old default silently returned nothing for them.
+   *
+   *  "spam" is what the inbound filter pipeline writes for a `quarantine`
+   *  verdict. Without it here, quarantined mail would be filed correctly and
+   *  then be unreachable through the API entirely — no worse-but-different than
+   *  the bug where it landed in the inbox. */
+  folder: z.enum(["inbox", "archive", "trash", "spam", "drafts", "all"]).optional(),
 });
 
 // ─── Shared send handler ───────────────────────────────────────────────────
@@ -1438,7 +1443,11 @@ messages.get(
   validateQuery(ListMessagesQuery),
   async (c) => {
     const query = getValidatedQuery<
-      PaginationParams & { status?: string; tag?: string; folder?: "inbox" | "archive" | "trash" | "all" }
+      PaginationParams & {
+        status?: string;
+        tag?: string;
+        folder?: "inbox" | "archive" | "trash" | "spam" | "drafts" | "all";
+      }
     >(c);
     const auth = c.get("auth");
     const db = getDatabase();
