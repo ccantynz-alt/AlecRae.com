@@ -98,6 +98,25 @@ const config: Config = {
           error: "#ef4444",
           info: "#3b82f6",
         },
+        // Two further stray vocabularies the 573-utility sweep missed:
+        // `accent` (`focus:ring-accent`, `bg-accent/10`, `text-accent` —
+        // ~102 uses across 13 dashboard pages) and `text-text-*` /
+        // `ring-accent-primary` (7 uses in the script-editor composite).
+        // Undefined, they compiled to nothing: accent badges rendered
+        // transparent and focus rings fell back to Tailwind's default blue
+        // inside the racing-green design. Aliased to brand/content values,
+        // same policy as the `surface`/`content` synonyms above —
+        // consolidation happens in the component migration, not here.
+        accent: {
+          DEFAULT: "#1f3d2e",
+          primary: "#1f3d2e",
+        },
+        text: {
+          DEFAULT: "#1c1a17",
+          primary: "#1c1a17",
+          secondary: "#57534a",
+          muted: "#6f6a5e",
+        },
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

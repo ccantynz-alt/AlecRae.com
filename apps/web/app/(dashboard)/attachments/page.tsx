@@ -1167,7 +1167,7 @@ export default function AttachmentsPage(): ReactNode {
   return (
     <PageLayout
       title="Attachment Intelligence"
-      description="Every attachment analyzed by AI — virus scanned, PII flagged, and smartly organized."
+      description="Attachments organized and checked for risky file types and PII patterns. Virus scanning is not available yet."
     >
       <PlanGate feature="attachment_intelligence">
         <AttachmentsContent />
