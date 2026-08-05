@@ -449,9 +449,19 @@ function decodeTransferEncoding(
     return decodeBase64(body);
   }
   if (enc === "quoted-printable") {
-    return new TextEncoder().encode(decodeQuotedPrintable(body));
+    // `quotedPrintableToBytes`, NOT TextEncoder.encode(decodeQuotedPrintable()).
+    // The latter double-encodes: decodeQuotedPrintable yields one code unit
+    // per byte, and re-encoding that as UTF-8 turns every byte >= 0x80 into
+    // two — silently corrupting every QP-encoded attachment (a PDF, a .docx)
+    // on the MBOX/EML import path. This is the attachment half of issue
+    // #113(a); the correct helper was written for that fix and left unused
+    // 30 lines below.
+    return quotedPrintableToBytes(body);
   }
-  return new TextEncoder().encode(body);
+  // 7bit/8bit/binary carry raw octets, so latin1 (byte-per-code-unit) is the
+  // faithful reading. TextEncoder would re-encode 8bit bodies as UTF-8 and
+  // corrupt them the same way.
+  return latin1ToBytes(body);
 }
 
 function decodeBase64(input: string): Uint8Array {

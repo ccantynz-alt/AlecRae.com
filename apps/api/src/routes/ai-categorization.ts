@@ -326,8 +326,17 @@ aiCategorizationRouter.post(
 
     const emailMap = new Map(emailRecords.map((e) => [e.id, e]));
 
-    // Process each email — call Claude for those we have records for,
-    // fall back to a deterministic placeholder for unknown IDs
+    // Categorise the emails this account actually owns. An id we have no
+    // record for is SKIPPED and reported back, never invented: the previous
+    // fallback derived a category from the character sum of the id itself
+    // (`hash % PRIMARY_CATEGORIES.length`) and persisted it with
+    // `aiModel: "haiku"`, so a row whose category had no relationship to any
+    // message — or to any model — was stored and later averaged into the
+    // reported categorisation accuracy. Same fabricated-verdict class as
+    // issues #141 and #137. Skipping also closes a quiet cross-tenant edge:
+    // another account's id used to come back with a confident-looking
+    // category rather than being ignored.
+    const skipped: string[] = [];
     const results: {
       id: string;
       accountId: string;
@@ -365,12 +374,8 @@ aiCategorizationRouter.post(
           confidence = 0.5;
         }
       } else {
-        // Deterministic fallback for unknown email IDs
-        const hash = emailId.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-        const idx = hash % PRIMARY_CATEGORIES.length;
-        primaryCategory = PRIMARY_CATEGORIES[idx] ?? "important";
-        secondaryCategories = [];
-        confidence = 0.5;
+        skipped.push(emailId);
+        continue;
       }
 
       results.push({
@@ -403,6 +408,9 @@ aiCategorizationRouter.post(
         categorizedAt: r.categorizedAt.toISOString(),
       })),
       total: results.length,
+      // Reported rather than silently dropped: a caller that asked for 50 and
+      // got 40 back needs to know which ten, and why.
+      skipped,
     });
   },
 );

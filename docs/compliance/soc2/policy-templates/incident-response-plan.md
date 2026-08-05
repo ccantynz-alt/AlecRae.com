@@ -63,7 +63,7 @@ This plan covers all security incidents affecting:
 | Automated security scans | GitHub Actions security.yml — weekly + every PR | GitHub Actions tab → security workflow |
 | CodeQL findings | GitHub Security tab → Code scanning alerts | `github.com/[ORG]/AlecRae.com/security/code-scanning` |
 | Secret scanning | Gitleaks in security.yml + GitHub native secret scanning | GitHub Security tab |
-| Dependency vulnerabilities | OSV-Scanner + audit-ci | security.yml run logs |
+| Dependency vulnerabilities | `bun audit` (gate) + OSV-Scanner (report) | security.yml run logs + job summary |
 | Threat detection alerts | `GET /v1/security-intelligence/threats` | Security Intelligence dashboard |
 | Rate limit abuse | `X-RateLimit-*` headers + Redis metrics | Upstash dashboard + Grafana |
 | Failed login spikes | Authentication logs in Neon (auth table, audit_logs) | Query `audit_logs` for `action = 'login_failed'` |

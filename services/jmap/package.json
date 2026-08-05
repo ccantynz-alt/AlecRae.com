@@ -7,8 +7,8 @@
   "types": "src/index.ts",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
-    "build": "echo 'Service builds independently \u2014 not part of Vercel web deployment'",
-    "start": "bun run dist/index.js",
+    "build": "echo 'Service runs from source under Bun — no build step; see start'",
+    "start": "bun run src/index.ts",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
