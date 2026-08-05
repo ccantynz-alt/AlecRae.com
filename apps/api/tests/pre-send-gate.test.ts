@@ -76,6 +76,33 @@ vi.mock("../src/lib/send-anomaly.js", () => ({
   recordSend: vi.fn(async () => undefined),
 }));
 
+// Warm-up: the ONLY gate dependency with a side effect (it creates a session
+// on-the-fly), which is why it must run last and never for a refused message.
+// ComplianceEngine is deliberately NOT mocked here — see the block below.
+let warmupAllowed = true;
+vi.mock("@alecrae/reputation", async () => {
+  const actual = await vi.importActual<Record<string, unknown>>("@alecrae/reputation");
+  return {
+    ...actual,
+    getWarmupOrchestrator: () => ({
+      ensureWarmupAndCheck: vi.fn(async () => {
+        callOrder.push("warmup");
+        return warmupAllowed
+          ? { allowed: true }
+          : {
+              allowed: false,
+              message: "Domain warm-up sending limit reached",
+              code: "WARMUP_LIMIT_EXCEEDED",
+              currentDay: 3,
+              dailyLimit: 200,
+              sentToday: 200,
+            };
+      }),
+      recordSend: vi.fn(async () => undefined),
+    }),
+  };
+});
+
 const mockDb = {
   select: vi.fn(() => {
     const chain: Record<string, unknown> = {
@@ -118,6 +145,7 @@ describe("runPreSendGate", () => {
     spamAllowed = true;
     anomalyAllowed = true;
     callOrder = [];
+    warmupAllowed = true;
   });
 
   it("allows an ordinary message and returns the sanitized headers", async () => {
@@ -140,6 +168,43 @@ describe("runPreSendGate", () => {
     expect(callOrder.indexOf("quota")).toBeLessThan(callOrder.indexOf("suppression"));
     expect(callOrder.indexOf("suppression")).toBeLessThan(callOrder.indexOf("spam"));
     expect(callOrder.indexOf("spam")).toBeLessThan(callOrder.indexOf("anomaly"));
+    // Warm-up runs LAST because it is the only check that creates state.
+    expect(callOrder.indexOf("anomaly")).toBeLessThan(callOrder.indexOf("warmup"));
+    expect(callOrder[callOrder.length - 1]).toBe("warmup");
+  });
+
+  it("enforces the warm-up limit / reputation hard-pause on every producer", async () => {
+    // Issue #159b: this check used to live inline in routes/messages.ts, so
+    // lib/agent-send.ts consulted neither the daily ramp nor the hard pause —
+    // a domain paused by a Postmaster signal kept sending AI-drafted replies.
+    // It lives in the shared gate now, so every producer inherits it.
+    warmupAllowed = false;
+    const { runPreSendGate } = await import("../src/lib/pre-send-gate.js");
+    const verdict = await runPreSendGate(input());
+
+    expect(verdict.allowed).toBe(false);
+    if (!verdict.allowed) {
+      expect(verdict.status).toBe(429);
+      expect(verdict.code).toBe("WARMUP_LIMIT_EXCEEDED");
+      // Body shape is verbatim from the old inline check — no contract moved.
+      expect(verdict.body).toMatchObject({
+        error: {
+          type: "rate_limit",
+          code: "WARMUP_LIMIT_EXCEEDED",
+          warmup: { currentDay: 3, dailyLimit: 200, sentToday: 200 },
+        },
+      });
+    }
+  });
+
+  it("never creates a warm-up session for a message refused earlier", async () => {
+    // ensureWarmupAndCheck enrols a domain as a side effect. A refusal that
+    // still enrolled would consume a slot for mail that never went out.
+    quotaAllowed = false;
+    const { runPreSendGate } = await import("../src/lib/pre-send-gate.js");
+    await runPreSendGate(input());
+
+    expect(callOrder).not.toContain("warmup");
   });
 
   it("refuses over quota with 429 and never scores the content", async () => {
@@ -243,6 +308,7 @@ describe("compliance classification (real ComplianceEngine)", () => {
     spamAllowed = true;
     anomalyAllowed = true;
     callOrder = [];
+    warmupAllowed = true;
   });
 
   it("classifies an ordinary email as correspondence, not marketing", async () => {

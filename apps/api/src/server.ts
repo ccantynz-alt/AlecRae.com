@@ -151,6 +151,7 @@ import { processDLQ } from "./lib/dlq-processor.js";
 import { reconcileStorageUsage } from "./lib/storage-quota.js";
 import { processExpiredGrace } from "./lib/billing.js";
 import { processScheduledAccountDeletions } from "./lib/account-deletion.js";
+import { getWarmupMonitor } from "@alecrae/reputation";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -1007,6 +1008,27 @@ const accountDeletionInterval = setInterval(() => {
   });
 }, 24 * 60 * 60 * 1000);
 accountDeletionInterval.unref();
+
+// Feed bounce/complaint signals into the warm-up orchestrator (issue #159).
+//
+// `runHealthCheckCycle()` is the ONLY caller of `orchestrator.adjustSchedule`,
+// which is the only writer of `bounceRate24h`/`complaintRate24h` — and it had
+// zero callers anywhere. So the >0.1% complaint and >10% bounce auto-pause
+// gates could never fire, and `maybeAdvanceAutoStep` gated the daily ramp on a
+// bounce rate permanently pinned at 0: a domain bouncing 40% doubled its cap
+// on schedule while the dashboard showed a healthy warm-up. Hourly matches the
+// cadence the method's own doc comment specifies and the 24h windows it reads.
+const warmupHealthInterval = setInterval(
+  () => {
+    getWarmupMonitor()
+      .runHealthCheckCycle()
+      .catch((err) => {
+        console.warn("[api] Warm-up health check cycle error:", err);
+      });
+  },
+  60 * 60 * 1000,
+);
+warmupHealthInterval.unref();
 
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 

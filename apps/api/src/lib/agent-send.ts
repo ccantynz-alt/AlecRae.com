@@ -26,6 +26,7 @@ import {
 import { getSendQueue } from "./queue.js";
 import { runPreSendGate, PreSendGateError } from "./pre-send-gate.js";
 import { recordSend } from "./send-anomaly.js";
+import { getWarmupOrchestrator } from "@alecrae/reputation";
 import { incrementQuota } from "./quota.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -299,6 +300,17 @@ export async function enqueueAgentDraftForSend(
   incrementQuota(draft.accountId).catch(() => {
     /* fire-and-forget */
   });
+
+  //     Warm-up volume, in recipients (issue #159b/c). The gate now CHECKS
+  //     the ramp and the reputation hard-pause on this path, so it must
+  //     also record against them — a check with no matching record would
+  //     let agent sends consume ISP volume the ramp never sees, which is
+  //     the same blindness in the opposite direction.
+  getWarmupOrchestrator()
+    .recordSend(preferred.id, draft.toAddresses.length)
+    .catch(() => {
+      /* fire-and-forget */
+    });
 
   // 6. Record the link back on the draft
   await db

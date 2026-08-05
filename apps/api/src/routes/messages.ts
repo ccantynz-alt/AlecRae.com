@@ -38,7 +38,7 @@ import { indexEmail, searchEmails } from "@alecrae/shared";
 import { enqueueEmail } from "@alecrae/ai-engine/embeddings/auto-indexer";
 import { usageEnforcement } from "../middleware/usage.js";
 import { idempotency } from "../middleware/idempotency.js";
-import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED } from "@alecrae/reputation";
+import { getWarmupOrchestrator } from "@alecrae/reputation";
 import { scanAttachment, isSafe } from "@alecrae/security";
 import { checkOutboundSpam } from "../lib/outbound-spam-gate.js";
 import { runPreSendGate, classifyContent } from "../lib/pre-send-gate.js";
@@ -694,40 +694,10 @@ async function handleSend(c: Context) {
 
   const sanitizedHeaders = gate.sanitizedHeaders;
 
-  // ── 1d. Auto-enrol the domain in warm-up + hard-enforce day limit ─
-  // `ensureWarmupAndCheck` creates a session on-the-fly for any domain
-  // that doesn't have one, so new customers cannot bypass warm-up by
-  // "not starting one". Reputation destruction is permanent — this
-  // gate MUST hard-reject. No silent drops.
-  const warmupOrchestrator = getWarmupOrchestrator();
-  const warmupCheck = await warmupOrchestrator.ensureWarmupAndCheck(
-    domainRecord.id,
-    auth.accountId,
-  );
-
-  if (!warmupCheck.allowed) {
-    return c.json(
-      {
-        error: {
-          type: "rate_limit",
-          message:
-            warmupCheck.message ??
-            "Domain warm-up sending limit reached",
-          code: warmupCheck.code ?? WARMUP_LIMIT_EXCEEDED,
-          retryAfter: warmupCheck.retryAfter?.toISOString() ?? null,
-          warmup: {
-            currentDay: warmupCheck.currentDay ?? null,
-            dailyLimit:
-              warmupCheck.dailyLimit === Number.MAX_SAFE_INTEGER
-                ? null
-                : warmupCheck.dailyLimit ?? null,
-            sentToday: warmupCheck.sentToday ?? null,
-          },
-        },
-      },
-      429,
-    );
-  }
+  // Warm-up enrolment + daily limit + reputation hard-pause now run inside
+  // runPreSendGate (issue #159b) so every producer inherits them — this
+  // check used to live here alone, which is why the agent send path kept
+  // sending through a hard pause. Response body is unchanged.
 
   // ── 2. Build the raw RFC-5322 message ─────────────────────────────
   // Pass sanitized headers so buildRawMessage never sees unvalidated input.
@@ -902,7 +872,13 @@ async function handleSend(c: Context) {
   }
 
   // ── 6b. Record send against warm-up counter (fire-and-forget) ────
-  warmupOrchestrator.recordSend(domainRecord.id).catch(() => { /* fire-and-forget */ });
+  // Counted in RECIPIENTS, not messages (issue #159c): ISP volume caps are
+  // per-recipient, and one call here can address hundreds.
+  getWarmupOrchestrator()
+    .recordSend(domainRecord.id, allRecipients.length)
+    .catch(() => {
+      /* fire-and-forget */
+    });
 
   // ── 6b2. Record against the send-volume anomaly counter ─────────
   void recordSend(auth.accountId);

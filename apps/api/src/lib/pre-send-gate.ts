@@ -34,7 +34,12 @@
 
 import { and, eq } from "drizzle-orm";
 import { getDatabase, suppressionLists } from "@alecrae/db";
-import { ComplianceEngine, type EmailMetadata } from "@alecrae/reputation";
+import {
+  ComplianceEngine,
+  type EmailMetadata,
+  getWarmupOrchestrator,
+  WARMUP_LIMIT_EXCEEDED,
+} from "@alecrae/reputation";
 import { checkQuota } from "./quota.js";
 import { checkOutboundSpam } from "./outbound-spam-gate.js";
 import { checkSendAnomaly } from "./send-anomaly.js";
@@ -404,6 +409,48 @@ export async function runPreSendGate(
           type: "validation_error",
           message: headerCheck.reason,
           code: HEADER_INJECTION_REJECTED,
+        },
+      },
+    };
+  }
+
+  // ── 7. Domain warm-up limit + reputation hard-pause ───────────────
+  // Moved in from routes/messages.ts (issue #159b). It sat inline on that
+  // one route, so `lib/agent-send.ts` — which drafts and sends AI replies —
+  // consulted neither the daily ramp nor the hard pause: when a Postmaster
+  // signal tripped `pauseAllActiveWarmups()` and paged Slack, the agent path
+  // kept sending anyway. Same shape as #151, one path later.
+  //
+  // Placed LAST deliberately: it is the only check whose *side effect* is
+  // creating a warm-up session, so a message refused by any earlier control
+  // must never reach it (the ordering #151's tests pin — a refusal costs no
+  // warm-up slot, no quota count, no Claude call).
+  const warmupCheck = await getWarmupOrchestrator().ensureWarmupAndCheck(
+    input.domainId,
+    input.accountId,
+  );
+  if (!warmupCheck.allowed) {
+    return {
+      allowed: false,
+      status: 429,
+      code: warmupCheck.code ?? WARMUP_LIMIT_EXCEEDED,
+      reason:
+        warmupCheck.message ?? "Domain warm-up sending limit reached",
+      // Body verbatim from the original inline check so no API contract moves.
+      body: {
+        error: {
+          type: "rate_limit",
+          message: warmupCheck.message ?? "Domain warm-up sending limit reached",
+          code: warmupCheck.code ?? WARMUP_LIMIT_EXCEEDED,
+          retryAfter: warmupCheck.retryAfter?.toISOString() ?? null,
+          warmup: {
+            currentDay: warmupCheck.currentDay ?? null,
+            dailyLimit:
+              warmupCheck.dailyLimit === Number.MAX_SAFE_INTEGER
+                ? null
+                : (warmupCheck.dailyLimit ?? null),
+            sentToday: warmupCheck.sentToday ?? null,
+          },
         },
       },
     };
