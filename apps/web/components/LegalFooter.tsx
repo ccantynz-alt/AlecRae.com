@@ -74,11 +74,11 @@ export function LegalFooter(): React.ReactElement {
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <a href="/status" className="hover:text-neutral-900">System status</a>
-              <a href="/changelog" className="hover:text-neutral-900">Changelog</a>
-              <a href="https://docs.alecrae.com" className="hover:text-neutral-900" rel="noopener noreferrer">
-                Docs
-              </a>
+              {/* Status/changelog/docs links removed until their targets exist:
+                  /status and /changelog have no route (middleware bounced them
+                  to /login) and docs.alecrae.com serves a 503. A footer link to
+                  a dead page reads as an outage, not a roadmap. */}
+              <a href="/security" className="hover:text-neutral-900">Security</a>
             </div>
           </div>
         </div>

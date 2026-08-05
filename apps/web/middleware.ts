@@ -19,6 +19,23 @@ const PUBLIC_PATHS = new Set([
   "/dmca",
   "/acceptable-use",
   "/subprocessors",
+  // The rest of the (legal) route group. These MUST be reachable logged-out:
+  // /california-notice and /do-not-sell are CCPA disclosures and /impressum is
+  // a statutory requirement where it applies — an auth wall in front of a
+  // legally required notice is non-compliance, not a UX nit. Before this list
+  // was completed, every one of these bounced visitors to /login.
+  "/security",
+  "/accessibility",
+  "/ai-transparency",
+  "/california-notice",
+  "/children",
+  "/compliance",
+  "/do-not-sell",
+  "/impressum",
+  "/refund",
+  // Marketing page that links only public destinations; it was authored as a
+  // public page (own footer, no dashboard chrome) but never added here.
+  "/roadmap",
 ]);
 
 export function middleware(request: NextRequest) {

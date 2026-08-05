@@ -264,11 +264,6 @@ export default function RoadmapPage(): React.JSX.Element {
                 Home
               </Text>
             </Box>
-            <Box as="a" href="/changelog">
-              <Text variant="caption" className="text-content-tertiary hover:text-content transition-colors">
-                Changelog
-              </Text>
-            </Box>
             <Box as="a" href="/security">
               <Text variant="caption" className="text-content-tertiary hover:text-content transition-colors">
                 Security
