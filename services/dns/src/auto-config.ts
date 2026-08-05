@@ -15,6 +15,7 @@ import {
   domains as domainsTable,
   dnsRecords as dnsRecordsTable,
 } from "@alecrae/db";
+import { sealSecret } from "@alecrae/crypto";
 import { getDnsConfig } from "./config";
 
 // ---------------------------------------------------------------------------
@@ -193,7 +194,12 @@ function countSpfLookups(spfRecord: string): number {
  * Generate all DNS records required for a sending domain.
  *
  * - Generates DKIM RSA 2048-bit key pair
- * - Stores the private key in the DB (encrypted at rest by the DB layer)
+ * - Stores the private key encrypted at rest via `sealSecret` (issue #160 —
+ *   this comment previously claimed "encrypted at rest by the DB layer",
+ *   which was false: the raw PEM went straight into the column, and a
+ *   backup leak would have handed out signing keys for every customer
+ *   domain). The returned value is the PLAINTEXT key, since the caller
+ *   shows it to the operator once; only the stored copy is sealed.
  * - Creates MX, SPF, DKIM, DMARC, and Return-Path records
  * - Stores all records in the `dns_records` table
  * - Returns the full list so the customer can configure their DNS
@@ -287,7 +293,7 @@ export async function generateDomainConfig(
     verificationStatus: "pending",
     dkimSelector,
     dkimPublicKey: publicKey,
-    dkimPrivateKey: privateKey,
+    dkimPrivateKey: sealSecret(privateKey),
     spfRecord: dnsConfig.spfValue,
     dmarcPolicy: "quarantine",
     dmarcRecord: dnsConfig.dmarcValue,
@@ -852,7 +858,7 @@ export async function rotateDkimKey(
     .set({
       dkimSelector: newSelector,
       dkimPublicKey: publicKey,
-      dkimPrivateKey: privateKey,
+      dkimPrivateKey: sealSecret(privateKey),
       dkimVerified: false,
       updatedAt: now,
     })

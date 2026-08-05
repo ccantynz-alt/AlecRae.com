@@ -370,6 +370,7 @@
       "name": "@alecrae/dns",
       "version": "0.1.0",
       "dependencies": {
+        "@alecrae/crypto": "workspace:*",
         "@alecrae/db": "workspace:*",
         "@alecrae/shared": "workspace:*",
         "bullmq": "^5.0.0",

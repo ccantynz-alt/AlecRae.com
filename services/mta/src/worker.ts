@@ -16,6 +16,7 @@
 import { Worker, Queue, type Job } from "bullmq";
 import { eq, and } from "drizzle-orm";
 import { getDatabase, emails, deliveryResults, domains, suppressionLists, events, webhooks as webhooksTable } from "@alecrae/db";
+import { openSecretSafe } from "@alecrae/crypto";
 import { getMtaHostname } from "./config.js";
 import { signMessage, addSignatureToMessage } from "./dkim/signer.js";
 import { SmtpClient } from "./smtp/client.js";
@@ -281,11 +282,24 @@ export class MtaWorker {
     let signedMessage = email.rawMessage;
     let dkimSigned = false;
 
-    if (domainRecord?.dkimPrivateKey && domainRecord?.dkimSelector) {
+    // Keys are sealed at rest (issue #160). `openSecretSafe` passes legacy
+    // plaintext rows through unchanged and returns null rather than throwing
+    // on an undecryptable value — a key we cannot open is a key we do not
+    // have, which routes into the hold-don't-send-unsigned branch below.
+    // Throwing here would fail the job into the DLQ instead.
+    const dkimPrivateKey = openSecretSafe(domainRecord?.dkimPrivateKey);
+    if (domainRecord?.dkimPrivateKey && !dkimPrivateKey) {
+      console.error(
+        `[mta-worker] DKIM key for ${domainRecord.domain} could not be decrypted ` +
+          `— holding the message. Check JWT_SECRET has not been rotated.`,
+      );
+    }
+
+    if (dkimPrivateKey && domainRecord?.dkimSelector) {
       const dkimOptions: DkimSignOptions = {
         domain: domainRecord.domain,
         selector: domainRecord.dkimSelector,
-        privateKey: domainRecord.dkimPrivateKey,
+        privateKey: dkimPrivateKey,
         algorithm: "rsa-sha256",
         canonicalization: "relaxed/relaxed",
         headersToSign: [
