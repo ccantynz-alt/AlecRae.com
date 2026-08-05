@@ -86,7 +86,8 @@ const TestScriptSchema = z.object({
     .optional(),
 });
 
-type TestScriptInput = z.infer<typeof TestScriptSchema>;
+// TestScriptSchema still validates the request; the inferred type is unused
+// only while execution is disabled (see POST /:id/test), so it is not deleted.
 
 const ListQuerySchema = z.object({
   trigger: TriggerEnum.optional(),
@@ -387,7 +388,9 @@ scripts.post(
   async (c) => {
     const auth = c.get("auth");
     const scriptId = c.req.param("id");
-    const body = getValidatedBody<TestScriptInput>(c);
+    // Body is still VALIDATED (the schema stays on the route, so a malformed
+    // request is still a 422 and the contract is unchanged for when execution
+    // returns) — it is simply not read while the endpoint refuses.
     const db = getDatabase();
 
     const [script] = await db
