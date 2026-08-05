@@ -160,6 +160,47 @@ function domainOf(address: string): string {
   return idx === -1 ? address : address.slice(idx + 1).toLowerCase();
 }
 
+// ── Compliance content detection ─────────────────────────────────────
+//
+// These two fields used to be hardcoded `false`, which made the marketing
+// branch of every compliance framework unsatisfiable: a campaign carrying a
+// perfect unsubscribe link and postal address was still refused for lacking
+// both, because the gate never looked at the message. Heuristics err toward
+// detection — a sender who genuinely included the mechanism must pass; total
+// absence is still refused.
+
+const UNSUB_URL =
+  /https?:\/\/[^\s"'<>]*(?:unsubscribe|opt[-_]?out|email[-_]?preferences|manage[-_]?preferences)[^\s"'<>]*/i;
+const UNSUB_MAILTO = /mailto:[^\s"'<>]*(?:unsubscribe|opt[-_]?out)[^\s"'<>]*/i;
+const UNSUB_ANCHOR_TEXT =
+  /<a\b[^>]*>[^<]*(?:unsubscribe|opt[\s-]?out|manage (?:your )?preferences)[^<]*<\/a>/i;
+
+/** Does the message body contain a visible unsubscribe mechanism? */
+export function detectUnsubscribeLink(
+  text: string | undefined,
+  html: string | undefined,
+): boolean {
+  const combined = `${text ?? ""}\n${html ?? ""}`;
+  return (
+    UNSUB_URL.test(combined) ||
+    UNSUB_MAILTO.test(combined) ||
+    (html !== undefined && UNSUB_ANCHOR_TEXT.test(html))
+  );
+}
+
+const PO_BOX = /\bP\.?\s?O\.?\s+Box\s+\d+/i;
+const STREET_ADDRESS =
+  /\b\d{1,6}\s+(?:[A-Za-z][A-Za-z.'-]*\s+){1,5}(?:st(?:reet)?|ave(?:nue)?|road|rd|blvd|boulevard|lane|ln|drive|court|ct|way|place|pl|terrace|parade|crescent|highway|hwy|square|sq|suite|ste|floor)\b/i;
+
+/** Does the message body contain something that reads as a postal address? */
+export function detectPhysicalAddress(
+  text: string | undefined,
+  html: string | undefined,
+): boolean {
+  const combined = `${text ?? ""}\n${html ?? ""}`;
+  return PO_BOX.test(combined) || STREET_ADDRESS.test(combined);
+}
+
 /**
  * Run every API-side pre-send control. Returns `{ allowed: true }` or the
  * refusal a caller should surface.
@@ -237,9 +278,13 @@ export async function runPreSendGate(
     to: input.recipients[0] ?? input.from,
     subject: input.subject,
     headers: headersMap,
-    hasUnsubscribeHeader: headersMap.has("list-unsubscribe"),
-    hasUnsubscribeLink: false,
-    hasPhysicalAddress: false,
+    // buildRawMessage emits RFC 8058 List-Unsubscribe + one-click POST
+    // headers on every message it assembles (whenever an email id exists),
+    // so the header is guaranteed present on the wire even when absent from
+    // the caller-supplied custom headers checked here.
+    hasUnsubscribeHeader: true,
+    hasUnsubscribeLink: detectUnsubscribeLink(input.text, input.html),
+    hasPhysicalAddress: detectPhysicalAddress(input.text, input.html),
     // "correspondence" takes the engine's exempt branch alongside
     // "transactional": neither is commercial bulk mail, so the marketing-only
     // requirements (physical address, unsubscribe link, recorded consent) do

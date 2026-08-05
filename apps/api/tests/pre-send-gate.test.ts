@@ -283,4 +283,52 @@ describe("compliance classification (real ComplianceEngine)", () => {
       expect(verdict.code).toBe("compliance_violation");
     }
   });
+
+  it("reads unsubscribe/address from the real message, not hardcoded false", async () => {
+    // Before this fix, these two fields were literally `false` regardless of
+    // content, so a campaign carrying a perfect unsubscribe link and postal
+    // address was refused for lacking both — no body could ever satisfy the
+    // check. A compliant body must clear the content rules; what remains is
+    // the consent violation, which is real (no consent-recording feature
+    // exists yet) and must keep refusing until one does.
+    const { runPreSendGate } = await import("../src/lib/pre-send-gate.js");
+    const verdict = await runPreSendGate(
+      input({
+        contentClass: "marketing",
+        text:
+          "Our spring offers are live.\n\n" +
+          "Unsubscribe: https://bookaride.co.nz/unsubscribe?u=123\n" +
+          "BookARide Ltd, 12 Queen Street, Auckland 1010",
+      }),
+    );
+
+    expect(verdict.allowed).toBe(false);
+    if (!verdict.allowed) {
+      const body = verdict.body as {
+        error: { violations: { rule: string }[] };
+      };
+      const rules = body.error.violations.map((v) => v.rule);
+      expect(rules).not.toContain("CAN-SPAM-PHYSICAL-ADDRESS");
+      expect(rules).not.toContain("CAN-SPAM-UNSUBSCRIBE-LINK");
+      expect(rules).not.toContain("CASL-UNSUBSCRIBE-LINK");
+      expect(rules).toContain("GDPR-CONSENT-MISSING");
+    }
+  });
+
+  it("detects unsubscribe mechanisms and postal addresses in both directions", async () => {
+    const { detectUnsubscribeLink, detectPhysicalAddress } = await import(
+      "../src/lib/pre-send-gate.js"
+    );
+
+    expect(detectUnsubscribeLink("See https://x.co/unsubscribe?u=1", undefined)).toBe(true);
+    expect(detectUnsubscribeLink(undefined, '<a href="https://x.co/u/9">Opt out</a>')).toBe(true);
+    expect(detectUnsubscribeLink("mailto:unsubscribe@x.co", undefined)).toBe(true);
+    expect(detectUnsubscribeLink("Just a plain newsletter body.", undefined)).toBe(false);
+    // The word alone with no mechanism is not a mechanism.
+    expect(detectUnsubscribeLink("You cannot unsubscribe from life.", undefined)).toBe(false);
+
+    expect(detectPhysicalAddress("BookARide, 12 Queen Street, Auckland", undefined)).toBe(true);
+    expect(detectPhysicalAddress("P.O. Box 911, Wellington", undefined)).toBe(true);
+    expect(detectPhysicalAddress("No address anywhere here.", undefined)).toBe(false);
+  });
 });
