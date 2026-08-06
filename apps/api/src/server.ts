@@ -39,7 +39,6 @@ import {
   writeRateLimit,
   webhookRateLimit,
   searchRateLimit,
-  closeRateLimitRedis,
 } from "./middleware/rate-limit.js";
 import { messages, unifiedSend } from "./routes/messages.js";
 import { domains } from "./routes/domains.js";
@@ -142,7 +141,7 @@ import { organizationsRouter } from "./routes/organizations.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 import { dpaRouter } from "./routes/dpa.js";
 import { closeConnection } from "@alecrae/db";
-import { closeIdempotencyRedis } from "./middleware/idempotency.js";
+import { closeAllRedis } from "./lib/redis.js";
 import { closeSendQueue, isRedisConfigured } from "./lib/queue.js";
 import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-dispatcher.js";
 import { initSearchIndex, initTelemetry, shutdownTelemetry, telemetryMiddleware } from "@alecrae/shared";
@@ -152,6 +151,7 @@ import { processDLQ } from "./lib/dlq-processor.js";
 import { reconcileStorageUsage } from "./lib/storage-quota.js";
 import { processExpiredGrace } from "./lib/billing.js";
 import { processScheduledAccountDeletions } from "./lib/account-deletion.js";
+import { getWarmupMonitor } from "@alecrae/reputation";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -325,6 +325,12 @@ app.use("/v1/recall/status/*", authMiddleware, readRateLimit);
 app.use("/v1/recall/self-destruct", authMiddleware, writeRateLimit);
 // Recall view is PUBLIC (no auth — recipients access via link)
 // Translation: read-level (600 req/min)
+// `/languages` (a static list) and `/history` (a plain DB read) make no AI
+// call, so they are mounted BEFORE the wildcard without requireAiQuota —
+// otherwise merely opening the Translation Center would spend the account's
+// monthly AI budget. Same reasoning that exempts core search (issue #102).
+app.use("/v1/translate/languages", authMiddleware, readRateLimit);
+app.use("/v1/translate/history", authMiddleware, readRateLimit);
 app.use("/v1/translate/*", authMiddleware, readRateLimit, requireAiQuota);
 app.use("/v1/translate", authMiddleware, readRateLimit, requireAiQuota);
 // Collaboration: write-level (200 req/min)
@@ -350,6 +356,29 @@ app.use("/v1/semantic", authMiddleware, searchRateLimit, requirePlan("pro"), req
 // Contacts: read-level (600 req/min)
 app.use("/v1/contacts/*", authMiddleware, readRateLimit);
 app.use("/v1/contacts", authMiddleware, readRateLimit);
+// ─── Routers that were mounted with app.route() and NO middleware ──────────
+//
+// Each of these calls requireScope() and reads c.get("auth"), but no
+// authMiddleware ever ran for them, so the auth context was undefined and
+// EVERY request 401'd — for every caller, including owners. Same class as
+// issue #87 (/v1/ai-intelligence), repeated four more times.
+//
+// Their unit tests all pass because those tests mock requireScope, so nothing
+// caught it. Found by diffing every app.route() mount against the set of
+// paths covered by an authMiddleware prefix.
+//
+// This contradicts several standing claims: the journey audit lists
+// Signatures as "real CRUD" and says Auto-Responder's "config genuinely
+// saves" (neither could), and CLAUDE.md records push notifications as wired
+// in tranche 5. Only the Contacts Groups instance had been spotted.
+app.use("/v1/contact-groups/*", authMiddleware, writeRateLimit);
+app.use("/v1/contact-groups", authMiddleware, writeRateLimit);
+app.use("/v1/signatures/*", authMiddleware, writeRateLimit);
+app.use("/v1/signatures", authMiddleware, writeRateLimit);
+app.use("/v1/auto-responder/*", authMiddleware, writeRateLimit);
+app.use("/v1/auto-responder", authMiddleware, writeRateLimit);
+app.use("/v1/push/*", authMiddleware, writeRateLimit);
+app.use("/v1/push", authMiddleware, writeRateLimit);
 // Contacts Extended (CRM-lite): read + write level
 app.use("/v1/contacts-extended/interactions/*", authMiddleware, readRateLimit);
 app.use("/v1/contacts-extended/interactions", authMiddleware, writeRateLimit);
@@ -418,6 +447,17 @@ app.use("/v1/query", authMiddleware, searchRateLimit, requirePlan("pro"), requir
 // which is enforced inside the route via requireScope("admin:write").
 app.use("/v1/changelog", readRateLimit);
 app.use("/v1/changelog/*", readRateLimit);
+// The changelog is a MIXED router: GET is genuinely public (it backs the
+// public changelog page), but POST/PUT/DELETE call requireScope("admin:write")
+// and had no authMiddleware, so every admin write 401'd — the same class as
+// the four routers above. A blanket app.use() would authenticate the public
+// reads too, so this is scoped by method rather than path alone.
+app.on(
+  ["POST", "PUT", "DELETE"],
+  ["/v1/changelog", "/v1/changelog/*"],
+  authMiddleware,
+  writeRateLimit,
+);
 // Voice Messages (B8): write-level (200 req/min — audio upload + transcription)
 app.use("/v1/voice-messages/*", authMiddleware, writeRateLimit);
 app.use("/v1/voice-messages", authMiddleware, writeRateLimit);
@@ -545,11 +585,24 @@ app.use("/v1/workflows/*", authMiddleware, writeRateLimit);
 app.use("/v1/workflows", authMiddleware, writeRateLimit);
 // AI Categorization: write-level for categorize/train, read-level for listing
 // Pro-gated (FEATURE_PLANS.ai_categorization — batch Claude calls, cost risk)
-app.use("/v1/ai/categorize/feedback", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
-app.use("/v1/ai/categorize/batch", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
-app.use("/v1/ai/categorize/smart-labels/*", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
-app.use("/v1/ai/categorize/smart-labels", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
-app.use("/v1/ai/categorize/*", authMiddleware, readRateLimit, requirePlan("pro"), requireAiQuota);
+// Only /categorize and /categorize/batch actually call Claude — the other ten
+// endpoints on this router are database reads and CRUD. AI quota is therefore
+// mounted on exactly those two, not on the wildcard, which used to charge a
+// user's monthly AI allowance for merely listing their smart rules.
+//
+// The router is mounted at /v1/ai/categorize AND registers "/categorize", so
+// the real path is the doubled one below. That is what the web app calls; the
+// previous `/v1/ai/categorize/batch` mount matched nothing.
+app.use("/v1/ai/categorize/categorize/batch", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai/categorize/categorize", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
+app.use("/v1/ai/categorize/feedback", authMiddleware, writeRateLimit, requirePlan("pro"));
+// The router registers these as `/smart-rules`, not `/smart-labels` — the old
+// middleware named a path that does not exist, so it never matched and
+// smart-rule WRITES (POST/PUT/DELETE) fell through to the read-tier limiter
+// beneath instead of the write-tier one.
+app.use("/v1/ai/categorize/smart-rules/*", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/ai/categorize/smart-rules", authMiddleware, writeRateLimit, requirePlan("pro"));
+app.use("/v1/ai/categorize/*", authMiddleware, readRateLimit, requirePlan("pro"));
 app.use("/v1/ai/categorize", authMiddleware, writeRateLimit, requirePlan("pro"), requireAiQuota);
 // Search Intelligence: search-level for queries, write-level for bookmarks
 app.use("/v1/search-intelligence/bookmarks/*", authMiddleware, writeRateLimit);
@@ -956,6 +1009,27 @@ const accountDeletionInterval = setInterval(() => {
 }, 24 * 60 * 60 * 1000);
 accountDeletionInterval.unref();
 
+// Feed bounce/complaint signals into the warm-up orchestrator (issue #159).
+//
+// `runHealthCheckCycle()` is the ONLY caller of `orchestrator.adjustSchedule`,
+// which is the only writer of `bounceRate24h`/`complaintRate24h` — and it had
+// zero callers anywhere. So the >0.1% complaint and >10% bounce auto-pause
+// gates could never fire, and `maybeAdvanceAutoStep` gated the daily ramp on a
+// bounce rate permanently pinned at 0: a domain bouncing 40% doubled its cap
+// on schedule while the dashboard showed a healthy warm-up. Hourly matches the
+// cadence the method's own doc comment specifies and the 24h windows it reads.
+const warmupHealthInterval = setInterval(
+  () => {
+    getWarmupMonitor()
+      .runHealthCheckCycle()
+      .catch((err) => {
+        console.warn("[api] Warm-up health check cycle error:", err);
+      });
+  },
+  60 * 60 * 1000,
+);
+warmupHealthInterval.unref();
+
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 
 let isShuttingDown = false;
@@ -996,13 +1070,13 @@ async function shutdown(signal: string): Promise<void> {
     await shutdownTelemetry();
     console.log("[api] Telemetry shut down");
 
-    // Close rate-limit Redis connection
-    await closeRateLimitRedis();
-    console.log("[api] Rate-limit Redis closed");
-
-    // Close idempotency Redis connection
-    await closeIdempotencyRedis();
-    console.log("[api] Idempotency Redis closed");
+    // Close every Redis connection. This replaced two per-module close calls
+    // that covered rate-limit and idempotency only — quota, ai-quota,
+    // login-protection, send-anomaly, the tracking throttle, provider backoff
+    // and the uptime ledger all survived shutdown, two of them behind close
+    // functions that were exported and never called.
+    await closeAllRedis();
+    console.log("[api] Redis connections closed");
 
     // Close the database connection pool
     await closeConnection();

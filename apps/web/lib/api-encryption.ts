@@ -115,16 +115,18 @@ export const encryptionApi = {
   },
 
   /**
-   * POST /v1/encryption/keys/generate — publish the account's public key.
+   * POST /v1/encryption/keys/generate — register THIS browser's public key.
    *
-   * The passphrase satisfies the endpoint's Zod schema (min 8). In this
-   * zero-knowledge flow the browser-held private key (in IndexedDB) is the real
-   * one, so the passphrase is a locally generated throwaway.
+   * It used to send a throwaway passphrase and no key at all: the server then
+   * minted its own unrelated keypair and stored that public key, so the
+   * registered key and the private key in IndexedDB came from different pairs
+   * and nothing encrypted to the user could ever have been decrypted. The
+   * server no longer generates anything — the key below is the real one.
    */
-  generateKeys(passphrase: string): Promise<{ data: GenerateKeysResult }> {
+  registerPublicKey(publicKey: string): Promise<{ data: GenerateKeysResult }> {
     return encryptionFetch<{ data: GenerateKeysResult }>(
       "/v1/encryption/keys/generate",
-      { method: "POST", body: JSON.stringify({ passphrase }) },
+      { method: "POST", body: JSON.stringify({ publicKey }) },
     );
   },
 };

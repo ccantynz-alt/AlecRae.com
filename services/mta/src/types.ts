@@ -102,6 +102,23 @@ export interface SmtpServerConfig {
   ipRateWindowMs: number;
   /** How long an IP that exceeds the rate window is refused new connections. */
   ipBanDurationMs: number;
+  /**
+   * Domains this server accepts mail FOR. Anything else is refused at RCPT TO
+   * with 550 5.7.1, because accepting it would make this an open relay.
+   *
+   * This is the control that was missing during the 2026-07-20 incident
+   * (Known Issue #105): `handleRcptTo` accepted ANY recipient and answered
+   * 250 OK, so the server relayed for anyone who connected — 90 spam messages
+   * were accepted over 9 days. The remediation stopped the service and added
+   * TLS and per-IP throttling, but neither of those is a relay control; the
+   * hole itself stayed open and was simply switched off.
+   *
+   * Empty or omitted means accept nothing. Failing CLOSED is deliberate: a
+   * deployment that forgets to configure this must reject mail, never relay
+   * it. A silent open relay is unrecoverable in a way a rejected message is
+   * not.
+   */
+  localDomains?: readonly string[];
 }
 
 export interface SmtpClientConfig {

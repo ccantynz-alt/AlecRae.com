@@ -15,6 +15,9 @@
  *   - JWT_SECRET        >= 32 characters (jwt.ts + oauth-state.ts signing)
  *   - WEBAUTHN_RP_ID    e.g. "alecrae.com" (passkey.ts throws without it)
  *   - WEBAUTHN_ORIGIN   e.g. "https://mail.alecrae.com"
+ *   - API_URL           public base URL embedded in outbound mail (List-
+ *                       Unsubscribe + click tracking); must be https and not
+ *                       localhost, or every recipient gets dead links
  *
  * Recommended in production (console.warn only):
  *   - REDIS_URL, WEBHOOK_SECRET, ANTHROPIC_API_KEY, STRIPE_SECRET_KEY
@@ -35,6 +38,32 @@ const productionEnvSchema = z.object({
   WEBAUTHN_ORIGIN: z
     .string({ required_error: "missing — set the WebAuthn origin (e.g. 'https://mail.alecrae.com')" })
     .url("must be a valid URL (e.g. 'https://mail.alecrae.com')"),
+  /**
+   * Public base URL of this API, as reached from OUTSIDE — it is embedded in
+   * outbound mail, so an unset value ships broken email rather than failing a
+   * request you would notice.
+   *
+   * `routes/messages.ts` falls back to http://localhost:3001, which in
+   * production would put into every message:
+   *   - `List-Unsubscribe: <http://localhost:3001/t/.../unsubscribe>` — an
+   *     unreachable one-click unsubscribe. Gmail and Yahoo REQUIRE a working
+   *     one for bulk senders; a dead link is a deliverability problem, not a
+   *     cosmetic one.
+   *   - a tracking pixel and, worse, click-tracking rewrites that point EVERY
+   *     link in the email at localhost — broken for every recipient.
+   *
+   * Required, and required to be https, because a plaintext link in mail is
+   * both a mixed-content problem and a bad look in a security product.
+   */
+  API_URL: z
+    .string({ required_error: "missing — set the public API base URL (e.g. 'https://api.alecrae.com'); it is embedded in outbound email" })
+    .url("must be a valid absolute URL (e.g. 'https://api.alecrae.com')")
+    .refine((v) => v.startsWith("https://"), {
+      message: "must use https:// — it appears in List-Unsubscribe headers and click-tracking links in outbound mail",
+    })
+    .refine((v) => !/localhost|127\.0\.0\.1/.test(v), {
+      message: "must not point at localhost — every tracked link and the one-click unsubscribe in outbound mail would be unreachable for recipients",
+    }),
 });
 
 const RECOMMENDED_VARS = [

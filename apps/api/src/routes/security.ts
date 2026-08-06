@@ -1,6 +1,8 @@
 /**
  * Security Routes — Sender Verification (B5) + Phishing Protection (B6)
  *
+ * GET  /v1/security                     — Overview counts (real rows only)
+ * GET  /v1/security/events              — Recent threat + phishing-report events
  * POST /v1/security/verify-sender       — Verify a sender from email + headers
  * POST /v1/security/check-sender        — Alias for verify-sender
  * POST /v1/security/check-phishing      — Run a phishing analysis on an email
@@ -10,7 +12,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
@@ -30,6 +32,7 @@ import {
   emails,
   attachments as attachmentsTable,
   phishingReports,
+  threatDetections,
 } from "@alecrae/db";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -317,6 +320,126 @@ security.post(
           "Thanks — your report has been recorded and will improve future phishing detection.",
       },
     });
+  },
+);
+
+// ─── GET /v1/security ────────────────────────────────────────────────────────
+//
+// The Security Center's default Overview tab — the first thing every user sees
+// — called this and it did not exist, so the page 404'd on load for everyone.
+//
+// Every number below is counted from real rows. There is deliberately NO
+// "security score": nothing in this codebase computes one, and inventing a
+// number to fill a gauge is the same fabrication already removed from
+// security-intelligence.ts (issue #84). `score` is null and the UI says so.
+
+security.get(
+  "/",
+  requireScope("messages:read"),
+  async (c) => {
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const [threatRows, phishingRows] = await Promise.all([
+      db
+        .select({ threatType: threatDetections.threatType })
+        .from(threatDetections)
+        .where(eq(threatDetections.accountId, auth.accountId)),
+      db
+        .select({ fromAddress: phishingReports.fromAddress })
+        .from(phishingReports)
+        .where(eq(phishingReports.accountId, auth.accountId)),
+    ]);
+
+    // Distinct senders the user has reported — a real "suspicious senders"
+    // figure, rather than a count of reports which would double-count repeats.
+    const suspiciousSenders = new Set(
+      phishingRows.map((r) => r.fromAddress.toLowerCase()),
+    ).size;
+
+    return c.json({
+      data: {
+        // Null, not 0 and not invented. See the note above.
+        score: null,
+        scoreAvailable: false,
+        threatsDetected: threatRows.length,
+        phishingReported: phishingRows.length,
+        suspiciousSenders,
+      },
+    });
+  },
+);
+
+// ─── GET /v1/security/events ─────────────────────────────────────────────────
+//
+// Also called by the Overview tab and also missing. Assembled from the two
+// tables that genuinely record security activity: detected threats and
+// user-reported phishing.
+
+const EventsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+security.get(
+  "/events",
+  requireScope("messages:read"),
+  async (c) => {
+    const parsed = EventsQuerySchema.safeParse({ limit: c.req.query("limit") ?? undefined });
+    if (!parsed.success) {
+      return c.json({ error: { code: "invalid_query", message: "limit must be 1-100" } }, 400);
+    }
+    const auth = c.get("auth");
+    const db = getDatabase();
+    const { limit } = parsed.data;
+
+    const [threatRows, phishingRows] = await Promise.all([
+      db
+        .select({
+          id: threatDetections.id,
+          threatType: threatDetections.threatType,
+          severity: threatDetections.severity,
+          aiExplanation: threatDetections.aiExplanation,
+          createdAt: threatDetections.createdAt,
+        })
+        .from(threatDetections)
+        .where(eq(threatDetections.accountId, auth.accountId))
+        .orderBy(desc(threatDetections.createdAt))
+        .limit(limit),
+      db
+        .select({
+          id: phishingReports.id,
+          fromAddress: phishingReports.fromAddress,
+          subject: phishingReports.subject,
+          reportedAt: phishingReports.reportedAt,
+        })
+        .from(phishingReports)
+        .where(eq(phishingReports.accountId, auth.accountId))
+        .orderBy(desc(phishingReports.reportedAt))
+        .limit(limit),
+    ]);
+
+    const events = [
+      ...threatRows.map((t) => ({
+        id: t.id,
+        type: t.threatType,
+        description: t.aiExplanation,
+        severity: t.severity,
+        createdAt: t.createdAt.toISOString(),
+      })),
+      ...phishingRows.map((p) => ({
+        id: p.id,
+        type: "phishing_reported",
+        description: `You reported "${p.subject}" from ${p.fromAddress}`,
+        // A user report is a signal, not a graded detection — "medium" is the
+        // honest placement rather than borrowing a severity nothing assigned.
+        severity: "medium" as const,
+        createdAt: p.reportedAt.toISOString(),
+      })),
+    ]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+
+    return c.json({ data: events });
   },
 );
 

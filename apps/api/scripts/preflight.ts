@@ -58,12 +58,19 @@ const envSchema = z.object({
     "DATABASE_URL must be a postgres:// URL",
   ),
 
-  // Redis (Upstash — REST trio + raw URL)
-  REDIS_URL: required("REDIS_URL"),
-  UPSTASH_REDIS_URL: required("UPSTASH_REDIS_URL").url(
-    "UPSTASH_REDIS_URL must be a valid URL",
+  // Redis. REDIS_URL is what the runtime actually reads (see apps/api/src/lib
+  // and services/mta). The Upstash REST pair used to be `required()` here —
+  // but NOTHING reads UPSTASH_REDIS_TOKEN anywhere in the codebase, and
+  // production is a self-hosted Redis reached over the tailnet, which has no
+  // REST endpoint at all. Requiring them meant this preflight could only pass
+  // against an architecture we do not run. They are optional now: present for
+  // a hosted-Upstash deployment, absent for ours.
+  REDIS_URL: required("REDIS_URL").startsWith(
+    "redis",
+    "REDIS_URL must be a redis:// or rediss:// URL",
   ),
-  UPSTASH_REDIS_TOKEN: required("UPSTASH_REDIS_TOKEN"),
+  UPSTASH_REDIS_URL: z.string().url().optional(),
+  UPSTASH_REDIS_TOKEN: z.string().optional(),
 
   // Search (Meilisearch)
   MEILI_URL: required("MEILI_URL").url("MEILI_URL must be a valid URL"),
@@ -113,6 +120,21 @@ type Env = z.infer<typeof envSchema>;
  * Validate `process.env` against the schema. Returns either the parsed env or a
  * per-field list of failures (one CheckResult per offending variable).
  */
+/**
+ * Describe a variable that passed validation.
+ *
+ * An optional variable that is simply absent also "passes", and reporting that
+ * as "present and well-formed" states the opposite of the truth — which in a
+ * preflight check is worse than saying nothing.
+ */
+function describeEnv(name: string): string {
+  const value = process.env[name];
+  if (value === undefined || value.trim() === "") {
+    return "not set (optional)";
+  }
+  return "present and well-formed";
+}
+
 function validateEnv():
   | { ok: true; env: Env; results: CheckResult[] }
   | { ok: false; env: null; results: CheckResult[] } {
@@ -123,7 +145,7 @@ function validateEnv():
     const results: CheckResult[] = keys.map((name) => ({
       name: `env: ${name}`,
       ok: true,
-      detail: "present and well-formed",
+      detail: describeEnv(name),
     }));
     return { ok: true, env: parsed.data, results };
   }
@@ -135,7 +157,11 @@ function validateEnv():
     if (errs && errs.length > 0) {
       return { name: `env: ${name}`, ok: false, detail: errs[0] ?? "invalid" };
     }
-    return { name: `env: ${name}`, ok: true, detail: "present and well-formed" };
+    return {
+      name: `env: ${name}`,
+      ok: true,
+      detail: describeEnv(name),
+    };
   });
   return { ok: false, env: null, results };
 }
@@ -183,8 +209,30 @@ async function checkPostgres(): Promise<CheckResult> {
   }
 }
 
-/** Redis ping via Upstash REST API (works from edge — no raw TCP needed). */
+/**
+ * Redis reachability.
+ *
+ * Only Upstash exposes a REST endpoint we can ping over HTTP. Our production
+ * Redis is self-hosted and reached over the tailnet, so there is nothing to
+ * fetch — a raw TCP check would mean pulling ioredis into this script, which
+ * is not worth a new dependency for a manual preflight. In that case we
+ * validate the URL shape and say plainly that connectivity is unverified,
+ * pointing at the runbook step that does verify it properly.
+ */
 async function checkRedis(env: Env): Promise<CheckResult> {
+  if (!env.UPSTASH_REDIS_URL || !env.UPSTASH_REDIS_TOKEN) {
+    return {
+      name: "redis: URL shape (self-hosted — connectivity NOT checked here)",
+      ok: true,
+      optional: true,
+      detail:
+        "No Upstash REST credentials, so this is a self-hosted Redis. Verify " +
+        "reachability AND that both boxes share one queue with Step 6 of " +
+        "docs/infra/redis-tailnet-setup.md — reaching *a* Redis from each box " +
+        "is not evidence they reach the *same* one.",
+    };
+  }
+
   try {
     const res = await fetchWithTimeout(`${env.UPSTASH_REDIS_URL}/ping`, {
       method: "GET",
@@ -342,8 +390,11 @@ async function checkStripe(env: Env): Promise<CheckResult> {
 function printChecklist(title: string, results: readonly CheckResult[]): void {
   console.warn(`\n${title}`);
   for (const r of results) {
-    const icon = r.ok ? "✅" : "❌";
-    const tag = r.optional && r.ok ? " (warn)" : "";
+    // A failing OPTIONAL check used to render as a bare ❌, identical to a
+    // blocking one, while the summary counted it as passing — so the icons and
+    // the exit code disagreed with no way to tell which entries caused it.
+    const icon = r.ok ? "✅" : r.optional ? "⚠️ " : "❌";
+    const tag = r.optional ? (r.ok ? " (warn)" : " (non-blocking)") : "";
     console.warn(`  ${icon} ${r.name} — ${r.detail}${tag}`);
   }
 }
@@ -351,6 +402,39 @@ function printChecklist(title: string, results: readonly CheckResult[]): void {
 /** A required check fails the run; optional checks never flip the exit code. */
 function isBlocking(r: CheckResult): boolean {
   return !r.ok && r.optional !== true;
+}
+
+/**
+ * The API and the MTA run on different boxes and must share one Redis, because
+ * one enqueues outbound mail and the other consumes it. A localhost URL cannot
+ * be shared, so it means each service has its own private queue — and that
+ * fails in the worst possible way: the API enqueues, returns success, and the
+ * mail never leaves. No bounce, no error, nothing in any log.
+ *
+ * Reported rather than fatal: a single-box deployment where both processes
+ * genuinely are on the same host is legitimate, and unlike a bad API_URL this
+ * does not corrupt outbound mail, it stops it — loudly enough to find once you
+ * know to look, which is what this line is for.
+ */
+function checkSharedQueue(env: Env): CheckResult {
+  const isLocal = /(?:localhost|127\.0\.0\.1|\[::1\])/.test(env.REDIS_URL);
+  if (!isLocal) {
+    return {
+      name: "redis: shared queue (non-local URL)",
+      ok: true,
+      detail: "REDIS_URL is not localhost, so both boxes can reach it.",
+    };
+  }
+  return {
+    name: "redis: shared queue",
+    ok: false,
+    optional: true,
+    detail:
+      "REDIS_URL points at localhost. If the API and MTA are on separate " +
+      "boxes this means each has its OWN queue: sends are accepted and then " +
+      "silently never delivered. See docs/infra/redis-tailnet-setup.md. " +
+      "Ignore only if both processes run on this same host.",
+  };
 }
 
 async function main(): Promise<void> {
@@ -368,6 +452,7 @@ async function main(): Promise<void> {
     connectivity = await Promise.all([
       checkPostgres(),
       checkRedis(envCheck.env),
+      Promise.resolve(checkSharedQueue(envCheck.env)),
       checkMeilisearch(envCheck.env),
       checkAnthropic(envCheck.env),
       checkStripe(envCheck.env),

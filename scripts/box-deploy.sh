@@ -2,7 +2,7 @@
 #
 # AlecRae box deploy — the "pull ritual" as one command.
 #
-# Run ON the production box (149.28.119.158) as the operator user:
+# Run ON the production box (Jarvis, 66.42.121.161) as the operator user:
 #
 #   cd /path/to/AlecRae.com && bash scripts/box-deploy.sh
 #
@@ -43,7 +43,7 @@ bun install
 step "3/6 database migrations"
 if [ -z "${DATABASE_URL:-}" ]; then
   echo "ERROR: DATABASE_URL is not set in this shell." >&2
-  echo "Source the production env first (e.g. set -a; . /etc/alecrae/api.env; set +a)" >&2
+  echo "Source the production env first (e.g. set -a; . /opt/alecrae/.env; set +a)" >&2
   exit 1
 fi
 bun run db:migrate
@@ -56,10 +56,17 @@ bun run --cwd apps/web build
 step "5/6 restart services"
 sudo systemctl restart "$API_UNIT"
 sudo systemctl restart "$WEB_UNIT"
-# Restart MTA worker if it exists (optional — only present after mta-box-setup.md is followed)
-if systemctl is-enabled alecrae-mta &>/dev/null; then
+# Restart the MTA worker ONLY if it is currently running. `is-enabled` was
+# the wrong test: it reports boot-enablement, not active state, and
+# `restart` STARTS a stopped unit — so a routine deploy would have quietly
+# reversed the issue-#105 emergency stop (alecrae-mta deliberately stopped
+# by Craig after the open-relay abuse). Starting the MTA is Craig's call,
+# never a deploy side effect.
+if systemctl is-active alecrae-mta &>/dev/null; then
   sudo systemctl restart alecrae-mta
-  echo "alecrae-mta restarted"
+  echo "alecrae-mta restarted (was running)"
+elif systemctl is-enabled alecrae-mta &>/dev/null; then
+  echo "alecrae-mta is stopped — NOT started (deliberate; see CLAUDE.md issue #105)"
 fi
 
 step "6/6 health checks"

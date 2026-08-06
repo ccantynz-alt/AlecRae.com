@@ -24,16 +24,28 @@ async function hashKey(key: string): Promise<string> {
 
 const CreateApiKeySchema = z.object({
   name: z.string().min(1).max(256),
-  permissions: z.object({
-    sendEmail: z.boolean().default(true),
-    readEmail: z.boolean().default(true),
-    manageDomains: z.boolean().default(false),
-    manageApiKeys: z.boolean().default(false),
-    manageWebhooks: z.boolean().default(false),
-    viewAnalytics: z.boolean().default(true),
-    manageAccount: z.boolean().default(false),
-    manageTeamMembers: z.boolean().default(false),
-  }),
+  /**
+   * Optional. Every field already carries a default — send/read/analytics on,
+   * everything management-related off — so omitting the object yields a
+   * least-privilege key rather than nothing.
+   *
+   * The object itself used to be REQUIRED while the only caller (the
+   * Integrations page's "Generate New Key") sent just `{ name }`, so key
+   * creation 422'd every single time. Making it optional relaxes the contract,
+   * which is backward compatible for anyone already sending it.
+   */
+  permissions: z
+    .object({
+      sendEmail: z.boolean().default(true),
+      readEmail: z.boolean().default(true),
+      manageDomains: z.boolean().default(false),
+      manageApiKeys: z.boolean().default(false),
+      manageWebhooks: z.boolean().default(false),
+      viewAnalytics: z.boolean().default(true),
+      manageAccount: z.boolean().default(false),
+      manageTeamMembers: z.boolean().default(false),
+    })
+    .default({}),
   environment: z.enum(["live", "test"]).default("live"),
   expiresAt: z.string().datetime().optional(),
 });

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { aiComplete } from "../src/lib/ai.js";
+import { aiComplete, shortRetryDelayMs } from "../src/lib/ai.js";
 
 const realFetch = globalThis.fetch;
 
@@ -17,12 +17,12 @@ function claudeResponse(text: string): Response {
 }
 
 function vapronResponse(text: string): Response {
-  // tRPC/superjson success envelope wrapping an OpenAI-style gateway payload.
+  // Plain-JSON REST payload (OpenAI-style) — the Vapron AI gateway speaks the
+  // REST platform surface, not tRPC. See src/lib/vapron.ts header.
   return new Response(
     JSON.stringify({
-      result: {
-        data: { json: { id: "cmpl_1", choices: [{ index: 0, message: { role: "assistant", content: text } }] } },
-      },
+      id: "cmpl_1",
+      choices: [{ index: 0, message: { role: "assistant", content: text } }],
     }),
     { status: 200 },
   );
@@ -57,7 +57,7 @@ describe("aiComplete", () => {
     process.env["VAPRON_API_KEY"] = "vpk_test";
     globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
       if (String(url).includes("api.anthropic.com")) return new Response("upstream", { status: 503 });
-      expect(String(url)).toContain("api.vapron.ai");
+      expect(String(url)).toBe("https://vapron.ai/api/platform/ai/chat");
       return vapronResponse("from vapron");
     }) as unknown as typeof fetch;
 
@@ -66,6 +66,24 @@ describe("aiComplete", () => {
       messages: [{ role: "user", content: "hi" }],
     });
     expect(result).toEqual({ text: "from vapron", provider: "vapron" });
+  });
+
+  it("treats an unrecognised Vapron gateway shape as a provider failure, not empty success", async () => {
+    // vapron.ai.complete() deliberately returns text: "" for a shape it cannot
+    // parse (the gateway response format is undocumented). aiComplete must NOT
+    // hand that back to callers as a successful completion — "never silently
+    // fail". Pairs with the matching assertion in vapron.test.ts.
+    process.env["ANTHROPIC_API_KEY"] = "sk-ant-test";
+    process.env["VAPRON_API_KEY"] = "vpk_test";
+    globalThis.fetch = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes("api.anthropic.com")) return new Response("upstream", { status: 503 });
+      return new Response(JSON.stringify({ unexpected: "shape" }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await expect(aiComplete({ messages: [{ role: "user", content: "hi" }] })).rejects.toMatchObject({
+      name: "AiError",
+      code: "vapron_empty",
+    });
   });
 
   it("throws no_provider when neither is configured", async () => {
@@ -92,5 +110,48 @@ describe("aiComplete", () => {
     expect(userMessage).toContain("--- END CONTENT ---");
     expect(userMessage).toContain(malicious);
     expect(capturedBody?.system ?? "").toContain("never a set of instructions");
+  });
+});
+
+// ─── Retry-After handling (Known Issue #111, AI half) ──────────────────────
+//
+// A 429 or 529 from Claude used to be indistinguishable from a genuine
+// failure, so the Vapron fallback fired silently and the user received an
+// answer from a different model with nothing recorded. These pin the parsing
+// that decides whether waiting inline is the right answer at all.
+
+describe("shortRetryDelayMs", () => {
+  const NOW = Date.parse("2026-03-02T09:00:00.000Z");
+
+  it("accepts a short delta-seconds wait", () => {
+    expect(shortRetryDelayMs("1", NOW)).toBe(1000);
+    expect(shortRetryDelayMs("2", NOW)).toBe(2000);
+  });
+
+  it("refuses a wait longer than the cloud-AI performance budget", () => {
+    // This runs inside a user's request; a longer wait is a hang, not a
+    // retry. The caller fails over instead.
+    expect(shortRetryDelayMs("3", NOW)).toBeNull();
+    expect(shortRetryDelayMs("60", NOW)).toBeNull();
+  });
+
+  it("handles the HTTP-date form", () => {
+    const soon = new Date(NOW + 1500).toUTCString();
+    // toUTCString has second granularity, so this lands on 1000 or 2000.
+    const parsed = shortRetryDelayMs(soon, NOW);
+    expect(parsed).not.toBeNull();
+    expect(parsed).toBeLessThanOrEqual(2000);
+  });
+
+  it("returns null for an absent or unparseable header", () => {
+    expect(shortRetryDelayMs(null, NOW)).toBeNull();
+    expect(shortRetryDelayMs(undefined, NOW)).toBeNull();
+    expect(shortRetryDelayMs("", NOW)).toBeNull();
+    expect(shortRetryDelayMs("in a bit", NOW)).toBeNull();
+  });
+
+  it("treats a date already past as no wait rather than a negative one", () => {
+    const past = new Date(NOW - 5000).toUTCString();
+    expect(shortRetryDelayMs(past, NOW)).toBe(0);
   });
 });

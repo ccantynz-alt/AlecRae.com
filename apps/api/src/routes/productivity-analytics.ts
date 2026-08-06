@@ -4,18 +4,18 @@
  * Time tracking, AI-generated productivity insights, behavior patterns,
  * reports, comparisons, and team leaderboards.
  *
- * POST /v1/productivity-analytics/track                — Track time on email activity
- * GET  /v1/productivity-analytics/time                 — Time tracking data (cursor pagination)
- * GET  /v1/productivity-analytics/time/summary         — Time summary by period
- * GET  /v1/productivity-analytics/insights             — AI productivity insights
- * GET  /v1/productivity-analytics/insights/:id         — Specific insight
- * PUT  /v1/productivity-analytics/insights/:id         — Action/dismiss insight
- * POST /v1/productivity-analytics/insights/generate    — Trigger insight generation
- * GET  /v1/productivity-analytics/patterns             — Behavior patterns
- * GET  /v1/productivity-analytics/patterns/predict     — Predict best time for activities
- * GET  /v1/productivity-analytics/report               — Weekly/monthly productivity report
- * GET  /v1/productivity-analytics/comparison           — Compare productivity across periods
- * GET  /v1/productivity-analytics/leaderboard          — Team productivity leaderboard
+ * POST /v1/productivity/track                — Track time on email activity
+ * GET  /v1/productivity/time                 — Time tracking data (cursor pagination)
+ * GET  /v1/productivity/time/summary         — Time summary by period
+ * GET  /v1/productivity/insights             — AI productivity insights
+ * GET  /v1/productivity/insights/:id         — Specific insight
+ * PUT  /v1/productivity/insights/:id         — Action/dismiss insight
+ * POST /v1/productivity/insights/generate    — Trigger insight generation
+ * GET  /v1/productivity/patterns             — Behavior patterns
+ * GET  /v1/productivity/patterns/predict     — Predict best time for activities
+ * GET  /v1/productivity/report               — Weekly/monthly productivity report
+ * GET  /v1/productivity/comparison           — Compare productivity across periods
+ * GET  /v1/productivity/leaderboard          — Team productivity leaderboard
  */
 
 import { Hono } from "hono";

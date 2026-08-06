@@ -55,7 +55,22 @@ export const PLAN_LABELS: Record<PlanTier, string> = {
   enterprise: "Enterprise",
 };
 
-export const FEATURE_PLANS: Record<string, PlanTier> = {
+/**
+ * The single source of truth for which plan tier unlocks which feature.
+ *
+ * This MUST stay in step with the server-side `requirePlan(...)` gates in
+ * apps/api/src/server.ts — the UI gate is a courtesy, the server gate is the
+ * enforcement. `PlanGate` derives its threshold from this map and takes no
+ * per-call-site override, because a hand-passed threshold silently drifts:
+ * the AI Triage page carried `required="personal"` against this map's "pro"
+ * and the backend's `requirePlan("pro")`, so Personal-tier users were let
+ * into the page and then 403'd by every request it made.
+ *
+ * `satisfies` (rather than a `Record<string, …>` annotation) keeps the exact
+ * key union, so `PlanGate feature="typo"` is a compile error instead of an
+ * undefined lookup at runtime.
+ */
+export const FEATURE_PLANS = {
   // AI Features
   ai_agent: "pro",
   voice_clone: "pro",
@@ -86,6 +101,12 @@ export const FEATURE_PLANS: Record<string, PlanTier> = {
   delegation: "team",
   team_chat: "team",
   collaboration: "team",
+  // NB: the server gates /v1/sso/config on admin role only, with no
+  // requirePlan(). This UI threshold is therefore stricter than the server's
+  // — a Free-tier admin can still configure SSO via the API. Revenue-policy
+  // gap, not a security hole (admin role is still required); left to a
+  // deliberate decision rather than changed silently here.
+  sso: "team",
   // Free features
   grammar_basic: "free",
   templates: "free",
@@ -96,4 +117,7 @@ export const FEATURE_PLANS: Record<string, PlanTier> = {
   search: "free",
   analytics_basic: "free",
   gamification: "free",
-};
+} satisfies Record<string, PlanTier>;
+
+/** Every gateable feature name. `PlanGate` accepts only these. */
+export type FeatureKey = keyof typeof FEATURE_PLANS;

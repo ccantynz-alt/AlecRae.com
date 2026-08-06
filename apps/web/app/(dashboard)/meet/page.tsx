@@ -1324,7 +1324,7 @@ export default function MeetPage(): ReactNode {
       title="AlecRae Meet"
       description="Video meeting rooms with recordings, transcripts, and AI summaries."
     >
-      <PlanGate feature="video_meetings" required="pro">
+      <PlanGate feature="video_meetings">
         <MeetContent />
       </PlanGate>
     </PageLayout>

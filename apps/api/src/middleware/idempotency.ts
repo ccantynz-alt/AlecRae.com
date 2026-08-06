@@ -15,7 +15,7 @@
  */
 
 import { createMiddleware } from "hono/factory";
-import Redis from "ioredis";
+import { getRedis } from "../lib/redis.js";
 
 // ─── UUID v4 validation ────────────────────────────────────────────────────
 
@@ -28,51 +28,6 @@ function isValidIdempotencyKey(key: string): boolean {
 
 // ─── Redis connection (singleton, lazy) ────────────────────────────────────
 
-const REDIS_URL =
-  process.env["REDIS_URL"] ??
-  process.env["UPSTASH_REDIS_URL"] ??
-  "redis://localhost:6379";
-
-let redisClient: Redis | null = null;
-// True only once the socket is "ready" to accept commands. Command issuance is
-// gated on this so we never send before the connection is writeable — otherwise
-// the first command races the connect and ioredis rejects it with "Stream isn't
-// writeable" (enableOfflineQueue: false). ioredis reconnects in the background
-// and re-fires "ready" when Redis returns, so no manual retry loop is needed.
-let redisReady = false;
-
-function getRedis(): Redis | null {
-  if (!redisClient) {
-    try {
-      const client = new Redis(REDIS_URL, {
-        maxRetriesPerRequest: 1,
-        connectTimeout: 3000,
-        enableOfflineQueue: false,
-      });
-
-      client.on("ready", () => {
-        redisReady = true;
-      });
-      client.on("error", (err) => {
-        // Log only the first transition to down; ioredis retries quietly.
-        if (redisReady) {
-          console.warn("[idempotency] Redis error, proceeding without cache:", err.message);
-        }
-        redisReady = false;
-      });
-      client.on("end", () => {
-        redisReady = false;
-      });
-
-      redisClient = client;
-    } catch {
-      return null;
-    }
-  }
-
-  // Until the connection is ready, callers proceed without the cache.
-  return redisReady ? redisClient : null;
-}
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -162,17 +117,10 @@ export function idempotency() {
   });
 }
 
-/**
- * Gracefully close the idempotency Redis connection. Call during app shutdown.
- */
-export async function closeIdempotencyRedis(): Promise<void> {
-  if (redisClient) {
-    await redisClient.quit().catch(() => {
-      /* intentional no-op: best-effort shutdown */
-    });
-    redisClient = null;
-  }
-}
+// `closeIdempotencyRedis()` used to live here and WAS wired into shutdown —
+// unlike quota.ts's and ai-quota.ts's equivalents, which never were. All three
+// are gone: the connection is the shared one now, closed once by
+// `closeAllRedis()`, so shutdown can no longer be partially correct.
 
 // Export for testing
 export { isValidIdempotencyKey };

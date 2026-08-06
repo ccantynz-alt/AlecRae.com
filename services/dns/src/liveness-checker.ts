@@ -51,6 +51,62 @@ async function safeTxtResolve(hostname: string): Promise<string[] | null> {
 }
 
 /**
+ * Can we actually receive the DMARC aggregate reports we ask for?
+ *
+ * We publish `_dmarc.customer.com` with a `rua` on OUR domain. Because that
+ * crosses an organizational boundary, RFC 7489 §7.1 requires the receiving
+ * domain to opt in with a `_report._dmarc` record — and Google, Microsoft and
+ * Yahoo enforce it. Without that record a conforming reporter sends nothing,
+ * so every customer domain publishes DMARC and we receive no reports at all,
+ * with no error anywhere to indicate it.
+ *
+ * This is checked once against our own zone rather than per customer domain,
+ * because the wildcard record covers all of them. It is deliberately NOT part
+ * of a customer's own record set: it is ours to publish, not theirs.
+ */
+export async function checkDmarcReportAuthorization(): Promise<{
+  ok: boolean;
+  detail: string;
+  required: string | null;
+}> {
+  const { dmarcReportAuthorization: auth } = getDnsConfig();
+  if (!auth) {
+    return {
+      ok: false,
+      detail: "DMARC rua is not a mailto: address, so no report destination can be derived",
+      required: null,
+    };
+  }
+
+  // Query a concrete name under the wildcard. Resolving the literal "*" label
+  // does not test what a reporter would actually look up.
+  const probe = auth.name.replace("*", "_probe");
+  const records = await safeTxtResolve(probe);
+
+  if (!records || records.length === 0) {
+    return {
+      ok: false,
+      detail:
+        `No DMARC external-authorization record. Reporters will NOT send aggregate ` +
+        `reports for customer domains to ${auth.publishOn}. Publish ${auth.name} ` +
+        `TXT "${auth.value}" in the ${auth.publishOn} zone.`,
+      required: auth.name,
+    };
+  }
+
+  const hasTag = records.some((r) => r.trim().toLowerCase().startsWith("v=dmarc1"));
+  if (!hasTag) {
+    return {
+      ok: false,
+      detail: `Record exists at ${probe} but does not start with "v=DMARC1"`,
+      required: auth.name,
+    };
+  }
+
+  return { ok: true, detail: "", required: auth.name };
+}
+
+/**
  * Check if the SPF record for a domain includes our expected mechanism.
  */
 async function checkSpf(domain: string): Promise<{ ok: boolean; detail: string }> {

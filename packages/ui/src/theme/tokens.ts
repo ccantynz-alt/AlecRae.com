@@ -1,34 +1,61 @@
+/**
+ * Design tokens — the JS-readable mirror of the shipped palette.
+ *
+ * ⚠️ **`apps/web/tailwind.config.ts` is the source of truth.** Styling in this
+ * repo is expressed as Tailwind class strings, so the config is what actually
+ * renders; these constants exist for the rare case that needs a colour in JS
+ * (canvas, chart libraries, inline SVG fills).
+ *
+ * **Keep the two in sync.** Until 2026-08-04 they were not, and the drift was
+ * total: every value below was Tailwind's stock indigo/slate — `brand.600` read
+ * `#4f46e5` (indigo) while the app renders `#1f3d2e` (racing green), and the
+ * surfaces were cool slate against the app's warm ivory. Nothing imports these
+ * constants except `provider.tsx`, and `ThemeProvider` is never mounted, so the
+ * file had no runtime effect — it was pure documentation, and it documented a
+ * product that does not exist. Anyone designing a new component against it
+ * would have produced an indigo-on-slate panel in a green-on-ivory app.
+ *
+ * Values below now match `apps/web/tailwind.config.ts` exactly.
+ */
 export const colors = {
+  /** AlecRae racing green — the considered, signature accent. */
   brand: {
-    50: "#eef2ff",
-    100: "#e0e7ff",
-    200: "#c7d2fe",
-    300: "#a5b4fc",
-    400: "#818cf8",
-    500: "#6366f1",
-    600: "#4f46e5",
-    700: "#4338ca",
-    800: "#3730a3",
-    900: "#312e81",
-    950: "#1e1b4b",
+    50: "#f3f6f4",
+    100: "#e3ebe5",
+    200: "#c6d6cb",
+    300: "#9eb8a7",
+    400: "#6f937d",
+    500: "#4d735c",
+    600: "#1f3d2e",
+    700: "#1a3427",
+    800: "#15281e",
+    900: "#102018",
+    950: "#0a1510",
   },
+  /** Warm ivory surfaces matching the marketing identity. */
   surface: {
     DEFAULT: "#ffffff",
-    secondary: "#f8fafc",
-    tertiary: "#f1f5f9",
-    inverse: "#0f172a",
+    raised: "#ffffff",
+    subtle: "#faf9f6",
+    secondary: "#f5f4ef",
+    tertiary: "#efede5",
+    hover: "#eceae1",
+    active: "#e3dfd3",
+    inverse: "#1c1a17",
   },
   border: {
-    DEFAULT: "#e2e8f0",
-    strong: "#cbd5e1",
-    focus: "#6366f1",
+    DEFAULT: "#e3dfd3",
+    strong: "#d1ccbe",
+    focus: "#4d735c",
   },
   content: {
-    DEFAULT: "#0f172a",
-    secondary: "#475569",
-    tertiary: "#94a3b8",
-    inverse: "#ffffff",
-    brand: "#4f46e5",
+    DEFAULT: "#1c1a17",
+    secondary: "#57534a",
+    /** The muted tier. Clears WCAG AA on white at 5.35:1 — see the config. */
+    subtle: "#6f6a5e",
+    tertiary: "#8a8475",
+    inverse: "#f5f4ef",
+    brand: "#1f3d2e",
   },
   status: {
     success: "#10b981",

@@ -1,11 +1,41 @@
 /**
- * E2E Encryption Route — Zero-Knowledge Encrypted Email
+ * E2E Encryption Route — public-key registration
  *
- * POST /v1/encryption/keys/generate  — Generate encryption keypair for user
- * GET  /v1/encryption/keys/public    — Get user's public key
- * POST /v1/encryption/encrypt        — Encrypt email content for recipient
- * POST /v1/encryption/decrypt        — Decrypt received encrypted email
- * GET  /v1/encryption/status         — Check if E2E is enabled
+ * POST /v1/encryption/keys/generate  — Register the CLIENT's public key
+ * GET  /v1/encryption/keys/public    — Get a user's public key
+ * GET  /v1/encryption/status         — Whether a public key is registered
+ *
+ * WHAT THIS DOES AND DOES NOT DO (read before touching the UI copy)
+ * -----------------------------------------------------------------
+ * This endpoint registers a public key. **No email is encrypted anywhere in
+ * this product.** There is no encryption step in the send path
+ * (routes/messages.ts encrypts OAuth tokens and nothing else) and no
+ * decryption step on read. Key registration is a prerequisite for E2EE, not
+ * E2EE. The settings page previously claimed mail was "encrypted
+ * automatically"; it was not, and that copy has been corrected.
+ *
+ * WHAT WAS WRONG (Known Issue #77(d), worse than recorded)
+ * --------------------------------------------------------
+ * `/keys/generate` used to generate the keypair ON THE SERVER:
+ *
+ *   1. The server minted an RSA keypair and stored ITS public key. The client
+ *      independently generated its own keypair and kept that private key in
+ *      IndexedDB — so the registered public key and the user's private key
+ *      were from two unrelated pairs. Anything encrypted to the stored public
+ *      key could NEVER have been decrypted by the user. The feature could not
+ *      have worked even once.
+ *   2. A private key therefore existed in server memory, which defeats the
+ *      zero-knowledge claim by itself.
+ *   3. The private key was wrapped with `passphrase.padEnd(32,"0").slice(0,32)`
+ *      used directly as raw AES key material — no KDF, no salt. A passphrase
+ *      of "hunter2" produced the key "hunter2" plus 25 zero bytes.
+ *   4. The passphrase was accepted as a request field, while the comment
+ *      beside it read "the passphrase never touches the server". The web
+ *      client was already sending a throwaway value purely to satisfy the
+ *      schema, which is how obviously vestigial it had become.
+ *
+ * The server now stores only a public key that the client supplies, and never
+ * sees a private key or a passphrase — the property the module always claimed.
  */
 
 import { Hono } from "hono";
@@ -33,9 +63,28 @@ function generateId(): string {
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
-const GenerateKeysSchema = z.object({
-  /** Passphrase to encrypt the private key (never leaves the client in production) */
-  passphrase: z.string().min(8),
+/** Rough bounds for a base64 SPKI-encoded RSA-4096 public key (~736 chars). */
+const MIN_PUBLIC_KEY_LEN = 300;
+const MAX_PUBLIC_KEY_LEN = 4096;
+
+const RegisterKeySchema = z.object({
+  /**
+   * The CLIENT's base64 SPKI public key. The matching private key must never
+   * be sent — see the module header for what happened when the server made
+   * its own pair instead.
+   */
+  publicKey: z
+    .string()
+    .min(MIN_PUBLIC_KEY_LEN)
+    .max(MAX_PUBLIC_KEY_LEN)
+    .regex(/^[A-Za-z0-9+/]+={0,2}$/, "publicKey must be base64-encoded SPKI"),
+  /**
+   * Optional client-side-encrypted private key blob, for restoring access on
+   * another device. The server stores it opaquely and cannot decrypt it: the
+   * wrapping key is derived on the client and never transmitted. Omit it and
+   * the key is single-device only.
+   */
+  encryptedPrivateKey: z.string().max(16_384).optional(),
 });
 
 // Note: Encrypt/Decrypt schemas not currently used — encryption is handled
@@ -45,59 +94,19 @@ const GenerateKeysSchema = z.object({
 
 const encryption = new Hono();
 
-// POST /v1/encryption/keys/generate — Generate keypair
+// POST /v1/encryption/keys/generate — Register the client's public key.
+//
+// Kept at this path so existing clients keep working; the behaviour is now
+// registration, not generation. The server does no key generation at all.
 encryption.post(
   "/keys/generate",
   requireScope("encryption:write"),
-  validateBody(GenerateKeysSchema),
+  validateBody(RegisterKeySchema),
   async (c) => {
-    const input = getValidatedBody<z.infer<typeof GenerateKeysSchema>>(c);
+    const input = getValidatedBody<z.infer<typeof RegisterKeySchema>>(c);
     const auth = c.get("auth");
 
-    // In production: use Web Crypto API on the CLIENT
-    // Server only stores the public key + encrypted private key
-    // The passphrase never touches the server
-
-    // Generate a keypair using Web Crypto (RSA-OAEP)
-    const keyPair = await crypto.subtle.generateKey(
-      {
-        name: "RSA-OAEP",
-        modulusLength: 4096,
-        publicExponent: new Uint8Array([1, 0, 1]),
-        hash: "SHA-256",
-      },
-      true,
-      ["encrypt", "decrypt"],
-    );
-
-    // Export public key
-    const publicKeyRaw = await crypto.subtle.exportKey("spki", keyPair.publicKey);
-    const publicKeyB64 = Buffer.from(publicKeyRaw).toString("base64");
-
-    // Export and "encrypt" private key with passphrase
-    // (In production: this happens CLIENT-SIDE with AES-GCM derived from passphrase)
-    const privateKeyRaw = await crypto.subtle.exportKey("pkcs8", keyPair.privateKey);
-    const privateKeyB64 = Buffer.from(privateKeyRaw).toString("base64");
-
-    // Derive AES key from passphrase for private key encryption
-    const passphraseKey = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(input.passphrase.padEnd(32, "0").slice(0, 32)),
-      "AES-GCM",
-      false,
-      ["encrypt"],
-    );
-
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
-      passphraseKey,
-      new TextEncoder().encode(privateKeyB64),
-    );
-
-    const encryptedPrivateKey = Buffer.from(iv).toString("base64") + "." + Buffer.from(encrypted).toString("base64");
-
-    // Upsert: exactly one keypair per account (regeneration overwrites).
+    // Upsert: exactly one registered key per account (re-registering replaces).
     const db = getDatabase();
     const now = new Date();
     await db
@@ -105,8 +114,10 @@ encryption.post(
       .values({
         id: generateId(),
         accountId: auth.accountId,
-        publicKey: publicKeyB64,
-        encryptedPrivateKey,
+        publicKey: input.publicKey,
+        // Opaque to us. Empty string when the client keeps its private key
+        // on-device only, which is the default.
+        encryptedPrivateKey: input.encryptedPrivateKey ?? "",
         algorithm: ENCRYPTION_ALGORITHM,
         createdAt: now,
         updatedAt: now,
@@ -114,20 +125,28 @@ encryption.post(
       .onConflictDoUpdate({
         target: encryptionKeys.accountId,
         set: {
-          publicKey: publicKeyB64,
-          encryptedPrivateKey,
+          publicKey: input.publicKey,
+          encryptedPrivateKey: input.encryptedPrivateKey ?? "",
           algorithm: ENCRYPTION_ALGORITHM,
           updatedAt: now,
         },
       });
 
-    return c.json({
-      data: {
-        publicKey: publicKeyB64,
-        message: "Encryption keys generated. Your private key is encrypted with your passphrase.",
-        warning: "Do NOT lose your passphrase. Without it, encrypted emails cannot be decrypted.",
+    return c.json(
+      {
+        data: {
+          publicKey: input.publicKey,
+          message:
+            "Public key registered. Your private key stays on your device — it is never sent to us.",
+          // Stated on the endpoint itself so no future UI can imply otherwise
+          // without contradicting the API it is calling.
+          messageEncryptionActive: false,
+          notice:
+            "Registering a key does not encrypt your mail. Message encryption is not implemented yet — there is no encryption step in the send path.",
+        },
       },
-    }, 201);
+      201,
+    );
   },
 );
 

@@ -13,7 +13,8 @@
 import { Hono } from "hono";
 import { getDatabase } from "@alecrae/db";
 import { sql } from "drizzle-orm";
-import Redis from "ioredis";
+import type Redis from "ioredis";
+import { createProbeRedis } from "../lib/redis.js";
 import { Queue } from "bullmq";
 import { MeiliSearch } from "meilisearch";
 import { getDeployedCommit, getDriftStatus, getServiceDriftStatus } from "../lib/deploy-info.js";
@@ -65,11 +66,9 @@ async function checkRedis(): Promise<ServiceStatus> {
   const start = Date.now();
   let client: Redis | null = null;
   try {
-    client = new Redis(REDIS_URL, {
-      connectTimeout: PROBE_TIMEOUT_MS,
-      maxRetriesPerRequest: 1,
-      lazyConnect: true,
-    });
+    // Own connection, not the shared client — see lib/redis.ts.
+    client = createProbeRedis({ connectTimeout: PROBE_TIMEOUT_MS });
+    if (!client) throw new Error("Redis is not configured");
     const redis = client;
     await Promise.race([
       (async () => {
@@ -97,24 +96,52 @@ async function checkRedis(): Promise<ServiceStatus> {
   }
 }
 
-async function checkMtaQueue(): Promise<ServiceStatus> {
+/**
+ * The minimal queue surface the probe needs — structural, so tests can pass
+ * a fake without casting through `never`/`unknown` (Forbidden List #2/#3).
+ */
+export interface MtaQueueProbe {
+  getJobCounts(
+    ...states: ("waiting" | "active" | "delayed" | "failed")[]
+  ): Promise<Record<string, number>>;
+  getWorkers(): Promise<unknown[]>;
+  close(): Promise<void>;
+}
+
+export async function checkMtaQueue(
+  queueFactory: () => MtaQueueProbe = () =>
+    new Queue(MTA_QUEUE_NAME, { connection: { url: REDIS_URL } }),
+): Promise<ServiceStatus> {
   if (!REDIS_URL) {
     return { status: "degraded", error: "Redis not configured — MTA queue unavailable" };
   }
   const start = Date.now();
-  let queue: Queue | null = null;
+  let queue: MtaQueueProbe | null = null;
   try {
-    queue = new Queue(MTA_QUEUE_NAME, {
-      connection: { url: REDIS_URL },
-    });
-    await Promise.race([
-      queue.getJobCounts("waiting", "active", "delayed", "failed"),
+    queue = queueFactory();
+    // Queue readability alone says nothing about mail capability: in the
+    // split-Redis failure mode (issue #149) the API enqueues into a queue no
+    // worker will ever read, and this probe used to report "ok" for exactly
+    // that state. A worker connected to the queue is the part that makes a
+    // send actually leave the box, so its absence is a degradation.
+    const [counts, workers] = await Promise.race([
+      Promise.all([
+        queue.getJobCounts("waiting", "active", "delayed", "failed"),
+        queue.getWorkers(),
+      ]),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("timeout after 2s")), PROBE_TIMEOUT_MS),
       ),
     ]);
     const latency = Date.now() - start;
     await queue.close();
+    if (workers.length === 0) {
+      return {
+        status: "degraded",
+        latencyMs: latency,
+        error: `MTA queue reachable but no worker is consuming it (${counts["waiting"] ?? 0} waiting) — queued sends will not be delivered`,
+      };
+    }
     return {
       status: "ok",
       latencyMs: latency,
@@ -292,11 +319,8 @@ async function checkRedisDetailed(): Promise<ConfigCheck> {
   const start = Date.now();
   let client: Redis | null = null;
   try {
-    client = new Redis(process.env["REDIS_URL"], {
-      connectTimeout: PROBE_TIMEOUT_MS,
-      maxRetriesPerRequest: 1,
-      lazyConnect: true,
-    });
+    client = createProbeRedis({ connectTimeout: PROBE_TIMEOUT_MS });
+    if (!client) throw new Error("Redis is not configured");
     const redisClient = client;
     await Promise.race([
       (async () => {

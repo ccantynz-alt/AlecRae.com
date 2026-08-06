@@ -42,6 +42,12 @@ export interface EmailAddress {
 export interface Message {
   id: string;
   messageId: string;
+  /**
+   * Conversation key, shared by every message in a reply chain. Derived from
+   * the RFC 5322 reference headers server-side (lib/thread-key.ts) — optional
+   * because a cached response from before it existed won't carry it.
+   */
+  threadId?: string;
   from: EmailAddress;
   to: EmailAddress[];
   cc?: EmailAddress[];
@@ -53,6 +59,12 @@ export interface Message {
   isStarred: boolean;
   folder: "inbox" | "archive" | "trash" | string;
   hasAttachments: boolean;
+  /**
+   * When the recipient first opened this message, from the real tracking
+   * events; null if never opened. The Sent page previously inferred this from
+   * an "opened" tag that nothing writes.
+   */
+  openedAt: string | null;
   createdAt: string;
   updatedAt: string;
   sentAt: string | null;
@@ -634,12 +646,23 @@ export interface Mailbox {
   forwardTo: string[] | null;
   isActive: boolean;
   createdAt?: string;
+  updatedAt?: string;
 }
 
+/**
+ * NOTE the envelope asymmetry below — it mirrors what
+ * `apps/api/src/routes/mailboxes.ts` actually returns rather than what would be
+ * tidiest: the LIST is enveloped as `{ data }` while the single-resource writes
+ * return the object bare. Unwrapping a bare response as `{ data }` (or the
+ * reverse) is the defect class of issue #136, where the Integrations page
+ * silently rendered an empty list because it unwrapped an envelope that was not
+ * there. Each signature here was checked against the route.
+ */
 export const mailboxesApi = {
   list(): Promise<{ data: Mailbox[] }> {
     return apiFetch("/v1/mailboxes");
   },
+  /** The domain must already be verified AND active, or the API answers 409. */
   create(payload: {
     address: string;
     displayName?: string;
@@ -647,6 +670,24 @@ export const mailboxesApi = {
   }): Promise<Mailbox> {
     return apiFetch("/v1/mailboxes", {
       method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  /**
+   * `address` is deliberately absent from the payload: inbound routing resolves
+   * recipients by exact address, so a rename in place would strand mail already
+   * delivered to the old one. Changing an address is a remove plus a create.
+   */
+  update(
+    id: string,
+    payload: {
+      displayName?: string | null;
+      forwardTo?: string[] | null;
+      isActive?: boolean;
+    },
+  ): Promise<Mailbox> {
+    return apiFetch(`/v1/mailboxes/${encodeURIComponent(id)}`, {
+      method: "PATCH",
       body: JSON.stringify(payload),
     });
   },
@@ -896,7 +937,45 @@ export const messagesApi = {
     return apiFetch<{ data: MessageDetail }>(`/v1/messages/${id}`);
   },
 
-  list(params?: { cursor?: string; limit?: number; status?: string; tag?: string; folder?: "inbox" | "archive" | "trash" | "all" }) {
+  /**
+   * Create a draft. Drafts are never queued or sent — they are `emails` rows
+   * with status "draft" in the "drafts" folder.
+   */
+  createDraft(payload: {
+    from?: EmailAddress;
+    to?: EmailAddress[];
+    cc?: EmailAddress[];
+    bcc?: EmailAddress[];
+    subject?: string;
+    text?: string;
+    html?: string;
+  }) {
+    return apiFetch<{ data: { id: string; createdAt: string; updatedAt: string } }>(
+      "/v1/messages/drafts",
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  /** Update an existing draft in place. 409s if the message is no longer a draft. */
+  updateDraft(
+    id: string,
+    payload: {
+      from?: EmailAddress;
+      to?: EmailAddress[];
+      cc?: EmailAddress[];
+      bcc?: EmailAddress[];
+      subject?: string;
+      text?: string;
+      html?: string;
+    },
+  ) {
+    return apiFetch<{ data: { id: string; updatedAt: string } }>(
+      `/v1/messages/drafts/${encodeURIComponent(id)}`,
+      { method: "PUT", body: JSON.stringify(payload) },
+    );
+  },
+
+  list(params?: { cursor?: string; limit?: number; status?: string; tag?: string; folder?: "inbox" | "archive" | "trash" | "drafts" | "all" }) {
     const qs = new URLSearchParams();
     if (params?.cursor) qs.set("cursor", params.cursor);
     if (params?.limit) qs.set("limit", String(params.limit));
@@ -1572,12 +1651,25 @@ export type AIWritingTone =
 
 export type AIWritingLength = "short" | "medium" | "long";
 
+/**
+ * `degraded` means Claude was unavailable and the endpoint returned a canned
+ * placeholder instead of generated text — the compose fallback literally reads
+ * "[AI-composed content would appear here ... when Claude API is configured.]".
+ *
+ * It was added server-side (issue #99) precisely so callers could tell the two
+ * apart, and then no caller read it: the inbox inserted the placeholder
+ * straight into the reply box as though it were an AI draft, where a user
+ * could send it to a real recipient. Declared here so that is a type error
+ * rather than a silent omission.
+ */
 export interface AIComposeResult {
   subject: string;
   body: string;
   tone: AIWritingTone;
   length: AIWritingLength;
   confidence: number;
+  /** True when the text is a placeholder, not model output. */
+  degraded?: boolean;
   wordCount: number;
   profileUsed: string | null;
 }
@@ -1589,6 +1681,8 @@ export interface AISummarizeResult {
   summaryWordCount: number;
   compressionRatio: number;
   confidence: number;
+  /** True when the summary is a placeholder, not model output. */
+  degraded?: boolean;
 }
 
 export const aiWritingApi = {
@@ -3139,10 +3233,39 @@ export const autoResponderApi = {
     );
   },
 
-  preview(sampleEmailBody: string): Promise<{ reply: string }> {
-    return apiFetch<{ reply: string }>("/v1/auto-responder/preview", {
+  /**
+   * POST /v1/auto-responder/preview — render the auto-reply for a sample email.
+   *
+   * This sent `{ sampleEmailBody }` — a field the endpoint's schema does not
+   * declare — while the schema REQUIRES senderEmail, subject and body. Every
+   * preview 422'd. It also expected a bare `{ reply }`, where the endpoint
+   * returns an enveloped preview object.
+   *
+   * `aiGenerated` is surfaced deliberately: the reply is currently templated,
+   * not AI-written, and the endpoint says so. Callers should not present it as
+   * an AI draft while that flag is false.
+   */
+  preview(sample: {
+    senderEmail: string;
+    senderName?: string;
+    subject: string;
+    body: string;
+  }): Promise<{
+    data: {
+      preview: { to: string; subject: string; htmlBody: string; textBody: string };
+      aiGenerated: boolean;
+      note: string;
+    };
+  }> {
+    return apiFetch<{
+      data: {
+        preview: { to: string; subject: string; htmlBody: string; textBody: string };
+        aiGenerated: boolean;
+        note: string;
+      };
+    }>("/v1/auto-responder/preview", {
       method: "POST",
-      body: JSON.stringify({ sampleEmailBody }),
+      body: JSON.stringify(sample),
     });
   },
 };

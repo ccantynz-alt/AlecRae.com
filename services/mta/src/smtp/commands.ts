@@ -204,6 +204,20 @@ export const SmtpResponses = {
     return { code: 452, enhanced: "4.5.3", message: "Too many recipients", isMultiline: false };
   },
 
+  /**
+   * Refusal for a recipient whose domain we do not host. 550/5.7.1 is the
+   * standard permanent "we don't relay" answer, so a legitimate sender fails
+   * fast rather than retrying for days.
+   */
+  relayDenied(): SmtpResponse {
+    return {
+      code: 550,
+      enhanced: "5.7.1",
+      message: "Relay access denied — this server does not relay mail",
+      isMultiline: false,
+    };
+  },
+
   messageTooLarge(): SmtpResponse {
     return { code: 552, enhanced: "5.3.4", message: "Message size exceeds fixed maximum message size", isMultiline: false };
   },

@@ -21,55 +21,9 @@
 
 import { createMiddleware } from "hono/factory";
 import type { Context, MiddlewareHandler } from "hono";
-import Redis from "ioredis";
+import type Redis from "ioredis";
+import { getRedis } from "../lib/redis.js";
 
-// ─── Redis connection (singleton, lazy) ────────────────────────────────────
-
-const REDIS_URL =
-  process.env["REDIS_URL"] ??
-  process.env["UPSTASH_REDIS_URL"] ??
-  "redis://localhost:6379";
-
-let redisClient: Redis | null = null;
-// True only once the socket is "ready" to accept commands. Command issuance is
-// gated on this so we never send before the connection is writeable — otherwise
-// the first command races the connect and ioredis rejects it with "Stream isn't
-// writeable" (enableOfflineQueue: false). ioredis reconnects in the background
-// and re-fires "ready" when Redis returns, so no manual retry loop is needed.
-let redisReady = false;
-
-function getRedis(): Redis | null {
-  if (!redisClient) {
-    try {
-      const client = new Redis(REDIS_URL, {
-        maxRetriesPerRequest: 1,
-        connectTimeout: 3000,
-        enableOfflineQueue: false,
-      });
-
-      client.on("ready", () => {
-        redisReady = true;
-      });
-      client.on("error", (err) => {
-        // Log only the first transition to down; ioredis retries quietly.
-        if (redisReady) {
-          console.warn("[rate-limit] Redis error, falling back to in-memory:", err.message);
-        }
-        redisReady = false;
-      });
-      client.on("end", () => {
-        redisReady = false;
-      });
-
-      redisClient = client;
-    } catch {
-      return null;
-    }
-  }
-
-  // Until the connection is ready, callers use the in-memory fallback.
-  return redisReady ? redisClient : null;
-}
 
 // ─── In-memory fallback store ──────────────────────────────────────────────
 
@@ -312,10 +266,8 @@ export const searchRateLimit = rateLimitByKey(60, ONE_MINUTE);
 export const globalIpRateLimit = rateLimitByIp(1000, ONE_MINUTE);
 
 // ─── Cleanup on shutdown ───────────────────────────────────────────────────
-
-export async function closeRateLimitRedis(): Promise<void> {
-  if (redisClient) {
-    await redisClient.quit().catch(() => { /* ignore */ });
-    redisClient = null;
-  }
-}
+//
+// `closeRateLimitRedis()` used to live here. The connection is shared now and
+// `closeAllRedis()` (lib/redis.ts) closes it along with every other, so
+// shutdown covers all of them or none rather than the four-of-nine it did
+// before.

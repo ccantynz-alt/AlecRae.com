@@ -2,6 +2,7 @@ import { SmtpReceiver } from "./receiver/smtp-receiver.js";
 import { MimeParser } from "./parser/mime-parser.js";
 import { FilterPipeline } from "./filter/pipeline.js";
 import { MailboxRouter } from "./routing/router.js";
+import { createDomainVerifier } from "./routing/domain-verifier.js";
 import { InMemoryEmailStore } from "./storage/store.js";
 import { PostgresEmailStore } from "./storage/postgres-store.js";
 import { createHttpInbound } from "./http-inbound.js";
@@ -91,7 +92,12 @@ async function handleInboundMessage(
   // itself is still a real message and gets delivered to its mailbox.
   if (isDsnMessage(parsed.headers)) {
     const rawText = new TextDecoder().decode(rawData);
-    await processInboundDsn(rawText).catch((err) => {
+    // The envelope recipient is our VERP return path
+    // (bounces+<emailId>@bounce.<domain>), which attributes the bounce to the
+    // exact message rather than guessing from recency. A DSN is addressed to a
+    // single recipient, so the first entry is the one.
+    const dsnEnvelopeTo = Array.isArray(envelope.rcptTo) ? envelope.rcptTo[0] : envelope.rcptTo;
+    await processInboundDsn(rawText, dsnEnvelopeTo).catch((err) => {
       console.error("[Inbound] DSN processing failed:", err instanceof Error ? err.message : String(err));
     });
   }
@@ -159,6 +165,9 @@ const enableHttp = process.env["DISABLE_HTTP"] !== "true";
 const receiver = new SmtpReceiver({
   hostname,
   port: smtpPort,
+  // The relay control. Without this the receiver answers 250 to any recipient
+  // on any domain — see routing/domain-verifier.ts and issue #105.
+  domainVerifier: createDomainVerifier(),
   onMessage: handleInboundMessage,
 });
 

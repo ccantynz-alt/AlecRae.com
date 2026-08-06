@@ -25,12 +25,7 @@ import {
   getValidatedQuery,
 } from "../middleware/validator.js";
 import { getDatabase, emailScripts, scriptRuns } from "@alecrae/db";
-import {
-  runSnippet,
-  createSampleEmailContext,
-  SCRIPT_TEMPLATES,
-} from "@alecrae/ai-engine/scripts/snippet-runner";
-import type { EmailContextData } from "@alecrae/ai-engine/scripts/snippet-runner";
+import { SCRIPT_TEMPLATES } from "@alecrae/ai-engine/scripts/snippet-runner";
 
 // ─── Zod Schemas ──────────────────────────────────────────────────────────────
 
@@ -91,7 +86,8 @@ const TestScriptSchema = z.object({
     .optional(),
 });
 
-type TestScriptInput = z.infer<typeof TestScriptSchema>;
+// TestScriptSchema still validates the request; the inferred type is unused
+// only while execution is disabled (see POST /:id/test), so it is not deleted.
 
 const ListQuerySchema = z.object({
   trigger: TriggerEnum.optional(),
@@ -392,7 +388,9 @@ scripts.post(
   async (c) => {
     const auth = c.get("auth");
     const scriptId = c.req.param("id");
-    const body = getValidatedBody<TestScriptInput>(c);
+    // Body is still VALIDATED (the schema stays on the route, so a malformed
+    // request is still a 422 and the contract is unchanged for when execution
+    // returns) — it is simply not read while the endpoint refuses.
     const db = getDatabase();
 
     const [script] = await db
@@ -419,84 +417,30 @@ scripts.post(
       );
     }
 
-    // Build email context from sample or use default
-    const normalizeAddress = (a: { name?: string | undefined; address: string }) => ({
-      address: a.address,
-      ...(a.name !== undefined ? { name: a.name } : {}),
-    });
-    const emailContext: EmailContextData = body.sampleEmail
-      ? createSampleEmailContext({
-          id: body.sampleEmail.id ?? "test_email_001",
-          from: normalizeAddress(body.sampleEmail.from),
-          to: (body.sampleEmail.to ?? [{ address: "you@alecrae.com" }]).map(normalizeAddress),
-          cc: (body.sampleEmail.cc ?? []).map(normalizeAddress),
-          subject: body.sampleEmail.subject,
-          body: body.sampleEmail.body,
-          headers: body.sampleEmail.headers ?? {},
-          attachments: body.sampleEmail.attachments ?? [],
-          threadId: body.sampleEmail.threadId ?? "thread_test_001",
-          receivedAt: body.sampleEmail.receivedAt ?? new Date().toISOString(),
-        })
-      : createSampleEmailContext();
-
-    const result = await runSnippet({
-      code: script.code,
-      emailContext,
-      dryRun: true,
-      timeoutMs: 5_000,
-    });
-
-    if (result.ok) {
-      // Record the test run
-      const runId = generateId("srun");
-      await db.insert(scriptRuns).values({
-        id: runId,
-        scriptId: script.id,
-        emailId: emailContext.id,
-        status: "success",
-        executionTimeMs: result.value.durationMs,
-        actionsExecuted: result.value.actions.map((a) => ({
-          type: a.type,
-          params: a.params,
-        })),
-        logs: result.value.logs,
-      });
-
-      return c.json({
-        data: {
-          success: true,
-          runId,
-          actions: result.value.actions,
-          logs: result.value.logs,
-          executionTimeMs: result.value.durationMs,
-          dryRun: true,
+    // Deliberately disabled, AFTER the ownership check so a 404 still means
+    // what it meant. The previous executor (`runSnippet`) ran user code with
+    // `new Function(...)` in the API process behind a parameter-shadowing
+    // "sandbox" that does not hold: any function literal reaches the real
+    // Function constructor via `.constructor`, handing back process.env
+    // (JWT_SECRET, DATABASE_URL, API keys) to any registered user — and a
+    // synchronous infinite loop blocks the event loop for every tenant,
+    // because a Promise.race timeout cannot interrupt synchronous code.
+    // The real fix is porting this endpoint onto the QuickJS-WASM sandbox
+    // that /v1/programs already uses (hard memory/time limits, no host
+    // access) — a deliberate build, not a patch on an escape-prone boundary.
+    return c.json(
+      {
+        error: {
+          type: "not_implemented",
+          message:
+            "Script test runs are temporarily disabled while the execution " +
+            "sandbox is rebuilt. Your script was not run and no result was " +
+            "recorded.",
+          code: "script_execution_unavailable",
         },
-      });
-    }
-
-    // Record the failed test run
-    const runId = generateId("srun");
-    await db.insert(scriptRuns).values({
-      id: runId,
-      scriptId: script.id,
-      emailId: emailContext.id,
-      status: "error",
-      executionTimeMs: result.error.durationMs,
-      actionsExecuted: [],
-      logs: result.error.logs,
-      error: result.error.message,
-    });
-
-    return c.json({
-      data: {
-        success: false,
-        runId,
-        error: result.error.message,
-        logs: result.error.logs,
-        executionTimeMs: result.error.durationMs,
-        dryRun: true,
       },
-    });
+      501,
+    );
   },
 );
 

@@ -3,7 +3,7 @@
  * Implements RFC 7208 — validates that sending IPs are authorized by domain SPF records.
  */
 
-import * as dns from "node:dns/promises";
+import { boundedDns as dns } from "../dns/resolver.js";
 import * as net from "node:net";
 import type {
   SpfResult,

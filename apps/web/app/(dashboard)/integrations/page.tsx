@@ -48,12 +48,25 @@ interface Webhook {
   createdAt: string;
 }
 
+/**
+ * Mirrors a row from GET /v1/api-keys, plus the one-time `key` that only
+ * POST /v1/api-keys returns.
+ *
+ * `key` is intentionally optional: the full secret is shown exactly once, at
+ * creation, and can never be retrieved again — the list endpoint returns only
+ * `keyPrefix`. The old type declared `key` as always present and read a
+ * `lastUsed` field the API does not have (it is `lastUsedAt`).
+ */
 interface ApiKey {
   id: string;
   name: string;
-  key: string;
+  /** Present only in the creation response. */
+  key?: string;
+  keyPrefix: string;
+  environment: "live" | "test";
+  isActive?: boolean;
+  lastUsedAt?: string | null;
   createdAt: string;
-  lastUsed: string | null;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -227,73 +240,40 @@ IntegrationCard.displayName = "IntegrationCard";
 
 // ─── Integrations Grid ─────────────────────────────────────────────────────────
 
+/**
+ * The "Connected Apps" grid that used to live here has been removed.
+ *
+ * It rendered connect/disconnect toggles against `POST` and `DELETE`
+ * /v1/integrations/:id/connect — neither of which exists — and typed
+ * `GET /v1/integrations` as a catalogue of installable apps. That endpoint
+ * returns something else entirely: the account's Zapier/Make/n8n outbound
+ * connectors. The envelope and shape both mismatched, so the grid threw on
+ * load and took the whole page with it.
+ *
+ * It was not rebuilt over the connector API either, because those connectors
+ * do not fire. `webhook_integrations` rows are read by exactly two things:
+ * their own CRUD endpoints and the GDPR export. No dispatcher exists
+ * anywhere (CLAUDE.md issue #103), so a nicer UI would only have made
+ * non-functional theatre more convincing.
+ *
+ * What replaces it is an honest panel pointing at Webhooks, which genuinely
+ * work — webhook-dispatcher.ts delivers those, HMAC-signed and retried.
+ */
 function IntegrationsGrid(): ReactNode {
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
-
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiFetch<Integration[]>("/v1/integrations");
-      setIntegrations(data);
-    } catch (err) {
-      setError(errMsg(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  async function handleToggle(id: string, connected: boolean): Promise<void> {
-    setTogglingId(id);
-    try {
-      if (connected) {
-        await apiFetch<unknown>(`/v1/integrations/${id}/connect`, { method: "DELETE" });
-      } else {
-        await apiFetch<unknown>(`/v1/integrations/${id}/connect`, { method: "POST" });
-      }
-      setIntegrations((prev) =>
-        prev.map((intg) => (intg.id === id ? { ...intg, connected: !connected } : intg)),
-      );
-    } catch (err) {
-      setError(errMsg(err));
-    } finally {
-      setTogglingId(null);
-    }
-  }
-
-  if (loading) return <LoadingGrid />;
-  if (error) return <ErrorBanner message={error} onRetry={() => void load()} />;
-
-  if (integrations.length === 0) {
-    return (
-      <Box className="py-8 text-center">
-        <Text variant="body-sm" className="text-content-subtle">
-          No integrations available.
-        </Text>
-      </Box>
-    );
-  }
-
   return (
-    <Box className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {integrations.map((intg) => (
-        <IntegrationCard
-          key={intg.id}
-          integration={intg}
-          onToggle={(id, connected) => void handleToggle(id, connected)}
-          toggling={togglingId === intg.id}
-        />
-      ))}
+    <Box className="rounded-lg border border-border bg-surface-raised p-6">
+      <Text variant="body-sm" className="font-medium text-content">
+        App connections aren&apos;t available yet
+      </Text>
+      <Text variant="body-sm" className="text-content-subtle mt-1 max-w-prose">
+        Connecting third-party apps like Notion or Linear isn&apos;t built yet. To
+        send AlecRae events into another system today, use <strong>Webhooks</strong>{" "}
+        below — those are delivered for real, signed and retried.
+      </Text>
     </Box>
   );
 }
+
 IntegrationsGrid.displayName = "IntegrationsGrid";
 
 // ─── Webhooks Section ──────────────────────────────────────────────────────────
@@ -315,8 +295,13 @@ function WebhooksSection(): ReactNode {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<Webhook[]>("/v1/webhooks");
-      setWebhooks(data);
+      // Enveloped, like every other list endpoint. This page read it bare, so
+      // `setWebhooks` received the envelope object and the list never rendered
+      // — even though webhook-dispatcher.ts genuinely delivers these,
+      // HMAC-signed and retried. lib/api.ts had it right all along; this page
+      // hand-rolls its own call instead of using that client.
+      const res = await apiFetch<{ data: Webhook[] }>("/v1/webhooks");
+      setWebhooks(res.data);
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -346,11 +331,11 @@ function WebhooksSection(): ReactNode {
     setCreating(true);
     setCreateError(null);
     try {
-      const created = await apiFetch<Webhook>("/v1/webhooks", {
+      const created = await apiFetch<{ data: Webhook }>("/v1/webhooks", {
         method: "POST",
         body: JSON.stringify({ url: newUrl.trim(), events: Array.from(selectedEvents) }),
       });
-      setWebhooks((prev) => [created, ...prev]);
+      setWebhooks((prev) => [created.data, ...prev]);
       setNewUrl("");
       setSelectedEvents(new Set());
       setShowForm(false);
@@ -533,8 +518,8 @@ function ApiAccessSection(): ReactNode {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch<ApiKey[]>("/v1/api-keys");
-      setApiKeys(data);
+      const res = await apiFetch<{ data: ApiKey[] }>("/v1/api-keys");
+      setApiKeys(res.data);
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -550,11 +535,14 @@ function ApiAccessSection(): ReactNode {
     if (!confirm("Generate a new API key? Existing keys will remain valid.")) return;
     setGenerating(true);
     try {
-      const created = await apiFetch<ApiKey>("/v1/api-keys", {
+      // `permissions` is now optional server-side and defaults to
+      // least-privilege (send/read/analytics). This call used to 422 every
+      // time because the field was required and never sent.
+      const res = await apiFetch<{ data: ApiKey }>("/v1/api-keys", {
         method: "POST",
         body: JSON.stringify({ name: "Default" }),
       });
-      setApiKeys((prev) => [created, ...prev]);
+      setApiKeys((prev) => [res.data, ...prev]);
     } catch (err) {
       setError(errMsg(err));
     } finally {
@@ -563,6 +551,10 @@ function ApiAccessSection(): ReactNode {
   }
 
   async function copyKey(key: ApiKey): Promise<void> {
+    // Only a just-created key carries the full secret. The list endpoint
+    // returns `keyPrefix` alone — by design, the key is shown once and can
+    // never be retrieved again — so there is nothing to copy for older keys.
+    if (!key.key) return;
     try {
       await navigator.clipboard.writeText(key.key);
       setCopiedId(key.id);
@@ -632,12 +624,19 @@ function ApiAccessSection(): ReactNode {
                       as="code"
                       className="rounded bg-surface-raised border border-border px-2 py-0.5 text-xs font-mono text-content"
                     >
-                      {maskKey(key.key)}
+                      {key.key ? maskKey(key.key) : `${key.keyPrefix}…`}
                     </Box>
+                    {key.key && (
+                      <Text variant="caption" className="text-amber-700">
+                        Copy it now — it won&apos;t be shown again
+                      </Text>
+                    )}
                   </Box>
                   <Text variant="caption" className="text-content-subtle">
                     Created {formatDate(key.createdAt)}
-                    {key.lastUsed ? ` · Last used ${formatDate(key.lastUsed)}` : " · Never used"}
+                    {key.lastUsedAt
+                      ? ` · Last used ${formatDate(key.lastUsedAt)}`
+                      : " · Never used"}
                   </Text>
                 </Box>
                 <Button
@@ -679,7 +678,7 @@ export default function IntegrationsPage(): ReactNode {
         </Box>
 
         {/* Webhooks + API Access — Pro plan and above */}
-        <PlanGate feature="ai_agent" required="pro" showUpgrade={false}>
+        <PlanGate feature="ai_agent" showUpgrade={false}>
           <Box className="space-y-6">
             <WebhooksSection />
             <ApiAccessSection />

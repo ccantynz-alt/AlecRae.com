@@ -14,6 +14,15 @@
 // ---------------------------------------------------------------------------
 
 export interface ScanResult {
+  /**
+   * True ONLY when a scan actually ran and found nothing (status "clean").
+   * A skipped, errored, or timed-out scan is NOT clean — nothing looked at
+   * the file, and reporting `clean: true` for it is the same fabricated-
+   * verdict class issue #141 removed from the attachments UI. Callers
+   * deciding whether to BLOCK a send should use {@link isSafe} (which only
+   * blocks on detected threats — fail-open by policy); callers REPORTING a
+   * verdict must read `status`, never this field alone.
+   */
   clean: boolean;
   detections: number;
   totalEngines: number;
@@ -166,7 +175,7 @@ export async function scanAttachment(
   if (!apiKey) {
     console.warn(`[virus-scanner] VIRUSTOTAL_API_KEY not set. Skipping scan for "${filename}".`);
     return {
-      clean: true,
+      clean: false, // nothing scanned this file — not a clean verdict
       detections: 0,
       totalEngines: 0,
       threats: [],
@@ -182,7 +191,7 @@ export async function scanAttachment(
       `[virus-scanner] File "${filename}" (${(buffer.length / 1024 / 1024).toFixed(1)}MB) exceeds 32MB limit. Skipping scan.`,
     );
     return {
-      clean: true,
+      clean: false, // nothing scanned this file — not a clean verdict
       detections: 0,
       totalEngines: 0,
       threats: [],
@@ -207,7 +216,7 @@ export async function scanAttachment(
       error instanceof Error ? error.message : error,
     );
     return {
-      clean: true,
+      clean: false, // nothing scanned this file — not a clean verdict
       detections: 0,
       totalEngines: 0,
       threats: [],
@@ -219,7 +228,12 @@ export async function scanAttachment(
 }
 
 /**
- * Check if a scan result indicates the file is safe.
+ * Should the send proceed? Blocks only on DETECTED threats — an unscanned
+ * file (skipped/error/pending) passes, which is a deliberate fail-open:
+ * with no VIRUSTOTAL_API_KEY configured, failing closed would refuse every
+ * attachment in production. This function answers "block or not"; it does
+ * NOT mean the file was verified clean — that claim belongs to
+ * `result.status === "clean"` alone.
  */
 export function isSafe(result: ScanResult): boolean {
   return result.detections === 0;
@@ -324,7 +338,7 @@ async function uploadAndPoll(
     `[virus-scanner] Analysis timed out for "${filename}". Allowing send.`,
   );
   return {
-    clean: true,
+    clean: false, // nothing scanned this file — not a clean verdict
     detections: 0,
     totalEngines: 0,
     threats: [],

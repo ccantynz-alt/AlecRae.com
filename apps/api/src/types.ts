@@ -1,9 +1,40 @@
 import { z } from "zod";
 
+// --- Header-injection safety ---
+//
+// Anything below that ends up inside an RFC 5322 header line must not be able
+// to introduce a new one. `buildRawMessage()` writes `subject` and recipient
+// display names straight into `Subject:`, `From:`, `To:`, `Cc:` and
+// `Reply-To:` lines, and the result is DKIM-signed and relayed from our own
+// sending IP (or pushed through the customer's Gmail on the connected-account
+// path). A subject of "Hi\r\nBcc: victim@example.com" therefore injected a
+// real Bcc header — hidden recipients sent under our signature, which is the
+// classic way a sending domain earns a blocklisting.
+//
+// `validateCustomHeaders()` in @alecrae/mta already guarded `headers`, and
+// buildRawMessage's own comment says custom headers are "guaranteed safe by
+// the validator" — but nothing guarded subject or display names, which are
+// written above that comment. Enforced here, at the schema boundary, so every
+// send path and every future caller inherits it rather than each remembering.
+/** Matches only strings free of CR, LF and NUL — i.e. safe on one header line. */
+// Matching control characters is the entire purpose of this pattern — they are
+// exactly what a header-injection payload uses — so the rule does not apply.
+// eslint-disable-next-line no-control-regex
+const HEADER_SAFE_RE = /^[^\r\n\u0000]*$/;
+
+function headerSafeString(max: number, label: string): z.ZodString {
+  // `.regex()` rather than `.refine()` so the result stays a ZodString and
+  // needs no cast — the Forbidden List rules out `as unknown as X`.
+  return z
+    .string()
+    .max(max)
+    .regex(HEADER_SAFE_RE, `${label} must not contain line breaks or null bytes`);
+}
+
 // --- Email Address ---
 export const EmailAddressSchema = z.object({
   email: z.string().email(),
-  name: z.string().optional(),
+  name: headerSafeString(255, "Display name").optional(),
 });
 
 export type EmailAddress = z.infer<typeof EmailAddressSchema>;
@@ -25,7 +56,7 @@ export const SendMessageSchema = z.object({
   cc: z.array(EmailAddressSchema).max(50).optional(),
   bcc: z.array(EmailAddressSchema).max(50).optional(),
   replyTo: EmailAddressSchema.optional(),
-  subject: z.string().max(998).optional(),
+  subject: headerSafeString(998, "Subject").optional(),
   text: z.string().optional(),
   html: z.string().optional(),
   template_id: z.string().max(255).optional(),

@@ -621,7 +621,7 @@ export default function AgentPage(): React.ReactNode {
   const agentEnabled = status?.enabled ?? false;
 
   return (
-    <PlanGate feature="ai_agent" required="pro">
+    <PlanGate feature="ai_agent">
       <PageLayout
         title="AI Inbox Agent"
         description="Your AI works while you sleep — processes, triages and drafts replies overnight."

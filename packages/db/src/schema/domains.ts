@@ -58,7 +58,13 @@ export const domains = pgTable(
     dkimVerified: boolean("dkim_verified").notNull().default(false),
     dkimSelector: text("dkim_selector"),
     dkimPublicKey: text("dkim_public_key"),
-    dkimPrivateKey: text("dkim_private_key"), // Encrypted at rest
+    // Sealed at rest with AES-256-GCM via `sealSecret` (@alecrae/crypto).
+    // Write ONLY through sealSecret and read ONLY through openSecret/
+    // openSecretSafe — never touch this column raw. Legacy plaintext rows
+    // written before issue #160 decrypt transparently and self-heal on the
+    // next write. This comment used to claim encryption that did not exist,
+    // which is why nobody noticed the raw PEM sitting in the column.
+    dkimPrivateKey: text("dkim_private_key"),
     dmarcVerified: boolean("dmarc_verified").notNull().default(false),
     dmarcPolicy: text("dmarc_policy"),
     dmarcRecord: text("dmarc_record"),

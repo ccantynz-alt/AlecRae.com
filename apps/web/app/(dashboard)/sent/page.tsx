@@ -98,8 +98,12 @@ export default function SentPage(): React.ReactNode {
         preview: msg.preview || "",
         sentAt: msg.sentAt ?? msg.createdAt,
         status: msg.status,
-        opened: msg.tags.includes("opened"),
-        openedAt: null,
+        // Real first-open time from the tracking events. This used to read
+        // `tags.includes("opened")` — a tag nothing has ever written, so the
+        // badge said "Not opened" for every message forever, including ones
+        // the recipient had opened.
+        opened: msg.openedAt !== null && msg.openedAt !== undefined,
+        openedAt: msg.openedAt ?? null,
       }));
       setEmails(items);
     } catch (err) {

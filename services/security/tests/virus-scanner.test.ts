@@ -152,37 +152,45 @@ describe("virus-scanner", () => {
     expect(mockFetch).toHaveBeenCalledTimes(3);
   }, 15_000); // Extended timeout for the sleep(5000) in poll loop
 
-  it("should degrade gracefully when API key is missing", async () => {
+  // The three degradation cases below pin BOTH halves of the policy: the
+  // send still proceeds (isSafe — deliberate fail-open when nothing could
+  // scan), and the result is NEVER reported as a clean verdict, because no
+  // scan happened. `clean: true` for an unscanned file was the fabricated-
+  // verdict class of issue #141.
+  it("should degrade gracefully when API key is missing — unscanned, not clean", async () => {
     delete process.env["VIRUSTOTAL_API_KEY"];
 
-    const { scanAttachment } = await import("../src/virus-scanner.js");
+    const { scanAttachment, isSafe } = await import("../src/virus-scanner.js");
     const buffer = Buffer.from("some file content no key");
     const result = await scanAttachment(buffer, "report.pdf");
 
-    expect(result.clean).toBe(true);
+    expect(result.clean).toBe(false);
     expect(result.status).toBe("skipped");
+    expect(isSafe(result)).toBe(true);
     // Ensure no fetch was called in THIS test (only check calls after clearAllMocks)
     expect(mockFetch).toHaveBeenCalledTimes(0);
   });
 
-  it("should degrade gracefully when VirusTotal API is unreachable", async () => {
+  it("should degrade gracefully when VirusTotal API is unreachable — unscanned, not clean", async () => {
     mockFetch.mockRejectedValueOnce(new Error("Network unreachable"));
 
-    const { scanAttachment } = await import("../src/virus-scanner.js");
+    const { scanAttachment, isSafe } = await import("../src/virus-scanner.js");
     const buffer = Buffer.from("file during outage");
     const result = await scanAttachment(buffer, "document.pdf");
 
-    expect(result.clean).toBe(true);
+    expect(result.clean).toBe(false);
     expect(result.status).toBe("error");
+    expect(isSafe(result)).toBe(true);
   });
 
-  it("should skip scan for files larger than 32MB", async () => {
-    const { scanAttachment } = await import("../src/virus-scanner.js");
+  it("should skip scan for files larger than 32MB — unscanned, not clean", async () => {
+    const { scanAttachment, isSafe } = await import("../src/virus-scanner.js");
     const largeBuffer = Buffer.alloc(33 * 1024 * 1024);
     const result = await scanAttachment(largeBuffer, "huge-video.mp4");
 
-    expect(result.clean).toBe(true);
+    expect(result.clean).toBe(false);
     expect(result.status).toBe("skipped");
+    expect(isSafe(result)).toBe(true);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 

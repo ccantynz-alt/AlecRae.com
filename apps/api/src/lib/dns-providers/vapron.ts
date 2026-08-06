@@ -110,11 +110,31 @@ export async function configureVapron(records: AutoConfigRecord[]): Promise<Auto
     const zones = await vapron.dns.listZones();
     zone = findZone(zones, firstRecord.name);
   } catch (err) {
-    console.error("[dns-autoconfig:vapron] zone lookup failed:", err);
+    // This is the KNOWN-BROKEN transport, not a transient outage, so the
+    // message says so rather than inviting a pointless retry.
+    //
+    // When Craig supplied working Vapron docs, email/AI/storage were rewritten
+    // onto the real REST API at vapron.ai/api/platform. The DNS methods were
+    // deliberately left on the original transport — api.vapron.ai/api/trpc
+    // with a tRPC envelope — which was guessed against unpublished docs and has
+    // never been confirmed to exist. Guessing is what broke it the first time,
+    // so it was not guessed at again. See CLAUDE.md issue #83.
+    console.error(
+      "[dns-autoconfig:vapron] zone lookup failed. The DNS methods still use the " +
+        "unverified tRPC transport (see lib/vapron.ts) — this is expected to fail " +
+        "until the real Vapron DNS API shape is known. Underlying error:",
+      err,
+    );
     return {
       success: false,
       records: [],
-      error: "Could not reach Vapron DNS to look up the zone — see server logs.",
+      error:
+        "Automatic DNS setup for Vapron isn't working yet — the integration was " +
+        "built against an unpublished API and has never been verified. This is a " +
+        "known gap, not a temporary outage, so retrying will not help. " +
+        "Your DNS records are ready and correct: copy them from the list on this " +
+        "page and add them in Vapron's DNS panel by hand. Everything else about " +
+        "the domain — verification, DKIM, sending — works normally once they are in.",
     };
   }
 

@@ -925,8 +925,8 @@ function RelationshipsSection(): ReactNode {
               Relationship Insights
             </Text>
             <Text variant="body-sm" className="text-content-subtle">
-              AI-derived contact intelligence — strength, cadence, and fading
-              relationships worth reviving.
+              Contact strength, cadence, and fading relationships worth reviving.
+              Not generating yet — see below.
             </Text>
           </Box>
           <Button
@@ -945,11 +945,24 @@ function RelationshipsSection(): ReactNode {
         {!loading && error && (
           <ErrorBanner message={error} onRetry={() => void loadFirstPage(fadingOnly)} />
         )}
+        {/*
+          This said insights "build up automatically as you send and receive
+          email". Nothing builds them up: relationship_insights is a read-only
+          table — no code anywhere inserts into it, so the panel is empty for
+          every user, permanently, and that message asks them to wait for
+          something that will never arrive.
+
+          The analysis engine to populate it does exist and is unused
+          (@alecrae/ai-engine/relationships). Wiring it is the same per-email
+          dispatch decision as CLAUDE.md issue #132 — it needs a per-account
+          opt-in store and a cost model, which is Craig's call, so the copy is
+          made honest rather than the feature half-built.
+        */}
         {!loading && !error && insights.length === 0 && (
           <EmptyHint>
             {fadingOnly
-              ? "No fading relationships — nice work staying in touch."
-              : "No relationship insights yet. They build up automatically as you send and receive email."}
+              ? "No fading relationships to show."
+              : "Relationship insights aren't being generated yet — this feature isn't finished. Nothing will appear here for now."}
           </EmptyHint>
         )}
         {!loading && !error && insights.length > 0 && (
@@ -1137,7 +1150,7 @@ export default function AiIntelligencePage(): ReactNode {
       title="AI Intelligence"
       description="Priority scoring, sentiment, smart replies, action prediction, relationship insights, and a writing coach — all in one workbench."
     >
-      <PlanGate feature="context_intelligence" required="pro">
+      <PlanGate feature="context_intelligence">
         <AiIntelligenceContent />
       </PlanGate>
     </PageLayout>

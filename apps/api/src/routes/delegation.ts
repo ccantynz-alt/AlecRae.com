@@ -1,11 +1,11 @@
 /**
  * Email Delegation & Shared Drafts Routes
  *
- * POST   /v1/delegations              — Create a delegation
- * GET    /v1/delegations              — List delegations (for delegator or delegate)
- * PUT    /v1/delegations/:id          — Update delegation (permissions, scope, isActive)
- * DELETE /v1/delegations/:id          — Revoke delegation
- * GET    /v1/delegations/inbox        — Get emails delegated to current user (placeholder)
+ * POST   /v1/delegation              — Create a delegation
+ * GET    /v1/delegation              — List delegations (for delegator or delegate)
+ * PUT    /v1/delegation/:id          — Update delegation (permissions, scope, isActive)
+ * DELETE /v1/delegation/:id          — Revoke delegation
+ * GET    /v1/delegation/inbox        — Get emails delegated to current user (placeholder)
  *
  * POST   /v1/shared-drafts            — Create a shared draft
  * GET    /v1/shared-drafts            — List shared drafts (filter by status)
@@ -18,7 +18,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, or, desc, lt } from "drizzle-orm";
+import { eq, and, or, desc, lt, gt, isNull } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -101,7 +101,7 @@ function generateId(): string {
 
 const delegationRouter = new Hono();
 
-// POST /v1/delegations — Create a delegation
+// POST /v1/delegation — Create a delegation
 delegationRouter.post(
   "/",
   requireScope("messages:write"),
@@ -167,7 +167,7 @@ delegationRouter.post(
   },
 );
 
-// GET /v1/delegations — List delegations (for delegator or delegate)
+// GET /v1/delegation — List delegations (for delegator or delegate)
 delegationRouter.get(
   "/",
   requireScope("messages:read"),
@@ -224,7 +224,7 @@ delegationRouter.get(
   },
 );
 
-// PUT /v1/delegations/:id — Update delegation (permissions, scope, isActive)
+// PUT /v1/delegation/:id — Update delegation (permissions, scope, isActive)
 delegationRouter.put(
   "/:id",
   requireScope("messages:write"),
@@ -314,7 +314,7 @@ delegationRouter.put(
   },
 );
 
-// DELETE /v1/delegations/:id — Revoke delegation
+// DELETE /v1/delegation/:id — Revoke delegation
 delegationRouter.delete(
   "/:id",
   requireScope("messages:write"),
@@ -365,7 +365,7 @@ delegationRouter.delete(
   },
 );
 
-// GET /v1/delegations/inbox — Get emails delegated to current user (placeholder)
+// GET /v1/delegation/inbox — Get emails delegated to current user (placeholder)
 delegationRouter.get(
   "/inbox",
   requireScope("messages:read"),
@@ -387,6 +387,15 @@ delegationRouter.get(
           eq(emailDelegations.delegateUserId, userId),
           eq(emailDelegations.accountId, auth.accountId),
           eq(emailDelegations.isActive, true),
+          // `expiresAt` was accepted, stored and echoed back, and compared
+          // against the clock NOWHERE (issue #73f) — so a delegation granted
+          // "until Friday" still granted access indefinitely. Someone who set
+          // an expiry had every reason to believe access ended; it never did.
+          // NULL means no expiry, which is a legitimate open-ended grant.
+          or(
+            isNull(emailDelegations.expiresAt),
+            gt(emailDelegations.expiresAt, new Date()),
+          ),
         ),
       )
       .orderBy(desc(emailDelegations.createdAt));
@@ -825,6 +834,32 @@ sharedDraftsRouter.post(
           },
         },
         409,
+      );
+    }
+
+    // Approval had NO reviewer check (issue #73e): the `reviewers` array was
+    // stored and consulted nowhere, so anyone in the workspace with
+    // messages:write could approve — including the author approving their own
+    // draft. An approval step that anyone can satisfy is not a review.
+    //
+    // Enforced only when reviewers were actually named, because that is the
+    // one case where intent is unambiguous. An empty list expresses no policy,
+    // and inventing one here would break workflows that submit for review
+    // without assigning anyone. Who may approve an unassigned draft is a
+    // product decision, not something to settle in an authorization check.
+    const approver = auth.userId ?? auth.accountId;
+    const assigned = existing.reviewers;
+    if (assigned.length > 0 && !assigned.includes(approver)) {
+      return c.json(
+        {
+          error: {
+            type: "forbidden",
+            message:
+              "Only an assigned reviewer can approve this draft.",
+            code: "not_a_reviewer",
+          },
+        },
+        403,
       );
     }
 

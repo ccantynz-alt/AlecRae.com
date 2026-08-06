@@ -37,6 +37,13 @@ const mockDb = {
   where: vi.fn().mockReturnThis(),
   limit: vi.fn().mockResolvedValue([]),
   orderBy: vi.fn().mockReturnThis(),
+  // The upload path now enforces storage quota (checkStorageQuota) and counts
+  // the upload (incrementStorageUsage, which issues an UPDATE). `limit`
+  // resolving to [] means the account lookup finds nothing, so the quota check
+  // takes its free-tier fallback and allows these small test uploads — the
+  // dedicated quota behaviour lives in files-storage-quota.test.ts.
+  update: vi.fn().mockReturnThis(),
+  set: vi.fn().mockReturnThis(),
   insert: vi.fn().mockReturnThis(),
   values: vi.fn().mockImplementation((row: Record<string, unknown>) => {
     insertedRows.push(row);

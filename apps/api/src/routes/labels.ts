@@ -17,7 +17,7 @@ import {
   validateBody,
   getValidatedBody,
 } from "../middleware/validator.js";
-import { getDatabase, labels, emailLabels } from "@alecrae/db";
+import { getDatabase, labels, emailLabels, emails } from "@alecrae/db";
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -434,24 +434,45 @@ labelsRouter.post(
       );
     }
 
+    // The LABEL's ownership was checked above; the EMAILS' was not, so a
+    // caller could attach their own label to any message id they could guess,
+    // including another account's. Harmless-looking — a label is only a
+    // pointer — but it writes a row keyed to someone else's mail, and it makes
+    // "does this id exist" answerable by whether the count comes back.
+    // Resolve the ids through the caller's own account instead of trusting the
+    // body, exactly as bulk-actions does.
+    const owned = await db
+      .select({ id: emails.id })
+      .from(emails)
+      .where(
+        and(
+          inArray(emails.id, input.emailIds),
+          eq(emails.accountId, auth.accountId),
+        ),
+      );
+
     const now = new Date();
-    const insertValues = input.emailIds.map((emailId) => ({
+    const insertValues = owned.map((row) => ({
       id: generateId(),
-      emailId,
+      emailId: row.id,
       labelId,
       appliedAt: now,
     }));
 
     // Use ON CONFLICT DO NOTHING to handle duplicates gracefully
-    await db
-      .insert(emailLabels)
-      .values(insertValues)
-      .onConflictDoNothing({ target: [emailLabels.emailId, emailLabels.labelId] });
+    if (insertValues.length > 0) {
+      await db
+        .insert(emailLabels)
+        .values(insertValues)
+        .onConflictDoNothing({ target: [emailLabels.emailId, emailLabels.labelId] });
+    }
 
     return c.json({
       data: {
         labelId,
-        emailIds: input.emailIds,
+        // What was actually labelled, not what was asked for. Echoing the
+        // request back would report success for ids the caller does not own.
+        emailIds: owned.map((row) => row.id),
         applied: true,
       },
     });

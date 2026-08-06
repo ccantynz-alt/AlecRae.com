@@ -11,7 +11,7 @@
  * No live DB needed — these helpers are pure on their inputs.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 
 // Mock BullMQ + queue config so importing dlq-processor never opens sockets.
 vi.mock("bullmq", () => ({
@@ -35,6 +35,22 @@ vi.mock("@alecrae/ai-engine/calendar/slot-detector", () => ({
 vi.mock("@alecrae/ai-engine/calendar/slot-suggester", () => ({
   suggestSlotsForCompose: vi.fn(),
 }));
+
+// Each test below dynamically imports a route module, and those pull in large
+// dependency graphs — `snooze.js` and `import.js` each take ~2s to load cold.
+// Only the FIRST test touching each module pays that, so under a parallel
+// full-suite run one arbitrary test would blow the 5s default and fail while
+// passing in isolation. Warming the cache here puts the cost on no individual
+// test. Same fix, same reason, as billing-dunning-notifications.test.ts.
+beforeAll(async () => {
+  await Promise.all([
+    import("../src/routes/snooze.js"),
+    import("../src/routes/import.js"),
+    import("../src/routes/calendar.js"),
+    import("../src/routes/ai-rules.js"),
+    import("../src/lib/dlq-processor.js"),
+  ]);
+}, 60_000);
 
 describe("snooze.ts — resolveUndoFromMetadata", () => {
   // 15s: the first dynamic import of snooze.js pays the whole module-graph

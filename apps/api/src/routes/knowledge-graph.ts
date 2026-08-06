@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, lt, gte, sql, or, ilike, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, sql, or, ilike, inArray } from "drizzle-orm";
+import { decodeKeysetCursor, encodeKeysetCursor, seekCondition, parseNumber, parseDate } from "../lib/keyset-cursor.js";
 import {
   getDatabase,
   knowledgeEntities,
@@ -259,23 +260,61 @@ knowledgeGraphRouter.get(
     const conditions = [eq(knowledgeEntities.accountId, accountId)];
     if (query.type) conditions.push(eq(knowledgeEntities.entityType, query.type));
     if (query.search) conditions.push(ilike(knowledgeEntities.name, `%${query.search}%`));
-    if (query.cursor) conditions.push(lt(knowledgeEntities.id, query.cursor));
 
     const orderCol = query.sortBy === "recent" ? knowledgeEntities.lastSeenAt : knowledgeEntities.mentionCount;
+
+    // The cursor used to filter `id < cursor` while ordering by mentionCount or
+    // lastSeenAt — two columns with no relationship, so each page dropped and
+    // repeated an arbitrary subset (issue #74g). The filter must match the
+    // ordering, with the id only as a tiebreaker: mentionCount especially is
+    // heavily tied, and without it every row sharing the boundary value is
+    // lost or duplicated.
+    // Branch on the sort column rather than passing the raw string to a union
+    // of a timestamp and an integer column — they need different value types,
+    // and coercing at the boundary is what keeps the comparison meaningful.
+    const cursor = decodeKeysetCursor(query.cursor);
+    if (cursor) {
+      const seek =
+        query.sortBy === "recent"
+          ? seekCondition(
+              knowledgeEntities.lastSeenAt,
+              parseDate(cursor.value),
+              knowledgeEntities.id,
+              cursor.id,
+            )
+          : seekCondition(
+              knowledgeEntities.mentionCount,
+              parseNumber(cursor.value),
+              knowledgeEntities.id,
+              cursor.id,
+            );
+      if (seek) conditions.push(seek);
+    }
 
     const rows = await db
       .select()
       .from(knowledgeEntities)
       .where(and(...conditions))
-      .orderBy(desc(orderCol))
+      // Tiebreak in the ORDER BY too, or rows sharing a sort value come back in
+      // an unstable order and the cursor points into a page that has reshuffled.
+      .orderBy(desc(orderCol), desc(knowledgeEntities.id))
       .limit(query.limit + 1);
 
     const hasMore = rows.length > query.limit;
     if (hasMore) rows.pop();
 
+    const last = rows[rows.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? encodeKeysetCursor(
+            query.sortBy === "recent" ? last.lastSeenAt : last.mentionCount,
+            last.id,
+          )
+        : undefined;
+
     return c.json({
       data: rows,
-      pagination: { hasMore, nextCursor: hasMore ? rows[rows.length - 1]?.id : undefined },
+      pagination: { hasMore, nextCursor },
     });
   },
 );
@@ -417,21 +456,38 @@ knowledgeGraphRouter.get(
     const conditions = [eq(knowledgeRelationships.accountId, accountId)];
     if (query.type) conditions.push(eq(knowledgeRelationships.relationshipType, query.type));
     if (query.minStrength !== undefined) conditions.push(gte(knowledgeRelationships.strength, query.minStrength));
-    if (query.cursor) conditions.push(lt(knowledgeRelationships.id, query.cursor));
+
+    // Same mismatch as /entities: ordered by strength, paginated by id.
+    const cursor = decodeKeysetCursor(query.cursor);
+    if (cursor) {
+      const seek = seekCondition(
+        knowledgeRelationships.strength,
+        parseNumber(cursor.value),
+        knowledgeRelationships.id,
+        cursor.id,
+      );
+      if (seek) conditions.push(seek);
+    }
 
     const rows = await db
       .select()
       .from(knowledgeRelationships)
       .where(and(...conditions))
-      .orderBy(desc(knowledgeRelationships.strength))
+      .orderBy(desc(knowledgeRelationships.strength), desc(knowledgeRelationships.id))
       .limit(query.limit + 1);
 
     const hasMore = rows.length > query.limit;
     if (hasMore) rows.pop();
 
+    const last = rows[rows.length - 1];
+
     return c.json({
       data: rows,
-      pagination: { hasMore, nextCursor: hasMore ? rows[rows.length - 1]?.id : undefined },
+      pagination: {
+        hasMore,
+        nextCursor:
+          hasMore && last ? encodeKeysetCursor(last.strength, last.id) : undefined,
+      },
     });
   },
 );

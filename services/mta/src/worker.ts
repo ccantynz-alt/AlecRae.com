@@ -16,6 +16,7 @@
 import { Worker, Queue, type Job } from "bullmq";
 import { eq, and } from "drizzle-orm";
 import { getDatabase, emails, deliveryResults, domains, suppressionLists, events, webhooks as webhooksTable } from "@alecrae/db";
+import { openSecretSafe } from "@alecrae/crypto";
 import { getMtaHostname } from "./config.js";
 import { signMessage, addSignatureToMessage } from "./dkim/signer.js";
 import { SmtpClient } from "./smtp/client.js";
@@ -24,6 +25,9 @@ import { DeliveryOptimizer } from "./delivery/optimizer.js";
 import { recordEmailSent, recordEmailSendDuration, recordActiveConnection } from "@alecrae/shared";
 import type { QueuedEmail, DkimSignOptions } from "./types.js";
 import { classifyBounce, type BounceVerdict } from "./bounce/classifier.js";
+import { buildReturnPath } from "./bounce/return-path.js";
+import { WarmupGate, warmupGateOptionsFromEnv } from "./delivery/warmup-gate.js";
+import IORedis from "ioredis";
 
 /**
  * classifier.ts is fully built (DSN enhanced-status + SMTP-code + keyword
@@ -86,6 +90,17 @@ export interface WorkerConfig {
   useRelay: boolean;
 }
 
+/**
+ * Whether an unsigned message may leave the building.
+ *
+ * Explicit opt-out only — an unset variable means DKIM is required, because
+ * the dangerous default is the permissive one. Read per call rather than
+ * captured at module load so an operator can change it without a redeploy.
+ */
+export function requireDkim(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env["MTA_REQUIRE_DKIM"]?.trim().toLowerCase() !== "false";
+}
+
 const DEFAULT_WORKER_CONFIG: WorkerConfig = {
   redisUrl: process.env["REDIS_URL"] ?? "redis://localhost:6379",
   queueName: process.env["MTA_QUEUE_NAME"] ?? "alecrae-outbound",
@@ -101,12 +116,34 @@ export class MtaWorker {
   private readonly config: WorkerConfig;
   private readonly optimizer: DeliveryOptimizer;
   private readonly relayClient: RelayClient | null;
+  /**
+   * Enforces the IP warmup ramp. The optimizer's per-ISP throttles are a
+   * steady-state rate limit; this is the day-by-day volume ceiling that keeps
+   * a cold IP from burning its reputation in the first week.
+   */
+  private readonly warmupGate: WarmupGate;
   private shuttingDown = false;
   private maintenanceInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config?: Partial<WorkerConfig>) {
     this.config = { ...DEFAULT_WORKER_CONFIG, ...config };
     this.optimizer = new DeliveryOptimizer();
+
+    // Counters live in the same Redis the queue already uses, so the caps
+    // hold across every worker process rather than per-process.
+    const warmupOptions = warmupGateOptionsFromEnv(
+      process.env["MTA_PUBLIC_IP"]?.trim() || this.config.localHostname,
+    );
+    this.warmupGate = new WarmupGate({
+      ...warmupOptions,
+      redis: new IORedis(this.config.redisUrl, { maxRetriesPerRequest: null }),
+    });
+    if (!warmupOptions.enabled) {
+      console.warn(
+        "[mta-worker] IP warmup enforcement is DISABLED (MTA_WARMUP_ENABLED=false). " +
+          "Only correct for an IP with established sending reputation.",
+      );
+    }
 
     // Initialise relay client if configured
     if (this.config.useRelay) {
@@ -233,14 +270,36 @@ export class MtaWorker {
       .where(eq(domains.domain, email.domain))
       .limit(1);
 
-    // ── 3. Sign with DKIM if keys are available ─────────────────────────
+    // ── 3. Sign with DKIM ───────────────────────────────────────────────
+    // Signing used to fail OPEN: a domain with no key, or a signing error,
+    // logged a warning and sent the message unsigned anyway. That is not a
+    // survivable default. Gmail and Yahoo require DKIM from bulk senders
+    // outright, and alecrae.com publishes DMARC p=quarantine — under which an
+    // unsigned message has only SPF to fall back on, and SPF breaks on any
+    // forwarded path (mailing lists, .forward rules) where DKIM would have
+    // survived. Unsigned mail damages the reputation of every customer on the
+    // IP, not just the one message.
     let signedMessage = email.rawMessage;
+    let dkimSigned = false;
 
-    if (domainRecord?.dkimPrivateKey && domainRecord?.dkimSelector) {
+    // Keys are sealed at rest (issue #160). `openSecretSafe` passes legacy
+    // plaintext rows through unchanged and returns null rather than throwing
+    // on an undecryptable value — a key we cannot open is a key we do not
+    // have, which routes into the hold-don't-send-unsigned branch below.
+    // Throwing here would fail the job into the DLQ instead.
+    const dkimPrivateKey = openSecretSafe(domainRecord?.dkimPrivateKey);
+    if (domainRecord?.dkimPrivateKey && !dkimPrivateKey) {
+      console.error(
+        `[mta-worker] DKIM key for ${domainRecord.domain} could not be decrypted ` +
+          `— holding the message. Check JWT_SECRET has not been rotated.`,
+      );
+    }
+
+    if (dkimPrivateKey && domainRecord?.dkimSelector) {
       const dkimOptions: DkimSignOptions = {
         domain: domainRecord.domain,
         selector: domainRecord.dkimSelector,
-        privateKey: domainRecord.dkimPrivateKey,
+        privateKey: dkimPrivateKey,
         algorithm: "rsa-sha256",
         canonicalization: "relaxed/relaxed",
         headersToSign: [
@@ -261,19 +320,46 @@ export class MtaWorker {
           signedMessage,
           signResult.value,
         );
+        dkimSigned = true;
         console.log(
           `[mta-worker] DKIM signed for ${domainRecord.domain} ` +
             `(selector=${domainRecord.dkimSelector})`,
         );
       } else {
-        console.warn(
-          `[mta-worker] DKIM signing failed, sending unsigned: ${signResult.error.message}`,
+        console.error(
+          `[mta-worker] DKIM signing FAILED for ${domainRecord.domain}: ${signResult.error.message}`,
         );
       }
     } else {
-      console.warn(
-        `[mta-worker] No DKIM keys for domain ${email.domain}, sending unsigned`,
+      console.error(
+        `[mta-worker] No DKIM keys configured for domain ${email.domain}`,
       );
+    }
+
+    if (!dkimSigned && requireDkim()) {
+      // DEFERRED, not bounced: the message is still perfectly deliverable once
+      // a key is configured, and a bounce would lose it. This is retryable by
+      // an operator action, which is exactly what deferral is for.
+      console.error(
+        `[mta-worker] Refusing to send email ${email.id} unsigned (domain=${email.domain}). ` +
+          `Configure DKIM for this domain, or set MTA_REQUIRE_DKIM=false to send unsigned ` +
+          `— which risks the sending reputation of every domain on this IP.`,
+      );
+      const now = new Date();
+      await db
+        .update(deliveryResults)
+        .set({
+          status: "deferred",
+          remoteResponse:
+            "Held: no valid DKIM signature. Sending unsigned would fail DMARC on forwarded paths and breaches Gmail/Yahoo bulk-sender requirements.",
+          lastAttemptAt: now,
+        })
+        .where(eq(deliveryResults.emailId, email.id));
+      await db
+        .update(emails)
+        .set({ status: "queued", updatedAt: now })
+        .where(eq(emails.id, email.id));
+      return;
     }
 
     // ── 3b. Check suppression list — skip recipients who have bounced/complained
@@ -287,6 +373,23 @@ export class MtaWorker {
       for (const s of suppressed) {
         suppressedSet.add(s.email.toLowerCase());
       }
+    }
+
+    // ── 3c. Envelope sender (Return-Path) ─────────────────────────────
+    // MAIL FROM was the message's own From: address, so asynchronous bounce
+    // DSNs went to the CUSTOMER's inbox and never reached our bounce
+    // processor — suppression only ever learned about synchronous rejections,
+    // and we would keep mailing addresses already reported dead. That is the
+    // clearest blocklisting signal there is. See bounce/return-path.ts for why
+    // the address is per-customer rather than one shared bounce domain
+    // (SPF + DMARC alignment). The From: header is untouched: only the SMTP
+    // envelope changes, which is exactly what Return-Path means.
+    const returnPath = buildReturnPath(email.id, domainRecord?.domain ?? email.domain, email.from);
+    if (returnPath === email.from) {
+      console.warn(
+        `[mta-worker] No bounce domain resolved for email ${email.id} (domain=${email.domain}) — ` +
+          `sending with From: as envelope sender, so async bounces will NOT be captured`,
+      );
     }
 
     // ── 4. Deliver to each recipient ──────────────────────────────────
@@ -321,14 +424,40 @@ export class MtaWorker {
                 eq(deliveryResults.recipientAddress, recipient),
               ),
             );
-        } else {
-          activeRecipients.push(recipient);
+          continue;
         }
+
+        // Warmup ramp: over-cap recipients are DEFERRED, never dropped —
+        // quota returns at UTC midnight, so the message is still deliverable.
+        const warmup = await this.warmupGate.reserve(recipient);
+        if (!warmup.allow) {
+          console.log(
+            `[mta-worker] Deferring ${recipient} — ${warmup.reason ?? "warmup cap"}`,
+          );
+          anyDeferred = true;
+          allBounced = false;
+          await db
+            .update(deliveryResults)
+            .set({
+              status: "deferred",
+              remoteResponse: `Deferred by IP warmup pacing: ${warmup.reason ?? "cap reached"}`,
+              lastAttemptAt: new Date(),
+            })
+            .where(
+              and(
+                eq(deliveryResults.emailId, email.id),
+                eq(deliveryResults.recipientAddress, recipient),
+              ),
+            );
+          continue;
+        }
+
+        activeRecipients.push(recipient);
       }
 
       if (activeRecipients.length > 0) {
         const relayResult = await this.relayClient.send(
-          email.from,
+          returnPath,
           activeRecipients,
           signedMessage,
         );
@@ -468,11 +597,38 @@ export class MtaWorker {
         continue;
       }
 
+      // Warmup ramp: defer rather than drop — the cap resets at UTC midnight,
+      // so an over-cap message is still perfectly deliverable tomorrow.
+      const warmup = await this.warmupGate.reserve(recipient);
+      if (!warmup.allow) {
+        console.log(
+          `[mta-worker] Deferring ${recipient} — ${warmup.reason ?? "warmup cap"}`,
+        );
+        anyDeferred = true;
+        allBounced = false;
+
+        await db
+          .update(deliveryResults)
+          .set({
+            status: "deferred",
+            remoteResponse: `Deferred by IP warmup pacing: ${warmup.reason ?? "cap reached"}`,
+            lastAttemptAt: new Date(),
+          })
+          .where(
+            and(
+              eq(deliveryResults.emailId, email.id),
+              eq(deliveryResults.recipientAddress, recipient),
+            ),
+          );
+
+        continue;
+      }
+
       const optimizerResult = await this.optimizer.deliverMessage(
         email.id,
         recipient,
         signedMessage,
-        email.from,
+        returnPath,
         transport,
         attemptNumber,
       );

@@ -13,7 +13,7 @@
  *  - Automatic schedule extension on bad signals, acceleration on good signals
  */
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import {
   getDatabase,
   warmupSessions,
@@ -531,7 +531,23 @@ export class WarmupOrchestrator {
    * Increment the sent counter for a domain's warm-up session.
    * Call this after successfully queuing an email.
    */
-  async recordSend(domainId: string): Promise<void> {
+  /**
+   * Record volume against the warm-up counter.
+   *
+   * `count` is the number of RECIPIENTS, not messages (issue #159c). One
+   * `POST /v1/messages` can address 500 people; recording it as 1 meant a
+   * day-one cap of ~20 was satisfied by 20 API calls carrying ten thousand
+   * recipients — the ramp measured the wrong thing entirely, and ISP caps
+   * are per-recipient.
+   *
+   * The increment is done in SQL (`sentToday + n`) rather than from the
+   * value read a moment ago: the previous read-then-write lost updates
+   * under concurrent sends, so the counter under-reported exactly when
+   * volume was highest. The MTA's own gate documents the same requirement
+   * (delivery/warmup-gate.ts) — it reserves atomically via Redis INCR.
+   */
+  async recordSend(domainId: string, count = 1): Promise<void> {
+    if (count <= 0) return;
     const session = await this.getActiveSession(domainId);
     if (!session || session.status !== "active") return;
 
@@ -541,8 +557,8 @@ export class WarmupOrchestrator {
     await db
       .update(warmupSessions)
       .set({
-        sentToday: session.sentToday + 1,
-        totalSent: session.totalSent + 1,
+        sentToday: sql`${warmupSessions.sentToday} + ${count}`,
+        totalSent: sql`${warmupSessions.totalSent} + ${count}`,
         updatedAt: new Date(),
       })
       .where(eq(warmupSessions.id, session.id));

@@ -158,7 +158,10 @@ Schema migrations are irreversible in production. Special rules apply:
 
 ## 8. Dependency Updates
 
-- Dependencies are monitored by OSV-Scanner and audit-ci (`.github/workflows/security.yml`)
+- Dependencies are monitored by `bun audit` and OSV-Scanner (`.github/workflows/security.yml`).
+  Unreviewed critical advisories fail the build; accepted ones carry a written
+  reason in `scripts/check-dependency-audit.ts`. (Before 2026-08-05 this said
+  "audit-ci", which could not run against a Bun lockfile and audited nothing.)
 - Routine patch-level updates (e.g., `1.2.3 → 1.2.4`) follow the standard change process
 - Major version upgrades follow the major change process if they alter behavior
 - New dependencies require Craig's authorization (CLAUDE.md Boss Rule #2)

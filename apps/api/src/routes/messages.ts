@@ -9,7 +9,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, desc, and, lt, sql } from "drizzle-orm";
+import { eq, desc, and, lt, sql, inArray } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -23,7 +23,7 @@ import type {
   PaginationParams,
   PaginatedResponse,
 } from "../types.js";
-import { getDatabase, emails, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts } from "@alecrae/db";
+import { getDatabase, emails, events, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts, emailLabels, labels } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
 import { ensureFreshAccessToken } from "../sync/engine.js";
 import { registerUndoable } from "./snooze.js";
@@ -33,18 +33,19 @@ import { decryptSecretOrNull, encryptSecret } from "../lib/token-crypto.js";
  *  during which POST /v1/send/undo/:id can cancel it. registerUndoable()
  *  existed but had zero callers anywhere — undo-send was pure dead code. */
 const UNDO_SEND_WINDOW_SECONDS = 10;
-import { checkQuota, incrementQuota } from "../lib/quota.js";
+import { incrementQuota } from "../lib/quota.js";
 import { indexEmail, searchEmails } from "@alecrae/shared";
 import { enqueueEmail } from "@alecrae/ai-engine/embeddings/auto-indexer";
 import { usageEnforcement } from "../middleware/usage.js";
 import { idempotency } from "../middleware/idempotency.js";
-import { getWarmupOrchestrator, WARMUP_LIMIT_EXCEEDED, ComplianceEngine } from "@alecrae/reputation";
-import type { EmailMetadata } from "@alecrae/reputation";
-import {
-  validateCustomHeaders,
-  HEADER_INJECTION_REJECTED,
-} from "@alecrae/mta/lib";
+import { getWarmupOrchestrator } from "@alecrae/reputation";
 import { scanAttachment, isSafe } from "@alecrae/security";
+import { checkOutboundSpam } from "../lib/outbound-spam-gate.js";
+import { runPreSendGate, classifyContent } from "../lib/pre-send-gate.js";
+import { buildTrackedUrl } from "../lib/tracking-link.js";
+import { threadKeyFor } from "../lib/thread-key.js";
+import { headerValue } from "../lib/header-safety.js";
+import { checkSendAnomaly, recordSend } from "../lib/send-anomaly.js";
 import {
   renderTemplate,
   validateVariables,
@@ -69,6 +70,14 @@ function domainOf(address: string): string {
   return idx === -1 ? address : address.slice(idx + 1).toLowerCase();
 }
 
+/**
+ * Public base URL embedded in outbound mail — the List-Unsubscribe header and
+ * every click-tracking link. The localhost fallback is for local dev ONLY;
+ * `assertProductionEnv()` (lib/env.ts) requires API_URL to be set to an https,
+ * non-localhost URL in production precisely so this fallback can never reach a
+ * real recipient. A dead one-click unsubscribe is a Gmail/Yahoo bulk-sender
+ * compliance failure, not a cosmetic bug.
+ */
 const API_BASE_URL = process.env["API_URL"] ?? "http://localhost:3001";
 
 /**
@@ -88,7 +97,10 @@ function injectTracking(html: string, emailId: string): string {
       if (url.startsWith("mailto:") || url.startsWith("tel:") || url.startsWith("#")) {
         return `<a ${prefix}href="${url}"`;
       }
-      const trackedUrl = `${API_BASE_URL}/t/${emailId}/click?url=${encodeURIComponent(url)}`;
+      // Signed, so the redirect endpoint can refuse a URL we never sent —
+      // see lib/tracking-link.ts for why an open redirect here would be a
+      // self-inflicted blocklisting.
+      const trackedUrl = buildTrackedUrl(API_BASE_URL, emailId, url);
       return `<a ${prefix}href="${trackedUrl}"`;
     },
   );
@@ -98,6 +110,21 @@ function injectTracking(html: string, emailId: string): string {
  * Build an RFC 5322 raw message from the API input.
  * Produces headers + body separated by a blank line.
  */
+/**
+ * Strip CR/LF/NUL from a value before it is written into a header line.
+ *
+ * Defence in depth. SendMessageSchema already rejects these characters in
+ * `subject` and display names (see apps/api/src/types.ts), which is the real
+ * gate — a caller gets a clear 422 rather than silently mangled output. This
+ * exists so that any future caller reaching buildRawMessage by another route
+ * still cannot inject a header. Without both, a subject like
+ * "Hi\r\nBcc: victim@example.com" became a genuine Bcc header on a
+ * DKIM-signed message sent from our own IP.
+ */
+// Implementation lives in lib/header-safety.ts and is shared with
+// lib/agent-send.ts, which has its own RFC-5322 builder and was missed by the
+// original fix. A second private copy is how the agent path stayed exposed.
+
 function buildRawMessage(
   input: SendMessageInput,
   messageId: string,
@@ -105,28 +132,22 @@ function buildRawMessage(
 ): string {
   const lines: string[] = [];
 
+  const display = (r: { email: string; name?: string | undefined }): string =>
+    r.name ? `${headerValue(r.name)} <${r.email}>` : r.email;
+
   // From
-  const fromStr = input.from.name
-    ? `${input.from.name} <${input.from.email}>`
-    : input.from.email;
-  lines.push(`From: ${fromStr}`);
+  lines.push(`From: ${display(input.from)}`);
 
   // To
-  const toStr = input.to
-    .map((r) => (r.name ? `${r.name} <${r.email}>` : r.email))
-    .join(", ");
-  lines.push(`To: ${toStr}`);
+  lines.push(`To: ${input.to.map(display).join(", ")}`);
 
   // Cc
   if (input.cc && input.cc.length > 0) {
-    const ccStr = input.cc
-      .map((r) => (r.name ? `${r.name} <${r.email}>` : r.email))
-      .join(", ");
-    lines.push(`Cc: ${ccStr}`);
+    lines.push(`Cc: ${input.cc.map(display).join(", ")}`);
   }
 
   // Subject
-  lines.push(`Subject: ${input.subject ?? ""}`);
+  lines.push(`Subject: ${headerValue(input.subject ?? "")}`);
 
   // Message-ID
   lines.push(`Message-ID: ${messageId}`);
@@ -212,22 +233,41 @@ function buildRawMessage(
 // ─── Query schemas ──────────────────────────────────────────────────────────
 
 const ListMessagesQuery = PaginationSchema.extend({
+  /**
+   * Must mirror the DB's `email_status` enum exactly.
+   *
+   * It did not. The list accepted "sending", which is not a database value and
+   * therefore matched nothing, while REJECTING "sent", "processing" and
+   * "dropped", which are. The practical effect: the Sent page calls
+   * `?status=sent` and got a 422 on every load — the list it is built around
+   * could not be requested at all. Found by a test written for a different bug
+   * on the same page.
+   */
   status: z
     .enum([
       "draft",
       "queued",
-      "sending",
+      "processing",
+      "sent",
       "delivered",
       "bounced",
       "deferred",
+      "dropped",
       "complained",
       "failed",
     ])
     .optional(),
   tag: z.string().optional(),
-  /** Defaults to "inbox" (excludes trash and archive) — pass "archive",
-   *  "trash", or "all" explicitly to see those. */
-  folder: z.enum(["inbox", "archive", "trash", "all"]).optional(),
+  /** Defaults to "inbox" (excludes trash, archive and spam) — pass "archive",
+   *  "trash", "spam", "drafts", or "all" explicitly to see those. When
+   *  `status=draft` is requested the default becomes "drafts", since drafts are
+   *  never in the inbox and the old default silently returned nothing for them.
+   *
+   *  "spam" is what the inbound filter pipeline writes for a `quarantine`
+   *  verdict. Without it here, quarantined mail would be filed correctly and
+   *  then be unreachable through the API entirely — no worse-but-different than
+   *  the bug where it landed in the inbox. */
+  folder: z.enum(["inbox", "archive", "trash", "spam", "drafts", "all"]).optional(),
 });
 
 // ─── Shared send handler ───────────────────────────────────────────────────
@@ -360,7 +400,10 @@ async function handleSend(c: Context) {
     // path used whatever was stored at connect time with no expiry check, so
     // sending broke ~1 hour after connecting and stayed broken until the user
     // manually reconnected the account.
-    let freshAccessToken = connectedAcct.accessToken;
+    // No initializer: the catch below returns, so the only way past this block
+    // is with a genuinely refreshed token. Seeding it with the stored one would
+    // reintroduce the stale-token bug this exists to fix.
+    let freshAccessToken: string;
     try {
       const fresh = await ensureFreshAccessToken({
         provider: connectedAcct.provider as "gmail" | "outlook",
@@ -388,6 +431,111 @@ async function handleSend(c: Context) {
           message: `Reconnect the ${connectedAcct.provider} account — its access token expired and could not be refreshed: ${err instanceof Error ? err.message : String(err)}`,
         },
         502,
+      );
+    }
+
+    // ── Abuse checks that apply even though the provider owns the IP ──
+    //
+    // This fast path returns before the domain-based pipeline's gates, which
+    // is right for warm-up and per-ISP throttling — Google/Microsoft own the
+    // sending IP and its reputation, not us. It is NOT right for these two:
+    //
+    //   * Spam content. If a compromised account blasts phishing through its
+    //     connected Gmail using our API, Google can suspend OUR OAuth client
+    //     — which would break Gmail for every customer at once. Our exposure
+    //     here is the app registration, not an IP.
+    //   * Hard bounces and complaints. A recipient who bounced or reported us
+    //     is objectively undeliverable or hostile, whatever the transport.
+    //
+    // Deliberately NOT applied here: unsubscribe suppression, which is
+    // list-scoped consent and should not silently block a personal 1:1 reply;
+    // and per-account quota, which is a billing behaviour change and Craig's
+    // call, not a side effect of a security fix. Both are flagged rather than
+    // changed. Header-injection safety needs nothing here — it is enforced in
+    // SendMessageSchema, so this path inherits it.
+    const connectedRecipients = [
+      ...input.to.map((r) => r.email),
+      ...(input.cc ?? []).map((r) => r.email),
+      ...(input.bcc ?? []).map((r) => r.email),
+    ];
+
+    const connectedSpamVerdict = await checkOutboundSpam({
+      messageId,
+      accountId: auth.accountId,
+      from: input.from.email,
+      to: connectedRecipients,
+      subject: resolvedSubject,
+      text: input.text,
+      html: input.html,
+    });
+
+    if (!connectedSpamVerdict.allowed) {
+      return c.json(
+        {
+          error: {
+            type: "spam_content_rejected",
+            message:
+              "This message was refused because its content scored as spam. " +
+              "Sending it would risk this platform's access to your mail provider.",
+            code: "outbound_spam_rejected",
+            score: connectedSpamVerdict.score,
+            reasons: connectedSpamVerdict.reasons,
+          },
+        },
+        422,
+      );
+    }
+
+    // Bounce/complaint suppression across every domain this account owns.
+    // suppression_lists.domain_id is NOT NULL, so there is no account-level
+    // row to read — join through the caller's own domains instead.
+    const hardSuppressed = await db
+      .select({ email: suppressionLists.email, reason: suppressionLists.reason })
+      .from(suppressionLists)
+      .innerJoin(domains, eq(suppressionLists.domainId, domains.id))
+      .where(
+        and(
+          eq(domains.accountId, auth.accountId),
+          inArray(
+            suppressionLists.email,
+            connectedRecipients.map((e) => e.toLowerCase()),
+          ),
+          inArray(suppressionLists.reason, ["bounce", "complaint"]),
+        ),
+      )
+      .limit(1);
+
+    const blocked = hardSuppressed[0];
+    if (blocked) {
+      return c.json(
+        {
+          error: "RECIPIENT_SUPPRESSED",
+          reason: blocked.reason === "bounce" ? "hard_bounce" : "complaint",
+          address: blocked.email,
+        },
+        422,
+      );
+    }
+
+    // Volume anomaly applies here too: a compromised account blasting through
+    // its connected Gmail is exactly the pattern that gets our OAuth client
+    // suspended, which would break Gmail for every customer at once.
+    const connectedAnomaly = await checkSendAnomaly(auth.accountId);
+    if (!connectedAnomaly.allowed) {
+      return c.json(
+        {
+          error: {
+            type: "send_volume_anomaly",
+            message:
+              "Sending is paused on this account: volume this hour is far above its " +
+              "normal rate, which usually means credentials have been compromised. " +
+              "Contact support to resume.",
+            code: "send_volume_anomaly",
+            sentThisHour: connectedAnomaly.currentHour,
+            threshold: connectedAnomaly.threshold,
+          },
+        },
+        429,
       );
     }
 
@@ -462,6 +610,9 @@ async function handleSend(c: Context) {
     // via indexEmail() (Meilisearch); this fast-path skipped it entirely.
     enqueueEmail(id, auth.accountId);
 
+    // Feed the volume-anomaly counter. Best-effort: the send already happened.
+    void recordSend(auth.accountId);
+
     return c.json({ id, messageId: providerMessageId ?? messageId, status: "sent" as const }, 202);
   }
 
@@ -505,172 +656,48 @@ async function handleSend(c: Context) {
     );
   }
 
-  // ── 1a. Hard quota enforcement ────────────────────────────────────
-  // Must be checked BEFORE warmup, suppression, and enqueue so that
-  // over-quota accounts cannot consume warmup slots or queue capacity.
-  const quota = await checkQuota(auth.accountId);
-  if (!quota.allowed) {
-    return c.json(
-      {
-        error: "QUOTA_EXCEEDED",
-        message: `Monthly email limit reached (${quota.sent}/${quota.limit}). Upgrade your plan or wait until next billing cycle.`,
-        plan: quota.plan,
-        limit: quota.limit,
-        sent: quota.sent,
-        resetsAt: quota.resetsAt,
-      },
-      429,
-    );
-  }
-
-  // ── 1b. Suppression list check ────────────────────────────────────
-  // Reject sends to suppressed recipients BEFORE warmup and enqueue
-  // so a suppressed address cannot waste a warmup slot or quota count.
+  // ── 1a-1c. The pre-send gate ──────────────────────────────────────
+  // Quota, suppression, compliance, outbound spam scoring, send-volume
+  // anomaly and custom-header validation, in that order, all in
+  // lib/pre-send-gate.ts.
+  //
+  // This stack used to be written inline here, which is exactly why the other
+  // three outbound-queue producers ran none of it (issue #151) — a long
+  // handler is not something another caller can reuse. It now lives in one
+  // callable gate that every producer shares, with the response bodies
+  // unchanged so no API contract moved.
   const allRecipientAddresses = [
     ...input.to.map((r) => r.email),
     ...(input.cc ?? []).map((r) => r.email),
     ...(input.bcc ?? []).map((r) => r.email),
   ];
 
-  for (const recipientEmail of allRecipientAddresses) {
-    const [suppressed] = await db
-      .select({
-        email: suppressionLists.email,
-        reason: suppressionLists.reason,
-      })
-      .from(suppressionLists)
-      .where(
-        and(
-          eq(suppressionLists.email, recipientEmail.toLowerCase()),
-          eq(suppressionLists.domainId, domainRecord.id),
-        ),
-      )
-      .limit(1);
-
-    if (suppressed) {
-      return c.json(
-        {
-          error: "RECIPIENT_SUPPRESSED",
-          reason: suppressed.reason === "bounce" ? "hard_bounce"
-            : suppressed.reason === "complaint" ? "complaint"
-            : suppressed.reason === "unsubscribe" ? "manual_unsubscribe"
-            : suppressed.reason,
-          address: suppressed.email,
-        },
-        422,
-      );
-    }
-  }
-
-  // ── 1b2. Compliance check (CAN-SPAM / GDPR / CASL) ────────────────
-  // Transactional emails (password reset, verification) are exempt from
-  // marketing-only rules but must still pass basic compliance. The engine
-  // is configured to exempt transactional by default.
-  const complianceEngine = new ComplianceEngine({ exemptTransactional: true });
-  const isTransactional = (input.tags ?? []).includes("transactional") ||
-    (input.template_id ?? "").includes("verify") ||
-    (input.template_id ?? "").includes("password-reset") ||
-    (input.template_id ?? "").includes("magic-link");
-  const headersMap = new Map<string, string>(
-    Object.entries(input.headers ?? {}).map(([k, v]) => [k, String(v)]),
-  );
-  const complianceMeta: EmailMetadata = {
+  const gate = await runPreSendGate({
+    accountId: auth.accountId,
+    domainId: domainRecord.id,
+    messageId,
     from: input.from.email,
-    to: allRecipientAddresses[0] ?? input.from.email,
+    recipients: allRecipientAddresses,
     subject: resolvedSubject,
-    headers: headersMap,
-    hasUnsubscribeHeader: headersMap.has("list-unsubscribe"),
-    hasUnsubscribeLink: false,
-    hasPhysicalAddress: false,
-    contentType: isTransactional ? "transactional" : "marketing",
-    senderDomain: domainOf(input.from.email),
-  };
-  const complianceResult = complianceEngine.checkAll(complianceMeta);
-  if (!complianceResult.ok) {
-    return c.json(
-      {
-        error: {
-          type: "compliance_error",
-          message: complianceResult.error instanceof Error
-            ? complianceResult.error.message
-            : "Compliance check failed",
-          code: "compliance_violation",
-        },
-      },
-      422,
-    );
-  }
-  const violations = complianceResult.value.flatMap((r) => r.violations ?? []);
-  if (violations.length > 0) {
-    return c.json(
-      {
-        error: {
-          type: "compliance_error",
-          message: `Email blocked: ${violations.map((v) => v.description ?? v.rule).join("; ")}`,
-          code: "compliance_violation",
-          violations,
-        },
-      },
-      422,
-    );
+    text: input.text,
+    html: input.html,
+    headers: (input.headers ?? null) as Record<string, unknown> | null,
+    contentClass: classifyContent({
+      tags: input.tags,
+      templateId: input.template_id,
+    }),
+  });
+
+  if (!gate.allowed) {
+    return c.json(gate.body as Record<string, unknown>, gate.status);
   }
 
-  // ── 1c. Validate customer-supplied custom headers ─────────────────
-  // Reputation-protection: Bcc/CRLF injection and platform-controlled
-  // headers (DKIM-Signature, Authentication-Results, etc) must never
-  // reach the SMTP DATA stream. Hard-reject at queue-accept time so
-  // the customer gets a clear error and no bad send is enqueued.
-  const headerCheck = validateCustomHeaders(
-    (input.headers ?? null) as Record<string, unknown> | null,
-  );
-  if (!headerCheck.ok) {
-    return c.json(
-      {
-        error: {
-          type: "validation_error",
-          message: headerCheck.reason,
-          code: HEADER_INJECTION_REJECTED,
-        },
-      },
-      400,
-    );
-  }
-  const sanitizedHeaders = headerCheck.sanitized;
+  const sanitizedHeaders = gate.sanitizedHeaders;
 
-  // ── 1d. Auto-enrol the domain in warm-up + hard-enforce day limit ─
-  // `ensureWarmupAndCheck` creates a session on-the-fly for any domain
-  // that doesn't have one, so new customers cannot bypass warm-up by
-  // "not starting one". Reputation destruction is permanent — this
-  // gate MUST hard-reject. No silent drops.
-  const warmupOrchestrator = getWarmupOrchestrator();
-  const warmupCheck = await warmupOrchestrator.ensureWarmupAndCheck(
-    domainRecord.id,
-    auth.accountId,
-  );
-
-  if (!warmupCheck.allowed) {
-    return c.json(
-      {
-        error: {
-          type: "rate_limit",
-          message:
-            warmupCheck.message ??
-            "Domain warm-up sending limit reached",
-          code: warmupCheck.code ?? WARMUP_LIMIT_EXCEEDED,
-          retryAfter: warmupCheck.retryAfter?.toISOString() ?? null,
-          warmup: {
-            currentDay: warmupCheck.currentDay ?? null,
-            dailyLimit:
-              warmupCheck.dailyLimit === Number.MAX_SAFE_INTEGER
-                ? null
-                : warmupCheck.dailyLimit ?? null,
-            sentToday: warmupCheck.sentToday ?? null,
-          },
-        },
-      },
-      429,
-    );
-  }
+  // Warm-up enrolment + daily limit + reputation hard-pause now run inside
+  // runPreSendGate (issue #159b) so every producer inherits them — this
+  // check used to live here alone, which is why the agent send path kept
+  // sending through a hard pause. Response body is unchanged.
 
   // ── 2. Build the raw RFC-5322 message ─────────────────────────────
   // Pass sanitized headers so buildRawMessage never sees unvalidated input.
@@ -845,7 +872,16 @@ async function handleSend(c: Context) {
   }
 
   // ── 6b. Record send against warm-up counter (fire-and-forget) ────
-  warmupOrchestrator.recordSend(domainRecord.id).catch(() => { /* fire-and-forget */ });
+  // Counted in RECIPIENTS, not messages (issue #159c): ISP volume caps are
+  // per-recipient, and one call here can address hundreds.
+  getWarmupOrchestrator()
+    .recordSend(domainRecord.id, allRecipients.length)
+    .catch(() => {
+      /* fire-and-forget */
+    });
+
+  // ── 6b2. Record against the send-volume anomaly counter ─────────
+  void recordSend(auth.accountId);
 
   // ── 6c. Increment quota counter in Redis (fire-and-forget) ──────
   incrementQuota(auth.accountId).catch(() => {
@@ -921,6 +957,168 @@ messages.post("/send", ...sendMiddleware, handleSend);
 
 // POST /v1/messages — Alias for /send
 messages.post("/", ...sendMiddleware, handleSend);
+
+// ─── Drafts ─────────────────────────────────────────────────────────────────
+//
+// There was no draft persistence anywhere in the API. Compose's "Save Draft"
+// button only set the string "Draft saved locally" — nothing was written, not
+// even locally, so a user's unsent work was silently lost. The Drafts page
+// meanwhile listed `status: "queued"`, which is outbound mail waiting to go
+// out, not drafts.
+//
+// Drafts are ordinary `emails` rows with status "draft" and folder "drafts"
+// (`folder` is a plain text column, and the email_status enum has always had
+// "draft" — CLAUDE.md known issue #8 says otherwise and is stale). They never
+// enter the send pipeline: nothing queues, signs or delivers a draft row.
+
+const DraftRecipient = z.object({
+  email: z.string().email(),
+  name: z.string().max(255).optional(),
+});
+
+const DraftSchema = z
+  .object({
+    /** Sender address. Falls back to the account's first verified mailbox. */
+    from: DraftRecipient.optional(),
+    to: z.array(DraftRecipient).max(100).default([]),
+    cc: z.array(DraftRecipient).max(100).default([]),
+    bcc: z.array(DraftRecipient).max(100).default([]),
+    subject: z.string().max(998).default(""),
+    text: z.string().max(1_000_000).optional(),
+    html: z.string().max(1_000_000).optional(),
+  })
+  .refine(
+    (v) =>
+      v.to.length > 0 ||
+      v.cc.length > 0 ||
+      v.bcc.length > 0 ||
+      v.subject.trim().length > 0 ||
+      (v.text ?? "").trim().length > 0 ||
+      (v.html ?? "").trim().length > 0,
+    { message: "A draft needs at least one recipient, a subject, or a body" },
+  );
+
+type DraftInput = z.infer<typeof DraftSchema>;
+
+function draftAddresses(list: DraftInput["to"]): { name?: string; address: string }[] {
+  return list.map((r) => ({ address: r.email, ...(r.name !== undefined ? { name: r.name } : {}) }));
+}
+
+/** Column values shared by draft create and update. */
+function draftValues(
+  input: DraftInput,
+  now: Date,
+): {
+  toAddresses: { name?: string; address: string }[];
+  ccAddresses: { name?: string; address: string }[] | null;
+  bccAddresses: { name?: string; address: string }[] | null;
+  subject: string;
+  textBody: string | null;
+  htmlBody: string | null;
+  updatedAt: Date;
+} {
+  return {
+    toAddresses: draftAddresses(input.to),
+    ccAddresses: input.cc.length > 0 ? draftAddresses(input.cc) : null,
+    bccAddresses: input.bcc.length > 0 ? draftAddresses(input.bcc) : null,
+    subject: input.subject,
+    textBody: input.text ?? null,
+    htmlBody: input.html ?? null,
+    updatedAt: now,
+  };
+}
+
+// POST /v1/messages/drafts — Create a draft
+messages.post(
+  "/drafts",
+  requireScope("messages:write"),
+  validateBody(DraftSchema),
+  async (c) => {
+    const input = getValidatedBody<DraftInput>(c);
+    const auth = c.get("auth");
+    const db = getDatabase();
+    const now = new Date();
+    const id = crypto.randomUUID();
+
+    await db.insert(emails).values({
+      id,
+      accountId: auth.accountId,
+      domainId: null,
+      // messageId is NOT NULL and unique per (accountId, messageId). A draft
+      // has no RFC 822 Message-ID yet; a synthetic, always-fresh one satisfies
+      // the constraint without colliding.
+      messageId: `draft-${id}@drafts.alecrae.local`,
+      fromAddress: input.from?.email ?? "",
+      fromName: input.from?.name ?? null,
+      status: "draft",
+      folder: "drafts",
+      source: "outbound",
+      isRead: true,
+      tags: [],
+      createdAt: now,
+      ...draftValues(input, now),
+    });
+
+    return c.json(
+      { data: { id, createdAt: now.toISOString(), updatedAt: now.toISOString() } },
+      201,
+    );
+  },
+);
+
+// PUT /v1/messages/drafts/:id — Update an existing draft
+messages.put(
+  "/drafts/:id",
+  requireScope("messages:write"),
+  validateBody(DraftSchema),
+  async (c) => {
+    const id = c.req.param("id");
+    const input = getValidatedBody<DraftInput>(c);
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const [existing] = await db
+      .select({ id: emails.id, status: emails.status })
+      .from(emails)
+      .where(and(eq(emails.id, id), eq(emails.accountId, auth.accountId)))
+      .limit(1);
+
+    if (!existing) {
+      return c.json(
+        { error: { type: "not_found", message: `Draft ${id} not found`, code: "draft_not_found" } },
+        404,
+      );
+    }
+
+    // Refuse to rewrite a message that has already entered the send pipeline —
+    // otherwise this endpoint could mutate sent or in-flight mail.
+    if (existing.status !== "draft") {
+      return c.json(
+        {
+          error: {
+            type: "conflict",
+            message: `Message ${id} is not a draft (status: ${existing.status}) and cannot be edited`,
+            code: "not_a_draft",
+          },
+        },
+        409,
+      );
+    }
+
+    const now = new Date();
+    await db
+      .update(emails)
+      .set({
+        ...draftValues(input, now),
+        ...(input.from !== undefined
+          ? { fromAddress: input.from.email, fromName: input.from.name ?? null }
+          : {}),
+      })
+      .where(and(eq(emails.id, id), eq(emails.accountId, auth.accountId)));
+
+    return c.json({ data: { id, updatedAt: now.toISOString() } });
+  },
+);
 
 // GET /v1/messages/search — Full-text email search via Meilisearch
 messages.get(
@@ -1023,6 +1221,8 @@ messages.get(
       data: {
         id: emailRecord.id,
         messageId: emailRecord.messageId,
+        /** Same derivation as the list, so the two never disagree. */
+        threadId: threadKeyFor(emailRecord),
         from: {
           email: emailRecord.fromAddress,
           name: emailRecord.fromName,
@@ -1063,7 +1263,11 @@ messages.get(
   validateQuery(ListMessagesQuery),
   async (c) => {
     const query = getValidatedQuery<
-      PaginationParams & { status?: string; tag?: string; folder?: "inbox" | "archive" | "trash" | "all" }
+      PaginationParams & {
+        status?: string;
+        tag?: string;
+        folder?: "inbox" | "archive" | "trash" | "spam" | "drafts" | "all";
+      }
     >(c);
     const auth = c.get("auth");
     const db = getDatabase();
@@ -1073,7 +1277,7 @@ messages.get(
     // Default to "inbox" — previously nothing filtered on folder/status at
     // all, so archiving or deleting a message never actually removed it from
     // the list; it just came back on the next reload marked unread.
-    const folder = query.folder ?? "inbox";
+    const folder = query.folder ?? (query.status === "draft" ? "drafts" : "inbox");
     if (folder !== "all") {
       conditions.push(eq(emails.folder, folder));
     }
@@ -1111,6 +1315,11 @@ messages.get(
       .select({
         id: emails.id,
         messageId: emails.messageId,
+        // Needed to derive the conversation key — see lib/thread-key.ts. The
+        // list previously exposed no threading at all, so the inbox muted
+        // threads by message id and every reply arrived unmuted.
+        inReplyTo: emails.inReplyTo,
+        references: emails.references,
         fromAddress: emails.fromAddress,
         fromName: emails.fromName,
         toAddresses: emails.toAddresses,
@@ -1140,9 +1349,96 @@ messages.get(
         ? lastPageItem.createdAt.toISOString()
         : null;
 
+    // First-open time per message, from the real tracking events.
+    //
+    // The Sent page's "Opened" badge read `tags.includes("opened")`, and
+    // nothing has ever written that tag — the tracking pixel records an
+    // `events` row of type "email.opened" instead. So the badge said "Not
+    // opened" for every message forever, including ones that had been.
+    //
+    // Resolved with one extra query per page rather than a join on the hot
+    // list query: bounded by page size, and it keeps `events` as the single
+    // source of truth instead of denormalising an "opened" tag that could
+    // then drift.
+    const openedAtByEmail = new Map<string, string>();
+    if (page.length > 0) {
+      try {
+        const openRows = await db
+          .select({
+            emailId: events.emailId,
+            firstOpenedAt: sql<Date>`min(${events.createdAt})`,
+          })
+          .from(events)
+          .where(
+            and(
+              eq(events.type, "email.opened"),
+              inArray(
+                events.emailId,
+                page.map((r) => r.id),
+              ),
+            ),
+          )
+          .groupBy(events.emailId);
+
+        for (const r of openRows) {
+          if (r.emailId && r.firstOpenedAt) {
+            openedAtByEmail.set(r.emailId, new Date(r.firstOpenedAt).toISOString());
+          }
+        }
+      } catch (err) {
+        // Open data is supplementary — a failure here must not break the list.
+        console.error(
+          "[messages] Failed to load open events:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+
+    // Labels were write-only: two endpoints applied them and NO endpoint ever
+    // returned which labels an email had, so applying one had no visible
+    // effect anywhere (issue #76c). One bounded query per page, same shape as
+    // the openedAt lookup above, rather than a join on the hot list query.
+    const labelsByEmail = new Map<string, { id: string; name: string; color: string }[]>();
+    if (page.length > 0) {
+      try {
+        const labelRows = await db
+          .select({
+            emailId: emailLabels.emailId,
+            id: labels.id,
+            name: labels.name,
+            color: labels.color,
+          })
+          .from(emailLabels)
+          .innerJoin(labels, eq(emailLabels.labelId, labels.id))
+          .where(
+            inArray(
+              emailLabels.emailId,
+              page.map((row) => row.id),
+            ),
+          );
+
+        for (const row of labelRows) {
+          const list = labelsByEmail.get(row.emailId) ?? [];
+          list.push({ id: row.id, name: row.name, color: row.color });
+          labelsByEmail.set(row.emailId, list);
+        }
+      } catch (err) {
+        // Wrapped for the same reason as openedAt: label data is useful, but
+        // losing it must never take down the inbox itself.
+        console.warn(
+          "[messages] label lookup failed, returning messages without labels:",
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+
     const data = page.map((row) => ({
       id: row.id,
       messageId: row.messageId,
+      /** Conversation key — shared by every message in a reply chain. */
+      threadId: threadKeyFor(row),
+      /** Labels applied to this message, empty when none. */
+      labels: labelsByEmail.get(row.id) ?? [],
       from: { email: row.fromAddress, name: row.fromName },
       to: row.toAddresses,
       cc: row.ccAddresses,
@@ -1154,6 +1450,8 @@ messages.get(
       isStarred: row.isStarred,
       folder: row.folder,
       hasAttachments: false,
+      /** When the recipient first opened this message, or null if never. */
+      openedAt: openedAtByEmail.get(row.id) ?? null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       sentAt: row.sentAt?.toISOString() ?? null,

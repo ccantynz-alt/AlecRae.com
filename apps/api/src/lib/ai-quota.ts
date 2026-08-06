@@ -16,47 +16,12 @@
  * due to billing system outages").
  */
 
-import Redis from "ioredis";
+import { getRedis } from "./redis.js";
 import { eq } from "drizzle-orm";
 import { getDatabase, accounts } from "@alecrae/db";
 import { PLANS } from "./billing.js";
 import type { PlanId } from "./billing.js";
 
-const REDIS_URL =
-  process.env["REDIS_URL"] ??
-  process.env["UPSTASH_REDIS_URL"] ??
-  "redis://localhost:6379";
-
-let redisClient: Redis | null = null;
-let redisReady = false;
-
-function getRedis(): Redis | null {
-  if (!redisClient) {
-    try {
-      const client = new Redis(REDIS_URL, {
-        maxRetriesPerRequest: 1,
-        connectTimeout: 3000,
-        enableOfflineQueue: false,
-      });
-      client.on("ready", () => {
-        redisReady = true;
-      });
-      client.on("error", (err) => {
-        if (redisReady) {
-          console.warn("[ai-quota] Redis error, AI quota unenforced until it recovers:", err.message);
-        }
-        redisReady = false;
-      });
-      client.on("end", () => {
-        redisReady = false;
-      });
-      redisClient = client;
-    } catch {
-      return null;
-    }
-  }
-  return redisReady ? redisClient : null;
-}
 
 function currentMonthKey(accountId: string): string {
   const now = new Date();
@@ -133,11 +98,6 @@ export async function incrementAiQuota(accountId: string): Promise<void> {
   }
 }
 
-export async function closeAiQuotaRedis(): Promise<void> {
-  if (redisClient) {
-    await redisClient.quit().catch(() => {
-      /* intentional no-op: best-effort shutdown */
-    });
-    redisClient = null;
-  }
-}
+// `closeAiQuotaRedis()` used to live here, exported and called by nothing —
+// see the matching note in quota.ts. The connection is now the shared one,
+// closed by `closeAllRedis()`.

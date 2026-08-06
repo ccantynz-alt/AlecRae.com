@@ -4,7 +4,8 @@
  */
 
 import * as net from "node:net";
-import * as dns from "node:dns/promises";
+import { boundedDns as dns } from "../dns/resolver.js";
+import { toAsciiDomain, normalizeAddress, smtpUtf8Blocker } from "../address/idna.js";
 
 /** RFC 5321 MX record shape. node:dns/promises doesn't re-export MxRecord. */
 interface MxRecord {
@@ -52,7 +53,11 @@ export class SmtpClient extends EventEmitter {
   /**
    * Resolve MX records for a domain and return them sorted by priority.
    */
-  static async resolveMx(domain: string): Promise<MxRecord[]> {
+  static async resolveMx(rawDomain: string): Promise<MxRecord[]> {
+    // An internationalized domain has to be an ASCII A-label before it goes
+    // anywhere near DNS — `例え.jp` resolves to nothing, `xn--r8jz45g.jp`
+    // resolves correctly and is what every server expects.
+    const domain = toAsciiDomain(rawDomain);
     try {
       const records = await dns.resolveMx(domain);
       return records.sort((a, b) => a.priority - b.priority);
@@ -75,7 +80,10 @@ export class SmtpClient extends EventEmitter {
     to: string,
     rawMessage: string,
   ): Promise<Result<{ response: string; host: string }>> {
-    const recipientDomain = to.split("@")[1];
+    // Use the ASCII form of the recipient from here on: the domain goes into
+    // DNS and into RCPT TO, and both want an A-label rather than raw UTF-8.
+    const normalized = normalizeAddress(to);
+    const recipientDomain = normalized.domain;
     if (!recipientDomain) {
       return err(new Error(`Invalid recipient address: ${to}`));
     }
@@ -89,7 +97,12 @@ export class SmtpClient extends EventEmitter {
 
     // Try each MX in priority order
     for (const mx of mxRecords) {
-      const result = await this.attemptDelivery(mx.exchange, from, to, rawMessage);
+      const result = await this.attemptDelivery(
+        mx.exchange,
+        from,
+        normalized.address,
+        rawMessage,
+      );
       if (result.ok) {
         return result;
       }
@@ -152,6 +165,16 @@ export class SmtpClient extends EventEmitter {
       } else if (this.config.requireTls && !this.tls) {
         await this.quit();
         return err(new Error(`TLS required but ${host} does not support STARTTLS`));
+      }
+
+      // A non-ASCII local part has no ASCII encoding, so a server that does
+      // not advertise SMTPUTF8 cannot accept this address by any means.
+      // Refusing here beats sending a RCPT TO we know will be rejected — a
+      // rejection we caused still counts against our sending reputation.
+      const utf8Blocker = smtpUtf8Blocker(to, this.extensions.has("SMTPUTF8"));
+      if (utf8Blocker) {
+        await this.quit();
+        return err(new Error(`550 ${utf8Blocker} (host: ${host})`));
       }
 
       // MAIL FROM

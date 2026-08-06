@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, gt as _gt, lt, gte, sql, count as _count } from "drizzle-orm";
+import { eq, and, desc, gt as _gt, gte, sql, count as _count } from "drizzle-orm";
+import { decodeKeysetCursor, encodeKeysetCursor, seekCondition, parseNumber, parseDate } from "../lib/keyset-cursor.js";
 import { getDatabase, sentimentTimeline, relationshipHealth } from "@alecrae/db";
 import { generateId } from "../lib/jwt.js";
 import { requireScope } from "../middleware/auth.js";
@@ -23,6 +24,9 @@ async function runSentimentAnalysis(content: string): Promise<EmailSentiment> {
       err instanceof Error && err.message.includes("ANTHROPIC_API_KEY")
         ? "Sentiment analysis is unavailable — no AI provider configured."
         : `Sentiment analysis failed: ${err instanceof Error ? err.message : String(err)}`,
+      // Keep the provider error attached — the message above is for the user,
+      // the cause is what makes a failure diagnosable in logs.
+      { cause: err },
     );
   }
 }
@@ -183,21 +187,40 @@ sentimentTimelineRouter.get(
     if (query.contactEmail) conditions.push(eq(sentimentTimeline.contactEmail, query.contactEmail));
     const cutoff = new Date(Date.now() - query.days * 86400000);
     conditions.push(gte(sentimentTimeline.createdAt, cutoff));
-    if (query.cursor) conditions.push(lt(sentimentTimeline.id, query.cursor));
+
+    // Ordered by createdAt but paginated by id — unrelated columns, so pages
+    // skipped and repeated rows (issue #75b). Same defect and same fix as the
+    // knowledge-graph lists; the shared helper is why this is three lines.
+    const cursor = decodeKeysetCursor(query.cursor);
+    if (cursor) {
+      const seek = seekCondition(
+        sentimentTimeline.createdAt,
+        parseDate(cursor.value),
+        sentimentTimeline.id,
+        cursor.id,
+      );
+      if (seek) conditions.push(seek);
+    }
 
     const rows = await db
       .select()
       .from(sentimentTimeline)
       .where(and(...conditions))
-      .orderBy(desc(sentimentTimeline.createdAt))
+      .orderBy(desc(sentimentTimeline.createdAt), desc(sentimentTimeline.id))
       .limit(query.limit + 1);
 
     const hasMore = rows.length > query.limit;
     if (hasMore) rows.pop();
 
+    const last = rows[rows.length - 1];
+
     return c.json({
       data: rows,
-      pagination: { hasMore, nextCursor: hasMore ? rows[rows.length - 1]?.id : undefined },
+      pagination: {
+        hasMore,
+        nextCursor:
+          hasMore && last ? encodeKeysetCursor(last.createdAt, last.id) : undefined,
+      },
     });
   },
 );
@@ -245,25 +268,61 @@ sentimentTimelineRouter.get(
 
     const conditions = [eq(relationshipHealth.accountId, accountId)];
     if (query.riskLevel) conditions.push(eq(relationshipHealth.riskLevel, query.riskLevel));
-    if (query.cursor) conditions.push(lt(relationshipHealth.id, query.cursor));
 
     const orderCol = query.sortBy === "healthScore" ? relationshipHealth.healthScore
       : query.sortBy === "totalInteractions" ? relationshipHealth.totalInteractions
       : relationshipHealth.updatedAt;
 
+    // Health scores and interaction counts tie constantly — dozens of contacts
+    // share a score — so the id tiebreaker is what stops rows on the boundary
+    // being dropped or repeated between pages.
+    const cursor = decodeKeysetCursor(query.cursor);
+    if (cursor) {
+      const seek =
+        query.sortBy === "updatedAt"
+          ? seekCondition(
+              relationshipHealth.updatedAt,
+              parseDate(cursor.value),
+              relationshipHealth.id,
+              cursor.id,
+            )
+          : seekCondition(
+              orderCol,
+              parseNumber(cursor.value),
+              relationshipHealth.id,
+              cursor.id,
+            );
+      if (seek) conditions.push(seek);
+    }
+
     const rows = await db
       .select()
       .from(relationshipHealth)
       .where(and(...conditions))
-      .orderBy(desc(orderCol))
+      .orderBy(desc(orderCol), desc(relationshipHealth.id))
       .limit(query.limit + 1);
 
     const hasMore = rows.length > query.limit;
     if (hasMore) rows.pop();
 
+    const last = rows[rows.length - 1];
+    const sortValue = last
+      ? query.sortBy === "healthScore"
+        ? last.healthScore
+        : query.sortBy === "totalInteractions"
+          ? last.totalInteractions
+          : last.updatedAt
+      : null;
+
     return c.json({
       data: rows,
-      pagination: { hasMore, nextCursor: hasMore ? rows[rows.length - 1]?.id : undefined },
+      pagination: {
+        hasMore,
+        nextCursor:
+          hasMore && last && sortValue !== null
+            ? encodeKeysetCursor(sortValue, last.id)
+            : undefined,
+      },
     });
   },
 );
@@ -312,9 +371,22 @@ sentimentTimelineRouter.get(
     const cutoff = new Date(Date.now() - query.days * 86400000);
     const truncFn = query.period === "monthly" ? "month" : query.period === "weekly" ? "week" : "day";
 
+    // `date_trunc(${truncFn}, …)` interpolated truncFn as a BOUND PARAMETER,
+    // and the same expression appeared three times — in SELECT, GROUP BY and
+    // ORDER BY. Each occurrence got its own placeholder ($1, $2, $3), so
+    // Postgres saw three textually different expressions and rejected the
+    // query: the grouped column does not match the selected one. The endpoint
+    // could not have returned a row (issue #75c).
+    //
+    // Built once and reused, so all three render identically by construction
+    // rather than by three copies happening to agree. `sql.raw` is safe here
+    // and only here: truncFn is derived from a validated three-value enum and
+    // can never carry caller input.
+    const truncated = sql`date_trunc(${sql.raw(`'${truncFn}'`)}, ${sentimentTimeline.createdAt})`;
+
     const rows = await db
       .select({
-        period: sql<string>`date_trunc(${truncFn}, ${sentimentTimeline.createdAt})::text`.as("period"),
+        period: sql<string>`${truncated}::text`.as("period"),
         avgScore: sql<number>`avg(${sentimentTimeline.score})`.as("avg_score"),
         count: sql<number>`count(*)::int`.as("count"),
       })
@@ -325,8 +397,8 @@ sentimentTimelineRouter.get(
           gte(sentimentTimeline.createdAt, cutoff),
         ),
       )
-      .groupBy(sql`date_trunc(${truncFn}, ${sentimentTimeline.createdAt})`)
-      .orderBy(sql`date_trunc(${truncFn}, ${sentimentTimeline.createdAt})`);
+      .groupBy(truncated)
+      .orderBy(truncated);
 
     return c.json({ data: rows });
   },

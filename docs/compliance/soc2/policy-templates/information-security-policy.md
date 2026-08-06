@@ -123,8 +123,9 @@ embedded in the platform (per CLAUDE.md Forbidden List items 6–7).
 
 ## 8. Vulnerability Management
 
-- Automated dependency scanning runs every Monday (OSV-Scanner + audit-ci)
-  and on every pull request to `main` (`.github/workflows/security.yml`)
+- Automated dependency scanning runs every Monday (`bun audit` + OSV-Scanner)
+  and on every pull request to `main` (`.github/workflows/security.yml`).
+  Unreviewed critical advisories fail the build.
 - CodeQL SAST analysis with `security-extended` query pack runs on every PR
 - Gitleaks secret scanning runs on every PR with full commit history
 - Third-party penetration tests are conducted [INSERT FREQUENCY — recommend annually]

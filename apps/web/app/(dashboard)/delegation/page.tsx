@@ -1059,7 +1059,7 @@ function DelegatedInboxSection(): ReactNode {
               <Text variant="body-sm" className="text-content-subtle">
                 {data.delegations.length === 0
                   ? "Once someone delegates their inbox to you, their emails will show up here."
-                  : "No delegated emails yet — new mail matching your delegations will appear here as it arrives."}
+                  : "Delegated mail isn't being routed here yet — this part isn't finished."}
               </Text>
             </Box>
           ) : (
@@ -1739,7 +1739,7 @@ export default function DelegationPage(): ReactNode {
       title="Delegation"
       description="Delegate email handling to teammates, work delegated inboxes, and co-write drafts with a review workflow."
     >
-      <PlanGate feature="delegation" required="team">
+      <PlanGate feature="delegation">
         <DelegationContent />
       </PlanGate>
     </PageLayout>

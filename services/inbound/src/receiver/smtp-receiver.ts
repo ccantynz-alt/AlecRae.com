@@ -308,8 +308,29 @@ export class SmtpConnectionHandler {
       return { code: 550, message: "Invalid recipient address — missing domain" };
     }
 
-    // Domain verification: check if this domain is registered and active
-    if (this.config.domainVerifier) {
+    // Domain verification: check if this domain is registered and active.
+    //
+    // FAILS CLOSED. With no verifier configured this used to skip the check
+    // entirely and answer 250 to any recipient on any domain — an open relay,
+    // and `index.ts` never supplied one, so that was the shipped behaviour of
+    // the service meant to be exposed on port 25. It is the same defect that
+    // ran on this box for nine days and was actively abused (issue #105), and
+    // the same one issue #127 closed in the MTA's receiver.
+    //
+    // Refusing when unconfigured is the whole point: a deployment that forgets
+    // to wire the verifier must reject mail, never relay it. 550 rather than
+    // 450 because an unconfigured relay control is not a transient condition —
+    // retrying will not fix it, and a permanent refusal is what stops a relay
+    // scanner recording us as open.
+    if (!this.config.domainVerifier) {
+      console.error(
+        "[SmtpReceiver] No domainVerifier configured — refusing all recipients. " +
+          "This is fail-closed behaviour; wire createDomainVerifier() in index.ts.",
+      );
+      return { code: 550, message: "Relay not permitted" };
+    }
+
+    {
       try {
         const result = await this.config.domainVerifier(recipientDomain);
 

@@ -7,8 +7,13 @@
  * settings, stats, and history. Requires Personal plan or above.
  *
  * API:
- *   POST /v1/translate             { text, sourceLang, targetLang }
+ *   POST /v1/translate   { text, targetLanguage, sourceLanguage? }
+ *                        -> { data: { translated, sourceLanguage, wasTranslated, ... } }
  *   GET  /v1/translate/history
+ *
+ * History covers per-email translations only — ad-hoc text translated in the
+ * box below is not persisted server-side (see the route's own note), so it is
+ * labelled accordingly rather than implying everything is recorded.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -65,19 +70,29 @@ const AUTO_DETECT = "auto";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/** Mirrors the `data` object returned by POST /v1/translate. */
 interface TranslationResult {
-  translatedText: string;
-  detectedLanguage: string;
-  confidence: number;
+  original: string;
+  translated: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  /** False when AI translation was unavailable — `translated` is then the original text. */
+  wasTranslated: boolean;
+  translationUnavailable: boolean;
 }
 
+/** Mirrors one row from GET /v1/translate/history. */
 interface HistoryItem {
   id: string;
-  sourceLang: string;
-  targetLang: string;
+  emailId: string;
+  sourceLanguage: string;
+  sourceLanguageName: string;
+  targetLanguage: string;
+  targetLanguageName: string;
   snippet: string;
   createdAt: string;
   wordCount: number;
+  autoTranslated: boolean;
 }
 
 interface TranslationStats {
@@ -249,7 +264,7 @@ export default function TranslatePage(): React.JSX.Element {
 
       const langCounts: Record<string, number> = {};
       for (const item of historyRes) {
-        langCounts[item.sourceLang] = (langCounts[item.sourceLang] ?? 0) + 1;
+        langCounts[item.sourceLanguage] = (langCounts[item.sourceLanguage] ?? 0) + 1;
       }
       const topSourceLanguages = Object.entries(langCounts)
         .sort(([, a], [, b]) => b - a)
@@ -282,20 +297,32 @@ export default function TranslatePage(): React.JSX.Element {
         method: "POST",
         body: JSON.stringify({
           text: sourceText,
-          sourceLang: sourceLang === AUTO_DETECT ? "auto" : sourceLang,
-          targetLang,
+          targetLanguage: targetLang,
+          // Omit entirely for auto-detect — the server treats a missing
+          // sourceLanguage as "detect it", and "auto" is not a language code.
+          ...(sourceLang === AUTO_DETECT ? {} : { sourceLanguage: sourceLang }),
         }),
       }).then((r) => r.data);
-      setTranslatedText(result.translatedText);
-      if (result.detectedLanguage) setDetectedLang(result.detectedLanguage);
-      // Refresh history after a successful translation
-      void loadHistory();
+
+      // The server returns the ORIGINAL text with wasTranslated: false when the
+      // AI provider is unavailable. Surface that instead of presenting untranslated
+      // text as a successful translation.
+      if (result.translationUnavailable || !result.wasTranslated) {
+        setTranslatedText("");
+        setTranslateError(
+          "Translation is temporarily unavailable — the AI provider could not be reached. Your text was not translated.",
+        );
+        return;
+      }
+
+      setTranslatedText(result.translated);
+      if (result.sourceLanguage) setDetectedLang(result.sourceLanguage);
     } catch (e) {
       setTranslateError(errMsg(e));
     } finally {
       setTranslating(false);
     }
-  }, [sourceText, sourceLang, targetLang, loadHistory]);
+  }, [sourceText, sourceLang, targetLang]);
 
   const handleSwapLanguages = useCallback(() => {
     if (sourceLang === AUTO_DETECT) return;
@@ -317,7 +344,7 @@ export default function TranslatePage(): React.JSX.Element {
       title="Translation"
       description="Translate emails instantly across 35+ languages with AI that understands context, not just words."
     >
-      <PlanGate feature="translation" required="personal">
+      <PlanGate feature="translation">
         <Box className="space-y-8">
           {/* Live Translation */}
           <Card>
@@ -540,8 +567,11 @@ export default function TranslatePage(): React.JSX.Element {
 
           {/* Translation History */}
           <Box>
-            <Text variant="heading-sm" className="mb-3">
+            <Text variant="heading-sm" className="mb-1">
               Translation History
+            </Text>
+            <Text variant="body-sm" muted className="mb-3 text-xs">
+              Emails you&apos;ve translated. Text translated in the box above isn&apos;t stored.
             </Text>
 
             {historyError && (
@@ -600,10 +630,10 @@ export default function TranslatePage(): React.JSX.Element {
                     {history.map((item) => (
                       <tr key={item.id} className="hover:bg-surface-raised transition-colors">
                         <td className="whitespace-nowrap px-4 py-3 text-content">
-                          {langLabel(item.sourceLang)}
+                          {item.sourceLanguageName || langLabel(item.sourceLanguage)}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-content">
-                          {langLabel(item.targetLang)}
+                          {item.targetLanguageName || langLabel(item.targetLanguage)}
                         </td>
                         <td className="hidden max-w-xs truncate px-4 py-3 text-content-subtle md:table-cell">
                           {item.snippet}

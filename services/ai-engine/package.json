@@ -4,14 +4,8 @@
   "private": true,
   "description": "Core AI/ML engine for the AlecRae platform \u2014 spam detection, reputation scoring, content analysis, and intelligent email assistance",
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "//": "Subpath-only package: there is no src/index.ts barrel, so no \".\" export. Every consumer imports a specific capability subpath.",
   "exports": {
-    ".": {
-      "bun": "./src/index.ts",
-      "types": "./src/index.ts",
-      "import": "./dist/index.js"
-    },
     "./spam": {
       "bun": "./src/spam/classifier.ts",
       "types": "./src/spam/classifier.ts",
@@ -41,6 +35,11 @@
       "bun": "./src/relationships/graph.ts",
       "types": "./src/relationships/graph.ts",
       "import": "./dist/relationships/graph.js"
+    },
+    "./types": {
+      "bun": "./src/types.ts",
+      "types": "./src/types.ts",
+      "import": "./dist/types.js"
     },
     "./classifier": {
       "bun": "./src/classifier.ts",
@@ -106,6 +105,11 @@
       "bun": "./src/unsubscribe/index.ts",
       "types": "./src/unsubscribe/index.ts",
       "import": "./dist/unsubscribe/index.js"
+    },
+    "./unsubscribe/mailto-runner": {
+      "bun": "./src/unsubscribe/mailto-runner.ts",
+      "types": "./src/unsubscribe/mailto-runner.ts",
+      "import": "./dist/unsubscribe/mailto-runner.js"
     },
     "./send-time": {
       "bun": "./src/send-time/predictor.ts",
@@ -214,8 +218,7 @@
     }
   },
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "build": "echo 'Service builds independently \u2014 not part of Vercel web deployment'",
+    "build": "tsc",
     "test": "bun test",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

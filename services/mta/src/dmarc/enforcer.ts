@@ -3,7 +3,7 @@
  * Implements RFC 7489 — evaluates DMARC policies using SPF and DKIM results.
  */
 
-import * as dns from "node:dns/promises";
+import { boundedDns as dns } from "../dns/resolver.js";
 import type {
   DmarcRecord,
   DmarcPolicy,

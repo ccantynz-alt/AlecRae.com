@@ -249,7 +249,30 @@ function splitHeaderAndBody(raw: Uint8Array): { headerBlock: string; bodyStart: 
   return { headerBlock: text, bodyStart: text.length };
 }
 
-function parseMimePart(raw: Uint8Array): MimePart {
+/**
+ * Deepest `multipart/*` nesting we will descend into.
+ *
+ * This parser runs on the port-25 receive path, so its input comes from
+ * anonymous remote senders. Recursion here was unbounded, and each level
+ * re-splits the body it was handed — so a message nesting multiparts hundreds
+ * deep costs work superlinear in its own size, from a stranger, for free.
+ * Legitimate mail is a handful of levels at most (`multipart/mixed` wrapping
+ * `multipart/alternative` wrapping the bodies is three); anything past this is
+ * either broken or deliberate.
+ *
+ * Over-depth parts are returned unparsed rather than dropped: the raw bytes
+ * stay available, and a truncated part tree beats refusing a message that may
+ * be perfectly legitimate but unusually structured.
+ */
+const MAX_MULTIPART_DEPTH = 20;
+
+/**
+ * Most sibling parts we will parse at one level. A single level containing
+ * tens of thousands of parts is the flat version of the same attack.
+ */
+const MAX_PARTS_PER_LEVEL = 500;
+
+function parseMimePart(raw: Uint8Array, depth = 0): MimePart {
   const { headerBlock, bodyStart } = splitHeaderAndBody(raw);
   const headers = parseHeaders(headerBlock);
   const body = raw.slice(bodyStart);
@@ -257,11 +280,16 @@ function parseMimePart(raw: Uint8Array): MimePart {
   const contentType = getHeader(headers, "content-type");
   const mediaType = contentType?.value?.toLowerCase() ?? "text/plain";
 
-  // If multipart, recursively parse sub-parts
-  if (mediaType.startsWith("multipart/") && contentType?.params?.["boundary"]) {
+  // If multipart, recursively parse sub-parts — bounded, see the constants
+  // above for why an anonymous sender must not choose our recursion depth.
+  if (
+    mediaType.startsWith("multipart/") &&
+    contentType?.params?.["boundary"] &&
+    depth < MAX_MULTIPART_DEPTH
+  ) {
     const boundary = contentType.params["boundary"];
-    const parts = splitMultipart(body, boundary);
-    return { headers, body, parts: parts.map(parseMimePart) };
+    const parts = splitMultipart(body, boundary).slice(0, MAX_PARTS_PER_LEVEL);
+    return { headers, body, parts: parts.map((p) => parseMimePart(p, depth + 1)) };
   }
 
   return { headers, body, parts: [] };

@@ -1,18 +1,18 @@
 /**
  * Analytics Dashboard Route
  *
- * GET    /v1/analytics-dashboard/overview        — Dashboard overview with period comparison
- * GET    /v1/analytics-dashboard/trends           — Trend data over time (daily/weekly/monthly)
- * GET    /v1/analytics-dashboard/top-senders      — Top senders by volume
- * GET    /v1/analytics-dashboard/top-recipients   — Top recipients by volume
- * GET    /v1/analytics-dashboard/engagement       — Engagement metrics (open/click/reply/bounce rates)
- * POST   /v1/analytics-dashboard/snapshot         — Create/update today's snapshot (upsert by date)
- * GET    /v1/analytics-dashboard/goals            — List analytics goals
- * POST   /v1/analytics-dashboard/goals            — Create analytics goal
- * PUT    /v1/analytics-dashboard/goals/:id        — Update goal
- * DELETE /v1/analytics-dashboard/goals/:id        — Delete goal
- * GET    /v1/analytics-dashboard/comparison       — Compare two date ranges side by side
- * GET    /v1/analytics-dashboard/export           — Export analytics as JSON (date range filter)
+ * GET    /v1/analytics/dashboard/overview        — Dashboard overview with period comparison
+ * GET    /v1/analytics/dashboard/trends           — Trend data over time (daily/weekly/monthly)
+ * GET    /v1/analytics/dashboard/top-senders      — Top senders by volume
+ * GET    /v1/analytics/dashboard/top-recipients   — Top recipients by volume
+ * GET    /v1/analytics/dashboard/engagement       — Engagement metrics (open/click/reply/bounce rates)
+ * POST   /v1/analytics/dashboard/snapshot         — Create/update today's snapshot (upsert by date)
+ * GET    /v1/analytics/dashboard/goals            — List analytics goals
+ * POST   /v1/analytics/dashboard/goals            — Create analytics goal
+ * PUT    /v1/analytics/dashboard/goals/:id        — Update goal
+ * DELETE /v1/analytics/dashboard/goals/:id        — Delete goal
+ * GET    /v1/analytics/dashboard/comparison       — Compare two date ranges side by side
+ * GET    /v1/analytics/dashboard/export           — Export analytics as JSON (date range filter)
  */
 
 import { Hono } from "hono";

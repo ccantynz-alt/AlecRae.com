@@ -1,27 +1,28 @@
 /**
  * Scheduling Intelligence Route
  *
- * POST   /v1/scheduling-intelligence/detect          — Detect scheduling intent in email
- * POST   /v1/scheduling-intelligence/propose         — Generate meeting proposal
- * GET    /v1/scheduling-intelligence/proposals        — List proposals (cursor pagination)
- * GET    /v1/scheduling-intelligence/proposals/:id    — Get specific proposal
- * PUT    /v1/scheduling-intelligence/proposals/:id    — Accept/decline proposal
- * GET    /v1/scheduling-intelligence/patterns         — Get availability patterns
- * PUT    /v1/scheduling-intelligence/patterns         — Update preferences
- * POST   /v1/scheduling-intelligence/patterns/learn   — Learn from calendar data
- * GET    /v1/scheduling-intelligence/suggest-times    — Suggest available times
- * GET    /v1/scheduling-intelligence/conflicts        — Detect scheduling conflicts
- * GET    /v1/scheduling-intelligence/stats            — Scheduling stats
- * POST   /v1/scheduling-intelligence/auto-respond     — Generate scheduling response
+ * POST   /v1/scheduling/detect          — Detect scheduling intent in email
+ * POST   /v1/scheduling/propose         — Generate meeting proposal
+ * GET    /v1/scheduling/proposals        — List proposals (cursor pagination)
+ * GET    /v1/scheduling/proposals/:id    — Get specific proposal
+ * PUT    /v1/scheduling/proposals/:id    — Accept/decline proposal
+ * GET    /v1/scheduling/patterns         — Get availability patterns
+ * PUT    /v1/scheduling/patterns         — Update preferences
+ * POST   /v1/scheduling/patterns/learn   — Learn from calendar data
+ * GET    /v1/scheduling/suggest-times    — Suggest available times
+ * GET    /v1/scheduling/conflicts        — Detect scheduling conflicts
+ * GET    /v1/scheduling/stats            — Scheduling stats
+ * POST   /v1/scheduling/auto-respond     — Generate scheduling response
  */
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, lt, gte, sql as _sql } from "drizzle-orm";
+import { eq, and, desc, lt, isNotNull, sql as _sql } from "drizzle-orm";
 import {
   getDatabase,
   meetingProposals,
   availabilityPatterns,
+  emails,
 } from "@alecrae/db";
 import type { MeetingPreferences } from "@alecrae/db";
 import { generateId } from "../lib/jwt.js";
@@ -134,6 +135,36 @@ const SCHEDULING_KEYWORDS = [
   "tomorrow",
   "this week",
 ];
+
+/** The `meeting_type` enum, mirrored so a stray string cannot be stored. */
+type MeetingType =
+  | "one_on_one"
+  | "group"
+  | "standup"
+  | "interview"
+  | "demo"
+  | "social";
+
+const MEETING_TYPES: readonly MeetingType[] = [
+  "one_on_one",
+  "group",
+  "standup",
+  "interview",
+  "demo",
+  "social",
+];
+
+/**
+ * Narrow the classifier's `string` to the DB enum.
+ *
+ * The insert previously used `meetingType as "one_on_one"` — a cast that
+ * asserted the value was a single literal it demonstrably was not, and which
+ * would have written an invalid enum value the moment the classifier returned
+ * anything else. Checking beats asserting.
+ */
+function toMeetingType(value: string): MeetingType {
+  return MEETING_TYPES.find((t) => t === value) ?? "one_on_one";
+}
 
 function detectSchedulingIntent(content: string): {
   hasIntent: boolean;
@@ -257,9 +288,33 @@ schedulingIntelligenceRouter.post(
 
     const proposedTimes = generateTimeSlots(body.duration, startHour, endHour);
 
-    const _intent = detectSchedulingIntent("");
-    const meetingType =
-      body.preferences?.preferMorning !== undefined ? "one_on_one" : "one_on_one";
+    // Classification used to be dead twice over (issue #75d):
+    // `detectSchedulingIntent("")` was called with an EMPTY STRING and its
+    // result thrown away into `_intent`, and `meetingType` came from a ternary
+    // whose two branches were both "one_on_one". So the classifier — which
+    // recognises standups, interviews, demos and social meetings from the
+    // text — never saw any text, and every proposal was filed as a one-to-one
+    // regardless of what the email said.
+    //
+    // The email it references is what the classifier is for, so read it.
+    // `emailId` is required by the schema, and the lookup is scoped to the
+    // caller's account so a proposal cannot be built from someone else's mail.
+    const [sourceEmail] = await db
+      .select({ subject: emails.subject, textBody: emails.textBody })
+      .from(emails)
+      .where(and(eq(emails.id, body.emailId), eq(emails.accountId, accountId)))
+      .limit(1);
+
+    const intent = detectSchedulingIntent(
+      `${sourceEmail?.subject ?? ""} ${sourceEmail?.textBody ?? ""}`,
+    );
+
+    // Participant count is a real signal the text cannot override: three people
+    // in a room is a group meeting whatever the subject line calls it.
+    const meetingType: MeetingType =
+      body.participants.length > 2 && intent.meetingType === "one_on_one"
+        ? "group"
+        : toMeetingType(intent.meetingType);
 
     const id = generateId();
     const [proposal] = await db
@@ -271,9 +326,13 @@ schedulingIntelligenceRouter.post(
         threadId: body.threadId,
         proposedTimes,
         participants: body.participants,
-        subject: `Meeting with ${body.participants.length} participant(s)`,
+        // The real subject when we have it — "Meeting with 3 participant(s)"
+        // told the user nothing they did not already know.
+        subject:
+          sourceEmail?.subject ??
+          `Meeting with ${body.participants.length} participant(s)`,
         duration: body.duration,
-        meetingType: meetingType as "one_on_one",
+        meetingType,
         status: "proposed",
         aiReasoning: `Proposed ${body.duration}-minute meeting based on email thread context and ${patterns.length} availability pattern(s).`,
       })
@@ -634,10 +693,42 @@ schedulingIntelligenceRouter.get(
         and(
           eq(meetingProposals.accountId, accountId),
           eq(meetingProposals.status, "accepted"),
-          gte(meetingProposals.createdAt, startDate),
+          // Only rows the conflict loop below can actually use.
+          isNotNull(meetingProposals.selectedTime),
         ),
-      )
-      .orderBy(meetingProposals.createdAt);
+      );
+
+    // Restrict to the window ASKED FOR, by when the meeting is.
+    //
+    // The query used to filter `createdAt >= startDate` — when the proposal was
+    // created, not when the meeting happens — so asking "what clashes next
+    // week" missed any meeting scheduled for next week but agreed a month ago,
+    // which is precisely the meeting most likely to clash. And `endDate`,
+    // computed from `range` right above, was never used at all: the range
+    // parameter did nothing.
+    //
+    // Filtered here rather than in SQL because `selected_time` is a TEXT
+    // column, so a SQL range comparison would be lexicographic and only
+    // correct if every stored value happened to share one ISO format. Parsing
+    // in JS is correct for any ISO variant; the set is bounded by account and
+    // accepted status.
+    const windowStart = startDate.getTime();
+    const windowEnd = endDate.getTime();
+    const inWindow = proposals
+      .filter((p) => {
+        if (!p.selectedTime) return false;
+        const start = new Date(p.selectedTime).getTime();
+        if (Number.isNaN(start)) return false;
+        const end = start + p.duration * 60 * 1000;
+        // Overlaps the window rather than starting inside it — a meeting that
+        // began before the window and runs into it still conflicts.
+        return end >= windowStart && start <= windowEnd;
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.selectedTime ?? 0).getTime() -
+          new Date(b.selectedTime ?? 0).getTime(),
+      );
 
     const conflicts: {
       proposalA: string;
@@ -646,10 +737,10 @@ schedulingIntelligenceRouter.get(
       overlapEnd: string;
     }[] = [];
 
-    for (let i = 0; i < proposals.length; i++) {
-      for (let j = i + 1; j < proposals.length; j++) {
-        const a = proposals[i];
-        const b = proposals[j];
+    for (let i = 0; i < inWindow.length; i++) {
+      for (let j = i + 1; j < inWindow.length; j++) {
+        const a = inWindow[i];
+        const b = inWindow[j];
         if (!a || !b) continue;
 
         if (a.selectedTime && b.selectedTime) {

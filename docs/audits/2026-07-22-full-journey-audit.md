@@ -1,6 +1,26 @@
 # Full Journey Audit & Build Plan — 2026-07-22
 
-> **Last updated: 2026-07-22 09:00 UTC**
+> **Last updated: 2026-07-28 23:10 UTC**
+
+> **2026-07-28 re-audit in progress.** Craig asked for a fresh brutal pass over
+> all code, explicitly distrusting the markdown. Findings so far, against this
+> document:
+>
+> - **The verdicts below held up on re-verification.** Every Phase 1 item
+>   re-checked against current source was still broken exactly as described.
+>   This audit is trustworthy; treat it as current except where ticked off.
+> - **It under-reported in one place.** Translation had a *fourth* break it did
+>   not catch: the page ignored `wasTranslated`/`translationUnavailable`, so an
+>   AI outage would have rendered untranslated text as a successful
+>   translation. Method note: this audit traced request/response *plumbing*
+>   well, but did not systematically check whether pages honour the honest-
+>   degradation flags the backends return. Worth adding to the next pass.
+> - **It could not see build/packaging defects.** `@alecrae/ai-engine` shipped
+>   40+ subpath exports pointing at a `dist` its no-op build never produced, so
+>   25 tests covering the core send path had never executed. A per-journey
+>   source trace cannot find that class of bug; running the gates does.
+>
+> Fixed since (see git log): AI Triage, Translation, Files, Drafts.
 
 **This is the source of truth for "does it actually work," superseding any status claims in CLAUDE.md's Known Issues table for the 49 journeys covered below.** It was produced by 49 independent, code-grounded audits — one per sidebar tab — each explicitly instructed to trust nothing in any markdown doc and verify directly against current source (frontend → API route → database/AI call). This is the audit Craig asked for after the previous one (2026-07-19) was never saved anywhere and got lost. It will not happen again — this file stays in the repo, gets checked off as items ship, and gets re-run periodically rather than trusted forever.
 
@@ -26,7 +46,7 @@
 | A/B Testing | actually sending + tracking variants | nothing — "Start Test" only zeroes counters |
 | Mail Merge | actually sending the campaign | nothing — code comment admits a worker "would" do this |
 
-**Fix this once, well, and eight of these features become real in the same afternoon.** The shape of the fix: a single hook point in the real inbound pipeline (`sync/engine.ts` / `received-email-store.ts`, which already exists and already fires `email.received` webhooks per issue #70) that, for each new email, checks each account's enabled automations of every kind above and dispatches to the already-built handlers. Mail Merge and A/B Testing need a separate outbound-send worker (different shape — campaign fan-out, not per-message reaction), but it's the same category: one real background worker, not eleven.
+**⚠️ CORRECTED 2026-07-29 — this estimate is wrong.** It assumed these features expose callable handlers. They do not: productivity-analytics, attachment-intelligence, scheduling-intelligence, knowledge-graph and sentiment-timeline have **55 route handlers and zero exported functions** between them — every one is logic embedded in a route body. There is also no per-account feature-enablement store anywhere, so "which automations does this account want" cannot be answered today. The real work is (a) extract each feature into a callable function, one refactor per feature, (b) a new opt-in table + UI — a schema migration reserved for Craig, plus a product call on defaults and plan-gating, and (c) the dispatcher, which must be built around cost (see issue #130: auto-triage was already firing one unbounded Claude call per message on import). Still one integration point rather than eleven — but not an afternoon. Original claim, kept for the record: The shape of the fix: a single hook point in the real inbound pipeline (`sync/engine.ts` / `received-email-store.ts`, which already exists and already fires `email.received` webhooks per issue #70) that, for each new email, checks each account's enabled automations of every kind above and dispatches to the already-built handlers. Mail Merge and A/B Testing need a separate outbound-send worker (different shape — campaign fan-out, not per-message reaction), but it's the same category: one real background worker, not eleven.
 
 ---
 
@@ -146,13 +166,15 @@ Track progress here directly; check items off as they ship (this replaces trusti
 - [ ] **Domains/Vapron DNS** — get real Vapron DNS API docs from Craig (same category as the email fix), correct `dns.*` transport in `lib/vapron.ts`, add a background re-check job for pending domains.
 
 ### Phase 1 — Broken today (crashes/fails for a real user, not a missing-feature question)
-- [ ] Drafts — wire Compose's "Save Draft" to a real API call; fix the Drafts page's status filter.
-- [ ] Files — align frontend/backend response envelope and field names (page currently crashes).
+
+> **All seven CLOSED as of 2026-07-29.** No dashboard journey now fails on load.
+- [x] Drafts — **DONE 2026-07-28.** Root cause ran deeper than described: `ComposeEditor` typed `onSaveDraft` as taking no arguments, so it *could not* save whatever was in the editor. Added POST/PUT `/v1/messages/drafts`, fixed the list's status filter and the folder default, and made reopening a draft carry its id + body instead of dropping both.
+- [x] Files — **DONE 2026-07-28.** Envelope and four field names aligned. Two things this audit missed: the filter tabs and search box sent query params the route never declared (Zod stripped them — every tab returned the same list), and `lib/storage-quota.ts` had **zero production callers**, so uploads enforced no plan limit and deletes never freed space. Both fixed; the weekly reconciler no longer wipes uploaded-file accounting either.
 - [ ] Achievements — add missing `/streak` endpoint; align response shapes.
-- [ ] Translation — align field names and add/remove the `/history` call.
-- [ ] Security (Overview tab) — add the three missing endpoints; fix the sender-verification response shape.
-- [ ] Integrations — fix Connected Apps envelope + decide whether to build real app-connect or remove the section; fix API-key generation's missing `permissions` field.
-- [ ] AI Triage — fix the plan-gate mismatch (trivial, one-line).
+- [x] Translation — **DONE 2026-07-28.** Field names and response shape fixed; `GET /v1/translate/history` built over the `email_translations` table it was always meant to read. Two extras found: the page ignored the backend's honest-degradation flags, and `/v1/translate/*` charged AI quota for reads that make no AI call.
+- [x] Security (Overview tab) — **DONE 2026-07-29.** Two endpoints built over real `threat_detections`/`phishing_reports` rows, with **no invented security score** (null + an honest UI state, pinned by a test). The third missing endpoint — trust settings — was NOT built: its four toggles controlled nothing (attachment scanning already runs unconditionally; the inbox strips all HTML so external images cannot load either way), so the switches were removed rather than given a store. Sender verification was also mis-typed AND read the envelope as the result; now renders the live SPF/DKIM/DMARC results and typosquat warning it always produced. Note the trust scale inverts vs the old `risk` field — badge colours corrected so a trustworthy sender is not painted red.
+- [x] Integrations — **DONE 2026-07-29.** API-key generation 422'd every time (`permissions` was required; the page sent only `{ name }`) — now optional and least-privilege by default, with tests pinning that the defaults do not silently grant management rights. Connected Apps was **removed, not rebuilt**: it called connect/disconnect endpoints that do not exist, and the connector API it would have been rebuilt on has no dispatcher (#103), so a nicer UI would only have made non-functional theatre more convincing. API-key list/create envelopes fixed, and the list now shows `keyPrefix` since the full secret only ever exists in the creation response.
+- [x] AI Triage — **DONE 2026-07-28.** Not the one-liner it looked like: `PlanGate` discarded its `feature` prop entirely and gated on a hand-passed `required`, so every one of its 24 call sites could drift from `FEATURE_PLANS` and the server's `requirePlan`. It now derives the tier from the map and the override prop is removed, so the drift is unexpressible.
 
 ### Phase 2 — Fabricated/dishonest claims (worse than broken — actively misleading)
 - [ ] **Encryption** — either wire real client-key storage + an actual encrypt/decrypt pipeline, or remove the "encrypted automatically" claim until it's real. This is a security promise currently being made falsely.
@@ -178,7 +200,7 @@ Track progress here directly; check items off as they ship (this replaces trusti
 - [ ] Contacts Groups — one-line `authMiddleware` fix.
 
 ### Phase 5 — Cosmetic / trivial
-- [ ] Sent — wire open-tracking to actually flip the "opened" tag.
+- [x] Sent — **DONE 2026-07-29, and it was worse than recorded.** The page was rated "partial — real list/send", but its list request was REJECTED: `ListMessagesQuery`'s status enum had drifted from the DB's `email_status`, accepting "sending" (not a DB value, matched nothing) while refusing "sent" — the exact status the page filters on. It 422'd on every load. Fixed to mirror the DB enum, with a test walking every value the database can hold. The "Opened" badge separately read a tag nothing writes; it now reports a real `openedAt` derived from the tracking `events` rows, kept as the single source of truth rather than denormalised into a tag that could drift. **Method note for the next audit: this one traced response shapes but not whether the REQUEST was accepted.**
 - [ ] Settings — wire 2FA/Sessions buttons (or remove), fix email-change persistence, fix notification-preference save.
 - [ ] Billing — compute real Domains/Webhooks usage counts instead of hardcoded 0.
 - [ ] Templates — return full row on create so the UI doesn't need a reload.

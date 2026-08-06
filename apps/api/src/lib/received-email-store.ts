@@ -18,6 +18,7 @@ import { and, eq } from "drizzle-orm";
 import { getDatabase, emails, events } from "@alecrae/db";
 import type { ParsedEmail } from "@alecrae/email-parser";
 import { aiComplete } from "./ai.js";
+import { checkAiQuota, incrementAiQuota } from "./ai-quota.js";
 import { redactPii } from "./pii-redact.js";
 import { runRulesForEmail } from "./rule-engine.js";
 import { enqueueEmail } from "@alecrae/ai-engine/embeddings/auto-indexer";
@@ -50,6 +51,17 @@ export interface ReceivedEmailInput {
    *  Outlook parser and then silently dropped before reaching storage. */
   isRead?: boolean;
   isStarred?: boolean;
+  /**
+   * True when this message is historical mail being backfilled (an initial
+   * mailbox sync, or an MBOX/EML import) rather than mail arriving now.
+   *
+   * Per-email AI work is skipped for backfill. This function runs once per
+   * MESSAGE, so importing a large mailbox would otherwise fire one Claude call
+   * per message — tens of thousands, unbounded, against an allowance nothing
+   * was checking. Triaging years-old mail has little value anyway; what a user
+   * cares about is what is arriving now.
+   */
+  backfill?: boolean;
 }
 
 function genId(): string {
@@ -124,6 +136,24 @@ function isTriageResult(v: unknown): v is TriageResult {
 async function runAiTriage(emailId: string, input: ReceivedEmailInput): Promise<void> {
   if (!process.env["ANTHROPIC_API_KEY"]) return;
 
+  // Triage is skipped for backfill. storeReceivedEmail() runs for EVERY message
+  // of an initial Gmail/Outlook sync or an MBOX import, so without this a
+  // customer connecting a 50,000-message mailbox fired 50,000 Claude calls —
+  // unbounded, and invisible until the bill arrived. Triaging years-old mail is
+  // also of little use to anyone; what matters is mail arriving now.
+  if (input.backfill === true) return;
+
+  // The per-account AI quota (issue #102) is enforced by middleware on HTTP
+  // routes. This is an internal path that no middleware sees, so it was
+  // spending against a plan's allowance without ever checking or recording it.
+  const quota = await checkAiQuota(input.accountId).catch(() => null);
+  if (quota && quota.enforced && !quota.allowed) {
+    console.warn(
+      `[received-email-store] AI triage skipped for account ${input.accountId} — monthly AI quota exhausted (${quota.used}/${quota.limit})`,
+    );
+    return;
+  }
+
   try {
     const result = await aiComplete({
       system: TRIAGE_SYSTEM,
@@ -131,6 +161,10 @@ async function runAiTriage(emailId: string, input: ReceivedEmailInput): Promise<
       model: "claude-haiku-4-5-20251001",
       maxTokens: 256,
     });
+
+    // Record the spend even if parsing fails below — the call was made and
+    // billed regardless of whether we could use the answer.
+    void incrementAiQuota(input.accountId);
 
     let parsed: unknown;
     try {
@@ -324,11 +358,18 @@ async function emitReceivedWebhook(emailId: string, input: ReceivedEmailInput): 
   }
 }
 
-/** Map a parsed RFC 5322 message to the store input. */
+/**
+ * Map a parsed RFC 5322 message to the store input.
+ *
+ * Used only by the MBOX/EML import paths, which are backfill by definition —
+ * an archive file is historical mail, not mail arriving now. Marked as such so
+ * importing a large mailbox does not fire one AI call per message.
+ */
 export function parsedToReceived(parsed: ParsedEmail, accountId: string, source: string): ReceivedEmailInput {
   const input: ReceivedEmailInput = {
     accountId,
     source,
+    backfill: true,
     from: { address: parsed.from.address, name: parsed.from.name ?? null },
     to: parsed.to.map((a) => ({ address: a.address, name: a.name ?? null })),
     cc: parsed.cc.map((a) => ({ address: a.address, name: a.name ?? null })),

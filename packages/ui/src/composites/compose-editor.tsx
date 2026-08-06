@@ -41,7 +41,13 @@ export interface ComposeEditorProps extends HTMLAttributes<HTMLDivElement> {
   body?: string;
   suggestions?: AISuggestion[];
   onSend?: (data: ComposeData) => void;
-  onSaveDraft?: () => void;
+  /**
+   * Receives the editor's current contents, exactly like `onSend`. It used to
+   * take no arguments at all, which made saving a draft impossible: the
+   * fields live in this component's state, so a zero-arg callback had nothing
+   * to persist. The compose page's handler could only ever show a message.
+   */
+  onSaveDraft?: (data: ComposeData) => void;
   onDiscard?: () => void;
   onApplySuggestion?: (suggestion: AISuggestion) => void;
   /** Fires on every body keystroke — used to drive grammar checking. */
@@ -117,6 +123,10 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
   const handleSend = useCallback((): void => {
     onSend?.({ from, to, cc, bcc, subject, body });
   }, [from, to, cc, bcc, subject, body, onSend]);
+
+  const handleSaveDraft = useCallback((): void => {
+    onSaveDraft?.({ from, to, cc, bcc, subject, body });
+  }, [from, to, cc, bcc, subject, body, onSaveDraft]);
 
   // Fetch calendar slots from the API
   const fetchCalendarSlots = useCallback(
@@ -209,7 +219,7 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
         <Button variant="primary" size="md" onClick={handleSend}>
           Send
         </Button>
-        <Button variant="secondary" size="md" onClick={onSaveDraft}>
+        <Button variant="secondary" size="md" onClick={handleSaveDraft}>
           Save Draft
         </Button>
         <Box className="flex-1" />

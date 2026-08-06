@@ -635,7 +635,7 @@ function ContactsSection({
       {!loading && !error && contacts.length === 0 && (
         <EmptyState
           title="No tracked relationships yet."
-          hint="Sentiment is analyzed automatically as your email syncs. Contacts appear here once their emails are scored."
+          hint="Automatic sentiment analysis isn't running yet — no contacts will be scored for now."
         />
       )}
       {!loading && contacts.length > 0 && (
@@ -1059,7 +1059,7 @@ export default function SentimentPage(): ReactNode {
       title="Sentiment Timeline"
       description="How every relationship is trending — sentiment tracked over time, with alerts before a relationship goes cold."
     >
-      <PlanGate feature="sentiment_timeline" required="pro">
+      <PlanGate feature="sentiment_timeline">
         <SentimentContent />
       </PlanGate>
     </PageLayout>

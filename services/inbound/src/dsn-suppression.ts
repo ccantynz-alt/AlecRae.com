@@ -12,18 +12,28 @@
  * This module detects an inbound DSN, parses it, and — for hard/permanent
  * bounces — writes a real suppression_lists row.
  *
- * Attribution caveat: a DSN's Final-Recipient tells us which address
- * bounced, but not which of our domains/accounts originally sent to it —
- * Return-Path isn't yet rewritten to a per-send VERP address (a separate,
- * still-open gap, issue #82(a)). Until that exists, this correlates the
- * bounce to the most recent matching `emails` row we sent to that address,
- * which is a reasonable approximation but not exact for accounts that
- * share a recipient across multiple domains.
+ * Attribution: a DSN's Final-Recipient tells us which address bounced, but
+ * not which of our domains/accounts sent to it. Issue #82(a) is now fixed —
+ * the MTA sets a per-send VERP envelope sender
+ * (`bounces+<emailId>@bounce.<domain>`, see services/mta/src/bounce/
+ * return-path.ts) — so when the DSN's envelope recipient is available it
+ * identifies the exact message and attribution is exact.
+ *
+ * The old heuristic (most recent message sent to that address in the last 30
+ * days) is retained as a fallback for mail sent before VERP existed, or where
+ * no bounce domain could be resolved. It is a reasonable approximation but
+ * wrong for a recipient mailed from several of an account's domains — it can
+ * suppress the address against the wrong domain.
  */
 
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDatabase, emails, domains, suppressionLists } from "@alecrae/db";
-import { parseBounceMessage, processBounce, type BounceInfo } from "@alecrae/mta/lib";
+import {
+  parseBounceMessage,
+  processBounce,
+  parseReturnPath,
+  type BounceInfo,
+} from "@alecrae/mta/lib";
 import type { MimeHeader } from "./types.js";
 
 const LOOKBACK_DAYS = 30;
@@ -48,16 +58,29 @@ export function isDsnMessage(headers: MimeHeader[]): boolean {
  * throws — a malformed or unattributable DSN is logged and skipped rather
  * than blocking normal inbound storage of the message.
  */
-export async function processInboundDsn(rawMessage: string): Promise<void> {
+export async function processInboundDsn(
+  rawMessage: string,
+  /**
+   * The envelope recipient the DSN was delivered to. When the original send
+   * used a VERP return path this is `bounces+<emailId>@bounce.<domain>`, which
+   * identifies the exact message that bounced.
+   */
+  envelopeTo?: string,
+): Promise<void> {
   const parsed = parseBounceMessage(rawMessage);
   if (!parsed.ok) {
     console.warn(`[inbound] DSN detected but failed to parse: ${parsed.error.message}`);
     return;
   }
 
+  // Exact attribution, when available. Falls back to the recency heuristic
+  // below for mail sent before VERP existed, or via a path that could not
+  // resolve a bounce domain.
+  const verp = envelopeTo ? parseReturnPath(envelopeTo) : null;
+
   for (const bounceInfo of parsed.value) {
     try {
-      await handleOneBounce(bounceInfo);
+      await handleOneBounce(bounceInfo, verp?.emailId ?? null);
     } catch (err) {
       console.error(
         `[inbound] Failed to process DSN bounce for ${bounceInfo.recipient}:`,
@@ -67,27 +90,37 @@ export async function processInboundDsn(rawMessage: string): Promise<void> {
   }
 }
 
-async function handleOneBounce(bounceInfo: BounceInfo): Promise<void> {
-  // No persistent per-recipient attempt-count store exists yet — evaluate
-  // as a first attempt. Hard/block bounces suppress unconditionally
-  // regardless of attempt count, so this doesn't affect the dominant,
-  // most damaging case; soft/transient bounces are logged but not acted
-  // on further here (the synchronous retry path already handles those).
-  const action = processBounce(bounceInfo, 0, 1);
-  if (action.kind !== "suppress") {
-    console.log(
-      `[inbound] DSN for ${bounceInfo.recipient}: ${bounceInfo.category}/${bounceInfo.type} — not suppressing (${action.kind})`,
+/**
+ * Resolve the account + sender domain that produced a bounce.
+ *
+ * Prefers the exact message id carried in the VERP return path. Falls back to
+ * "most recent message we sent to this address", which is a reasonable
+ * approximation but wrong for a recipient mailed from several of an account's
+ * domains — it can suppress the address on the wrong domain.
+ */
+async function attribute(
+  recipientLower: string,
+  verpEmailId: string | null,
+): Promise<{ accountId: string; fromAddress: string } | null> {
+  const db = getDatabase();
+
+  if (verpEmailId) {
+    const [exact] = await db
+      .select({ accountId: emails.accountId, fromAddress: emails.fromAddress })
+      .from(emails)
+      .where(eq(emails.id, verpEmailId))
+      .limit(1);
+    if (exact) return exact;
+    console.warn(
+      `[inbound] VERP return path referenced email ${verpEmailId}, which no longer exists — falling back to recency matching`,
     );
-    return;
   }
 
-  const db = getDatabase();
-  const recipientLower = bounceInfo.recipient.toLowerCase();
   const lookbackSince = new Date(Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
   // Parameterized JSONB containment check — NOT sql.raw()/string interpolation,
   // which would reopen exactly the SQL-injection class already found and
-  // fixed elsewhere in this codebase this session (knowledge-graph.ts).
+  // fixed elsewhere in this codebase (knowledge-graph.ts).
   const candidates = await db
     .select({
       accountId: emails.accountId,
@@ -103,10 +136,33 @@ async function handleOneBounce(bounceInfo: BounceInfo): Promise<void> {
     .orderBy(desc(emails.createdAt))
     .limit(LOOKBACK_LIMIT);
 
-  const match = candidates[0];
+  return candidates[0] ?? null;
+}
+
+async function handleOneBounce(
+  bounceInfo: BounceInfo,
+  verpEmailId: string | null,
+): Promise<void> {
+  // No persistent per-recipient attempt-count store exists yet — evaluate
+  // as a first attempt. Hard/block bounces suppress unconditionally
+  // regardless of attempt count, so this doesn't affect the dominant,
+  // most damaging case; soft/transient bounces are logged but not acted
+  // on further here (the synchronous retry path already handles those).
+  const action = processBounce(bounceInfo, 0, 1);
+  if (action.kind !== "suppress") {
+    console.log(
+      `[inbound] DSN for ${bounceInfo.recipient}: ${bounceInfo.category}/${bounceInfo.type} — not suppressing (${action.kind})`,
+    );
+    return;
+  }
+
+  const db = getDatabase();
+  const recipientLower = bounceInfo.recipient.toLowerCase();
+
+  const match = await attribute(recipientLower, verpEmailId);
   if (!match) {
     console.warn(
-      `[inbound] DSN hard-bounce for ${bounceInfo.recipient} — no matching sent email in the last ${LOOKBACK_DAYS}d to attribute it to a domain, skipping suppression`,
+      `[inbound] DSN hard-bounce for ${bounceInfo.recipient} — could not attribute it to a sending domain, skipping suppression`,
     );
     return;
   }

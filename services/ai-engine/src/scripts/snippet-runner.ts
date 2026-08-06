@@ -1,16 +1,20 @@
 /**
- * Snippet Runner — Sandboxed TypeScript snippet execution engine
+ * Snippet Runner — ⚠️ NOT A SANDBOX. DO NOT WIRE `runSnippet` TO ANY ROUTE.
  *
- * Executes user-authored TypeScript snippets in a restricted environment.
- * Snippets have NO access to: network, filesystem, process, globals.
- * Snippets CAN access: EmailContext (email data + action helpers).
+ * The security model this header used to describe does not hold. Shadowing
+ * `Function`/`eval`/`process` as undefined parameters stops nothing:
+ * `(() => {}).constructor("return process.env")()` reaches the real Function
+ * constructor through any function literal's prototype and executes with
+ * full host access — process.env, filesystem, network. The Promise.race
+ * timeout also cannot interrupt synchronous code, so `while(true){}` blocks
+ * the host event loop indefinitely.
  *
- * Security model:
- * - Uses Function constructor with a frozen global scope
- * - All dangerous globals are explicitly blocked (undefined)
- * - Timeout enforcement via AbortController + Promise.race
- * - Memory tracked via output size limits
- * - All snippet return values are validated with Zod
+ * `runSnippet`'s only production caller (POST /v1/scripts/:id/test) was
+ * disconnected on 2026-08-05 and returns 501. User-code execution belongs in
+ * `../programs/runtime.ts` — the QuickJS-WASM sandbox with hard memory and
+ * time limits and no host access — which is what any future scripts
+ * execution must be ported onto. The types, templates and helpers exported
+ * here remain in use and are safe; only snippet EXECUTION is the hazard.
  */
 
 import { z } from "zod";

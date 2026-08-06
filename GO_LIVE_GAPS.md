@@ -52,7 +52,7 @@ Nothing runs until these exist. Agents/code cannot do these — they need accoun
 | G1 | Build not verified in 6 weeks | HIGH | ✅ DONE — lint 0 errors, typecheck 37/37, test 61/61 |
 | G2 | Dunning flow only logs, doesn't retry | MED | ✅ DONE — state machine + tests (billing.ts, dunning.test.ts) |
 | G3 | DPA self-serve signing flow missing | MED | ✅ DONE — route + schema + web flow |
-| G4 | No preflight env/connectivity check | MED | ✅ DONE — scripts/preflight.ts |
+| G4 | No preflight env/connectivity check | MED | ✅ DONE — `apps/api/scripts/preflight.ts`. **Was marked DONE while unrunnable** (imported `zod`/`@alecrae/db`, neither resolvable from the repo root, so it died before reading a variable) and required Upstash REST vars no code reads. Fixed + verified running 2026-07-29 — issue #150. |
 | G5 | No load test — never run under traffic | HIGH | ✅ DONE — k6 harness wired to budgets (load-tests/) |
 | G6 | Status page not wired to real uptime | LOW | OPEN — currently static |
 | G7 | Pre-launch security review of public surface | HIGH | IN PROGRESS — agent report pending |
@@ -135,4 +135,4 @@ Do these in order; the whole thing is account creation + pasting secrets.
 
 ---
 
-_Last updated: 2026-06-08 23:35 UTC_
+_Last updated: 2026-07-29 09:20 UTC_

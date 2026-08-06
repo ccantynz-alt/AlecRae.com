@@ -81,7 +81,48 @@ function withInjectionFraming(params: AiCompleteParams): AiCompleteParams {
 }
 
 /** Call Claude directly. Throws on any failure so the caller can fall back. */
-async function callClaude(params: AiCompleteParams): Promise<string> {
+/**
+ * Longest Retry-After we are willing to wait out inline.
+ *
+ * The performance budget for a cloud AI response is 2s (CLAUDE.md), and this
+ * runs inside a user's request. A wait longer than this is not a retry, it is
+ * a hang — the right move there is to fail over or fail fast.
+ */
+const MAX_INLINE_RETRY_MS = 2_000;
+
+/**
+ * Parse Retry-After into a delay we are prepared to wait inline, or null if
+ * waiting is the wrong answer (absent, unparseable, or too long).
+ */
+export function shortRetryDelayMs(
+  header: string | null | undefined,
+  now: number = Date.now(),
+): number | null {
+  if (!header) return null;
+  const trimmed = header.trim();
+  if (trimmed === "") return null;
+
+  let seconds: number;
+  if (/^\d+$/.test(trimmed)) {
+    seconds = Number(trimmed);
+  } else {
+    const asDate = Date.parse(trimmed);
+    if (!Number.isFinite(asDate)) return null;
+    seconds = (asDate - now) / 1000;
+  }
+
+  const ms = Math.ceil(Math.max(0, seconds) * 1000);
+  return ms <= MAX_INLINE_RETRY_MS ? ms : null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callClaude(
+  params: AiCompleteParams,
+  isRetry = false,
+): Promise<string> {
   const key = getAnthropicKey();
   if (!key) throw new AiError("ANTHROPIC_API_KEY not set", "not_configured");
 
@@ -101,6 +142,24 @@ async function callClaude(params: AiCompleteParams): Promise<string> {
   });
 
   if (!res.ok) {
+    // 429 (rate limited) and 529 (overloaded) are transient and carry a
+    // Retry-After. They used to be indistinguishable from a genuine failure,
+    // so the Vapron fallback below fired silently and the user got an answer
+    // from a different model with no signal that anything had happened.
+    if (res.status === 429 || res.status === 529) {
+      const waitMs = shortRetryDelayMs(res.headers.get("Retry-After"));
+      if (waitMs !== null && !isRetry) {
+        // One retry, and only for a wait short enough to stay inside the
+        // 2s cloud-AI performance budget. A longer Retry-After means waiting
+        // is the wrong answer — fall through and let the caller fail over.
+        await sleep(waitMs);
+        return callClaude(params, true);
+      }
+      throw new AiError(
+        `Claude is ${res.status === 429 ? "rate limiting" : "overloaded"} (status ${res.status})`,
+        res.status === 429 ? "claude_rate_limited" : "claude_overloaded",
+      );
+    }
     throw new AiError(`Claude request failed with status ${res.status}`, "claude_error");
   }
 
@@ -156,6 +215,10 @@ export async function aiComplete(params: AiCompleteParams): Promise<AiCompleteRe
     } catch (err) {
       // Fall through to Vapron only if it's configured; otherwise rethrow.
       if (!isVapronConfigured()) throw err;
+      // Say so. Falling back means the answer comes from a different model,
+      // and that used to happen with nothing recorded anywhere.
+      const code = err instanceof AiError ? err.code : "unknown";
+      console.warn(`[ai] Claude unavailable (${code}) — falling back to Vapron`);
     }
   }
 

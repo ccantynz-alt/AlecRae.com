@@ -53,7 +53,9 @@ export interface SmtpServerEvents {
 }
 
 export class SmtpServer extends EventEmitter<SmtpServerEvents> {
-  private readonly config: SmtpServerConfig;
+  // Not readonly: `updateLocalDomains()` swaps it so the relay control can
+  // track domains onboarded after start-up.
+  private config: SmtpServerConfig;
   private readonly tlsManager: TlsManager | null;
   private server: net.Server | null = null;
   private readonly sessions = new Map<string, SmtpSession>();
@@ -444,6 +446,36 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
     socket.write(formatResponse(SmtpResponses.mailOk()));
   }
 
+  /**
+   * Replace the set of domains this server accepts mail for.
+   *
+   * Customer domains are added and removed while the server is running, so the
+   * relay control cannot be a constant fixed at construction — a domain
+   * onboarded after start-up would otherwise be refused until a restart.
+   */
+  updateLocalDomains(localDomains: readonly string[]): void {
+    this.config = { ...this.config, localDomains };
+  }
+
+  /**
+   * True when we host the recipient's domain.
+   *
+   * Deliberately fails closed — an unconfigured `localDomains` accepts
+   * nothing rather than everything. Subdomains are NOT implicitly accepted:
+   * hosting `example.com` must not silently make us the relay for
+   * `anything.example.com`.
+   */
+  private isLocalRecipient(address: string): boolean {
+    const domains = this.config.localDomains;
+    if (!domains || domains.length === 0) return false;
+
+    const at = address.lastIndexOf("@");
+    if (at <= 0 || at === address.length - 1) return false;
+    const domain = address.slice(at + 1).toLowerCase();
+
+    return domains.some((d) => d.trim().toLowerCase() === domain);
+  }
+
   private handleRcptTo(session: SmtpSession, parsed: SmtpParsedCommand, socket: net.Socket): void {
     const rcptTo = parseRcptTo(parsed.argument);
     if (!rcptTo) {
@@ -458,6 +490,20 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
 
     if (session.envelope.rcptTo.length >= this.config.maxRecipients) {
       socket.write(formatResponse(SmtpResponses.tooManyRecipients()));
+      return;
+    }
+
+    // ── Relay control ──────────────────────────────────────────────────
+    // Only accept mail addressed to a domain we actually host. Without this
+    // the server answers 250 OK to any recipient and forwards it — an open
+    // relay, which is what ran unnoticed for 9 days (Known Issue #105) and
+    // was "fixed" only by stopping the service. Fails closed: no configured
+    // domains means accept nothing.
+    if (!this.isLocalRecipient(rcptTo.address)) {
+      console.warn(
+        `[smtp] Relay denied: ${session.remoteAddress} tried to send to ${rcptTo.address}`,
+      );
+      socket.write(formatResponse(SmtpResponses.relayDenied()));
       return;
     }
 

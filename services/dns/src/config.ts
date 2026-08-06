@@ -44,6 +44,62 @@ export interface DnsServiceConfig {
   readonly returnPathHost: string;
   /** Authoritative nameserver hostnames, e.g. ["ns1.alecrae.com", "ns2.alecrae.com"]. */
   readonly nsHosts: readonly string[];
+  /**
+   * The DMARC External Destination Verification record (RFC 7489 §7.1).
+   *
+   * We publish `_dmarc.customer.com` with `rua=mailto:dmarc@alecrae.com` — a
+   * *different* organizational domain from the customer's. RFC 7489 requires
+   * the receiving domain to opt in before a reporter will send reports
+   * across an organizational boundary, and Google, Microsoft and Yahoo all
+   * enforce it. Without this record, a conforming reporter MUST NOT send the
+   * aggregate reports at all: every customer domain publishes DMARC and
+   * receives nothing, silently.
+   *
+   * That matters beyond tidiness. Aggregate reports are the primary signal
+   * telling us who is spoofing a customer's domain and whether our own mail
+   * is passing SPF/DKIM alignment in the wild — the feedback loop that turns
+   * a deliverability problem into something we notice before receivers start
+   * rejecting mail.
+   *
+   * A single wildcard covers every customer domain at once, which is the
+   * standard approach for a sender operating on behalf of many domains.
+   * `null` when the rua is not a mailto: address we can derive a host from.
+   */
+  readonly dmarcReportAuthorization: DmarcReportAuthorization | null;
+}
+
+export interface DmarcReportAuthorization {
+  /** Record name, e.g. "*._report._dmarc.alecrae.com". */
+  readonly name: string;
+  /** Record type — always TXT. */
+  readonly type: "TXT";
+  /** Record value — the literal string "v=DMARC1". */
+  readonly value: string;
+  /** Domain the record must be published on: ours, NOT the customer's. */
+  readonly publishOn: string;
+}
+
+/**
+ * Derive the external-authorization record from a `rua` target.
+ *
+ * Exported so the verification path and the onboarding docs read the same
+ * value rather than each hardcoding it.
+ */
+export function deriveDmarcReportAuthorization(
+  dmarcRua: string,
+): DmarcReportAuthorization | null {
+  const address = dmarcRua.startsWith("mailto:") ? dmarcRua.slice(7) : dmarcRua;
+  const host = address.split("@")[1]?.trim().toLowerCase();
+  if (!host) return null;
+
+  return {
+    // The wildcard form: one record authorizes reports for every domain we
+    // send on behalf of, rather than one record per customer onboarded.
+    name: `*._report._dmarc.${host}`,
+    type: "TXT",
+    value: "v=DMARC1",
+    publishOn: host,
+  };
 }
 
 // Production defaults — keep in sync with docs/infra/business-email-domain-onboarding.md
@@ -154,5 +210,6 @@ export function getDnsConfig(env: NodeJS.ProcessEnv = process.env): DnsServiceCo
     dmarcValue: `v=DMARC1; p=quarantine; rua=${dmarcRua}; pct=100`,
     returnPathHost: resolveReturnPathHost(env),
     nsHosts: resolveNsHosts(env),
+    dmarcReportAuthorization: deriveDmarcReportAuthorization(dmarcRua),
   };
 }

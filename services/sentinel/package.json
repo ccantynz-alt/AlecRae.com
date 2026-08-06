@@ -2,17 +2,18 @@
   "name": "@alecrae/sentinel",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-powered zero-latency validation pipeline \u2014 the immune system of AlecRae",
+  "description": "AI-powered zero-latency validation pipeline — the immune system of AlecRae",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
   "scripts": {
     "dev": "bun --watch src/index.ts",
-    "build": "echo 'Service builds independently \u2014 not part of Vercel web deployment'",
+    "build": "echo 'Service runs from source under Bun — no build step; see start'",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "start": "bun run src/index.ts"
   },
   "dependencies": {
     "@alecrae/shared": "workspace:*"

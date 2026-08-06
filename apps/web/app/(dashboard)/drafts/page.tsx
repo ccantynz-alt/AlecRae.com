@@ -43,7 +43,10 @@ export default function DraftsPage(): React.ReactNode {
     try {
       setLoading(true);
       setError(null);
-      const res = await messagesApi.list({ limit: 50, status: "queued" });
+      // status "queued" is outbound mail waiting to be delivered, not drafts —
+      // this page listed those for every user. Real drafts are status "draft"
+      // in the "drafts" folder.
+      const res = await messagesApi.list({ limit: 50, status: "draft", folder: "drafts" });
       const items: DraftItem[] = res.data.map((msg: Message) => ({
         id: msg.id,
         to: msg.to.map((r) => r.name ?? r.email).join(", ") || "No recipient",
@@ -64,11 +67,11 @@ export default function DraftsPage(): React.ReactNode {
   }, [fetchDrafts]);
 
   const handleOpenDraft = (draft: DraftItem): void => {
-    const params = new URLSearchParams({
-      to: draft.to !== "No recipient" ? draft.to : "",
-      subject: draft.subject !== "(no subject)" ? draft.subject : "",
-    });
-    router.push(`/compose?${params.toString()}`);
+    // Pass the id only and let Compose load the full draft. Previously just
+    // `to` and `subject` went through, so reopening a draft silently discarded
+    // its body and saving again created a duplicate row. The body is not put
+    // in the query string on purpose — an email body will exceed URL limits.
+    router.push(`/compose?draftId=${encodeURIComponent(draft.id)}`);
   };
 
   const handleDelete = async (id: string): Promise<void> => {

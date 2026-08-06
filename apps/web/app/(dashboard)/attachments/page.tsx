@@ -3,8 +3,12 @@
 /**
  * AlecRae — Attachment Intelligence
  *
- * AI-powered attachment analysis: virus scanning, PII detection, threat
- * assessment, text extraction (OCR), and smart file-organization suggestions.
+ * Attachment analysis: PII detection, a file-type risk check, text extraction
+ * (OCR) and smart file-organization suggestions.
+ *
+ * NOT virus scanning — no scanner is wired up, and the endpoint that used to
+ * fabricate a verdict now returns 501. The UI says so rather than implying a
+ * file has been checked.
  *
  * API (mounted at /v1/attachments/intelligence — see apps/api/src/server.ts):
  *   GET  /analysis                 → analyzed attachment library (cursor)
@@ -14,7 +18,7 @@
  *   GET  /pii-report               → PII detection report
  *   GET  /organize                 → AI organization suggestions (cursor)
  *   POST /organize/:id/action      → accept / dismiss a suggestion
- *   POST /scan                     → virus-scan one attachment
+ *   POST /scan                     → 501, no scanner configured (not called)
  *   POST /extract-text             → extract text (OCR — backend stub today)
  *
  * Plan gate: pro+ (attachment_intelligence).
@@ -361,7 +365,6 @@ function DetailPanel({
   onUpdated: (item: AttachmentAnalysis) => void;
 }): ReactNode {
   const [detail, setDetail] = useState<AttachmentAnalysis>(item);
-  const [scanning, setScanning] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [extractedText, setExtractedText] = useState<string | null>(
     item.extractedText,
@@ -383,20 +386,6 @@ function DetailPanel({
     closeRef.current?.focus();
   }, [item]);
 
-  async function handleScan(): Promise<void> {
-    setScanning(true);
-    setError(null);
-    try {
-      const res = await attachmentIntelligenceApi.scan(detail.id);
-      setDetail(res.data);
-      onUpdated(res.data);
-    } catch (e) {
-      setError(errMsg(e));
-    } finally {
-      setScanning(false);
-    }
-  }
-
   async function handleExtract(): Promise<void> {
     setExtracting(true);
     setError(null);
@@ -404,7 +393,11 @@ function DetailPanel({
       const res = await attachmentIntelligenceApi.extractText(detail.id);
       setExtractedText(res.data.extractedText);
       setExtractionIsStub(isPlaceholderExtraction(res.data.extractedText));
-      setDetail((prev) => ({ ...prev, extractedText: res.data.extractedText }));
+      const updated = { ...detail, extractedText: res.data.extractedText };
+      setDetail(updated);
+      // Tell the parent too — otherwise the list row keeps the pre-extraction
+      // text and reopening the item shows the stale value.
+      onUpdated(updated);
     } catch (e) {
       setError(errMsg(e));
     } finally {
@@ -446,15 +439,20 @@ function DetailPanel({
           {error && <ErrorBanner message={error} />}
 
           {/* Status pills */}
+          {/*
+            `threatLevel` is a file-extension and size check, nothing more — an
+            .exe is "dangerous", anything else under 25MB is "safe". Labelling
+            that plain "Safe" in green implied a scan had cleared the file. The
+            pill now names the check it actually performed. The separate
+            `isSafe` pill was derived from this same value, so it added a second
+            overclaim and no information; it is gone.
+          */}
           <Box className="flex flex-wrap items-center gap-2">
             <Pill tone={threatTone(detail.threatLevel)}>
-              Threat: {detail.threatLevel}
+              File type: {detail.threatLevel === "safe" ? "no obvious risk" : detail.threatLevel}
             </Pill>
             <Pill tone={scanTone(detail.virusScanStatus)}>
               {scanLabel(detail.virusScanStatus)}
-            </Pill>
-            <Pill tone={detail.isSafe ? "green" : "red"}>
-              {detail.isSafe ? "Safe" : "Not safe"}
             </Pill>
           </Box>
 
@@ -472,28 +470,23 @@ function DetailPanel({
           </Box>
 
           {/* Virus scan */}
+          {/*
+            No virus scanner is wired up. This panel previously showed a result
+            invented at random — usually "No threats detected" for a file
+            nothing had scanned — behind a "Rescan" button. Saying so plainly
+            beats a reassuring sentence we cannot stand behind, and the button
+            is gone rather than left to fail.
+          */}
           <Box className="rounded-lg border border-border p-3">
-            <Box className="flex items-center justify-between gap-3">
-              <Box className="min-w-0">
-                <Text variant="body-sm" className="font-medium text-content">
-                  Virus scan
-                </Text>
-                <Text variant="caption" className="text-content-subtle">
-                  {detail.virusScanResult ??
-                    (detail.virusScanStatus === "pending"
-                      ? "Not scanned yet."
-                      : "No details.")}
-                </Text>
-              </Box>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => void handleScan()}
-                disabled={scanning}
-                aria-label={`Run virus scan for ${detail.fileName}`}
-              >
-                {scanning ? "Scanning…" : "Rescan"}
-              </Button>
+            <Box className="min-w-0">
+              <Text variant="body-sm" className="font-medium text-content">
+                Virus scan
+              </Text>
+              <Text variant="caption" className="text-content-subtle">
+                Not available. AlecRae does not scan attachments for malware
+                yet, so this file has not been checked. Treat unexpected
+                attachments with the same caution you would anywhere else.
+              </Text>
             </Box>
           </Box>
 
@@ -699,8 +692,8 @@ function AttachmentListSection({
           }
           hint={
             mode === "threats"
-              ? "Suspicious and dangerous files will appear here as attachments are analyzed."
-              : "Attachments are analyzed automatically as email syncs."
+              ? "Nothing flagged. Note that automatic analysis isn't running yet."
+              : "Automatic attachment analysis isn't finished — files won't be analyzed on their own yet."
           }
         />
       )}
@@ -1174,9 +1167,9 @@ export default function AttachmentsPage(): ReactNode {
   return (
     <PageLayout
       title="Attachment Intelligence"
-      description="Every attachment analyzed by AI — virus scanned, PII flagged, and smartly organized."
+      description="Attachments organized and checked for risky file types and PII patterns. Virus scanning is not available yet."
     >
-      <PlanGate feature="attachment_intelligence" required="pro">
+      <PlanGate feature="attachment_intelligence">
         <AttachmentsContent />
       </PlanGate>
     </PageLayout>

@@ -98,7 +98,19 @@ export class PostgresEmailStore implements EmailStore {
     const id = generateId();
     const now = new Date();
 
-    // Determine mailbox based on verdict
+    // Determine mailbox based on verdict.
+    //
+    // `folder` (issue #88's real column) is what `GET /v1/messages` filters on;
+    // it defaults to "inbox" at the schema level, so a row that sets only the
+    // legacy `tags` entry lands in the user's inbox no matter what the filter
+    // pipeline decided. Both must be written from the same value or quarantined
+    // mail is detected correctly and then filed as if it were clean.
+    //
+    // "rejected" is unreachable from either ingress path today — both the SMTP
+    // handler and the HTTP webhook reject before calling store() — but it is
+    // mapped rather than collapsed into "spam": if a caller ever does store a
+    // rejected message, it must not appear in a mailbox listing, and no listable
+    // folder is the honest place for a message we told the sender we refused.
     let mailboxId = "inbox";
     if (verdict.action === "quarantine") mailboxId = "spam";
     if (verdict.action === "reject") mailboxId = "rejected";
@@ -136,6 +148,7 @@ export class PostgresEmailStore implements EmailStore {
       inReplyTo: email.inReplyTo ?? null,
       references: email.references.length > 0 ? email.references : null,
       status: "delivered",
+      folder: mailboxId,
       tags: [mailboxId],
       metadata: {
         spamScore: String(verdict.score ?? 0),

@@ -222,7 +222,7 @@ export default function AnalyticsPage(): React.ReactNode {
         role="region"
         aria-label="Advanced analytics dashboard"
       >
-        <PlanGate feature="productivity_analytics" required="pro">
+        <PlanGate feature="productivity_analytics">
           <AnalyticsDashboardPanel />
         </PlanGate>
       </motion.div>

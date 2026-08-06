@@ -91,6 +91,41 @@ v=DMARC1; p=quarantine; pct=10; rua=mailto:dmarc@alecrae.com; ruf=mailto:dmarc@a
 **Day 60 (if still clean):**
 - Move to `p=reject; pct=100`. You're now fully protected.
 
+### 5a. External report authorization — REQUIRED before any customer domain sends
+
+**⚠️ NOT YET PUBLISHED. Craig must add this (Boss Rule #4 — DNS changes).**
+
+| Name | Type | Value | Proxy |
+|---|---|---|---|
+| `*._report._dmarc` | TXT | `v=DMARC1` | DNS only |
+
+Every customer domain we onboard gets `_dmarc.customer.com` published with
+`rua=mailto:dmarc@alecrae.com`. That points the reports at a **different
+organizational domain** from the one being reported on, and RFC 7489 §7.1
+requires the *receiving* domain to opt in before a reporter will send across
+that boundary. Google, Microsoft and Yahoo all enforce it.
+
+Without this record, a conforming reporter **will not send the reports at
+all** — every customer domain publishes DMARC and we receive nothing, with no
+error anywhere to reveal it. Aggregate reports are how we learn who is
+spoofing a customer's domain and whether our mail is passing SPF/DKIM
+alignment in the wild, so losing them means losing the signal that surfaces a
+deliverability problem before receivers start rejecting mail.
+
+The wildcard covers every customer domain at once. The per-domain alternative
+(`customer.com._report._dmarc.alecrae.com`) would need a DNS write in our zone
+on every onboarding — a step that gets forgotten, and whose absence is
+invisible.
+
+Verify after publishing:
+```
+dig TXT _probe._report._dmarc.alecrae.com +short
+# Expected: "v=DMARC1"
+```
+
+`checkDmarcReportAuthorization()` in `services/dns` performs exactly this
+check, so once wired into monitoring the gap cannot silently reappear.
+
 ---
 
 ## 6. Verification Commands
@@ -143,4 +178,4 @@ dig -x 149.28.119.158 +short
 
 ---
 
-_Last updated: 2026-07-13 10:15 UTC_
+_Last updated: 2026-07-29 06:40 UTC_

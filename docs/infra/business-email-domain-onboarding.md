@@ -49,17 +49,18 @@ This runbook is grounded in the code, not generic advice. The load-bearing facts
   customer's MX must point at a host whose A record is our inbound IP, with
   matching PTR.
 
-> ⚠️ **Naming drift to be aware of.** `services/dns/src/auto-config.ts` and
-> `services/dns/src/records/manager.ts` still hard-code **`.dev`** placeholder
-> hostnames (`mx1.alecrae.dev`, `mx2.alecrae.dev`, `include:spf.alecrae.dev`,
-> `bounce.alecrae.dev`, `dmarc-reports@alecrae.dev`). The **production**
-> convention — used by `.env.production.template` (`MTA_HOSTNAME=mx1.alecrae.com`),
-> `dns-zone-alecrae.md`, and `deliverability.md` — is **`.com`**
-> (`mx1.alecrae.com` / `mx2.alecrae.com` / `_spf.alecrae.com` /
-> `bounce.alecrae.com`). **This runbook uses the production `.com` values.**
-> Before onboarding the first real customer, the `.dev` constants in
-> `auto-config.ts` must be updated to `.com` (tracked as a follow-up) or the
-> auto-generated records will tell customers to point at the wrong hosts.
+> ✅ **Naming drift RESOLVED — verified 2026-08-04.** This block previously
+> warned that `auto-config.ts` and `records/manager.ts` hard-coded **`.dev`**
+> placeholder hostnames, and told you to fix them before onboarding a real
+> customer. That is no longer true and acting on it would waste a step: there
+> are now **zero occurrences of `alecrae.dev` anywhere in `services/dns/src`**.
+> The hostnames live in `services/dns/src/config.ts` as a single source of
+> truth, env-driven with production `.com` defaults — `mx1/mx2.alecrae.com`,
+> `include:_spf.alecrae.com`, `mailto:dmarc@alecrae.com`,
+> `bounce.alecrae.com`, `ns1/ns2.alecrae.com`. Every default is
+> production-correct, so **no env vars are required** for the records this
+> runbook produces; override via `DNS_MX_HOSTS`, `DNS_SPF_INCLUDE`,
+> `DNS_DMARC_RUA`, `DNS_RETURN_PATH_HOST`, `DNS_NS_HOSTS` only if you need to.
 
 ---
 
@@ -414,4 +415,4 @@ VwIDAQAB
 
 ---
 
-_Last updated: 2026-07-13 10:15 UTC_
+_Last updated: 2026-08-04 01:00 UTC_

@@ -6,9 +6,13 @@
  *  2. Production with a complete env passes silently
  *  3. Production with missing/invalid vars throws ONE aggregated error
  *     naming every problem (DATABASE_URL, JWT_SECRET, WEBAUTHN_RP_ID,
- *     WEBAUTHN_ORIGIN)
+ *     WEBAUTHN_ORIGIN, API_URL)
  *  4. JWT_SECRET shorter than 32 chars is rejected
  *  5. WEBAUTHN_ORIGIN must be a URL
+ *  5b. API_URL must be an https, non-localhost URL — it is embedded in
+ *     outbound mail (List-Unsubscribe + click tracking), so a bad value
+ *     ships dead links to every recipient rather than failing a request
+ *     someone would notice
  *  6. Recommended vars (REDIS_URL, WEBHOOK_SECRET, ANTHROPIC_API_KEY,
  *     STRIPE_SECRET_KEY) warn but never throw
  */
@@ -22,6 +26,7 @@ const VALID_PRODUCTION_ENV: NodeJS.ProcessEnv = {
   JWT_SECRET: "a".repeat(32),
   WEBAUTHN_RP_ID: "alecrae.com",
   WEBAUTHN_ORIGIN: "https://mail.alecrae.com",
+  API_URL: "https://api.alecrae.com",
   REDIS_URL: "redis://localhost:6379",
   WEBHOOK_SECRET: "whsec_test",
   ANTHROPIC_API_KEY: "sk-ant-test",
@@ -69,7 +74,8 @@ describe("assertProductionEnv — production, invalid env", () => {
     expect(message).toContain("JWT_SECRET");
     expect(message).toContain("WEBAUTHN_RP_ID");
     expect(message).toContain("WEBAUTHN_ORIGIN");
-    expect(message).toContain("4 problems");
+    expect(message).toContain("API_URL");
+    expect(message).toContain("5 problems");
   });
 
   it("rejects a JWT_SECRET shorter than 32 characters", () => {
@@ -80,6 +86,30 @@ describe("assertProductionEnv — production, invalid env", () => {
   it("rejects a non-URL WEBAUTHN_ORIGIN", () => {
     const env = { ...VALID_PRODUCTION_ENV, WEBAUTHN_ORIGIN: "mail.alecrae.com" };
     expect(() => assertProductionEnv(env)).toThrowError(/WEBAUTHN_ORIGIN.*URL/s);
+  });
+
+  it("rejects a missing API_URL — outbound mail would advertise localhost", () => {
+    const env: NodeJS.ProcessEnv = { ...VALID_PRODUCTION_ENV, API_URL: undefined };
+    expect(() => assertProductionEnv(env)).toThrowError(/API_URL/s);
+  });
+
+  it("rejects a plaintext http API_URL", () => {
+    const env = { ...VALID_PRODUCTION_ENV, API_URL: "http://api.alecrae.com" };
+    expect(() => assertProductionEnv(env)).toThrowError(/API_URL.*https/s);
+  });
+
+  it("rejects a localhost API_URL (the dev default) in production", () => {
+    // The exact failure this guards: routes/messages.ts falls back to
+    // http://localhost:3001, so an unset API_URL would ship an unreachable
+    // List-Unsubscribe header and localhost click-tracking links in every
+    // outbound message — a deliverability problem, not a cosmetic one.
+    const env = { ...VALID_PRODUCTION_ENV, API_URL: "https://localhost:3001" };
+    expect(() => assertProductionEnv(env)).toThrowError(/API_URL.*localhost/s);
+  });
+
+  it("rejects a 127.0.0.1 API_URL in production", () => {
+    const env = { ...VALID_PRODUCTION_ENV, API_URL: "https://127.0.0.1:3001" };
+    expect(() => assertProductionEnv(env)).toThrowError(/API_URL/s);
   });
 
   it("only reports the vars that are actually broken", () => {
@@ -109,6 +139,7 @@ describe("assertProductionEnv — recommended vars", () => {
       JWT_SECRET: VALID_PRODUCTION_ENV["JWT_SECRET"],
       WEBAUTHN_RP_ID: VALID_PRODUCTION_ENV["WEBAUTHN_RP_ID"],
       WEBAUTHN_ORIGIN: VALID_PRODUCTION_ENV["WEBAUTHN_ORIGIN"],
+      API_URL: VALID_PRODUCTION_ENV["API_URL"],
     };
 
     expect(() => assertProductionEnv(env)).not.toThrow();

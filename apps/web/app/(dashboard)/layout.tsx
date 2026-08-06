@@ -181,6 +181,7 @@ const SETTINGS_ENTRIES: NavEntry[] = [
 const ADMIN_ENTRIES: NavEntry[] = [
   { id: "workspace", label: "Workspace", href: "/workspace" },
   { id: "domains", label: "Domains", href: "/domains" },
+  { id: "mailboxes", label: "Mailboxes", href: "/mailboxes" },
   { id: "admin", label: "Admin", href: "/admin" },
 ];
 

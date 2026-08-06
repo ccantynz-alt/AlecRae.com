@@ -112,7 +112,7 @@ Evidence paths are relative to the repo root unless otherwise noted.
 |---|---|---|
 | CI pipeline enforces quality gates | **Implemented** | `.github/workflows/ci.yml` — lint, typecheck, test, build all gate PRs to main |
 | Weekly automated security scan | **Implemented** | `.github/workflows/security.yml` — runs every Monday at 06:00 UTC; also runs on every PR to main |
-| Dependency audit (OSV-Scanner + audit-ci) | **Implemented** | `.github/workflows/security.yml` — `dependency-audit` job; `audit-ci.json` configured with `moderate` severity threshold |
+| Dependency audit (`bun audit` + OSV-Scanner) | **Implemented** | `.github/workflows/security.yml` — `dependency-audit` job runs `scripts/check-dependency-audit.ts`, which **fails the build on any unreviewed CRITICAL advisory**; accepted criticals are enumerated in that script with a written reason each. High/moderate/low are reported to the job summary, not blocking — see the script header for the reasoning. **Corrected 2026-08-05:** this row previously claimed `audit-ci` with a `moderate` threshold. That step could never have run — audit-ci requires an npm/yarn/pnpm lockfile and this is a Bun workspace, so it errored on every invocation and `\|\| true` reported success. The control existed on paper and audited nothing; treat any prior evidence period as unscanned. |
 | CodeQL SAST with security-extended queries | **Implemented** | `.github/workflows/security.yml` — `codeql` job; scans JavaScript/TypeScript |
 | Secret scanning (Gitleaks on every PR) | **Implemented** | `.github/workflows/security.yml` — `secret-scanning` job; full history checkout (`fetch-depth: 0`) |
 

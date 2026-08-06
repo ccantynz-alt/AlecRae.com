@@ -10,14 +10,14 @@
 import { Hono } from "hono";
 import { getDatabase } from "@alecrae/db";
 import { sql } from "drizzle-orm";
-import Redis from "ioredis";
+import type Redis from "ioredis";
+import { createProbeRedis } from "../lib/redis.js";
 
 const status = new Hono();
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
-const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
 const MEILISEARCH_URL =
   process.env["MEILISEARCH_URL"] ?? "http://localhost:7700";
 const ANTHROPIC_API_KEY =
@@ -70,11 +70,10 @@ async function checkRedis(): Promise<ServiceHealth> {
   const start = Date.now();
   let client: Redis | null = null;
   try {
-    client = new Redis(REDIS_URL, {
-      connectTimeout: 3000,
-      maxRetriesPerRequest: 1,
-      lazyConnect: true,
-    });
+    // Own connection, not the shared client — see lib/redis.ts's
+    // createProbeRedis for why a pooled probe would answer the wrong question.
+    client = createProbeRedis({ connectTimeout: 3000 });
+    if (!client) throw new Error("Redis is not configured");
     await client.connect();
     await client.ping();
     const latency = Date.now() - start;

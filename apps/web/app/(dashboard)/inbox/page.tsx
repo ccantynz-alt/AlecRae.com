@@ -79,6 +79,10 @@ function isLikelyNewsletter(msg: Message): boolean {
 function toEmailListItem(msg: Message): EmailListItem {
   return {
     id: msg.id,
+    // Falls back to the message id only when the API didn't supply one, which
+    // keeps a message its own single-message thread rather than silently
+    // joining every unthreaded message together under `undefined`.
+    threadId: msg.threadId ?? msg.id,
     sender: {
       name: msg.from.name ?? msg.from.email,
       email: msg.from.email,
@@ -325,7 +329,18 @@ export default function InboxPage(): React.ReactNode {
   }, []);
 
   const muteSelected = useCallback(() => {
-    const ids = Array.from(selectedIds);
+    // Selection is by message; muting is by conversation. Resolving one to the
+    // other here is the whole point — muting used to send message ids to a
+    // thread-mute endpoint, so the mute matched only that single message.
+    // De-duplicated because selecting three messages from one thread is one
+    // mute, not three.
+    const ids = Array.from(
+      new Set(
+        emailItems
+          .filter((e) => selectedIds.has(e.id))
+          .map((e) => e.threadId ?? e.id),
+      ),
+    );
     if (ids.length === 0) return;
     // Optimistic: mark muted immediately, roll back per-id on failure.
     setMutedThreadIds((prev) => {
@@ -352,7 +367,7 @@ export default function InboxPage(): React.ReactNode {
         });
       });
     }
-  }, [selectedIds, addUndoAction]);
+  }, [selectedIds, emailItems, addUndoAction]);
 
   const batchArchive = useCallback(() => {
     const ids = Array.from(selectedIds);
@@ -482,6 +497,16 @@ export default function InboxPage(): React.ReactNode {
         tone: "professional",
         length: "short",
       });
+      // When Claude is unavailable the endpoint returns a canned placeholder
+      // that reads "[AI-composed content would appear here ...]". Inserting
+      // that into the reply box presented it as an AI draft the user could
+      // send to a real recipient. Refuse instead of quietly drafting nonsense.
+      if (res.data.degraded === true) {
+        setAiError(
+          "AI reply isn't available right now, so nothing was drafted. Write your reply manually or try again shortly.",
+        );
+        return;
+      }
       setQuickReplyDraft(res.data.body);
       setQuickReplyDraftVersion((v) => v + 1);
       setQuickReplyOpen(true);
@@ -508,6 +533,10 @@ export default function InboxPage(): React.ReactNode {
           bodyText,
         maxLength: 100,
       });
+      if (res.data.degraded === true) {
+        setAiError("AI summaries aren't available right now — nothing was generated.");
+        return;
+      }
       setThreadSummary(res.data.summary);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "AI summarize failed");

@@ -65,7 +65,7 @@ export default function SsoSettingsPage(): ReactNode {
         </Text>
       </Box>
 
-      <PlanGate feature="sso" required="team">
+      <PlanGate feature="sso">
         <SsoConfigurator accountId={accountId} />
       </PlanGate>
     </Box>

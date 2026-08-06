@@ -48,6 +48,16 @@ export {
   envelopeEncrypt,
 } from "./encryption.js";
 
+// Secrets at rest (single implementation — see secret-box.ts)
+export {
+  sealSecret,
+  sealSecretOrNull,
+  openSecret,
+  openSecretOrNull,
+  openSecretSafe,
+  isSealed,
+} from "./secret-box.js";
+
 // Hashing
 export {
   hash,

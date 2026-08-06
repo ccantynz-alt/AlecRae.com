@@ -14,6 +14,8 @@ import { eq, and } from "drizzle-orm";
 import { getDatabase, emails, events, domains, suppressionLists } from "@alecrae/db";
 import { enqueueWebhookDelivery } from "../lib/webhook-dispatcher.js";
 import { recordEngagementEvent } from "./send-time.js";
+import { verifyTrackedUrl, SIGNATURE_PARAM } from "../lib/tracking-link.js";
+import { shouldRecordTrackingEvent } from "../lib/tracking-throttle.js";
 
 const tracking = new Hono();
 
@@ -40,6 +42,15 @@ async function recordEvent(
   eventType: string,
   extra: { url?: string; userAgent?: string; ipAddress?: string } = {},
 ): Promise<void> {
+  // Bail before touching the database. Each recorded event costs an insert
+  // AND a webhook delivery to the customer's own endpoint, so an unthrottled
+  // public endpoint lets anyone holding one tracking URL drive unlimited
+  // outbound calls at that customer's receiver. See lib/tracking-throttle.ts
+  // for why this is measured per email rather than per IP.
+  if (!(await shouldRecordTrackingEvent(emailId, eventType))) {
+    return;
+  }
+
   const db = getDatabase();
 
   // Look up the email to get account context
@@ -150,7 +161,19 @@ tracking.get("/:emailId/click", async (c) => {
     return c.text("Missing url parameter", 400);
   }
 
-  // Validate URL to prevent open redirect
+  // A protocol check alone is NOT open-redirect protection, which is what the
+  // comment here used to claim. Anyone could hand this endpoint any https URL
+  // and get a 302 to it from our own domain — the exact primitive phishers
+  // harvest to launder links past reputation filters, and a fast route to
+  // having api.alecrae.com flagged by Safe Browsing and blocklisted.
+  //
+  // The signature is over (emailId, url) and only this server can produce it,
+  // so the endpoint can only ever redirect to a link we ourselves put in that
+  // message. Verified BEFORE parsing or recording anything.
+  if (!verifyTrackedUrl(emailId, targetUrl, c.req.query(SIGNATURE_PARAM))) {
+    return c.text("Invalid or missing link signature", 400);
+  }
+
   try {
     const parsed = new URL(targetUrl);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
@@ -174,6 +197,17 @@ tracking.get("/:emailId/click", async (c) => {
 
 tracking.post("/:emailId/unsubscribe", async (c) => {
   const emailId = c.req.param("emailId");
+
+  // Repeat unsubscribes carry no information — the insert below is already
+  // idempotent — but they still cost a lookup and a write on an endpoint
+  // anyone can call. Past the limit we answer 200 without re-doing the work,
+  // because by then the address genuinely IS suppressed: reporting a failure
+  // to a mail client's one-click unsubscribe would be both wrong and a
+  // compliance risk.
+  if (!(await shouldRecordTrackingEvent(emailId, "email.unsubscribed.request"))) {
+    return c.text("Unsubscribed", 200);
+  }
+
   const db = getDatabase();
 
   // Look up the email to find the sender domain + recipient

@@ -56,10 +56,15 @@ for svc in ${EXPECTED_SERVICES:-}; do
 done
 
 # ── 2. Publicly-listening ports match the allowlist ──────────────────────
-# `ss -tlnp` output for a 0.0.0.0-bound listener looks like:
-#   LISTEN 0 511 0.0.0.0:443 0.0.0.0:*
-# Extract just the port number for 0.0.0.0-bound (not 127.0.0.1-bound) lines.
-listening_ports="$(ss -tlnp 2>/dev/null | awk '$4 ~ /^0\.0\.0\.0:/ { split($4, a, ":"); print a[2] }' | sort -un)"
+# `ss -tlnp` output for wildcard-bound listeners looks like:
+#   LISTEN 0 511 0.0.0.0:443 0.0.0.0:*     (IPv4 wildcard)
+#   LISTEN 0 511 [::]:25     [::]:*        (IPv6/dual-stack wildcard)
+#   LISTEN 0 511 *:8080      *:*           (either, some ss versions)
+# IPv6 MUST be covered: Bun and Node default to a dual-stack [::] bind, so
+# an IPv4-only filter would have let a repeat of the open-relay incident
+# (issue #105) listen publicly on [::]:25 without ever appearing here.
+# Loopback binds (127.0.0.1:*, [::1]:*) are deliberately excluded.
+listening_ports="$(ss -tlnp 2>/dev/null | awk '$4 ~ /^(0\.0\.0\.0:|\[::\]:|\*:)/ { n = split($4, a, ":"); print a[n] }' | sort -un)"
 
 unexpected_ports=()
 for port in $listening_ports; do

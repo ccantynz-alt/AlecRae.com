@@ -31,18 +31,26 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # `bun audit` against bun.lock. The previous step ran
+      # `npx audit-ci ... || true`, which could never work here — audit-ci
+      # requires an npm/yarn/pnpm lockfile and this is a Bun workspace, so
+      # every run died on "Cannot establish package-manager type" and the
+      # `|| true` reported success. The job was green while auditing nothing.
+      # The gate fails on UNREVIEWED criticals only; see the script for why
+      # high/moderate are reported rather than blocking.
       - name: Run dependency audit
-        run: |
-          # Bun does not have a built-in audit command yet.
-          # Use npm audit as a fallback against the lockfile.
-          npx audit-ci --config audit-ci.json || true
+        run: bun run scripts/check-dependency-audit.ts | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Check for known vulnerabilities with OSV-Scanner
         run: |
           curl -sfL -o osv-scanner \
             "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64"
           chmod +x osv-scanner
-          ./osv-scanner --lockfile=bun.lock --recursive . || true
+          # Non-blocking by design (bun audit above is the gate), but the
+          # output now reaches the job summary instead of being discarded —
+          # `|| true` with no visible result is indistinguishable from a
+          # scanner that never ran.
+          ./osv-scanner --lockfile=bun.lock --recursive . | tee -a "$GITHUB_STEP_SUMMARY" || true
 
   codeql:
     name: CodeQL Analysis

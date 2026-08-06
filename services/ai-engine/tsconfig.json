@@ -2,8 +2,15 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
+    "rootDir": "./src",
     "types": ["bun-types"],
-    "lib": ["ES2024", "DOM"]
+    "lib": ["ES2024", "DOM"],
+    // Resolve sibling workspace packages through node_modules (their built
+    // dist + .d.ts) rather than the repo-root `paths` mapping. The mapping
+    // points at other packages' *sources*, which drags them into this
+    // program and makes tsc rebase `outDir` to the monorepo root — the
+    // reason `dist/<subpath>.js` never matched this package's exports map.
+    "paths": {}
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
