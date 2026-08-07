@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { apiRequest, jsonBody, BASE_URL } from "./helpers.js";
+import { apiRequest, jsonBody } from "./helpers.js";
 
 describe("Health endpoints", () => {
   // ─── GET /health ──────────────────────────────────────────────────────────

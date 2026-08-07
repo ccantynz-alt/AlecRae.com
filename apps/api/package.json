@@ -10,7 +10,7 @@
     "build": "echo 'Service runs from source under Bun — no build step; see start'",
     "start": "bun run src/index.ts",
     "test": "vitest run --exclude 'tests/e2e/**'",
-    "test:e2e": "vitest run tests/e2e/",
+    "test:e2e": "vitest run --config tests/e2e/vitest.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "clean": "rm -rf dist"

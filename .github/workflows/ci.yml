@@ -245,6 +245,141 @@ jobs:
         run: bun run size
         working-directory: apps/web
 
+  # Boots the real API against real Postgres + Redis and runs the previously
+  # dormant e2e suite (apps/api/tests/e2e — CLAUDE.md issue #143: 7 files that
+  # had never executed anywhere). Deliberately NOT a required status check —
+  # promoting it to branch protection is an owner decision. No `|| true`
+  # anywhere: a red e2e run must fail this job (issue #161's lesson).
+  e2e-api:
+    name: E2E API
+    needs: lint
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # pgvector image, not plain postgres:16 — the migrations CREATE
+        # EXTENSION vector (semantic search embeddings), which the stock
+        # image cannot satisfy ("extension \"vector\" is not available").
+        # Same Postgres 16 major as production.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: alecrae_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/alecrae_e2e
+      REDIS_URL: redis://localhost:6379
+      # HS256 session signing (login for the templates suite) + DKIM secret-box
+      # sealing on domain create both key off JWT_SECRET. Test-only value.
+      JWT_SECRET: e2e-ci-only-jwt-secret-0123456789abcdefghijklmnop
+      # NOT "production": lib/env.ts's fail-fast validation (API_URL etc.) is
+      # deliberately production-only and must not fire in CI.
+      NODE_ENV: test
+      PORT: "3001"
+      E2E_API_URL: http://localhost:3001
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-22-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            bun-${{ runner.os }}-22-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # The API runs from source under Bun, but several workspace packages it
+      # imports (@alecrae/db, shared, crypto, email-parser) export ONLY
+      # ./dist — no bun/source condition — so their dist must exist before
+      # the API can boot ("Cannot find module '@alecrae/db'" otherwise; the
+      # production deploy ritual builds packages/db by hand for the same
+      # reason). Build the API's dependency closure; turbo's ^... filter
+      # selects exactly its upstream deps.
+      - name: Build API dependencies
+        run: bunx turbo run build --filter="@alecrae/api^..."
+
+      # packages/db/src/migrate.ts runs straight from source under Bun — no
+      # build step needed before it.
+      - name: Run database migrations
+        run: bun run db:migrate
+
+      - name: Seed E2E fixtures
+        run: bun run scripts/seed-e2e.ts
+        working-directory: apps/api
+
+      - name: Boot API server
+        run: |
+          nohup bun run start > /tmp/e2e-api.log 2>&1 &
+          echo $! > /tmp/e2e-api.pid
+        working-directory: apps/api
+
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3001/health > /dev/null 2>&1; then
+              echo "API healthy after ${i} attempt(s)"
+              exit 0
+            fi
+            if ! kill -0 "$(cat /tmp/e2e-api.pid)" 2> /dev/null; then
+              echo "::error::API process exited during boot — log follows"
+              cat /tmp/e2e-api.log
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "::error::API did not become healthy within 120s — log follows"
+          cat /tmp/e2e-api.log
+          exit 1
+
+      - name: Run E2E suite
+        run: bun run test:e2e
+        working-directory: apps/api
+
+      # A red run must be diagnosable from the job page alone.
+      - name: Dump API log on failure
+        if: failure()
+        # `|| true` on the cat only: a failure BEFORE the API boots means no
+        # log exists, and this diagnostic step must not mask the real error
+        # with its own.
+        run: cat /tmp/e2e-api.log || echo "(no API log — failure occurred before the API booted)"
+
+      - name: Upload API log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-api-log
+          path: /tmp/e2e-api.log
+          if-no-files-found: ignore
+
   gatetest:
     name: GateTest Quality Gate
     runs-on: ubuntu-latest

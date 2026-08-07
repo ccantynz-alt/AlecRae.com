@@ -52,7 +52,7 @@ export async function apiRequest(
   return fetch(url, {
     method,
     headers: fetchHeaders,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
 }
 
@@ -79,6 +79,63 @@ export async function authRequest(
   });
 }
 
+// ─── Session (bearer) auth ────────────────────────────────────────────────────
+//
+// API keys can only ever carry the eight permission-flag scopes
+// (messages:send/read, domains:manage, api_keys:manage, webhooks:manage,
+// analytics:read, account:manage, team:manage — see permissionsToScopes in
+// apps/api/src/middleware/auth.ts). The templates routes require
+// templates:read / templates:write, which only session JWTs carry
+// (scopesForRole in apps/api/src/lib/jwt.ts) — so the templates suite must
+// authenticate as a real user via POST /v1/auth/login. The user is created by
+// apps/api/scripts/seed-e2e.ts.
+
+export const E2E_USER_EMAIL =
+  process.env["E2E_USER_EMAIL"] ?? "e2e-user@e2e-test.example.com";
+
+export const E2E_USER_PASSWORD =
+  process.env["E2E_USER_PASSWORD"] ?? "e2e-test-password-1234";
+
+let sessionTokenPromise: Promise<string> | null = null;
+
+/**
+ * Log in once per test file (memoized) and return the session access token.
+ * Throws with a pointed message if the seed user does not exist.
+ */
+export function getSessionToken(): Promise<string> {
+  sessionTokenPromise ??= (async () => {
+    const res = await apiRequest("POST", "/v1/auth/login", {
+      body: { email: E2E_USER_EMAIL, password: E2E_USER_PASSWORD },
+    });
+    if (res.status !== 200) {
+      const text = await res.text();
+      throw new Error(
+        `E2E login failed (HTTP ${res.status}): ${text} — ` +
+          "did apps/api/scripts/seed-e2e.ts run against this API's database?",
+      );
+    }
+    const body = (await res.json()) as { data: { token: string } };
+    return body.data.token;
+  })();
+  return sessionTokenPromise;
+}
+
+/**
+ * Authenticated request using a session bearer token instead of an API key.
+ * Needed for surfaces (templates) whose scopes API keys cannot carry.
+ */
+export async function sessionAuthRequest(
+  method: HttpMethod,
+  path: string,
+  options: ApiRequestOptions = {},
+): Promise<Response> {
+  const token = await getSessionToken();
+  return apiRequest(method, path, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, ...options.headers },
+  });
+}
+
 // ─── Test data constants ──────────────────────────────────────────────────────
 
 export const TEST_DOMAIN = "e2e-test.example.com";
@@ -102,7 +159,10 @@ export const TEST_TEMPLATE = {
 
 export const TEST_WEBHOOK = {
   url: "https://webhook.e2e-test.example.com/events",
-  events: ["delivered", "bounced"] as const,
+  // Dotted names — the API's WebhookEventType enum mirrors the DB's
+  // email_event_type enum ("email.delivered", not "delivered"); bare names
+  // were the pre-issue-#70 convention and now fail validation with 422.
+  events: ["email.delivered", "email.bounced"] as const,
   description: "E2E test webhook",
   active: true,
 };

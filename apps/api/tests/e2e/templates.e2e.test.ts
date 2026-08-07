@@ -11,13 +11,22 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  authRequest,
+  sessionAuthRequest,
   apiRequest,
   jsonBody,
   TEST_TEMPLATE,
   uniqueId,
 } from "./helpers.js";
 import type { ApiError } from "./helpers.js";
+
+// NOTE ON AUTH: this suite authenticates with a session bearer token (via
+// POST /v1/auth/login against the seeded E2E user), NOT the X-API-Key the
+// other suites use. The templates routes require templates:read /
+// templates:write, and API keys structurally cannot carry those scopes —
+// permissionsToScopes in apps/api/src/middleware/auth.ts maps only the eight
+// permission flags, none of which is a templates scope. Templates are a
+// session-scoped surface (scopesForRole in apps/api/src/lib/jwt.ts grants
+// templates:* to every session role's baseline).
 
 describe("Templates API", () => {
   /**
@@ -32,7 +41,7 @@ describe("Templates API", () => {
       ...overrides,
     };
 
-    const res = await authRequest("POST", "/v1/templates", { body: payload });
+    const res = await sessionAuthRequest("POST", "/v1/templates", { body: payload });
     const body = await jsonBody<{ data: { id: string } }>(res);
     return { id: body.data?.id, status: res.status };
   }
@@ -46,7 +55,7 @@ describe("Templates API", () => {
         name: `E2E Create ${uniqueId()}`,
       };
 
-      const res = await authRequest("POST", "/v1/templates", {
+      const res = await sessionAuthRequest("POST", "/v1/templates", {
         body: payload,
       });
 
@@ -73,7 +82,7 @@ describe("Templates API", () => {
     });
 
     it("should reject a template without a name", async () => {
-      const res = await authRequest("POST", "/v1/templates", {
+      const res = await sessionAuthRequest("POST", "/v1/templates", {
         body: {
           subject: "Missing name",
           textBody: "Hello",
@@ -84,7 +93,7 @@ describe("Templates API", () => {
     });
 
     it("should reject a template without a subject", async () => {
-      const res = await authRequest("POST", "/v1/templates", {
+      const res = await sessionAuthRequest("POST", "/v1/templates", {
         body: {
           name: "Missing subject",
           textBody: "Hello",
@@ -107,7 +116,7 @@ describe("Templates API", () => {
 
   describe("GET /v1/templates", () => {
     it("should return a paginated list of templates", async () => {
-      const res = await authRequest("GET", "/v1/templates");
+      const res = await sessionAuthRequest("GET", "/v1/templates");
 
       expect(res.status).toBe(200);
 
@@ -129,7 +138,7 @@ describe("Templates API", () => {
     });
 
     it("should respect the limit parameter", async () => {
-      const res = await authRequest("GET", "/v1/templates", {
+      const res = await sessionAuthRequest("GET", "/v1/templates", {
         query: { limit: "1" },
       });
 
@@ -143,7 +152,7 @@ describe("Templates API", () => {
       const uniqueName = `Searchable-${uniqueId()}`;
       await createTemplate({ name: uniqueName });
 
-      const res = await authRequest("GET", "/v1/templates", {
+      const res = await sessionAuthRequest("GET", "/v1/templates", {
         query: { name: uniqueName },
       });
 
@@ -170,7 +179,7 @@ describe("Templates API", () => {
       const { id, status } = await createTemplate();
       if (status !== 201) return; // skip if create failed
 
-      const res = await authRequest("GET", `/v1/templates/${id}`);
+      const res = await sessionAuthRequest("GET", `/v1/templates/${id}`);
 
       expect(res.status).toBe(200);
 
@@ -195,7 +204,7 @@ describe("Templates API", () => {
     });
 
     it("should return 404 for a non-existent template", async () => {
-      const res = await authRequest(
+      const res = await sessionAuthRequest(
         "GET",
         "/v1/templates/nonexistent_template_id",
       );
@@ -220,7 +229,7 @@ describe("Templates API", () => {
       if (status !== 201) return;
 
       const updatedName = `Updated ${uniqueId()}`;
-      const res = await authRequest("PUT", `/v1/templates/${id}`, {
+      const res = await sessionAuthRequest("PUT", `/v1/templates/${id}`, {
         body: {
           name: updatedName,
           subject: "Updated subject: {{greeting}}",
@@ -247,7 +256,7 @@ describe("Templates API", () => {
     });
 
     it("should return 404 when updating a non-existent template", async () => {
-      const res = await authRequest(
+      const res = await sessionAuthRequest(
         "PUT",
         "/v1/templates/nonexistent_template_id",
         { body: { name: "Does not exist" } },
@@ -261,7 +270,7 @@ describe("Templates API", () => {
       if (status !== 201) return;
 
       // Update only the name
-      const res = await authRequest("PUT", `/v1/templates/${id}`, {
+      const res = await sessionAuthRequest("PUT", `/v1/templates/${id}`, {
         body: { name: `Partial ${uniqueId()}` },
       });
 
@@ -276,7 +285,7 @@ describe("Templates API", () => {
       const { id, status } = await createTemplate();
       if (status !== 201) return;
 
-      const res = await authRequest("POST", `/v1/templates/${id}/render`, {
+      const res = await sessionAuthRequest("POST", `/v1/templates/${id}/render`, {
         body: {
           variables: { name: "Alice", company: "Acme Corp" },
         },
@@ -303,7 +312,7 @@ describe("Templates API", () => {
       const { id, status } = await createTemplate();
       if (status !== 201) return;
 
-      const res = await authRequest("POST", `/v1/templates/${id}/render`, {
+      const res = await sessionAuthRequest("POST", `/v1/templates/${id}/render`, {
         body: {
           variables: { name: "Alice" },
           // Missing "company"
@@ -319,7 +328,7 @@ describe("Templates API", () => {
     });
 
     it("should return 404 for a non-existent template", async () => {
-      const res = await authRequest(
+      const res = await sessionAuthRequest(
         "POST",
         "/v1/templates/nonexistent_id/render",
         { body: { variables: {} } },
@@ -332,7 +341,7 @@ describe("Templates API", () => {
       const { id, status } = await createTemplate();
       if (status !== 201) return;
 
-      const res = await authRequest("POST", `/v1/templates/${id}/render`, {
+      const res = await sessionAuthRequest("POST", `/v1/templates/${id}/render`, {
         body: {},
       });
 
@@ -347,7 +356,7 @@ describe("Templates API", () => {
       const { id, status } = await createTemplate();
       if (status !== 201) return;
 
-      const res = await authRequest("DELETE", `/v1/templates/${id}`);
+      const res = await sessionAuthRequest("DELETE", `/v1/templates/${id}`);
 
       expect(res.status).toBe(200);
       const body = await jsonBody<{ deleted: boolean; id: string }>(res);
@@ -355,12 +364,12 @@ describe("Templates API", () => {
       expect(body.id).toBe(id);
 
       // Verify the template is gone
-      const getRes = await authRequest("GET", `/v1/templates/${id}`);
+      const getRes = await sessionAuthRequest("GET", `/v1/templates/${id}`);
       expect(getRes.status).toBe(404);
     });
 
     it("should return 404 when deleting a non-existent template", async () => {
-      const res = await authRequest(
+      const res = await sessionAuthRequest(
         "DELETE",
         "/v1/templates/nonexistent_template_id",
       );
@@ -372,8 +381,8 @@ describe("Templates API", () => {
       const { id, status } = await createTemplate();
       if (status !== 201) return;
 
-      await authRequest("DELETE", `/v1/templates/${id}`);
-      const res = await authRequest("DELETE", `/v1/templates/${id}`);
+      await sessionAuthRequest("DELETE", `/v1/templates/${id}`);
+      const res = await sessionAuthRequest("DELETE", `/v1/templates/${id}`);
 
       expect(res.status).toBe(404);
     });
