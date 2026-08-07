@@ -59,6 +59,11 @@ export class ConfidenceScorer {
       signal.weight = effectiveWeight;
       signals.push(signal);
 
+      // A signal with no underlying data is reported (for transparency) but
+      // excluded from the average — substituting a default here would be a
+      // fabricated measurement feeding a real spam decision.
+      if (signal.noData) continue;
+
       weightedSum += signal.score * effectiveWeight;
       totalWeight += effectiveWeight;
     }
@@ -108,7 +113,20 @@ export class ConfidenceScorer {
       weight: 2.0,
       evaluate: (item) => {
         const payload = item.payload as Record<string, unknown>;
-        const reputationScore = (payload['senderReputation'] as number) ?? 50;
+        const reputationScore = payload['senderReputation'] as
+          | number
+          | undefined;
+        // No cached reputation is NOT a neutral-50 measurement — it is the
+        // absence of one. Flag it so the scorer excludes this signal.
+        if (reputationScore === undefined) {
+          return {
+            signal: 'sender_reputation',
+            score: 0,
+            weight: 2.0,
+            reason: 'No sender reputation data — signal not scored',
+            noData: true,
+          };
+        }
         return {
           signal: 'sender_reputation',
           score: reputationScore,
@@ -172,31 +190,42 @@ export class ConfidenceScorer {
       evaluate: (item) => {
         const ip = item.metadata.sourceIp;
 
-        // Quick checks that don't require network
-        let score = 60;
-        const reasons: string[] = [];
-
-        // Private/reserved IPs get neutral score
-        if (this.isPrivateIP(ip)) {
-          score = 70;
-          reasons.push('Private IP range');
-        }
-
-        // Check if we have cached reputation for this IP
+        // Cached reputation for this IP, when present
         // (In production, this pulls from a pre-warmed Redis cache)
         const ipReputation = (
           item.payload as Record<string, unknown>
         )['ipReputation'] as number | undefined;
         if (ipReputation !== undefined) {
-          score = ipReputation;
-          reasons.push(`Cached IP reputation: ${ipReputation}`);
+          return {
+            signal: 'ip_reputation',
+            score: ipReputation,
+            weight: 1.5,
+            reason: `Cached IP reputation: ${ipReputation}`,
+          };
         }
 
+        // A private/reserved source IP is a real, locally-determinable fact
+        // (internal traffic), so scoring it neutral-good is a judgement on
+        // data, not a fabrication.
+        if (this.isPrivateIP(ip)) {
+          return {
+            signal: 'ip_reputation',
+            score: 70,
+            weight: 1.5,
+            reason: 'Private IP range',
+          };
+        }
+
+        // No cached reputation and a public IP: there is NO data. The old
+        // code returned a hardcoded 60 here, which flowed into real spam
+        // decisions as if it were a measurement. Flagged instead, and
+        // excluded from the weighted average.
         return {
           signal: 'ip_reputation',
-          score,
+          score: 0,
           weight: 1.5,
-          reason: reasons.join(', ') || 'No IP reputation data',
+          reason: 'No IP reputation data — signal not scored',
+          noData: true,
         };
       },
     });
@@ -329,7 +358,20 @@ export class ConfidenceScorer {
       weight: 1.3,
       evaluate: (item) => {
         const payload = item.payload as Record<string, unknown>;
-        const historicalScore = (payload['historicalBehavior'] as number) ?? 65;
+        const historicalScore = payload['historicalBehavior'] as
+          | number
+          | undefined;
+        // Same no-data rule as sender/IP reputation: the old default of 65
+        // reported "Normal behavior patterns" for a sender with no history.
+        if (historicalScore === undefined) {
+          return {
+            signal: 'behavioral_pattern',
+            score: 0,
+            weight: 1.3,
+            reason: 'No behavioral history — signal not scored',
+            noData: true,
+          };
+        }
 
         return {
           signal: 'behavioral_pattern',

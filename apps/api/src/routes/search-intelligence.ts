@@ -9,15 +9,15 @@
  * DELETE /v1/search-intelligence/bookmarks/:id            — Delete bookmark
  * POST   /v1/search-intelligence/bookmarks/:id/check      — Check for new results
  * GET    /v1/search-intelligence/suggestions              — Get smart suggestions
- * POST   /v1/search-intelligence/suggestions/generate     — Generate AI suggestions
- * GET    /v1/search-intelligence/trending                 — Get trending search terms
- * GET    /v1/search-intelligence/related/:emailId         — Get related emails
- * POST   /v1/search-intelligence/natural-language         — Parse NL query
+ * POST   /v1/search-intelligence/suggestions/generate     — Generate suggestions from search history
+ * GET    /v1/search-intelligence/trending                 — Trending terms from real search history
+ * GET    /v1/search-intelligence/related/:emailId         — 501 (no similarity index exists)
+ * POST   /v1/search-intelligence/natural-language         — 501 (no NL parser wired here)
  */
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc, lt } from "drizzle-orm";
+import { eq, and, desc, lt, gte, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import {
   validateBody,
@@ -517,65 +517,141 @@ searchIntelligenceRouter.get(
 );
 
 // ---------------------------------------------------------------------------
-// POST /suggestions/generate — Generate AI search suggestions
+// POST /suggestions/generate — Generate search suggestions from real history
 // ---------------------------------------------------------------------------
+// This used to return two canned suggestions with invented relevanceScores
+// (0.95/0.85) presented as AI output (issue #166, same fabricated-output class
+// as #84/#141/#163). The account's real search history exists (ai-search.ts
+// records it, issue #74f), so suggestions are now derived from it: the most
+// frequent queries of the last 30 days, with relevanceScore as the query's
+// share of the most-frequent one — a derived number, not an invented one.
+// No AI is involved and nothing claims otherwise.
 searchIntelligenceRouter.post(
   "/suggestions/generate",
   requireScope("messages:write"),
   async (c) => {
-    const _auth = c.get("auth");
+    const auth = c.get("auth");
+    const db = getDatabase();
 
-    // Placeholder: In production, this would:
-    // 1. Fetch recent search history
-    // 2. Analyze frequent contacts and email patterns
-    // 3. Use Claude Haiku to generate contextual search suggestions
-    // 4. Persist them to the searchSuggestions table
+    const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const frequent = await db
+      .select({
+        term: sql<string>`lower(${searchHistory.query})`,
+        total: sql<number>`count(*)::int`,
+      })
+      .from(searchHistory)
+      .where(
+        and(
+          eq(searchHistory.accountId, auth.accountId),
+          gte(searchHistory.createdAt, windowStart),
+        ),
+      )
+      .groupBy(sql`lower(${searchHistory.query})`)
+      .orderBy(desc(sql`count(*)`))
+      .limit(8);
 
-    const placeholderSuggestions = [
-      {
-        id: generateId(),
-        suggestion: "unread from last week",
-        reason: "You have unread emails from last week",
-        category: "ai_recommended" as const,
-        relevanceScore: 0.95,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: generateId(),
-        suggestion: "emails with attachments",
-        reason: "Frequently searched pattern",
-        category: "frequent" as const,
-        relevanceScore: 0.85,
-        createdAt: new Date().toISOString(),
-      },
-    ];
+    if (frequent.length === 0) {
+      return c.json({
+        data: [],
+        generated: true,
+        note: "No search history in the last 30 days — suggestions are generated from your own searches.",
+      });
+    }
+
+    // Regenerate rather than accumulate: replace this account's previous
+    // frequency-derived suggestions so re-running doesn't duplicate them.
+    await db
+      .delete(searchSuggestions)
+      .where(
+        and(
+          eq(searchSuggestions.accountId, auth.accountId),
+          eq(searchSuggestions.category, "frequent"),
+        ),
+      );
+
+    const maxCount = frequent[0]?.total ?? 1;
+    const now = new Date();
+    const generated = frequent.map((row) => ({
+      id: generateId(),
+      accountId: auth.accountId,
+      suggestion: row.term,
+      reason: `Searched ${row.total} time${row.total === 1 ? "" : "s"} in the last 30 days`,
+      category: "frequent" as const,
+      relevanceScore: row.total / maxCount,
+      createdAt: now,
+    }));
+
+    await db.insert(searchSuggestions).values(generated);
 
     return c.json({
-      data: placeholderSuggestions,
+      data: generated.map((s) => ({
+        id: s.id,
+        suggestion: s.suggestion,
+        reason: s.reason,
+        category: s.category,
+        relevanceScore: s.relevanceScore,
+        createdAt: s.createdAt.toISOString(),
+      })),
       generated: true,
     });
   },
 );
 
 // ---------------------------------------------------------------------------
-// GET /trending — Get trending search terms across account
+// GET /trending — Trending search terms, aggregated from real search history
 // ---------------------------------------------------------------------------
+// This used to return three hardcoded terms with invented counts (invoice: 42,
+// "meeting notes": 28, "quarterly report": 15) stamped with the caller's
+// accountId (issue #166). Now a real aggregation: terms searched in the last
+// 7 days, with the trend derived by comparing against the 7 days before that.
 searchIntelligenceRouter.get(
   "/trending",
   requireScope("messages:read"),
   async (c) => {
     const auth = c.get("auth");
+    const db = getDatabase();
 
-    // Placeholder: In production, this would aggregate search history
-    // across the account to find trending search terms over the last 7 days
-    const placeholderTrending = [
-      { term: "invoice", count: 42, trend: "up" as const },
-      { term: "meeting notes", count: 28, trend: "stable" as const },
-      { term: "quarterly report", count: 15, trend: "up" as const },
-    ];
+    const now = Date.now();
+    const windowStart = new Date(now - 14 * 24 * 60 * 60 * 1000);
+    const midpoint = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+    // Built once and reused so SELECT and ORDER BY render identically —
+    // the issue #75(c) lesson about duplicated bound-param expressions.
+    const recentCount = sql<number>`count(*) filter (where ${searchHistory.createdAt} >= ${midpoint})`;
+    const priorCount = sql<number>`count(*) filter (where ${searchHistory.createdAt} < ${midpoint})`;
+
+    const rows = await db
+      .select({
+        term: sql<string>`lower(${searchHistory.query})`,
+        recent: sql<number>`${recentCount}::int`,
+        prior: sql<number>`${priorCount}::int`,
+      })
+      .from(searchHistory)
+      .where(
+        and(
+          eq(searchHistory.accountId, auth.accountId),
+          gte(searchHistory.createdAt, windowStart),
+        ),
+      )
+      .groupBy(sql`lower(${searchHistory.query})`)
+      .orderBy(desc(recentCount))
+      .limit(10);
+
+    const trending = rows
+      .filter((row) => row.recent > 0)
+      .map((row) => ({
+        term: row.term,
+        count: row.recent,
+        trend:
+          row.recent > row.prior
+            ? ("up" as const)
+            : row.recent < row.prior
+              ? ("down" as const)
+              : ("stable" as const),
+      }));
 
     return c.json({
-      data: placeholderTrending,
+      data: trending,
       accountId: auth.accountId,
       period: "7d",
     });
@@ -583,70 +659,52 @@ searchIntelligenceRouter.get(
 );
 
 // ---------------------------------------------------------------------------
-// GET /related/:emailId — Get related emails by AI similarity
+// GET /related/:emailId — Related emails by similarity — NOT IMPLEMENTED
 // ---------------------------------------------------------------------------
+// Previously returned 200 with an empty array, indistinguishable from "the
+// feature ran and found nothing related". Nothing computes email similarity
+// today, so the honest answer is 501, not an empty success (issue #166; same
+// principle as #84/#141). No per-id lookup happens, so the response reveals
+// nothing about whether an email id exists.
 searchIntelligenceRouter.get(
   "/related/:emailId",
   requireScope("messages:read"),
-  async (c) => {
-    const emailId = c.req.param("emailId");
-    const auth = c.get("auth");
-
-    // Placeholder: In production, this would:
-    // 1. Fetch the email's embedding vector
-    // 2. Run a cosine similarity search against other embeddings
-    // 3. Return the top-N most similar emails
-    const placeholderRelated: {
-      emailId: string;
-      similarity: number;
-      reason: string;
-    }[] = [];
-
-    return c.json({
-      data: placeholderRelated,
-      sourceEmailId: emailId,
-      accountId: auth.accountId,
-    });
+  (c) => {
+    return c.json(
+      {
+        error: {
+          type: "not_implemented",
+          message:
+            "Related-email similarity search is not available yet — no similarity index exists, and no search was performed.",
+          code: "related_search_unavailable",
+        },
+      },
+      501,
+    );
   },
 );
 
 // ---------------------------------------------------------------------------
-// POST /natural-language — Parse natural language query into structured search
+// POST /natural-language — Parse NL query into structured search — NOT IMPLEMENTED
 // ---------------------------------------------------------------------------
+// Previously returned 200 with an all-null "parsed" structure as if parsing
+// had run. Nothing parses natural-language queries on this route today.
 searchIntelligenceRouter.post(
   "/natural-language",
   requireScope("messages:read"),
   validateBody(NaturalLanguageQuerySchema),
-  async (c) => {
-    const input = getValidatedBody<z.infer<typeof NaturalLanguageQuerySchema>>(
-      c,
-    );
-    const auth = c.get("auth");
-
-    // Placeholder: In production, this would:
-    // 1. Send the natural language query to Claude Haiku
-    // 2. Parse the response into structured search filters
-    // 3. Return both the structured query and the original text
-    const placeholderParsed = {
-      originalQuery: input.query,
-      structured: {
-        keywords: [] as string[],
-        from: null as string | null,
-        to: null as string | null,
-        dateAfter: null as string | null,
-        dateBefore: null as string | null,
-        hasAttachment: null as boolean | null,
-        labels: [] as string[],
-        folder: null as string | null,
+  (c) => {
+    return c.json(
+      {
+        error: {
+          type: "not_implemented",
+          message:
+            "Natural-language query parsing is not available yet — the query was not parsed. Use POST /v1/search/ai for AI search.",
+          code: "natural_language_parse_unavailable",
+        },
       },
-      confidence: 0.0,
-      suggestion: "Natural language parsing will be powered by Claude Haiku",
-    };
-
-    return c.json({
-      data: placeholderParsed,
-      accountId: auth.accountId,
-    });
+      501,
+    );
   },
 );
 

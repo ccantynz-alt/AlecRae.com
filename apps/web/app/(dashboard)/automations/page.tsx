@@ -571,8 +571,12 @@ function WorkflowsSection(): React.ReactNode {
     setRunResult(null);
     try {
       const res = await workflowsApi.run(wf.id);
+      // Action executors don't exist yet — the backend records the run as
+      // "skipped" and says so; show its notice rather than a count that
+      // could read as work done (issue #166).
       setRunResult(
-        `"${wf.name}" ran ${res.data.actionsExecuted}/${res.data.totalActions} actions (${res.data.run.status}).`,
+        res.data.notice ??
+          `"${wf.name}" ran ${res.data.actionsExecuted}/${res.data.totalActions} actions (${res.data.run.status}).`,
       );
       setWorkflows((prev) =>
         prev.map((w) =>

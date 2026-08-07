@@ -3,12 +3,17 @@
 /**
  * AlecRae — Attachment Intelligence
  *
- * Attachment analysis: PII detection, a file-type risk check, text extraction
- * (OCR) and smart file-organization suggestions.
+ * Attachment analysis: PII pattern detection, a file-type risk check, and
+ * smart file-organization suggestions.
  *
  * NOT virus scanning — no scanner is wired up, and the endpoint that used to
  * fabricate a verdict now returns 501. The UI says so rather than implying a
  * file has been checked.
+ *
+ * NOT OCR either (issue #166) — /extract-text returns 501; the old handler
+ * persisted a placeholder string as "extracted text" and the old UI showed
+ * it. The extract button is gone; genuine text supplied at analyze time still
+ * renders.
  *
  * API (mounted at /v1/attachments/intelligence — see apps/api/src/server.ts):
  *   GET  /analysis                 → analyzed attachment library (cursor)
@@ -19,7 +24,7 @@
  *   GET  /organize                 → AI organization suggestions (cursor)
  *   POST /organize/:id/action      → accept / dismiss a suggestion
  *   POST /scan                     → 501, no scanner configured (not called)
- *   POST /extract-text             → extract text (OCR — backend stub today)
+ *   POST /extract-text             → 501, no OCR engine (not called)
  *
  * Plan gate: pro+ (attachment_intelligence).
  */
@@ -84,19 +89,6 @@ function piiLabel(token: string): string {
     credit_card: "Credit card",
   };
   return map[token] ?? token.replace(/_/g, " ");
-}
-
-/**
- * The backend OCR/text-extraction endpoint is a documented stub (issue #29):
- * for un-extracted files it returns placeholder text prefixed with "[Extracted
- * text from …]". Detect that so the UI can degrade gracefully instead of
- * presenting placeholder prose as real content.
- */
-function isPlaceholderExtraction(text: string): boolean {
-  return (
-    text.startsWith("[Extracted text from ") &&
-    text.includes("placeholder")
-  );
 }
 
 // ─── Tone pills ────────────────────────────────────────────────────────────────
@@ -358,52 +350,22 @@ AttachmentRow.displayName = "AttachmentRow";
 function DetailPanel({
   item,
   onClose,
-  onUpdated,
 }: {
   item: AttachmentAnalysis;
   onClose: () => void;
-  onUpdated: (item: AttachmentAnalysis) => void;
 }): ReactNode {
   const [detail, setDetail] = useState<AttachmentAnalysis>(item);
-  const [extracting, setExtracting] = useState(false);
-  const [extractedText, setExtractedText] = useState<string | null>(
-    item.extractedText,
-  );
-  const [extractionIsStub, setExtractionIsStub] = useState<boolean>(
-    item.extractedText ? isPlaceholderExtraction(item.extractedText) : false,
-  );
-  const [error, setError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
 
   // Reset local state whenever a different attachment is selected.
   useEffect(() => {
     setDetail(item);
-    setExtractedText(item.extractedText);
-    setExtractionIsStub(
-      item.extractedText ? isPlaceholderExtraction(item.extractedText) : false,
-    );
-    setError(null);
     closeRef.current?.focus();
   }, [item]);
 
-  async function handleExtract(): Promise<void> {
-    setExtracting(true);
-    setError(null);
-    try {
-      const res = await attachmentIntelligenceApi.extractText(detail.id);
-      setExtractedText(res.data.extractedText);
-      setExtractionIsStub(isPlaceholderExtraction(res.data.extractedText));
-      const updated = { ...detail, extractedText: res.data.extractedText };
-      setDetail(updated);
-      // Tell the parent too — otherwise the list row keeps the pre-extraction
-      // text and reopening the item shows the stale value.
-      onUpdated(updated);
-    } catch (e) {
-      setError(errMsg(e));
-    } finally {
-      setExtracting(false);
-    }
-  }
+  // The API sanitizes rows poisoned by the old placeholder-writing extract
+  // endpoint (issue #166), so anything present here is genuine content.
+  const extractedText = detail.extractedText;
 
   const piiTypes = detail.piiTypes ?? [];
 
@@ -436,8 +398,6 @@ function DetailPanel({
             </Button>
           </Box>
 
-          {error && <ErrorBanner message={error} />}
-
           {/* Status pills */}
           {/*
             `threatLevel` is a file-extension and size check, nothing more — an
@@ -456,16 +416,22 @@ function DetailPanel({
             </Pill>
           </Box>
 
-          {/* AI summary */}
+          {/* Heuristic check summary */}
+          {/*
+            What the backend actually runs is an extension blocklist, a size
+            check, and four PII regexes — no model is involved. The old
+            "AI analysis" heading claimed otherwise (issue #166); the summary
+            text itself now says what ran.
+          */}
           <Box>
             <Text
               variant="caption"
               className="mb-1 block font-semibold uppercase tracking-wide text-content-subtle"
             >
-              AI analysis
+              File check
             </Text>
             <Text variant="body-sm" className="text-content">
-              {detail.aiSummary ?? "No AI summary available for this file."}
+              {detail.aiSummary ?? "No check summary available for this file."}
             </Text>
           </Box>
 
@@ -513,41 +479,22 @@ function DetailPanel({
             )}
           </Box>
 
-          {/* Extracted text (OCR) */}
+          {/* Extracted text */}
+          {/*
+            No OCR / document-parsing engine exists (the backend answers 501,
+            issue #166). The old "Extract text" button wrote a placeholder
+            string into the database and showed it here as content — the
+            button is removed rather than left to fail, the same call issue
+            #141 made for the fake Rescan button. Text genuinely supplied at
+            analyze time still renders.
+          */}
           <Box>
-            <Box className="mb-1.5 flex items-center justify-between gap-3">
-              <Text
-                variant="caption"
-                className="font-semibold uppercase tracking-wide text-content-subtle"
-              >
-                Extracted text
-              </Text>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void handleExtract()}
-                disabled={extracting}
-                aria-label={`Extract text from ${detail.fileName}`}
-              >
-                {extracting
-                  ? "Extracting…"
-                  : extractedText
-                    ? "Re-extract"
-                    : "Extract text"}
-              </Button>
-            </Box>
-
-            {extractionIsStub && (
-              <Box
-                className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
-                role="note"
-              >
-                <Text variant="caption" className="text-amber-800">
-                  Text extraction is preview-only right now — full OCR / document
-                  parsing is coming soon. The content below is placeholder text.
-                </Text>
-              </Box>
-            )}
+            <Text
+              variant="caption"
+              className="mb-1.5 block font-semibold uppercase tracking-wide text-content-subtle"
+            >
+              Extracted text
+            </Text>
 
             {extractedText ? (
               <Box
@@ -560,7 +507,8 @@ function DetailPanel({
               </Box>
             ) : (
               <Text variant="body-sm" className="text-content-subtle">
-                No text extracted yet. Use “Extract text” to run OCR.
+                No text available. OCR / document text extraction isn&apos;t
+                built yet, so nothing has read this file&apos;s contents.
               </Text>
             )}
           </Box>
@@ -1063,7 +1011,10 @@ function AttachmentsContent(): ReactNode {
   const [statsError, setStatsError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>("library");
   const [selected, setSelected] = useState<AttachmentAnalysis | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  // Bumping forces the list/report sections to reload; nothing mutates
+  // attachments from this page any more (the fake extract/rescan actions are
+  // gone), so it stays at its initial value until a real mutation returns.
+  const [refreshKey] = useState(0);
 
   const loadStats = useCallback(async (): Promise<void> => {
     setStatsLoading(true);
@@ -1081,13 +1032,6 @@ function AttachmentsContent(): ReactNode {
   useEffect(() => {
     void loadStats();
   }, [loadStats, refreshKey]);
-
-  // When an attachment is updated (e.g. rescanned), reflect it in the selection
-  // and refresh the surrounding lists + stats.
-  function handleUpdated(updated: AttachmentAnalysis): void {
-    setSelected(updated);
-    setRefreshKey((k) => k + 1);
-  }
 
   function handleSelect(item: AttachmentAnalysis): void {
     setSelected(item);
@@ -1132,7 +1076,6 @@ function AttachmentsContent(): ReactNode {
                       <DetailPanel
                         item={selected}
                         onClose={() => setSelected(null)}
-                        onUpdated={handleUpdated}
                       />
                     ) : (
                       <Box className="rounded-xl border border-dashed border-border p-6 text-center">
@@ -1140,8 +1083,8 @@ function AttachmentsContent(): ReactNode {
                           variant="body-sm"
                           className="text-content-subtle"
                         >
-                          Select an attachment to see its AI analysis, virus
-                          scan, PII findings, and extracted text.
+                          Select an attachment to see its file check and PII
+                          findings.
                         </Text>
                       </Box>
                     )}

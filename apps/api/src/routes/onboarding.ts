@@ -8,8 +8,8 @@
  * GET  /v1/onboarding/status              — Get onboarding progress
  * POST /v1/onboarding/start               — Start onboarding (create record)
  * POST /v1/onboarding/step/:step          — Mark a step complete
- * POST /v1/onboarding/import-settings     — Import settings from Gmail/Outlook
- * POST /v1/onboarding/sync-contacts       — Trigger initial contact sync
+ * POST /v1/onboarding/import-settings     — 501 (no provider settings import exists)
+ * POST /v1/onboarding/sync-contacts       — 501 (no contact sync exists)
  * POST /v1/onboarding/preferences         — Set initial preferences
  * POST /v1/onboarding/complete            — Mark onboarding complete
  * GET  /v1/onboarding/recommendations     — AI-powered recommendations
@@ -84,46 +84,6 @@ function getNextStep(completedSteps: string[]): OnboardingStep {
     }
   }
   return "complete";
-}
-
-interface ImportedSettings {
-  labels: string[];
-  filters: { criteria: string; action: string }[];
-  signatures: { name: string; content: string }[];
-}
-
-function buildImportedSettings(
-  provider: "gmail" | "outlook",
-  options: { importLabels: boolean; importFilters: boolean; importSignatures: boolean },
-): ImportedSettings {
-  // Provider-specific default label names for import simulation.
-  // In production this would call the Gmail/Outlook API to fetch real data.
-  const providerLabels: Record<"gmail" | "outlook", string[]> = {
-    gmail: ["Important", "Starred", "Sent", "Drafts", "Spam", "Trash", "Updates", "Promotions", "Social", "Forums"],
-    outlook: ["Focused", "Other", "Sent Items", "Drafts", "Junk Email", "Deleted Items", "Archive"],
-  };
-
-  const providerFilters: Record<"gmail" | "outlook", { criteria: string; action: string }[]> = {
-    gmail: [
-      { criteria: "from:notifications@github.com", action: "label:GitHub" },
-      { criteria: "from:noreply@medium.com", action: "label:Reading" },
-    ],
-    outlook: [
-      { criteria: "from:notifications@microsoft.com", action: "move:Updates" },
-      { criteria: "hasAttachment:true size:>5MB", action: "move:Large Files" },
-    ],
-  };
-
-  const providerSignatures: Record<"gmail" | "outlook", { name: string; content: string }[]> = {
-    gmail: [{ name: "Default Gmail Signature", content: "Sent from AlecRae" }],
-    outlook: [{ name: "Default Outlook Signature", content: "Sent from AlecRae" }],
-  };
-
-  return {
-    labels: options.importLabels ? (providerLabels[provider] ?? []) : [],
-    filters: options.importFilters ? (providerFilters[provider] ?? []) : [],
-    signatures: options.importSignatures ? (providerSignatures[provider] ?? []) : [],
-  };
 }
 
 interface Recommendation {
@@ -441,45 +401,25 @@ onboardingRouter.post(
       );
     }
 
-    // Build imported settings based on provider and options
-    const imported = buildImportedSettings(input.provider, {
-      importLabels: input.importLabels,
-      importFilters: input.importFilters,
-      importSignatures: input.importSignatures,
-    });
-
-    // Mark import_settings step as complete
-    const completedSteps = (record.completedSteps ?? []) as string[];
-    const updatedSteps = completedSteps.includes("import_settings")
-      ? completedSteps
-      : [...completedSteps, "import_settings"];
-    const nextStep = getNextStep(updatedSteps);
-
-    await db
-      .update(onboardingRecords)
-      .set({
-        importedFrom: input.provider,
-        completedSteps: updatedSteps,
-        currentStep: nextStep,
-      })
-      .where(eq(onboardingRecords.accountId, auth.accountId));
-
-    return c.json({
-      data: {
-        provider: input.provider,
-        imported: {
-          labelsCount: imported.labels.length,
-          filtersCount: imported.filters.length,
-          signaturesCount: imported.signatures.length,
-          labels: imported.labels,
-          filters: imported.filters,
-          signatures: imported.signatures,
+    // NOT IMPLEMENTED. The old handler "imported" a canned list of default
+    // Gmail/Outlook label names, filters and signatures that were never
+    // fetched from any provider AND never persisted anywhere, then marked the
+    // import_settings step complete (issue #166 — fabricated success, same
+    // class as #141/#163). Nothing calls the Gmail/Outlook settings APIs
+    // today. The step is deliberately NOT marked complete: a real import can
+    // still happen later, and POST /step/:step exists for a user who wants to
+    // skip it. The onboarding-record 404 above still means what it meant.
+    return c.json(
+      {
+        error: {
+          type: "not_implemented",
+          message:
+            `Settings import from ${input.provider} is not available yet — nothing was imported and the onboarding step was not marked complete. Use POST /v1/onboarding/step/import_settings to skip this step.`,
+          code: "settings_import_unavailable",
         },
-        currentStep: nextStep,
-        completedSteps: updatedSteps,
-        progress: Math.round((updatedSteps.length / ONBOARDING_STEPS.length) * 100),
       },
-    });
+      501,
+    );
   },
 );
 
@@ -512,34 +452,25 @@ onboardingRouter.post(
       );
     }
 
-    // Mark sync_contacts step as complete
-    const completedSteps = (record.completedSteps ?? []) as string[];
-    const updatedSteps = completedSteps.includes("sync_contacts")
-      ? completedSteps
-      : [...completedSteps, "sync_contacts"];
-    const nextStep = getNextStep(updatedSteps);
-
-    await db
-      .update(onboardingRecords)
-      .set({
-        completedSteps: updatedSteps,
-        currentStep: nextStep,
-      })
-      .where(eq(onboardingRecords.accountId, auth.accountId));
-
-    // In production, this would enqueue a background job to sync contacts
-    // from the provider's API (Google People API, Microsoft Graph, IMAP address book).
-    return c.json({
-      data: {
-        provider: input.provider,
-        maxContacts: input.maxContacts,
-        status: "syncing",
-        message: `Contact sync initiated from ${input.provider}. Up to ${input.maxContacts} contacts will be imported in the background.`,
-        currentStep: nextStep,
-        completedSteps: updatedSteps,
-        progress: Math.round((updatedSteps.length / ONBOARDING_STEPS.length) * 100),
+    // NOT IMPLEMENTED. The old handler reported status "syncing" and promised
+    // a background import that does not exist — no job, no worker, no contact
+    // ever synced — and marked the sync_contacts step complete, making the
+    // fake sync unretryable (issue #166, the fabricated-success class of
+    // #141/#163). The step is deliberately NOT marked complete: when a real
+    // sync exists it must still be runnable, and POST /step/:step exists for
+    // a user who wants to skip past it. The onboarding-record 404 above still
+    // means what it meant.
+    return c.json(
+      {
+        error: {
+          type: "not_implemented",
+          message:
+            `Contact sync from ${input.provider} is not available yet — no sync was started and the onboarding step was not marked complete. Use POST /v1/onboarding/step/sync_contacts to skip this step.`,
+          code: "contact_sync_unavailable",
+        },
       },
-    });
+      501,
+    );
   },
 );
 

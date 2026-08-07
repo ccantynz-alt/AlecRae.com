@@ -17,9 +17,11 @@
  *   GET    /v1/search-intelligence/related/:emailId      — related emails
  *   POST   /v1/search-intelligence/natural-language      — parse NL query
  *
- * NB (issue #29): suggestions/generate, trending, related and natural-language
- * are backend placeholders — callers should render whatever comes back and
- * degrade gracefully.
+ * NB (issue #166): suggestions/generate and trending are REAL now — both are
+ * aggregations over the account's own search_history (no AI, and nothing
+ * claims otherwise). related/:emailId and natural-language return an honest
+ * 501 (`not_implemented`) instead of the old empty-200 placeholders — callers
+ * should catch and show an unavailable state (see SearchIntelligenceError).
  *
  * Mirrors the featureFetch wrapper in lib/api-features.ts (module-private
  * there) so this domain has its own typed entry point with silent
@@ -43,6 +45,19 @@ interface SearchIntelligenceApiError {
     code?: string;
     details?: unknown;
   };
+}
+
+/** Error carrying the backend's error code, so callers can distinguish an
+ * honest 501 ("this feature does not exist yet") from a real failure. */
+export class SearchIntelligenceError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string | null,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "SearchIntelligenceError";
+  }
 }
 
 async function siFetch<T>(
@@ -74,8 +89,10 @@ async function siFetch<T>(
     const errorBody = (await res
       .json()
       .catch(() => null)) as SearchIntelligenceApiError | null;
-    throw new Error(
+    throw new SearchIntelligenceError(
       errorBody?.error?.message ?? `API request failed: ${res.status}`,
+      errorBody?.error?.code ?? null,
+      res.status,
     );
   }
 
@@ -286,25 +303,35 @@ export const searchIntelligenceApi = {
     );
   },
 
-  /** POST /v1/search-intelligence/suggestions/generate — AI suggestions (backend placeholder). */
+  /**
+   * POST /v1/search-intelligence/suggestions/generate — regenerate
+   * suggestions from the account's real search history (frequency-based, not
+   * AI). Empty `data` + `note` when there is no history yet.
+   */
   generateSuggestions(): Promise<{
     data: SearchSuggestion[];
     generated: boolean;
+    note?: string;
   }> {
-    return siFetch<{ data: SearchSuggestion[]; generated: boolean }>(
-      "/v1/search-intelligence/suggestions/generate",
-      { method: "POST" },
-    );
+    return siFetch<{
+      data: SearchSuggestion[];
+      generated: boolean;
+      note?: string;
+    }>("/v1/search-intelligence/suggestions/generate", { method: "POST" });
   },
 
-  /** GET /v1/search-intelligence/trending — trending terms (backend placeholder). */
+  /** GET /v1/search-intelligence/trending — trending terms aggregated from real search history. */
   trending(): Promise<{ data: TrendingTerm[]; period: string }> {
     return siFetch<{ data: TrendingTerm[]; period: string }>(
       "/v1/search-intelligence/trending",
     );
   },
 
-  /** GET /v1/search-intelligence/related/:emailId — related emails (backend placeholder). */
+  /**
+   * GET /v1/search-intelligence/related/:emailId — currently always throws a
+   * SearchIntelligenceError with code "related_search_unavailable" (501): no
+   * similarity index exists yet (issue #166).
+   */
   relatedEmails(
     emailId: string,
   ): Promise<{ data: RelatedEmail[]; sourceEmailId: string }> {
@@ -313,7 +340,11 @@ export const searchIntelligenceApi = {
     );
   },
 
-  /** POST /v1/search-intelligence/natural-language — parse NL query (backend placeholder). */
+  /**
+   * POST /v1/search-intelligence/natural-language — currently always throws a
+   * SearchIntelligenceError with code "natural_language_parse_unavailable"
+   * (501); use the AI search endpoint instead (issue #166).
+   */
   parseNaturalLanguage(
     query: string,
   ): Promise<{ data: ParsedNaturalLanguageQuery }> {

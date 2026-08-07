@@ -9,9 +9,9 @@
  * DELETE /v1/calendar-events/:id                — Delete event
  * GET    /v1/calendar-events/availability       — Get availability settings
  * PUT    /v1/calendar-events/availability       — Set availability
- * POST   /v1/calendar-events/find-time          — AI find available time
- * POST   /v1/calendar-events/schedule-from-text — AI parse natural language to event
- * GET    /v1/calendar-events/:id/prep           — AI meeting prep
+ * POST   /v1/calendar-events/find-time          — Propose meeting times (no availability check yet)
+ * POST   /v1/calendar-events/schedule-from-text — 501 (no NL parser wired)
+ * GET    /v1/calendar-events/:id/prep           — Meeting prep from event data (no AI yet)
  */
 
 import { Hono } from "hono";
@@ -247,6 +247,13 @@ calendarEventsRouter.post(
   async (c) => {
     const input = getValidatedBody<z.infer<typeof FindTimeSchema>>(c);
 
+    // These are deterministic business-hours proposals (next five weekdays'
+    // mornings) — nothing consults anyone's availability, and no AI runs.
+    // The old response attached an invented per-slot `confidence` (0.5–0.9)
+    // and a note claiming the slots were "AI-suggested based on attendee
+    // availability patterns" (issue #166). The proposals themselves are
+    // honest and useful as starting points, so they stay; the fabricated
+    // score and the false claim do not.
     const now = new Date();
     const slots = [];
     for (let i = 1; i <= 5; i++) {
@@ -256,8 +263,6 @@ calendarEventsRouter.post(
       slots.push({
         startAt: slotStart.toISOString(),
         endAt: slotEnd.toISOString(),
-        confidence: Math.max(0.5, 1 - i * 0.1),
-        attendeesAvailable: input.attendeeEmails,
       });
     }
 
@@ -266,38 +271,32 @@ calendarEventsRouter.post(
         durationMinutes: input.durationMinutes,
         attendeeCount: input.attendeeEmails.length,
         suggestedSlots: slots,
-        note: "Slots are AI-suggested based on attendee availability patterns. Connect calendar integrations for real-time availability.",
+        note: "Proposed business-hours times — attendee availability is NOT checked yet. Connect calendar integrations for availability-aware suggestions.",
       },
     });
   },
 );
 
+// The old handler ignored input.text entirely — every request came back
+// "tomorrow at 12:00" with parsed: true, confidence: 0.75 and a note calling
+// it "AI-parsed" (issue #166). Nothing parses scheduling text on this route
+// and no UI consumes it, so the honest answer is 501, not an invented event.
 calendarEventsRouter.post(
   "/schedule-from-text",
   requireScope("messages:write"),
   validateBody(ScheduleFromTextSchema),
-  async (c) => {
-    const input = getValidatedBody<z.infer<typeof ScheduleFromTextSchema>>(c);
-
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(12, 0, 0, 0);
-    const endTime = new Date(tomorrow.getTime() + 60 * 60 * 1000);
-
-    return c.json({
-      data: {
-        parsed: true,
-        originalText: input.text,
-        suggestedEvent: {
-          title: input.text.length > 100 ? input.text.slice(0, 97) + "..." : input.text,
-          startAt: tomorrow.toISOString(),
-          endAt: endTime.toISOString(),
-          allDay: false,
-          confidence: 0.75,
+  (c) => {
+    return c.json(
+      {
+        error: {
+          type: "not_implemented",
+          message:
+            "Scheduling from natural-language text is not available yet — the text was not parsed and no event was suggested.",
+          code: "schedule_from_text_unavailable",
         },
-        note: "AI-parsed event. Review and confirm before creating. Full NLP parsing requires Claude API.",
       },
-    });
+      501,
+    );
   },
 );
 
@@ -528,6 +527,11 @@ calendarEventsRouter.get(
 
     const attendees = (event.attendees ?? []) as { email: string; name?: string; status: string }[];
 
+    // The briefing is assembled from the event row itself — no AI runs. The
+    // old response also invented a `suggestedAgenda` (three canned bullet
+    // points) and a `confidence: 0.7` as if a model had produced them (issue
+    // #166). The honest "connect email history" note fields stay; the
+    // fabricated agenda and score are gone.
     return c.json({
       data: {
         eventId: event.id,
@@ -541,14 +545,8 @@ calendarEventsRouter.get(
             name: a.name ?? null,
             note: "Connect email history for AI-generated attendee briefing.",
           })),
-          suggestedAgenda: [
-            "Review previous action items",
-            "Discuss main topic: " + event.title,
-            "Align on next steps",
-          ],
           recentEmailContext: "Connect to email data for AI-powered context from recent conversations with attendees.",
         },
-        confidence: 0.7,
         generatedAt: new Date().toISOString(),
       },
     });

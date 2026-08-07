@@ -268,25 +268,22 @@ aiWritingRouter.post(
       });
     }
 
-    // Fallback when API is unavailable
-    const subject = `Re: ${input.topic.slice(0, 60)}`;
-    const body =
-      `Hi,\n\n` +
-      `Thank you for reaching out. Regarding "${input.topic}", ` +
-      `I wanted to share my thoughts.\n\n` +
-      `[AI-composed content would appear here in ${tone} tone, ` +
-      `targeting a ${length} email length, when Claude API is configured.]\n\n` +
-      `Best regards`;
-
+    // Fallback when the AI is unavailable. `body` is a SENDABLE field — the
+    // old fallback filled it with greeting + "[AI-composed content would
+    // appear here…]" placeholder prose, which issue #137 caught landing in a
+    // user's reply box as if it were a draft. Callers already refuse on
+    // `degraded: true` (the #137 fix); the body is now empty so that even a
+    // caller that ignores the flag has nothing fabricated to send — the same
+    // no-placeholder-in-content posture as /subject-lines' fallback.
     return c.json({
       data: {
-        subject,
-        body,
+        subject: `Re: ${input.topic.slice(0, 60)}`,
+        body: "",
         tone,
         length,
         confidence: 0,
         degraded: true,
-        wordCount: body.split(/\s+/).length,
+        wordCount: 0,
         profileUsed: input.profileId ?? null,
       },
     });

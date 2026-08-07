@@ -207,13 +207,16 @@ export interface ExtractPayload {
   participants?: string[];
 }
 
+// NB (issue #166): extraction responses no longer carry per-item `confidence`
+// — the extractor never computed one, and the old 0.85/0.95/0.80 values were
+// invented constants. Stored rows keep a confidence column (0 = no computed
+// score, per the #99 convention).
 export interface ExtractedActionItemSummary {
   id: string;
   actionText: string;
   assignedTo: string | null;
   dueDate: string | null;
   priority: ActionItemPriority;
-  confidence: number;
 }
 
 export interface ExtractedDeadlineSummary {
@@ -221,7 +224,7 @@ export interface ExtractedDeadlineSummary {
   deadlineDate: string;
   description: string;
   isExplicit: boolean;
-  confidence: number;
+  isUrgent: boolean;
 }
 
 export interface ExtractedPromiseSummary {
@@ -230,7 +233,6 @@ export interface ExtractedPromiseSummary {
   promisor: string;
   promisee: string;
   dueDate: string | null;
-  confidence: number;
 }
 
 export interface ExtractResult {
