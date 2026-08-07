@@ -300,7 +300,6 @@ code-ready but **not operational** — bring-up is the critical path (see Next A
 | 126 | Connected-account (Gmail/Outlook) send path: unsubscribe suppression + per-account quota deliberately unapplied — product/billing decisions (Boss Rule #10). | MED |
 | 129 | Real encrypt-on-send / decrypt-on-read E2EE pipeline — scoped project (key discovery, MIME encryption, search/AI implications). The fabricated claims are gone; the feature honestly says "not encrypted yet". | MED |
 | 132 | Automation dispatcher for the 11 "runs on new mail" features — needs opt-in schema + cost model, **Craig's call** (Boss Rules #7/#10); must not fan out per-message AI calls (#130's lesson). | MED |
-| 143 | The 7-file e2e suite executes nowhere — needs a CI job booting Postgres + Redis + API, plus fixtures. Honest executing-e2e coverage today: 0 endpoints. | MED |
 | 146 | Five undeployed services (`analytics`, `collab`, `jmap`, `sentinel`, `support`) need keep-or-delete (Craig); `collab.alecrae.com` documented but unresolved. | LOW |
 | 154 | Mailto unsubscribe: fails honestly now, but the real fix needs account + verified-domain context threaded into `executeOption`, `from` validated against owned domains, and the pre-send gate. | MED |
 | 156a | `POST /v1/auth/register` grants **owner** to every signup — the privilege half of the fixed RCE; needs Craig's review. | HIGH |
@@ -424,4 +423,4 @@ If something contradicts this file, this file wins. If you don't know what to do
 you. Changing this file needs Craig's approval. Shipping something not in this file breaks the
 rules. **AlecRae dominates or AlecRae dies. There is no second place.**
 
-**Last updated:** 2026-08-08 00:15 UTC
+**Last updated:** 2026-08-08 01:45 UTC
