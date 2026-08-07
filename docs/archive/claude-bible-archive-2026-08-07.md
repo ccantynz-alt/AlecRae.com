@@ -1110,3 +1110,21 @@ measurements (three signals, not the one the sweep found).
 
 **Left noted (folded into #170):** calendar `/today`'s `aiAgenda` field name overclaims for a
 template sentence; context-intelligence hardcodes `isExplicit: true` on every deadline.
+
+## Issue #143 — FIXED 2026-08-08 (PR #96): the e2e suite executes in CI at last
+
+New "E2E API" job in ci.yml: pgvector/pg16 + redis:7 service containers, migrations from source,
+idempotent fixture seeder (account, SHA-256-hashed API key matching the suite's literal key,
+Argon2id user + workspace membership; domain deliberately unseeded — the messages suite asserts
+the 422 path), the API's workspace-dependency closure built (db/shared/crypto/email-parser export
+only ./dist), API booted with bounded health wait, then all 7 files / 117 tests against the live
+server. Boot log dumps + uploads on failure; no || true anywhere.
+
+Two truths surfaced while building it: the old `test:e2e` script collected ZERO tests and exited 0
+(the app vitest config's exclude beat the CLI path filter — the #150/#161 do-nothing-control
+class; fixed with a dedicated e2e vitest config), and the never-run tests had drifted (bare
+webhook event names that 422 since #70/#103; a templates suite that authenticated with an API key
+which structurally cannot carry templates:* scopes — now logs in for a session JWT). Three CI
+rounds to green, each catching a real environmental requirement: pgvector extension, then the
+dist-only workspace packages. Not yet a required status check (branch-protection change is
+Craig's call — worth doing once it proves stable for a week).
