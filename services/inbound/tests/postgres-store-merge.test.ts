@@ -153,14 +153,18 @@ describe("PostgresEmailStore — same-account multi-recipient merge", () => {
     mailboxId: string,
     address: string,
     action: FilterVerdict["action"] = "accept",
-  ): Promise<{ id: string }> {
+  ): Promise<{ id: string; merged?: boolean | undefined }> {
     const store = new PostgresEmailStore();
     return store.store(makeParsed(), makeRecipient(mailboxId, address), makeVerdict(action));
   }
 
   it("inserts a fresh row with source 'inbound' and both folder + mailbox tags", async () => {
     storeMockState.insertReturning = [{ id: "whatever" }];
-    await storeOne("mbx-1", "user1@customer.com");
+    const stored = await storeOne("mbx-1", "user1@customer.com");
+
+    // A fresh insert is NOT flagged merged — the email.received emitter
+    // (events/received-event.ts) relies on this to emit exactly once.
+    expect(stored.merged).toBeFalsy();
 
     expect(storeMockState.insertedValues).toHaveLength(1);
     const row = storeMockState.insertedValues[0];
@@ -188,8 +192,11 @@ describe("PostgresEmailStore — same-account multi-recipient merge", () => {
 
     const stored = await storeOne("mbx-2", "user2@customer.com");
 
-    // The delivery SUCCEEDS and reports the existing row.
+    // The delivery SUCCEEDS and reports the existing row, flagged merged so
+    // the email.received emitter does not emit a duplicate event for the
+    // same (accountId, messageId).
     expect(stored.id).toBe("existing-1");
+    expect(stored.merged).toBe(true);
     // The new mailbox tag was merged, nothing duplicated.
     expect(storeMockState.updateSets).toHaveLength(1);
     expect(storeMockState.updateSets[0]?.["tags"]).toEqual(["inbox", "mbx-1", "mbx-2"]);

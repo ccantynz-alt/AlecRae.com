@@ -13,6 +13,7 @@ import type { MailboxRouter } from "./routing/router.js";
 import type { EmailStore } from "./storage/store.js";
 import type { SmtpSession, SmtpEnvelope, ResolvedRecipient, MimeHeader } from "./types.js";
 import { isDsnMessage, processInboundDsn } from "./dsn-suppression.js";
+import { emitReceivedEvent, type ReceivedEventEmitter } from "./events/received-event.js";
 import { smtpReject, smtpDefer } from "./errors.js";
 import { recordEmailReceived, recordEmailFilterDuration } from "@alecrae/shared";
 
@@ -66,6 +67,12 @@ export interface InboundHandlerDeps {
   detectDsn?: (headers: MimeHeader[]) => boolean;
   /** DSN processing — injectable for tests; defaults to the real processor. */
   processDsn?: (rawMessage: string, envelopeTo?: string) => Promise<void>;
+  /**
+   * email.received event/webhook emission — injectable for tests; defaults to
+   * the real emitter (events/received-event.ts). Always fire-and-forget: an
+   * eventing failure must never fail the delivery itself.
+   */
+  emitReceivedEvent?: ReceivedEventEmitter;
 }
 
 export type InboundMessageHandler = (
@@ -98,6 +105,7 @@ export function createInboundHandler(deps: InboundHandlerDeps): InboundMessageHa
   const { parser, pipeline, router, store } = deps;
   const detectDsn = deps.detectDsn ?? isDsnMessage;
   const processDsn = deps.processDsn ?? processInboundDsn;
+  const emitReceived = deps.emitReceivedEvent ?? emitReceivedEvent;
 
   return async function handleInboundMessage(
     session: SmtpSession,
@@ -223,6 +231,24 @@ export function createInboundHandler(deps: InboundHandlerDeps): InboundMessageHa
       console.log(
         `[Inbound] Stored ${stored.id} in mailbox ${target.mailboxId} for ${recipient}`,
       );
+
+      // email.received event + webhook (issue #169, bounded half) —
+      // fire-and-forget: the message is stored and the sender must get its
+      // 250 regardless of eventing failures (same posture as tracking.ts).
+      // The emitter itself skips merged deliveries so one message delivered
+      // to several recipients on one account emits exactly one event.
+      //
+      // Issue #169's REMAINING half deliberately does NOT hook here: AI
+      // triage, user-defined rules and semantic indexing run only on the
+      // API-side sync/import path (received-email-store.ts) — they carry
+      // quota/backfill guards (#130) and need a design pass before this
+      // service can fan out to them.
+      emitReceived(stored, target).catch((err) => {
+        console.error(
+          `[Inbound] email.received emission failed for ${stored.id}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      });
       deliveryCount++;
     }
 
