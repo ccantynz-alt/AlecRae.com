@@ -317,6 +317,16 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # The API runs from source under Bun, but several workspace packages it
+      # imports (@alecrae/db, shared, crypto, email-parser) export ONLY
+      # ./dist — no bun/source condition — so their dist must exist before
+      # the API can boot ("Cannot find module '@alecrae/db'" otherwise; the
+      # production deploy ritual builds packages/db by hand for the same
+      # reason). Build the API's dependency closure; turbo's ^... filter
+      # selects exactly its upstream deps.
+      - name: Build API dependencies
+        run: bunx turbo run build --filter="@alecrae/api^..."
+
       # packages/db/src/migrate.ts runs straight from source under Bun — no
       # build step needed before it.
       - name: Run database migrations
