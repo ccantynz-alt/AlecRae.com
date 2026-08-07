@@ -256,7 +256,11 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        # pgvector image, not plain postgres:16 — the migrations CREATE
+        # EXTENSION vector (semantic search embeddings), which the stock
+        # image cannot satisfy ("extension \"vector\" is not available").
+        # Same Postgres 16 major as production.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -353,7 +357,10 @@ jobs:
       # A red run must be diagnosable from the job page alone.
       - name: Dump API log on failure
         if: failure()
-        run: cat /tmp/e2e-api.log
+        # `|| true` on the cat only: a failure BEFORE the API boots means no
+        # log exists, and this diagnostic step must not mask the real error
+        # with its own.
+        run: cat /tmp/e2e-api.log || echo "(no API log — failure occurred before the API booted)"
 
       - name: Upload API log artifact
         if: always()
