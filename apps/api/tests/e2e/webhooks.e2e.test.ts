@@ -67,8 +67,10 @@ describe("Webhooks API", () => {
 
       expect(body.data.id).toBeDefined();
       expect(body.data.url).toBe(url);
+      // Dotted names per the API's WebhookEventType enum (mirrors the DB's
+      // email_event_type enum — bare names were the pre-issue-#70 convention).
       expect(body.data.events).toEqual(
-        expect.arrayContaining(["delivered", "bounced"]),
+        expect.arrayContaining(["email.delivered", "email.bounced"]),
       );
       // Secret should be masked in response
       expect(body.data.secret).toContain("••••");
@@ -221,7 +223,7 @@ describe("Webhooks API", () => {
       if (status !== 201) return;
 
       const res = await authRequest("PATCH", `/v1/webhooks/${id}`, {
-        body: { events: ["opened", "clicked"] },
+        body: { events: ["email.opened", "email.clicked"] },
       });
 
       expect(res.status).toBe(200);
@@ -231,7 +233,7 @@ describe("Webhooks API", () => {
       }>(res);
 
       expect(body.data.events).toEqual(
-        expect.arrayContaining(["opened", "clicked"]),
+        expect.arrayContaining(["email.opened", "email.clicked"]),
       );
     });
 

@@ -13,9 +13,7 @@ import {
   authRequest,
   apiRequest,
   jsonBody,
-  withAuth,
   TEST_SEND_PAYLOAD,
-  uniqueId,
 } from "./helpers.js";
 import type { ApiError } from "./helpers.js";
 
@@ -41,8 +39,9 @@ describe("Messages API", () => {
         expect(body.status).toBe("queued");
       } else if (res.status === 422) {
         // Domain not found is expected in a test environment
-        expect((body as ApiError).error).toBeDefined();
-        expect((body as ApiError).error.code).toBe("domain_not_found");
+        const errBody = body as unknown as ApiError;
+        expect(errBody.error).toBeDefined();
+        expect(errBody.error.code).toBe("domain_not_found");
       }
     });
 
@@ -232,12 +231,13 @@ describe("Messages API", () => {
         data: { id: string }[];
       }>(listRes);
 
-      if (listBody.data.length === 0) {
+      const first = listBody.data[0];
+      if (!first) {
         // No messages exist yet — skip this assertion
         return;
       }
 
-      const msgId = listBody.data[0]!.id;
+      const msgId = first.id;
       const res = await authRequest("GET", `/v1/messages/${msgId}`);
 
       expect(res.status).toBe(200);
