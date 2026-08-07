@@ -12,7 +12,7 @@
  * POST /v1/attachments/intelligence/organize/:id/action    — Mark suggestion as actioned
  * GET  /v1/attachments/intelligence/stats                  — Attachment statistics
  * GET  /v1/attachments/intelligence/pii-report             — PII detection report
- * POST /v1/attachments/intelligence/extract-text           — Extract text from attachment
+ * POST /v1/attachments/intelligence/extract-text           — 501 (no OCR engine; self-heals old placeholder rows)
  * GET  /v1/attachments/intelligence/duplicates             — Find duplicate attachments
  */
 
@@ -92,7 +92,13 @@ function generateId(): string {
     .join("");
 }
 
-/** Placeholder AI attachment analysis — in production this calls Claude. */
+/**
+ * Heuristic attachment screening — NOT AI, and its output must never claim to
+ * be. What actually runs: a risky-extension blocklist, a >25MB size check, and
+ * four regexes over caller-supplied text for PII patterns. The summary text it
+ * produces says exactly that (issue #166 — the previous text read like the
+ * verdict of an AI analysis that never happened).
+ */
 function analyzeAttachment(
   fileName: string,
   fileType: string,
@@ -134,7 +140,7 @@ function analyzeAttachment(
   return {
     isSafe: threatLevel === "safe",
     threatLevel,
-    aiSummary: `File "${fileName}" (${fileType}, ${mimeType}, ${fileSize} bytes) analyzed. Threat level: ${threatLevel}.${detectedPII.length > 0 ? ` PII detected: ${detectedPII.join(", ")}.` : " No PII detected."}`,
+    aiSummary: `Heuristic check (no AI): file extension and size screened — threat level ${threatLevel}.${detectedPII.length > 0 ? ` Pattern scan found possible PII: ${detectedPII.join(", ")}.` : content ? " Pattern scan found no PII." : " File content was not provided, so no PII scan ran."}`,
     extractedText: content ? content.slice(0, 5000) : null,
     containsPII: detectedPII.length > 0,
     piiTypes: detectedPII,
@@ -167,6 +173,42 @@ const VIRUS_SCAN_UNAVAILABLE = {
       "Virus scanning is not available — no scanning engine is configured. " +
       "The attachment has not been scanned, and no result has been recorded.",
     code: "virus_scan_unavailable" as const,
+  },
+};
+
+/**
+ * The old /extract-text handler PERSISTED a literal placeholder string
+ * ("[Extracted text from X] — This is a placeholder…") into
+ * `attachment_analysis.extracted_text`, and then reported `alreadyExtracted:
+ * true` for that row forever (issue #166). Rows poisoned that way still exist
+ * in the database. Adding a cleanup migration is Boss Rule #7, so instead the
+ * poison is treated as absent wherever extractedText is read, and cleared
+ * opportunistically when such a row is touched again — self-healing, no
+ * migration.
+ */
+function isPlaceholderExtractedText(text: string | null): boolean {
+  return (
+    text !== null &&
+    text.startsWith("[Extracted text from ") &&
+    text.includes("placeholder")
+  );
+}
+
+/** Null out a poisoned extractedText value on a row being returned to a caller. */
+function sanitizeAnalysisRow<T extends { extractedText: string | null }>(row: T): T {
+  if (isPlaceholderExtractedText(row.extractedText)) {
+    return { ...row, extractedText: null };
+  }
+  return row;
+}
+
+const TEXT_EXTRACTION_UNAVAILABLE = {
+  error: {
+    type: "not_implemented" as const,
+    message:
+      "Text extraction (OCR / document parsing) is not available — no extraction engine is configured. " +
+      "Nothing was extracted, and no result has been recorded.",
+    code: "text_extraction_unavailable" as const,
   },
 };
 
@@ -261,7 +303,9 @@ attachmentIntelligenceRouter.get(
       .limit(query.limit + 1);
 
     const hasMore = rows.length > query.limit;
-    const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const page = (hasMore ? rows.slice(0, query.limit) : rows).map(
+      sanitizeAnalysisRow,
+    );
     const nextCursor =
       hasMore && page.length > 0
         ? page[page.length - 1]?.createdAt.toISOString()
@@ -305,7 +349,7 @@ attachmentIntelligenceRouter.get(
       );
     }
 
-    return c.json({ data: record });
+    return c.json({ data: sanitizeAnalysisRow(record) });
   },
 );
 
@@ -398,7 +442,9 @@ attachmentIntelligenceRouter.get(
       .limit(query.limit + 1);
 
     const hasMore = rows.length > query.limit;
-    const page = hasMore ? rows.slice(0, query.limit) : rows;
+    const page = (hasMore ? rows.slice(0, query.limit) : rows).map(
+      sanitizeAnalysisRow,
+    );
     const nextCursor =
       hasMore && page.length > 0
         ? page[page.length - 1]?.createdAt.toISOString()
@@ -662,8 +708,16 @@ attachmentIntelligenceRouter.post(
       );
     }
 
-    // If text was already extracted, return it
-    if (existing.extractedText) {
+    // A row poisoned by the old placeholder-writing handler self-heals here:
+    // the fake text is cleared so alreadyExtracted can never again be true on
+    // the strength of a placeholder (issue #166; no migration, Boss Rule #7).
+    if (isPlaceholderExtractedText(existing.extractedText)) {
+      await db
+        .update(attachmentAnalysis)
+        .set({ extractedText: null })
+        .where(eq(attachmentAnalysis.id, input.attachmentId));
+    } else if (existing.extractedText) {
+      // Genuinely-present text (e.g. supplied at analyze time) is returned.
       return c.json({
         data: {
           attachmentId: existing.id,
@@ -674,23 +728,11 @@ attachmentIntelligenceRouter.post(
       });
     }
 
-    // Placeholder OCR/text extraction — in production this calls a document
-    // processing service (e.g. Tesseract, AWS Textract, or Claude vision)
-    const extractedText = `[Extracted text from ${existing.fileName}] — This is a placeholder. In production, the actual text content would be extracted from the ${existing.mimeType} file using OCR or document parsing.`;
-
-    await db
-      .update(attachmentAnalysis)
-      .set({ extractedText })
-      .where(eq(attachmentAnalysis.id, input.attachmentId));
-
-    return c.json({
-      data: {
-        attachmentId: existing.id,
-        fileName: existing.fileName,
-        extractedText,
-        alreadyExtracted: false,
-      },
-    });
+    // No OCR / document-parsing engine exists. The old handler fabricated a
+    // placeholder string, PERSISTED it as extracted text, and reported it as
+    // real forever after. The ownership check above runs first so a 404 still
+    // means what it meant; the capability gap is reported after it.
+    return c.json(TEXT_EXTRACTION_UNAVAILABLE, 501);
   },
 );
 

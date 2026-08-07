@@ -17,8 +17,10 @@
  * one) and this engine picking one would deepen that split rather than fix
  * it. `mark_important`, `forward`, and `auto_reply` are skipped because they
  * need capabilities (a starred-vs-important distinction, actually sending
- * mail) this pass doesn't add. Skipped actions are logged, not silently
- * dropped.
+ * mail) this pass doesn't add. Skipped actions are REPORTED in the result
+ * (`skippedActions`, see runRulesForEmail) — a console.warn alone let a rule
+ * whose only action was forward/auto_reply count as applied while nothing
+ * happened (issue #166).
  *
  * Similarly, condition evaluation only covers fields available at mail-
  * ingest time (from/to/cc/subject/body). has_attachment/size/label/
@@ -122,6 +124,33 @@ const IMPLEMENTED_ACTIONS = new Set<EmailRuleAction["type"]>([
   "categorize",
 ]);
 
+/**
+ * Split a rule's actions into the ones this engine can actually execute and
+ * the ones it cannot (label / mark_important / forward / auto_reply — see the
+ * module doc for why each is skipped).
+ *
+ * Exported so callers and tests can see the exact boundary. The skipped list
+ * MUST be surfaced by anything reporting a rule as applied: previously a rule
+ * whose only action was `auto_reply` was counted as applied (matchCount++)
+ * with nothing but a console.warn recording that the reply never happened —
+ * a user had every reason to believe mail was being answered (issue #166).
+ */
+export function partitionRuleActions(actions: EmailRuleAction[]): {
+  implemented: EmailRuleAction[];
+  unimplemented: EmailRuleAction["type"][];
+} {
+  const implemented: EmailRuleAction[] = [];
+  const unimplemented: EmailRuleAction["type"][] = [];
+  for (const action of actions) {
+    if (IMPLEMENTED_ACTIONS.has(action.type)) {
+      implemented.push(action);
+    } else {
+      unimplemented.push(action.type);
+    }
+  }
+  return { implemented, unimplemented };
+}
+
 async function applyActions(emailId: string, actions: EmailRuleAction[]): Promise<void> {
   const db = getDatabase();
   const updates: Record<string, unknown> = {};
@@ -159,10 +188,8 @@ async function applyActions(emailId: string, actions: EmailRuleAction[]): Promis
           metadataPatch = { ...(metadataPatch ?? {}), ai_category: action.value };
         }
         break;
-      default:
-        if (!IMPLEMENTED_ACTIONS.has(action.type)) {
-          console.warn(`[rule-engine] Action type "${action.type}" is not yet implemented — skipped.`);
-        }
+      // Unimplemented types never reach here — partitionRuleActions filters
+      // them out and runRulesForEmail reports them to the caller.
     }
   }
 
@@ -176,16 +203,28 @@ async function applyActions(emailId: string, actions: EmailRuleAction[]): Promis
   await db.update(emails).set(updates).where(eq(emails.id, emailId));
 }
 
+export interface SkippedRuleActions {
+  ruleId: string;
+  ruleName: string;
+  /** Action types the rule asked for that no engine can execute yet. */
+  actionTypes: EmailRuleAction["type"][];
+}
+
 /**
  * Evaluate every enabled rule for `accountId` against a newly-stored email
  * and apply the actions of every rule that matches. Increments matchCount on
  * each matching rule. Call this after the email row exists (needs its id).
+ *
+ * The result reports, per matching rule, which requested actions were
+ * SKIPPED because no executor exists for them (forward, auto_reply,
+ * mark_important, label). Callers must not present a rule as fully applied
+ * when this list is non-empty.
  */
 export async function runRulesForEmail(
   accountId: string,
   emailId: string,
   email: RuleEvaluationInput,
-): Promise<{ matchedRuleIds: string[] }> {
+): Promise<{ matchedRuleIds: string[]; skippedActions: SkippedRuleActions[] }> {
   const db = getDatabase();
   const rules = await db
     .select()
@@ -193,17 +232,22 @@ export async function runRulesForEmail(
     .where(and(eq(emailRules.accountId, accountId), eq(emailRules.enabled, true)));
 
   const matched: string[] = [];
+  const skippedActions: SkippedRuleActions[] = [];
 
   for (const rule of rules) {
     if (!matchesRule(email, { conditions: rule.conditions, matchMode: rule.matchMode })) continue;
 
     matched.push(rule.id);
-    await applyActions(emailId, rule.actions);
+    const { implemented, unimplemented } = partitionRuleActions(rule.actions);
+    if (unimplemented.length > 0) {
+      skippedActions.push({ ruleId: rule.id, ruleName: rule.name, actionTypes: unimplemented });
+    }
+    await applyActions(emailId, implemented);
     await db
       .update(emailRules)
       .set({ matchCount: rule.matchCount + 1, updatedAt: new Date() })
       .where(eq(emailRules.id, rule.id));
   }
 
-  return { matchedRuleIds: matched };
+  return { matchedRuleIds: matched, skippedActions };
 }

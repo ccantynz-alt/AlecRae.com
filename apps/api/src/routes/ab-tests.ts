@@ -58,6 +58,63 @@ function generateId(): string {
     .join("");
 }
 
+/**
+ * Standard normal CDF Φ(z), via the Abramowitz–Stegun 7.1.26 erf
+ * approximation (max abs error ≈ 1.5e-7 — far below anything that matters
+ * for declaring an A/B winner). No dependencies.
+ */
+export function normalCdf(z: number): number {
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const erf =
+    1 -
+    (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t -
+      0.284496736) *
+      t +
+      0.254829592) *
+      t *
+      Math.exp(-x * x);
+  const phi = 0.5 * (1 + erf);
+  return z >= 0 ? phi : 1 - phi;
+}
+
+/**
+ * One-sided pooled two-proportion z-test: the probability that `winner`'s
+ * underlying rate genuinely exceeds `runnerUp`'s, given the observed counts.
+ *
+ * Returns null when no significance can be computed — a missing side, zero
+ * sends, or zero pooled variance (0% or 100% everywhere). Callers must treat
+ * null as "no confidence value", never substitute a constant: the previous
+ * implementation stored a flat 0.95 for every completed test regardless of
+ * data (issue #166), which made the number a decoration, not a measurement.
+ */
+export function twoProportionConfidence(
+  winner: { successes: number; trials: number },
+  runnerUp: { successes: number; trials: number },
+): number | null {
+  if (winner.trials <= 0 || runnerUp.trials <= 0) return null;
+  const p1 = winner.successes / winner.trials;
+  const p2 = runnerUp.successes / runnerUp.trials;
+  const pooled =
+    (winner.successes + runnerUp.successes) / (winner.trials + runnerUp.trials);
+  const se = Math.sqrt(
+    pooled * (1 - pooled) * (1 / winner.trials + 1 / runnerUp.trials),
+  );
+  if (se === 0 || Number.isNaN(se)) return null;
+  const z = (p1 - p2) / se;
+  return Math.round(normalCdf(z) * 1000) / 1000;
+}
+
+/** Which per-variant success count backs each winner metric. */
+function metricSuccesses(
+  metric: string,
+  stats: { opened: number; clicked: number; replied: number },
+): number {
+  if (metric === "click_rate") return stats.clicked;
+  if (metric === "reply_rate") return stats.replied;
+  return stats.opened;
+}
+
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 const abTestsRouter = new Hono();
@@ -354,22 +411,36 @@ abTestsRouter.post(
 
     const now = new Date();
 
-    // Determine the winner: explicit winnerId from input, or auto-select by metric
+    // Determine the winner: explicit winnerId from input, or auto-select by
+    // the winner metric's observed rate (successes/sent, from real counts).
     let winnerId = input.winnerId;
+    let confidence: number | null = null;
+
     if (!winnerId && test.results) {
       const results = test.results as ABTestResults;
-      let bestScore = -1;
-      for (const [variantId, stats] of Object.entries(results.variants)) {
-        const score =
-          test.winnerMetric === "click_rate"
-            ? stats.clickRate
-            : stats.openRate;
-        if (score > bestScore) {
-          bestScore = score;
-          winnerId = variantId;
+      const ranked = Object.entries(results.variants)
+        .map(([variantId, stats]) => ({
+          variantId,
+          successes: metricSuccesses(test.winnerMetric, stats),
+          trials: stats.sent,
+        }))
+        .filter((v) => v.trials > 0)
+        .sort((a, b) => b.successes / b.trials - a.successes / a.trials);
+
+      const best = ranked[0];
+      const runnerUp = ranked[1];
+      if (best) {
+        winnerId = best.variantId;
+        // A real one-sided two-proportion z-test against the runner-up — or
+        // no confidence value at all. The old code stored a constant 0.95
+        // here with no significance test behind it (issue #166).
+        if (runnerUp) {
+          confidence = twoProportionConfidence(best, runnerUp);
         }
       }
     }
+    // A manually-decreed winner (input.winnerId) is the user's decision, not a
+    // statistical result — no confidence value is attached to it.
 
     const updatedResults: ABTestResults = {
       ...(test.results as ABTestResults | null) ?? {
@@ -377,7 +448,7 @@ abTestsRouter.post(
         variants: {},
       },
       ...(winnerId !== undefined ? { winner: winnerId } : {}),
-      ...(winnerId ? { confidence: 0.95 } : {}),
+      ...(confidence !== null ? { confidence } : {}),
     };
 
     await db
@@ -395,6 +466,10 @@ abTestsRouter.post(
         id,
         status: "completed",
         winner: winnerId ?? null,
+        // Null when no significance test could be run (manual winner, a
+        // single variant with sends, or degenerate counts) — never a
+        // made-up constant.
+        confidence,
         completedAt: now.toISOString(),
       },
     });

@@ -424,7 +424,8 @@ function FindTimeSection({
       <CardHeader>
         <Text variant="heading-sm">Find a time</Text>
         <Text variant="body-sm" muted>
-          AI suggests meeting slots based on attendee availability.
+          Proposes business-hours slots to offer — attendee availability
+          isn&apos;t checked yet.
         </Text>
       </CardHeader>
       <CardContent>
@@ -468,9 +469,6 @@ function FindTimeSection({
                 <Box>
                   <Text variant="body-sm" className="font-medium">
                     {formatEventTime(slot.startAt, slot.endAt, false)}
-                  </Text>
-                  <Text variant="caption" muted>
-                    {Math.round(slot.confidence * 100)}% confidence
                   </Text>
                 </Box>
                 <Button variant="secondary" size="sm" onClick={() => onPickSlot(slot)}>

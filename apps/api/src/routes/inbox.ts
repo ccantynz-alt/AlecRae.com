@@ -13,7 +13,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, desc, inArray, isNotNull } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import {
@@ -30,6 +30,7 @@ import {
   commitments as commitmentsTable,
   inboxCategories as inboxCategoriesTable,
   screenerDecisions as screenerDecisionsTable,
+  emails,
 } from "@alecrae/db";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -302,12 +303,89 @@ inbox.patch(
 );
 
 // GET /v1/inbox/follow-ups — Get follow-up nudges
+//
+// Previously called detectFollowUpNeeded([]) — a literal empty array — so the
+// endpoint was a silent always-empty 200 that looked like "no follow-ups
+// needed" (issue #166). It now feeds the detector the account's real sent
+// mail: the last 100 sent/delivered emails of the past 30 days, with
+// hasReply resolved by checking whether any stored message replies to the
+// sent message's RFC 5322 Message-ID (In-Reply-To). Clients disagree about
+// angle brackets around ids (the issue #76b lesson), so both spellings are
+// matched.
 inbox.get(
   "/follow-ups",
   requireScope("inbox:read"),
-  (c) => {
-    // In production, query sent emails from DB
-    const nudges = detectFollowUpNeeded([]);
+  async (c) => {
+    const auth = c.get("auth");
+    const db = getDatabase();
+
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const sent = await db
+      .select({
+        id: emails.id,
+        messageId: emails.messageId,
+        toAddresses: emails.toAddresses,
+        subject: emails.subject,
+        sentAt: emails.sentAt,
+      })
+      .from(emails)
+      .where(
+        and(
+          eq(emails.accountId, auth.accountId),
+          inArray(emails.status, ["sent", "delivered"]),
+          isNotNull(emails.sentAt),
+          gte(emails.sentAt, cutoff),
+        ),
+      )
+      .orderBy(desc(emails.sentAt))
+      .limit(100);
+
+    if (sent.length === 0) {
+      return c.json({ data: [] });
+    }
+
+    const stripAngles = (id: string): string => id.replace(/^<|>$/g, "");
+    // Match In-Reply-To against both "<id>" and bare "id" spellings.
+    const lookupIds = sent.flatMap((row) => {
+      const bare = stripAngles(row.messageId);
+      return bare === row.messageId
+        ? [row.messageId, `<${row.messageId}>`]
+        : [row.messageId, bare];
+    });
+
+    const replies = await db
+      .select({ inReplyTo: emails.inReplyTo })
+      .from(emails)
+      .where(
+        and(
+          eq(emails.accountId, auth.accountId),
+          isNotNull(emails.inReplyTo),
+          inArray(emails.inReplyTo, lookupIds),
+        ),
+      );
+
+    const repliedTo = new Set(
+      replies
+        .map((r) => (r.inReplyTo ? stripAngles(r.inReplyTo) : null))
+        .filter((v): v is string => v !== null),
+    );
+
+    const nudges = detectFollowUpNeeded(
+      sent.flatMap((row) =>
+        row.sentAt === null
+          ? []
+          : [
+              {
+                id: row.id,
+                toAddress: row.toAddresses[0]?.address ?? "",
+                subject: row.subject,
+                sentAt: row.sentAt,
+                hasReply: repliedTo.has(stripAngles(row.messageId)),
+              },
+            ],
+      ),
+    );
+
     return c.json({ data: nudges });
   },
 );

@@ -34,11 +34,19 @@ function generateId(): string {
 }
 
 /**
- * Placeholder enrichment function — extracts domain from email address and
- * returns mock enrichment data. The real AI enrichment pipeline (DNS MX
- * lookups, domain WHOIS, public profile APIs, Claude for synthesis) connects
- * later. This function defines the shape and contract.
+ * Deterministic derivation from the email address itself — title-cased name
+ * from the local part, company guessed from a non-free-provider domain. That
+ * is all this does; no external data source is consulted and no AI runs.
+ *
+ * It used to be presented as "AI" enrichment (source: "ai") with invented
+ * confidence scores of 0.5 / 0.2 (issue #166). The derivation is honest and
+ * mildly useful, so it stays — labelled as what it is (`source:
+ * "derived_from_address"`), with confidence 0 per the #99 convention: no
+ * measured score exists. A real enrichment pipeline (MX/WHOIS/profile APIs,
+ * Claude synthesis) would replace this wholesale.
  */
+const DERIVED_SOURCE = "derived_from_address";
+
 function enrichFromEmail(email: string): {
   data: EnrichmentData;
   confidence: number;
@@ -83,7 +91,9 @@ function enrichFromEmail(email: string): {
 
   return {
     data,
-    confidence: isFreeProvider ? 0.2 : 0.5,
+    // No measured confidence exists for an address-derived guess — 0 means
+    // "no computed score", never an invented probability.
+    confidence: 0,
   };
 }
 
@@ -144,7 +154,7 @@ contactEnrichmentRouter.post(
           email: contact.email,
           data: enrichment.data,
           confidence: enrichment.confidence,
-          source: "ai",
+          source: DERIVED_SOURCE,
           enrichedAt: now,
           expiresAt,
         })
@@ -157,7 +167,7 @@ contactEnrichmentRouter.post(
           email: contact.email,
           data: enrichment.data,
           confidence: enrichment.confidence,
-          source: "ai",
+          source: DERIVED_SOURCE,
           enrichedAt: now.toISOString(),
           expiresAt: expiresAt.toISOString(),
         },
@@ -173,7 +183,7 @@ contactEnrichmentRouter.post(
       email: contact.email,
       data: enrichment.data,
       confidence: enrichment.confidence,
-      source: "ai",
+      source: DERIVED_SOURCE,
       enrichedAt: now,
       expiresAt,
     });
@@ -186,7 +196,7 @@ contactEnrichmentRouter.post(
           email: contact.email,
           data: enrichment.data,
           confidence: enrichment.confidence,
-          source: "ai",
+          source: DERIVED_SOURCE,
           enrichedAt: now.toISOString(),
           expiresAt: expiresAt.toISOString(),
         },
@@ -329,7 +339,7 @@ contactEnrichmentRouter.post(
             email: contact.email,
             data: enrichment.data,
             confidence: enrichment.confidence,
-            source: "ai",
+            source: DERIVED_SOURCE,
             enrichedAt: now,
             expiresAt,
           })
@@ -342,7 +352,7 @@ contactEnrichmentRouter.post(
           email: contact.email,
           data: enrichment.data,
           confidence: enrichment.confidence,
-          source: "ai",
+          source: DERIVED_SOURCE,
           enrichedAt: now,
           expiresAt,
         });

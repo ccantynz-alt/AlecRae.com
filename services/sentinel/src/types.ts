@@ -44,6 +44,14 @@ export interface SignalScore {
   score: number;
   weight: number;
   reason: string;
+  /**
+   * True when the signal had no underlying data to score — e.g. no cached IP
+   * or sender reputation for this item. A no-data signal is EXCLUDED from the
+   * weighted average rather than contributing an invented default: the scorer
+   * previously substituted hardcoded values (IP reputation 60, sender 50,
+   * behavior 65) that flowed into real spam decisions as if measured.
+   */
+  noData?: boolean;
 }
 
 export type SignalType =

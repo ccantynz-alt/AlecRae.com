@@ -7,9 +7,10 @@
  *   - ContactRemindersPanel      — follow-up reminders (list/create/complete)
  *   - ContactInsightsPanel       — AI relationship insights
  *
- * Backend note (Known Issue #29): enrichment is currently domain-derived mock
- * data and insights are heuristic placeholders — these panels render whatever
- * comes back and show a friendly note when data is sparse.
+ * Backend note (issues #29/#166): enrichment is a deterministic derivation
+ * from the contact's email address (source "derived_from_address", no AI, no
+ * external lookups) and is labelled as such — the invented confidence score
+ * it used to carry is gone. Insights remain heuristic placeholders.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -281,26 +282,40 @@ export function ContactEnrichmentCard({
             </Box>
           )}
 
-          <Box className="flex items-center gap-3 mt-4">
-            <Box
-              className="flex-1 h-1.5 rounded-full bg-surface-secondary overflow-hidden"
-              role="progressbar"
-              aria-label="Enrichment confidence"
-              aria-valuenow={Math.round(enrichment.confidence * 100)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            >
-              <Box
-                className="h-full rounded-full bg-brand-500"
-                style={{ width: `${Math.round(enrichment.confidence * 100)}%` }}
-              />
-            </Box>
-            <Text variant="caption" muted>
-              {Math.round(enrichment.confidence * 100)}% confidence
-            </Text>
-          </Box>
+          {/*
+            The confidence bar is shown only for a real, measured score.
+            Today's derivation (source "derived_from_address") stores 0 — the
+            #99 "no computed score" convention — and older rows carry the
+            invented 0.5/0.2 constants issue #166 removed, so the bar renders
+            for neither; describing the derivation honestly replaces it.
+          */}
+          {enrichment.confidence > 0 &&
+            enrichment.source !== "ai" &&
+            enrichment.source !== "derived_from_address" && (
+              <Box className="flex items-center gap-3 mt-4">
+                <Box
+                  className="flex-1 h-1.5 rounded-full bg-surface-secondary overflow-hidden"
+                  role="progressbar"
+                  aria-label="Enrichment confidence"
+                  aria-valuenow={Math.round(enrichment.confidence * 100)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <Box
+                    className="h-full rounded-full bg-brand-500"
+                    style={{ width: `${Math.round(enrichment.confidence * 100)}%` }}
+                  />
+                </Box>
+                <Text variant="caption" muted>
+                  {Math.round(enrichment.confidence * 100)}% confidence
+                </Text>
+              </Box>
+            )}
           <Text variant="caption" muted className="mt-1">
-            Enriched {formatDate(enrichment.enrichedAt)} via {enrichment.source}
+            {enrichment.source === "derived_from_address" ||
+            enrichment.source === "ai"
+              ? `Derived from the contact's email address ${formatDate(enrichment.enrichedAt)} — no external data sources were consulted.`
+              : `Enriched ${formatDate(enrichment.enrichedAt)} via ${enrichment.source}`}
           </Text>
 
           {fields.length <= 2 && (

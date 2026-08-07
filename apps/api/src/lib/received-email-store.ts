@@ -298,9 +298,22 @@ export async function storeReceivedEmail(
     subject: input.subject,
     textBody: input.textBody ?? null,
     htmlBody: input.htmlBody ?? null,
-  }).catch((err) => {
-    console.error("[rule-engine] Failed to evaluate rules for email", id, err instanceof Error ? err.message : String(err));
-  });
+  })
+    .then((result) => {
+      // A matching rule asked for actions no executor exists for (forward,
+      // auto_reply, mark_important, label). Surface it loudly — a user whose
+      // rule says "auto-reply" must not be left believing replies are being
+      // sent (issue #166; errors must be visible to monitoring, Forbidden
+      // Rule #19).
+      for (const skipped of result.skippedActions) {
+        console.warn(
+          `[rule-engine] Rule "${skipped.ruleName}" (${skipped.ruleId}) matched email ${id} but these actions are NOT implemented and were skipped: ${skipped.actionTypes.join(", ")}`,
+        );
+      }
+    })
+    .catch((err) => {
+      console.error("[rule-engine] Failed to evaluate rules for email", id, err instanceof Error ? err.message : String(err));
+    });
 
   // email.received webhook (Known Issue #70) — previously there was no way
   // for an external platform to programmatically react to inbound mail.

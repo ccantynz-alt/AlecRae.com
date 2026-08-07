@@ -347,16 +347,28 @@ export const workflowsApi = {
     );
   },
 
+  /**
+   * Manually trigger a workflow. Action executors don't exist yet, so the
+   * run is recorded honestly as "skipped" with actionsExecuted 0 and a
+   * `notice` saying so (issue #166 — it used to be persisted as a fabricated
+   * "success" with every action counted as executed).
+   */
   run(
     id: string,
   ): Promise<{
-    data: { run: WorkflowRunData; actionsExecuted: number; totalActions: number };
+    data: {
+      run: WorkflowRunData;
+      actionsExecuted: number;
+      totalActions: number;
+      notice?: string;
+    };
   }> {
     return featureFetch<{
       data: {
         run: WorkflowRunData;
         actionsExecuted: number;
         totalActions: number;
+        notice?: string;
       };
     }>(`/v1/workflows/${id}/run`, {
       method: "POST",
@@ -403,11 +415,13 @@ export interface TodayAgendaData {
   aiAgenda: string;
 }
 
+// Deterministic business-hours proposals — availability is NOT checked and no
+// AI runs. The old shape carried an invented per-slot `confidence` and an
+// `attendeesAvailable` echo of the request; both were fabrications and are
+// gone (issue #166).
 export interface FindTimeSlotData {
   startAt: string;
   endAt: string;
-  confidence: number;
-  attendeesAvailable: string[];
 }
 
 export const calendarEventsApi = {

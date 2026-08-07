@@ -607,27 +607,16 @@ workflowsRouter.post(
       );
     }
 
-    // Execute workflow actions (simulated — real execution depends on action runners)
+    // No workflow action executors exist yet. The old loop incremented
+    // actionsExecuted once per action while executing NOTHING, then persisted
+    // the run as status "success" — a fabricated execution record (issue
+    // #166, same class as #141/#163). The run is now recorded honestly:
+    // status "skipped" (a real workflow_run_status enum value), zero actions
+    // executed, and a response that says so in plain words.
     const startTime = Date.now();
     const actions = workflow.actions as WorkflowAction[];
-    let actionsExecuted = 0;
-    let runError: string | null = null;
-
-    try {
-      for (const _action of actions) {
-        // Each action type would have its own executor in production.
-        // For now, we count each action as executed successfully.
-        actionsExecuted++;
-      }
-    } catch (err) {
-      runError =
-        err instanceof Error ? err.message : "Unknown error during execution";
-    }
-
     const duration = Date.now() - startTime;
-    const status = runError ? "failed" : "success";
 
-    // Record the run
     const runId = generateId("wfr");
     const [run] = await db
       .insert(workflowRuns)
@@ -635,14 +624,15 @@ workflowsRouter.post(
         id: runId,
         workflowId,
         emailId: body.emailId ?? null,
-        status: status as "success" | "failed",
-        actionsExecuted,
-        error: runError,
+        status: "skipped",
+        actionsExecuted: 0,
+        error: null,
         duration,
       })
       .returning();
 
-    // Update workflow counters
+    // Update workflow counters — the run row above exists, so the counter
+    // reflects a real (skipped) run, not a fabricated success.
     await db
       .update(workflows)
       .set({
@@ -655,8 +645,10 @@ workflowsRouter.post(
     return c.json({
       data: {
         run,
-        actionsExecuted,
+        actionsExecuted: 0,
         totalActions: actions.length,
+        notice:
+          "Workflow action execution is not implemented yet — no actions were executed. The run is recorded as skipped.",
       },
     });
   },

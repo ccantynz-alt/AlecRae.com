@@ -113,9 +113,10 @@ function dayHeading(iso: string): string {
   });
 }
 
-function confidencePct(confidence: number): string {
-  return `${Math.round(confidence * 100)}%`;
-}
+// NB: the "N% confidence" chips are gone (issue #166). The extractor returns
+// no per-item confidence — newer rows store 0 (the #99 "no computed score"
+// convention) and older rows carry invented constants (0.85/0.95/0.80), so
+// there has never been a real score to show.
 
 // ─── Shared sub-components ─────────────────────────────────────────────────────
 
@@ -479,9 +480,6 @@ function PromiseRow({
               {promise.dueDate ? ` · ${formatDate(promise.dueDate)}` : ""}
             </Pill>
           )}
-          <Text variant="caption" className="text-content-subtle">
-            {confidencePct(promise.confidence)} confidence
-          </Text>
         </Box>
       </Box>
       <Box className="flex items-center gap-2 flex-shrink-0">
@@ -743,9 +741,6 @@ function ActionItemRow({
               {item.dueDate ? ` · ${formatDate(item.dueDate)}` : ""}
             </Pill>
           )}
-          <Text variant="caption" className="text-content-subtle">
-            {confidencePct(item.confidence)} confidence
-          </Text>
         </Box>
       </Box>
       <Box className="flex items-center gap-2 flex-shrink-0">
@@ -1021,9 +1016,6 @@ function DeadlineRow({
           </Pill>
           {overdue && <Pill tone="red">{dueLabel(deadline.deadlineDate)}</Pill>}
           {!deadline.isExplicit && <Pill tone="gray">inferred</Pill>}
-          <Text variant="caption" className="text-content-subtle">
-            {confidencePct(deadline.confidence)} confidence
-          </Text>
           {reminderSet && deadline.reminderAt && (
             <Text variant="caption" className="text-content-subtle">
               Reminder {formatDateTime(deadline.reminderAt)}

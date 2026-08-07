@@ -17,7 +17,7 @@
  *   POST /organize/:id/action    — accept/dismiss an organization suggestion
  *   GET  /stats                  — attachment statistics
  *   GET  /pii-report             — PII detection report
- *   POST /extract-text           — extract text from an attachment (OCR stub)
+ *   POST /extract-text           — 501 unless text already exists (no OCR engine)
  *   GET  /duplicates             — find duplicate attachments
  *
  * Mirrors the private featureFetch wrapper in lib/api-features.ts (which is not
@@ -278,7 +278,12 @@ export const attachmentIntelligenceApi = {
     });
   },
 
-  /** POST /extract-text — extract text from an attachment (OCR stub). */
+  /**
+   * POST /extract-text — returns previously-supplied text when it exists,
+   * otherwise 501: no OCR/document-parsing engine is configured (issue #166).
+   * No page calls this any more; kept because the endpoint still serves
+   * genuine already-present text.
+   */
   extractText(attachmentId: string): Promise<{ data: ExtractTextResult }> {
     return attachmentFetch<{ data: ExtractTextResult }>("/extract-text", {
       method: "POST",

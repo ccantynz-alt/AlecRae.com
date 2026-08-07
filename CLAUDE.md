@@ -261,9 +261,10 @@ Colors/logo TBD (Craig). Marketing phases + competitive positioning: see archive
 NOT the same as reachable or working. ~75%+ of endpoints have UI. The 2026-07-22 journey audit's
 seven broken journeys are all closed. The 2026-08-07 spine audit re-verified the send chain
 end-to-end (contracts match, controls wired) and fixed the receive chain's six breaks (#164) —
-but also found a fresh batch of fabricated-output endpoints (#166), so the earlier "fabricated
-count is 0" claim was wrong outside the 49 audited journeys. Email send/receive is code-ready but
-**not operational** — bring-up is the critical path (see Next Actions).
+and surfaced a fresh batch of ~16 fabricated-output sites (the earlier "fabricated count is 0"
+claim was wrong outside the 49 audited journeys) — **all fixed 2026-08-08** (#166, archive): real
+implementations where the data existed, honest 501s elsewhere, UIs updated. Email send/receive is
+code-ready but **not operational** — bring-up is the critical path (see Next Actions).
 
 ---
 
@@ -304,11 +305,10 @@ count is 0" claim was wrong outside the 49 audited journeys. Email send/receive 
 | 154 | Mailto unsubscribe: fails honestly now, but the real fix needs account + verified-domain context threaded into `executeOption`, `from` validated against owned domains, and the pre-send gate. | MED |
 | 156a | `POST /v1/auth/register` grants **owner** to every signup — the privilege half of the fixed RCE; needs Craig's review. | HIGH |
 | 158a | Whether to configure `VIRUSTOTAL_API_KEY` (free tier shares customer samples — confidentiality/GDPR call) — **Craig**. | DEC |
-| 166 | **Fabricated-output batch (2026-08-07 sweep, ~14 sites):** search-intelligence `/trending` returns hardcoded fake counts + `/suggestions/generate` invents relevance scores; attachment OCR persists placeholder text then marks the row `alreadyExtracted` forever (poisoned rows need cleanup); calendar `/schedule-from-text` ignores the text (always tomorrow-noon, `confidence: 0.75`) + canned meeting-briefing agenda; workflows run-loop writes `status: "success"` rows for actions it never executed; ai-categorization `/retrain` fakes a queued job; onboarding contact-sync fakes a background import AND marks the step unretryable; ab-tests hardcodes `confidence: 0.95` with no significance test; context-intelligence writes hardcoded per-item confidences (0.85/0.95/0.80); contact-enrichment title-cases the email address and calls it enrichment; sentinel defaults IP reputation to 60 inside real spam decisions; inbox `/follow-ups` calls the detector with a literal `[]`; rule-engine silently skips unimplemented action types while reporting the rule applied; ai-writing compose fallback puts placeholder text in a sendable `body` field. Fix pattern: honest 501/`degraded` per #84/#141 precedent; OCR needs poisoned-row cleanup. | HIGH |
 | 167 | **Dead/duplicate spine modules — adopt or delete (some are Craig scope calls):** `EmailQueueManager` (360-line parallel queue impl, zero callers), `FeedbackLoopProcessor` (FBL subscription state machine, not even barrel-exported), DNS cluster (`AuthoritativeDnsServer`, `DnsRecordManager`, `DnsHealthMonitor`, `DnsPropagationChecker` — all dead), `retry-policy.ts` (bounce-class-aware 72h retry curve, test-only — worker uses generic BullMQ retries instead), `fbl-parser.ts` (full RFC 5965 parser test-only while `routes/fbl.ts` runs a weaker inline copy that misclassifies `not-spam`/`opt-out` as abuse), MTA `telemetry.ts` (DKIM-failure/queue-depth metrics never recorded), `warmup.ts` cap functions (re-implemented in warmup-gate), `ReputationEngine`. Postmaster/SNDS timers exist only as copy-paste shell in a runbook — nothing installs them. | MED |
 | 168 | **No real TLS on the mail path.** Inbound STARTTLS is now honestly absent (was fabricated — advertised + acked with no handshake, #164) so received mail transits plaintext; needs a certificate on the mail box (ACME task) + a genuine `tls.TLSSocket` upgrade. MTA outbound TLS cert is the same pending box task (#107 wired the manager; no cert exists). | HIGH |
-| 169 | **Mail received via our own MX fires nothing:** `services/inbound`'s store path writes the row + Meilisearch but emits no `email.received` event, no webhook, no AI triage, no user rules, no semantic indexing — all of that lives only on the Gmail-sync/import path (`storeReceivedEmail`). Receiving-side Resend-parity (inbound webhooks) is blocked on this. Events row + `alecrae-webhooks` enqueue are doable inside inbound (MTA worker pattern); triage/rules need a design for calling API-side logic. | HIGH |
-| 170 | **Spine-audit residuals:** warm-up gate's Redis connection never closed on worker stop; `postgres-store.resolveDomainId` auto-creates `domains` rows on lookup miss (policy question); catch-all routing dead for DB-resolved domains (`catchAllMailbox` never populated; falls through to a sentinel `"inbox"` mailboxId); inbound AV filter stage matches EICAR only with unscanned indistinguishable from clean; HTTP-ingest reject bodies include `verdict.reason` (authenticated-only, low); `packages/crypto/src/encryption.ts` produces placeholder S/MIME/PGP envelopes; IMAP mailbox state is a process-local Map + JMAP threading no-ops (both services undeployed); `emails.source` backfill for pre-existing rows not done (new rows only). | LOW-MED |
+| 169 | **API-side half only (events + webhooks FIXED 2026-08-08, PR #95):** mail received via our own MX now emits `email.received` events + webhooks, but still gets no AI triage, no user rules, no semantic indexing — those live API-side (`storeReceivedEmail`) and need a design for how inbound reaches them (mind #130's spend guard). | MED |
+| 170 | **Spine-audit residuals:** warm-up gate's Redis connection never closed on worker stop; `postgres-store.resolveDomainId` auto-creates `domains` rows on lookup miss (policy question); catch-all routing dead for DB-resolved domains (`catchAllMailbox` never populated; falls through to a sentinel `"inbox"` mailboxId); inbound AV filter stage matches EICAR only with unscanned indistinguishable from clean; HTTP-ingest reject bodies include `verdict.reason` (authenticated-only, low); `packages/crypto/src/encryption.ts` produces placeholder S/MIME/PGP envelopes; IMAP mailbox state is a process-local Map + JMAP threading no-ops (both services undeployed); `emails.source` backfill for pre-existing rows not done (new rows only); calendar `/today` field named `aiAgenda` for a template sentence (content honest, name overclaims — rename pass); context-intelligence hardcodes `isExplicit: true` on every deadline (schema doc says false = AI-inferred — needs an extractor prompt change). | LOW-MED |
 
 ---
 
@@ -344,12 +344,11 @@ receive on customer domains**, not the general backlog.
 
 1. **Send/receive smoke test against a real domain** once Craig's box steps (Waiting 1–4) are done —
    nothing in this repo can prove the loop end to end. Includes SPF/DKIM/DMARC pass into Gmail.
-2. **#169** inbound `email.received` events/webhooks/triage + **#168** real TLS (needs cert) —
-   both on the receive path business email depends on.
-3. **#166** fabricated-output batch (honest-501 conversions + OCR poisoned-row cleanup) and
-   **#154** real mailto-unsubscribe fix (shape above).
+2. **#168** real TLS on the receive path (needs cert — Craig's box task) and the API-side half of
+   **#169** (AI triage/rules/indexing for MX-received mail; events + webhooks are DONE, PR #95).
+3. **#154** real mailto-unsubscribe fix (shape above).
 4. **#116(d)** GDPR export/erasure — highest remaining compliance gap.
-5. **#143** e2e CI job · **#110** token storage · **#114** HTML rendering (design-first) ·
+5. **#110** token storage · **#114** HTML rendering (design-first) ·
    **#115(a)(b)(d)** · **#116(b)** multi-currency.
 6. Backlog: #167 dead-module adopt-or-delete · #103 dispatcher session · #29 remaining stubs ·
    #69 orphan components · #72 staging/alerting design session · #170 residuals · flywheel builds
@@ -425,4 +424,4 @@ If something contradicts this file, this file wins. If you don't know what to do
 you. Changing this file needs Craig's approval. Shipping something not in this file breaks the
 rules. **AlecRae dominates or AlecRae dies. There is no second place.**
 
-**Last updated:** 2026-08-07 02:30 UTC
+**Last updated:** 2026-08-08 00:15 UTC

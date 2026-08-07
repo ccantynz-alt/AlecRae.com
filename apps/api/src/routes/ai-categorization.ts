@@ -946,48 +946,27 @@ aiCategorizationRouter.get(
   },
 );
 
-// POST /retrain — Trigger retraining from feedback (placeholder)
+// POST /retrain — NOT IMPLEMENTED. The old handler returned status "queued"
+// with an estimatedDuration computed from the feedback count while queueing
+// NOTHING — no job, no worker, no retraining anywhere (issue #166, the
+// fabricated-success class of #141/#163). Feedback corrections ARE stored
+// (category_feedback) and will be usable when retraining exists; this
+// endpoint just refuses to claim it already does.
 aiCategorizationRouter.post(
   "/retrain",
   requireScope("messages:write"),
-  async (c) => {
-    const auth = c.get("auth");
-    const db = getDatabase();
-
-    // Count available feedback for retraining
-    const [feedbackStats] = await db
-      .select({
-        totalFeedback: sql<number>`count(*)::int`,
-      })
-      .from(categoryFeedback)
-      .where(eq(categoryFeedback.accountId, auth.accountId));
-
-    const total = feedbackStats?.totalFeedback ?? 0;
-
-    if (total === 0) {
-      return c.json(
-        {
-          error: {
-            type: "validation_error",
-            message:
-              "No feedback data available for retraining. Submit corrections first.",
-            code: "no_feedback_data",
-          },
+  (c) => {
+    return c.json(
+      {
+        error: {
+          type: "not_implemented",
+          message:
+            "Categorization retraining is not available yet — nothing was queued. Your feedback corrections are stored and will be used once retraining exists.",
+          code: "retraining_unavailable",
         },
-        400,
-      );
-    }
-
-    // Placeholder: In production this queues a background job to fine-tune
-    // the categorization model using accumulated feedback data.
-    return c.json({
-      data: {
-        status: "queued",
-        feedbackSamples: total,
-        estimatedDuration: `${Math.ceil(total / 10)}s`,
-        queuedAt: new Date().toISOString(),
       },
-    });
+      501,
+    );
   },
 );
 

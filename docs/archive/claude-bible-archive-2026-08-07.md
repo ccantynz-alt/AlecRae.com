@@ -1073,3 +1073,40 @@ insert; all five doc files corrected re DKIM env vars; fly.toml given a prominen
 not-the-production-method warning.
 
 **Known residuals logged as open issues #166–#170 in CLAUDE.md.**
+
+## Issue #166 — FIXED 2026-08-08: fabricated-output batch (~16 sites, full record)
+
+Found by the 2026-08-07 spine-audit stub sweep; fixed in one pass with 51 new tests
+(apps/api 508/508, sentinel 47/47, apps/web typecheck/lint clean). Dispositions:
+
+**Made real (the data existed):** search-intelligence `/trending` (aggregation over the account's
+own search_history, 7-day windows with real trend vs the prior week) and `/suggestions/generate`
+(frequency-derived from 30 days of real history, honest relevance = term share); ab-tests
+completion now runs a genuine one-sided pooled two-proportion z-test (no deps) between winner and
+runner-up — stores/returns null when untestable, never a constant, and `reply_rate` now actually
+maps to replies; inbox `/follow-ups` feeds the detector the account's real sent mail (reply
+resolution via In-Reply-To against sent Message-IDs, bracketed and bare).
+
+**Honest 501s (nothing real behind them):** search `/related` + `/natural-language` (were
+200-with-empty as if they ran); attachment `/extract-text` OCR (persisted placeholder prose then
+locked the row via alreadyExtracted — poisoned rows now self-heal: placeholder-matching text reads
+as null everywhere and clears on next touch; no migration); calendar `/schedule-from-text` (always
+returned tomorrow-noon with confidence 0.75 regardless of input); ai-categorization `/retrain`
+(fake queued job); onboarding `/sync-contacts` AND `/import-settings` (the second found during the
+fix — fabricated import of canned label/filter/signature lists, both marked their step complete and
+unretryable; steps stay retryable now).
+
+**Honesty repairs:** workflows runs record `status: "skipped"` + actionsExecuted 0 + notice (were
+persisting success rows for actions never executed — a fabricated audit trail); context-intelligence
+stops attributing invented per-item confidences (0.85/0.95/0.80 → stored 0 per the #99 convention,
+omitted from responses; commitments-page confidence chips removed); contact-enrichment relabelled
+`derived_from_address` with confidence 0 (title-casing an email address is not enrichment);
+calendar `/prep` drops the canned agenda + confidence, `/find-time` drops invented per-slot
+confidence and the false availability claim; ai-writing degraded compose returns an EMPTY body
+(no placeholder prose can sit in a sendable field); rule-engine returns `skippedActions` and logs
+loudly per rule (users no longer believe a forward/auto-reply happened); sentinel excludes
+no-data signals from the weighted spam score instead of feeding hardcoded 60/50/65 defaults in as
+measurements (three signals, not the one the sweep found).
+
+**Left noted (folded into #170):** calendar `/today`'s `aiAgenda` field name overclaims for a
+template sentence; context-intelligence hardcodes `isExplicit: true` on every deadline.

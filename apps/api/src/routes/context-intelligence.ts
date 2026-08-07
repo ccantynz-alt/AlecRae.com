@@ -100,6 +100,17 @@ function generateId(): string {
     .join("");
 }
 
+/**
+ * The extraction itself is real (Claude Sonnet via extractEmailContext), but
+ * the extractor returns NO per-item confidence — the 0.85 / 0.95 / 0.80
+ * values previously persisted here were invented constants attributed to the
+ * model (issue #166, the same fabricated-score class as #95/#99). The
+ * confidence columns are NOT NULL and altering them is a migration (Boss Rule
+ * #7), so the #99 convention applies: 0 means "no per-item score was
+ * computed". Responses omit the field entirely rather than echo the 0.
+ */
+const NO_COMPUTED_CONFIDENCE = 0;
+
 // Convert API errors thrown by ai-engine into JSON 5xx responses.
 function aiErrorResponse(
   err: unknown,
@@ -175,7 +186,7 @@ contextIntelligenceRouter.post(
         dueDate: item.dueDate ? new Date(item.dueDate) : null,
         priority: item.priority,
         status: "pending",
-        confidence: 0.85,
+        confidence: NO_COMPUTED_CONFIDENCE,
         source: "ai_detected",
         createdAt: now,
         updatedAt: now,
@@ -186,7 +197,6 @@ contextIntelligenceRouter.post(
         assignedTo: item.assignedTo ?? null,
         dueDate: item.dueDate ?? null,
         priority: item.priority,
-        confidence: 0.85,
       });
     }
 
@@ -201,7 +211,7 @@ contextIntelligenceRouter.post(
         deadlineDate: new Date(dl.dueDate),
         description: dl.description,
         isExplicit: true,
-        confidence: dl.isUrgent ? 0.95 : 0.80,
+        confidence: NO_COMPUTED_CONFIDENCE,
         reminderSent: false,
         createdAt: now,
       });
@@ -210,7 +220,7 @@ contextIntelligenceRouter.post(
         deadlineDate: dl.dueDate,
         description: dl.description,
         isExplicit: true,
-        confidence: dl.isUrgent ? 0.95 : 0.80,
+        isUrgent: dl.isUrgent,
       });
     }
 
@@ -231,7 +241,7 @@ contextIntelligenceRouter.post(
         promisee,
         dueDate: p.dueDate ? new Date(p.dueDate) : null,
         status: "active",
-        confidence: 0.80,
+        confidence: NO_COMPUTED_CONFIDENCE,
         followUpSent: false,
         createdAt: now,
         updatedAt: now,
@@ -242,7 +252,6 @@ contextIntelligenceRouter.post(
         promisor,
         promisee,
         dueDate: p.dueDate ?? null,
-        confidence: 0.80,
       });
     }
 
@@ -929,7 +938,7 @@ contextIntelligenceRouter.post(
           dueDate: item.dueDate ? new Date(item.dueDate) : null,
           priority: item.priority,
           status: "pending",
-          confidence: 0.85,
+          confidence: NO_COMPUTED_CONFIDENCE,
           source: "ai_detected",
           createdAt: now,
           updatedAt: now,
@@ -950,7 +959,7 @@ contextIntelligenceRouter.post(
           deadlineDate: new Date(dl.dueDate),
           description: dl.description,
           isExplicit: true,
-          confidence: dl.isUrgent ? 0.95 : 0.80,
+          confidence: NO_COMPUTED_CONFIDENCE,
           reminderSent: false,
           createdAt: now,
         });
@@ -971,7 +980,7 @@ contextIntelligenceRouter.post(
           promisee,
           dueDate: p.dueDate ? new Date(p.dueDate) : null,
           status: "active",
-          confidence: 0.80,
+          confidence: NO_COMPUTED_CONFIDENCE,
           followUpSent: false,
           createdAt: now,
           updatedAt: now,

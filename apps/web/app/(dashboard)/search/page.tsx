@@ -17,6 +17,7 @@ import { SemanticSearchSection } from "../../../components/semantic-search-secti
 import { aiSearchApi, type AISearchResult } from "../../../lib/api-features";
 import {
   searchIntelligenceApi,
+  SearchIntelligenceError,
   type SearchBookmark,
   type SearchHistoryEntry,
   type SearchSuggestion,
@@ -267,28 +268,10 @@ function AISearchSection({
 AISearchSection.displayName = "AISearchSection";
 
 // ─── Suggestions + trending chips ────────────────────────────────────────────
-
-// Known backend placeholder payloads (issue #29) — used only to show a
-// friendly note; whatever the API returns is still rendered as-is.
-const PLACEHOLDER_TRENDING_TERMS = ["invoice", "meeting notes", "quarterly report"];
-const PLACEHOLDER_SUGGESTION_TEXTS = [
-  "unread from last week",
-  "emails with attachments",
-];
-
-function isPlaceholderTrending(terms: TrendingTerm[]): boolean {
-  return (
-    terms.length === PLACEHOLDER_TRENDING_TERMS.length &&
-    terms.every((t, i) => t.term === PLACEHOLDER_TRENDING_TERMS[i])
-  );
-}
-
-function isPlaceholderSuggestions(items: SearchSuggestion[]): boolean {
-  return (
-    items.length > 0 &&
-    items.every((s) => PLACEHOLDER_SUGGESTION_TEXTS.includes(s.suggestion))
-  );
-}
+//
+// The backend's trending + generate endpoints are real aggregations over the
+// account's own search history now (issue #166) — the old canned-placeholder
+// detection is gone because there are no canned placeholders left to detect.
 
 const TREND_ARROWS: Record<TrendingTerm["trend"], string> = {
   up: "↑",
@@ -306,7 +289,7 @@ function SuggestionChips({ onPick }: SuggestionChipsProps): React.ReactNode {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [generatedNote, setGeneratedNote] = useState(false);
+  const [generatedNote, setGeneratedNote] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -335,7 +318,7 @@ function SuggestionChips({ onPick }: SuggestionChipsProps): React.ReactNode {
     try {
       const res = await searchIntelligenceApi.generateSuggestions();
       setSuggestions(res.data);
-      setGeneratedNote(isPlaceholderSuggestions(res.data));
+      setGeneratedNote(res.note ?? null);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Couldn't generate suggestions",
@@ -354,8 +337,6 @@ function SuggestionChips({ onPick }: SuggestionChipsProps): React.ReactNode {
       </Box>
     );
   }
-
-  const showTrendingNote = isPlaceholderTrending(trending);
 
   return (
     <Box className="mt-4 space-y-3">
@@ -392,14 +373,14 @@ function SuggestionChips({ onPick }: SuggestionChipsProps): React.ReactNode {
           size="sm"
           onClick={() => void handleGenerate()}
           disabled={generating}
+          title="Derived from your own search history — no AI involved"
         >
-          {generating ? "Generating..." : "Generate AI suggestions"}
+          {generating ? "Generating..." : "Generate from search history"}
         </Button>
       </Box>
       {generatedNote && (
         <Text variant="caption" muted>
-          These starter suggestions are illustrative — personalized AI
-          suggestions arrive as your search history grows.
+          {generatedNote}
         </Text>
       )}
 
@@ -422,12 +403,6 @@ function SuggestionChips({ onPick }: SuggestionChipsProps): React.ReactNode {
               </span>
             </Button>
           ))}
-          {showTrendingNote && (
-            <Text variant="caption" muted>
-              Sample terms — trending analytics come online as your team
-              searches.
-            </Text>
-          )}
         </Box>
       )}
     </Box>
@@ -447,6 +422,7 @@ function RelatedEmailsInline({
 }: RelatedEmailsInlineProps): React.ReactNode {
   const [related, setRelated] = useState<RelatedEmail[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -455,11 +431,16 @@ function RelatedEmailsInline({
         const res = await searchIntelligenceApi.relatedEmails(emailId);
         if (!cancelled) setRelated(res.data);
       } catch (err) {
-        if (!cancelled) {
-          setError(
-            err instanceof Error ? err.message : "Couldn't load related emails",
-          );
+        if (cancelled) return;
+        // The backend answers an honest 501 while no similarity index exists
+        // (issue #166) — that's an unavailable feature, not a failure.
+        if (err instanceof SearchIntelligenceError && err.status === 501) {
+          setUnavailable(true);
+          return;
         }
+        setError(
+          err instanceof Error ? err.message : "Couldn't load related emails",
+        );
       }
     };
     void load();
@@ -473,7 +454,12 @@ function RelatedEmailsInline({
       className="mt-2 rounded-md border border-border bg-surface-secondary p-3"
       aria-live="polite"
     >
-      {error ? (
+      {unavailable ? (
+        <Text variant="caption" muted>
+          Related-email search isn&apos;t available yet — nothing has been
+          indexed for similarity, so no search was run.
+        </Text>
+      ) : error ? (
         <Text variant="caption" className="text-red-700" role="alert">
           {error}
         </Text>
@@ -483,8 +469,7 @@ function RelatedEmailsInline({
         </Text>
       ) : related.length === 0 ? (
         <Text variant="caption" muted>
-          No related emails yet — AI similarity search lights up once your
-          mail is indexed for embeddings.
+          No related emails found.
         </Text>
       ) : (
         <Box className="space-y-2">
