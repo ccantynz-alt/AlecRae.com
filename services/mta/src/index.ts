@@ -12,11 +12,12 @@ import { getMtaHostname } from "./config.js";
 import { SmtpServer } from "./smtp/server.js";
 import { MtaWorker } from "./worker.js";
 import { TlsManager } from "./tls/manager.js";
-import { createHealthServer, dbCheck, redisCheck } from "./health.js";
+import { createHealthServer, buildMtaHealthChecks } from "./health.js";
 import { getDatabase, closeConnection, domains } from "@alecrae/db";
 import { eq } from "drizzle-orm";
 import { initTelemetry, shutdownTelemetry } from "@alecrae/shared";
 import Redis from "ioredis";
+import { Queue } from "bullmq";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -31,6 +32,11 @@ const WORKER_CONCURRENCY = parseInt(
 );
 const HEALTH_PORT = parseInt(process.env["HEALTH_PORT"] ?? "8082", 10);
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
+/** Waiting-job count above which /readyz reports the queue as backed up. */
+const MAX_HEALTHY_QUEUE_DEPTH = parseInt(
+  process.env["MTA_MAX_HEALTHY_QUEUE_DEPTH"] ?? "1000",
+  10,
+);
 
 /**
  * Whether this OUTBOUND service also opens an SMTP listener.
@@ -101,6 +107,8 @@ const TLS_MIN_VERSION = (process.env["TLS_MIN_VERSION"] === "TLSv1.3" ? "TLSv1.3
 let smtpServer: SmtpServer | null = null;
 let mtaWorker: MtaWorker | null = null;
 let redis: Redis | null = null;
+/** Read-only Queue handle used solely by the queue-depth readiness check. */
+let healthQueue: Queue | null = null;
 let healthServer: { start: () => Promise<void>; stop: () => Promise<void> } | null = null;
 let isShuttingDown = false;
 
@@ -314,15 +322,32 @@ async function start(): Promise<void> {
   await mtaWorker.start();
 
   // ── 6. Start health server ──────────────────────────────────────────
+  // buildMtaHealthChecks registers the full set (previously only db + redis
+  // were wired — the queue-depth and SMTP-listener checks existed but had no
+  // callers, so /readyz reported ok while the outbound queue backed up).
   console.log(`[mta] Starting health server on port ${HEALTH_PORT}...`);
   const redisClient = redis;
+  healthQueue = new Queue(MTA_QUEUE_NAME, {
+    connection: { url: REDIS_URL },
+  });
+  const depthQueue = healthQueue;
   healthServer = createHealthServer({
     port: HEALTH_PORT,
     version: SERVICE_VERSION,
-    checks: [
-      dbCheck(() => getDatabase()),
-      ...(redisClient ? [redisCheck(redisClient)] : []),
-    ],
+    checks: buildMtaHealthChecks({
+      getDb: () => getDatabase(),
+      redis: redisClient,
+      getQueueDepth: () => depthQueue.getWaitingCount(),
+      maxHealthyQueueDepth: MAX_HEALTHY_QUEUE_DEPTH,
+      // The listener check is registered only when the receiver is enabled:
+      // it is default-OFF by design (Known Issue #128), and an always-on
+      // check would flag the deliberately-absent listener as unhealthy.
+      smtpReceiverEnabled: ENABLE_SMTP_RECEIVER,
+      getSmtpStatus: () => ({
+        listening: smtpServer?.isListening() ?? false,
+        port: SMTP_PORT,
+      }),
+    }),
   });
   try {
     await healthServer.start();
@@ -398,6 +423,12 @@ async function shutdown(signal: string): Promise<void> {
       console.log("[mta] Stopping SMTP server...");
       await smtpServer.stop();
       console.log("[mta] SMTP server stopped");
+    }
+
+    if (healthQueue) {
+      console.log("[mta] Closing health-check queue handle...");
+      await healthQueue.close();
+      healthQueue = null;
     }
 
     if (redis) {

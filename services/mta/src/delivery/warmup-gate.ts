@@ -66,8 +66,15 @@ export interface WarmupGateOptions {
    * possible, otherwise the MTA hostname. Only used to namespace counters.
    */
   readonly identity: string;
-  /** Epoch ms when this IP first started sending. */
-  readonly warmupStartedAt: number;
+  /**
+   * Epoch ms when this IP first started sending. When omitted, the gate
+   * resolves it from Redis: the first process to ever run writes "now" once
+   * (SET NX) and every later process — including this one after a restart —
+   * reads that same value back. Before this existed the fallback was
+   * `Date.now()` per process, which pinned the IP back to week-1 caps on
+   * EVERY restart, forever.
+   */
+  readonly warmupStartedAt?: number;
   /**
    * When false the gate allows everything. Only appropriate for an IP with
    * established reputation; a new IP must never run with this off.
@@ -85,20 +92,21 @@ export function warmupGateOptionsFromEnv(
   const enabled = env["MTA_WARMUP_ENABLED"]?.trim().toLowerCase() !== "false";
 
   const configured = env["MTA_WARMUP_STARTED_AT"]?.trim();
-  let warmupStartedAt = Date.now();
   if (configured) {
     const parsed = Date.parse(configured);
     if (Number.isFinite(parsed)) {
-      warmupStartedAt = parsed;
-    } else {
-      console.warn(
-        `[warmup-gate] MTA_WARMUP_STARTED_AT is not a parseable date ("${configured}") — ` +
-          "treating today as warmup day 1 (the most restrictive reading).",
-      );
+      return { identity, warmupStartedAt: parsed, enabled };
     }
+    console.warn(
+      `[warmup-gate] MTA_WARMUP_STARTED_AT is not a parseable date ("${configured}") — ` +
+        "falling back to the persisted start date (or day 1 if none exists).",
+    );
   }
 
-  return { identity, warmupStartedAt, enabled };
+  // Unset (or unparseable): leave warmupStartedAt undefined so the gate
+  // resolves the durable first-seen date from Redis instead of restarting
+  // the ramp from day 1 on every process restart.
+  return { identity, enabled };
 }
 
 /**
@@ -109,7 +117,10 @@ export function warmupGateOptionsFromEnv(
 export class WarmupGate {
   private readonly redis: Redis | null;
   private readonly identity: string;
-  private readonly warmupStartedAt: number;
+  /** Explicitly configured start (env/option). Always wins when present. */
+  private readonly configuredStartedAt: number | null;
+  /** Resolved start date, cached after the first {@link warmupStartedAt}. */
+  private resolvedStartedAt: number | null = null;
   private readonly enabled: boolean;
 
   /** Fallback counters when Redis is unavailable: key → count. */
@@ -120,13 +131,66 @@ export class WarmupGate {
   constructor(options: WarmupGateOptions) {
     this.redis = options.redis ?? null;
     this.identity = options.identity;
-    this.warmupStartedAt = options.warmupStartedAt;
+    this.configuredStartedAt = options.warmupStartedAt ?? null;
     this.enabled = options.enabled;
   }
 
+  /**
+   * Epoch ms when this identity first started sending.
+   *
+   * Resolution order:
+   *   1. An explicitly configured value (MTA_WARMUP_STARTED_AT) always wins.
+   *   2. Otherwise the date persisted in Redis under this identity. If none
+   *      exists yet, "now" is written atomically (SET NX) so concurrent
+   *      workers agree on a single winner, then read back — a restart
+   *      therefore resumes the ramp where it left off instead of pinning
+   *      the IP back to week-1 caps forever.
+   *   3. Without Redis, "now" per process — bounded but process-local, the
+   *      pre-persistence behaviour, and logged as such.
+   *
+   * The result is cached: the start date is immutable once established.
+   */
+  async warmupStartedAt(now: number = Date.now()): Promise<number> {
+    if (this.configuredStartedAt !== null) return this.configuredStartedAt;
+    if (this.resolvedStartedAt !== null) return this.resolvedStartedAt;
+
+    if (this.redis) {
+      try {
+        const key = `mta:warmup:${this.identity}:started-at`;
+        // SET NX first: exactly one process ever writes; everyone (including
+        // the writer) then reads the same stored value back.
+        await this.redis.set(key, String(now), "NX");
+        const stored = await this.redis.get(key);
+        const parsed = stored === null ? Number.NaN : Number(stored);
+        if (Number.isFinite(parsed)) {
+          this.resolvedStartedAt = parsed;
+          return parsed;
+        }
+        console.warn(
+          `[warmup-gate] Persisted warmup start date is unreadable ("${String(stored)}") — ` +
+            "using process start; day tracking is process-local until the key is repaired.",
+        );
+      } catch (error) {
+        console.warn(
+          `[warmup-gate] Redis unavailable resolving the warmup start date (${String(error)}) — ` +
+            "using process start; warmup day tracking is process-local for this process.",
+        );
+      }
+    } else {
+      console.warn(
+        "[warmup-gate] No Redis configured — warmup day tracking is process-local: " +
+          "every restart re-enters day 1. Set MTA_WARMUP_STARTED_AT to pin the ramp.",
+      );
+    }
+
+    this.resolvedStartedAt = now;
+    return now;
+  }
+
   /** 1-indexed warmup day for `now`. Day 1 is the day sending began. */
-  currentDay(now: number = Date.now()): number {
-    const elapsed = now - this.warmupStartedAt;
+  async currentDay(now: number = Date.now()): Promise<number> {
+    const startedAt = await this.warmupStartedAt(now);
+    const elapsed = now - startedAt;
     if (!Number.isFinite(elapsed) || elapsed < 0) return 1;
     return Math.floor(elapsed / MS_PER_DAY) + 1;
   }
@@ -146,11 +210,14 @@ export class WarmupGate {
     now: number = Date.now(),
   ): Promise<WarmupGateDecision> {
     const isp = classifyRecipientIsp(recipient);
-    const day = this.currentDay(now);
 
     if (!this.enabled) {
-      return { allow: true, isp, day };
+      // Skip start-date resolution entirely: a disabled gate must not log
+      // Redis warnings or write a persisted start date it will never use.
+      return { allow: true, isp, day: 1 };
     }
+
+    const day = await this.currentDay(now);
 
     const limits = computeLimitsForDay(day);
     const ispCap = limits.byIsp[isp];

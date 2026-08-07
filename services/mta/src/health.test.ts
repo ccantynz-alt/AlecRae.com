@@ -7,6 +7,7 @@
 import { describe, it, expect } from "bun:test";
 import {
   buildHealthApp,
+  buildMtaHealthChecks,
   dbCheck,
   redisCheck,
   queueDepthCheck,
@@ -316,6 +317,82 @@ describe("queueDepthCheck", () => {
     expect(result.healthy).toBe(false);
     expect(result.message).toContain("500");
     expect(result.message).toContain("100");
+  });
+});
+
+describe("buildMtaHealthChecks — registration", () => {
+  const base = {
+    getDb: () => ({ execute: async (): Promise<unknown> => undefined }),
+    redis: { ping: async (): Promise<string> => "PONG" },
+    getQueueDepth: async (): Promise<number> => 0,
+    maxHealthyQueueDepth: 1000,
+    getSmtpStatus: (): { listening: boolean; port: number } => ({
+      listening: false,
+      port: 25,
+    }),
+  };
+
+  it("always registers db, redis and queue_depth", () => {
+    const checks = buildMtaHealthChecks({ ...base, smtpReceiverEnabled: false });
+    const names = checks.map((c) => c.name);
+    expect(names).toContain("database");
+    expect(names).toContain("redis");
+    expect(names).toContain("queue_depth");
+  });
+
+  it("omits the SMTP listener check when the receiver is disabled (the default)", () => {
+    // MTA_ENABLE_SMTP_RECEIVER is default-OFF by design (issue #128): the
+    // outbound service opens no listening socket. An always-on listener
+    // check would report that deliberate absence as a critical failure.
+    const checks = buildMtaHealthChecks({ ...base, smtpReceiverEnabled: false });
+    expect(checks.map((c) => c.name)).not.toContain("smtp_listener");
+  });
+
+  it("registers the SMTP listener check when the receiver is enabled", () => {
+    const checks = buildMtaHealthChecks({ ...base, smtpReceiverEnabled: true });
+    expect(checks.map((c) => c.name)).toContain("smtp_listener");
+  });
+
+  it("stays ready with the receiver disabled even though nothing listens", async () => {
+    // The whole point of the conditional: a default deployment (receiver
+    // off, nothing bound on port 25) must NOT fail readiness for it.
+    const checks = buildMtaHealthChecks({ ...base, smtpReceiverEnabled: false });
+    const { status, body } = await getReadyz(checks);
+    expect(status).toBe(200);
+    expect(body.status).toBe("ok");
+  });
+
+  it("fails readiness when the receiver is enabled but not listening", async () => {
+    const checks = buildMtaHealthChecks({ ...base, smtpReceiverEnabled: true });
+    const { status, body } = await getReadyz(checks);
+    expect(status).toBe(503);
+    expect(body.status).toBe("fail");
+    const listener = body.checks.find((c) => c.name === "smtp_listener");
+    expect(listener?.healthy).toBe(false);
+  });
+
+  it("degrades (not fails) readiness when the queue is backed up", async () => {
+    const checks = buildMtaHealthChecks({
+      ...base,
+      getQueueDepth: async (): Promise<number> => 5000,
+      smtpReceiverEnabled: false,
+    });
+    const { status, body } = await getReadyz(checks);
+    // Non-critical by design: a backed-up queue is a page, not a reason to
+    // stop reporting ready.
+    expect(status).toBe(200);
+    expect(body.status).toBe("degraded");
+    const depth = body.checks.find((c) => c.name === "queue_depth");
+    expect(depth?.healthy).toBe(false);
+  });
+
+  it("omits the redis check when no client is supplied", () => {
+    const checks = buildMtaHealthChecks({
+      ...base,
+      redis: null,
+      smtpReceiverEnabled: false,
+    });
+    expect(checks.map((c) => c.name)).not.toContain("redis");
   });
 });
 

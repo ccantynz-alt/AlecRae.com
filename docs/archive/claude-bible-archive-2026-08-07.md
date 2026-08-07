@@ -958,3 +958,118 @@ Craig is also building a **Render+Vercel+AI hybrid platform** (the "Back to the 
 
 This is why we move with discipline: every architectural choice in AlecRae informs the platform underneath. We don't build AlecRae in a way that requires the platform to ship first — AlecRae deploys to Cloudflare today, and migrates to the new platform when it's ready, with zero rewrites needed (because the new platform supports the same primitives).
 
+
+
+---
+
+# APPENDED 2026-08-07 — Spine audit session (fixed issues #164–#165, full record)
+
+> **Last updated:** 2026-08-07 02:30 UTC (this appended section; the snapshot above is frozen)
+
+## Session narrative — 2026-08-07 spine verification ("run checks through our spine")
+
+Craig asked for comprehensive checks of the core ("spine") for stubs, broken code, and efficiency.
+Five tracks ran: full test suite forced-uncached (48/48 tasks, 0 cached, all green — apps/api 450,
+MTA 275+), typecheck 36/36, lint 0 errors, plus three parallel sweeps: stub/fabrication hunt,
+built-but-unwired importer mapping, and an end-to-end producer↔consumer contract trace of both
+mail chains. The send chain verified structurally sound (queue names, `{email:{…}}` job shape,
+DKIM/suppression/warm-up/VERP all present and matching). The receive chain had six real breaks —
+found in the service that has never run anywhere and is next to deploy for business email. The
+sweeps also surfaced a fresh fabricated-output batch (logged #166), a dead/duplicate-module set
+(#167), and wiring gaps. Everything bounded was fixed same-session by three parallel workstreams
+with strict file ownership, each with regression tests.
+
+## Issue #164 — FIXED 2026-08-07: inbound receive path had six breaks + three traps (bundle)
+
+**Findings (all verified in code, none reachable in production only because `services/inbound`
+has never been deployed):**
+- **(a) Defer silently accepted:** the filter pipeline returns `defer` when any stage throws
+  (SPF DNS blip, DKIM verifier error, AI failure), and `index.ts` branched only on `reject` — so
+  a filter failure delivered unfiltered mail to the inbox with `250 OK`, the opposite of the
+  pipeline's own fail-closed comment. Same gap on both HTTP ingest paths.
+- **(b) Reject answered 451 + oracle:** every throw became `451 Temporary failure: <reason>` —
+  permanently-rejected spam was retried by senders for days, and the verbatim reason (spam score,
+  stage) was a filter-tuning oracle on the wire.
+- **(c) Multi-recipient dedup crash:** `emails` has a unique index on (accountId, messageId);
+  delivering To:+Cc: on one account inserted the same pair twice → throw → 451 → the sender
+  redelivered the first copy forever.
+- **(d) STARTTLS fabricated:** advertised in EHLO, answered `220 Ready to start TLS`, set
+  `session.secure = true`, never upgraded the socket — a conforming sender's ClientHello was
+  parsed as SMTP garbage, and `requireTls` was defeatable by issuing STARTTLS and continuing in
+  plaintext.
+- **(e) VERP bounces refused at the door:** the MTA sends `bounces+<id>@bounce.<customer-domain>`;
+  the domain verifier did exact-match lookup and no `domains` row exists for `bounce.*` — every
+  async DSN got `550 Relay not permitted`, making the entire DSN-suppression loop (the thing VERP
+  was built for, #82a) unreachable dead code.
+- **(f) DSN handling missing from HTTP ingest** (SMTP path had it; HTTP paths stored bounces as
+  ordinary messages).
+- **(g) Forward rules silently discarded mail** (logged "Forwarding" then `continue` — nothing
+  stored, nothing forwarded).
+- **(h) HTTP ingest unauthenticated by default:** `INBOUND_WEBHOOK_SECRET` unset ⇒ open POST
+  endpoint on `0.0.0.0:8025`.
+- **(i) `emails.source` never set** on received mail.
+
+**Fixes (all in `services/inbound`, 47 new tests, 67/67 passing):** typed `SmtpError` with
+`smtpReject()` → generic `550 5.7.1` / `smtpDefer()` → generic `451 4.7.1` (detail to logs, never
+the wire; unknown errors 451 generic); defer stores nothing on all three ingress paths; store uses
+`onConflictDoNothing` on the unique index + merges the second recipient's mailbox tag into the
+existing row (DB resolves the race; #153's folder==tags[0] invariant preserved); STARTTLS
+de-advertised, answers `502 5.5.1`, `session.secure` never set without a real upgrade, and
+`requireTls` now honestly refuses all mail with `530 5.7.0` (real TLS needs a cert — issue #168);
+domain verifier accepts `bounce.<X>` iff `X` exactly matches a hosted row — scoped to the literal
+`bounce.` label only, NO generic subdomain inheritance, inheriting the parent's active/verified
+state; bounce-domain recipients run DSN processing and are never stored to a mailbox (non-DSN to
+a bounce domain is logged + dropped with 250 — never bounce a bounce); DSN detection added to both
+HTTP paths in SMTP-path order; forward rules deliver locally with a loud not-implemented warning
+instead of losing mail (localized to the original hosted address so a foreign forward target can't
+mint a `domains` row); secret-unset HTTP ingest fails closed 503 naming the env var; `source:
+"inbound"` written. `handleInboundMessage` extracted to a testable factory in the process.
+
+## Issue #165 — FIXED 2026-08-07: send-path traps (MTA + API bundle)
+
+**Findings:**
+- **(a) Per-ISP daily counters never reset:** `optimizer.resetDailyCounters()`'s own comment says
+  "call once per day"; zero callers — `messagesThisDay` only ever incremented, so a long-lived MTA
+  process saturated every ISP's daily cap and silently throttled itself to zero. (The hourly
+  sibling was wired; the daily one wasn't.)
+- **(b) Warm-up reset to day 1 on every restart:** unset `MTA_WARMUP_STARTED_AT` fell back to
+  `Date.now()` per process — every restart pinned the IP to week-1 caps forever.
+- **(c) Signing-domain lookup unscoped:** `worker.ts` resolved `domains` by name only (no unique
+  constraint on `domain`) — two accounts registering the same domain string could get the wrong
+  account's DKIM key and suppression list.
+- **(d) Agent-mail had zero delivery retries:** `messages.ts` enqueued with `attempts: 8` but
+  `agent-send.ts` inherited the queue default of 1 — one greylist deferral permanently failed an
+  agent-drafted message. (Worker throws on deferral; attempts are load-bearing.)
+- **(e) Redis fallback asymmetry:** API queue/webhook/health honoured `UPSTASH_REDIS_URL` as a
+  fallback while the MTA read `REDIS_URL` only — an operator setting only the former would split
+  producer and consumer across two Redis instances, silently (the #149 class). Same pattern in the
+  shared `redis.ts` client and the DNS liveness job.
+- **(f) Daily DNS liveness job never registered:** `registerDnsLivenessJob` had zero callers while
+  `messages.ts`'s stale-DNS gate comment assumed it ran — a customer deleting their SPF/DKIM
+  records was never detected.
+- **(g) MTA queue-depth/SMTP-listener health checks built but unregistered** — `/readyz` reported
+  healthy with a backed-up queue. **(h)** no `start` script in the MTA package. **(i)**
+  `emails.source` never set on first-party outbound. **(j)** env templates/docs instructed setting
+  `DKIM_PRIVATE_KEY`/`DKIM_SELECTOR` env vars that NO code reads (keys live per-domain in the DB)
+  — an operator following them got every message held with a correct-looking config; template also
+  said `MTA_HOSTNAME=mx1` where production requires `smtp`. **(k)** stale `fly.toml` publishing
+  four SMTP ports against a receiver that is default-off (would fail its own health checks).
+
+**Fixes (30 new tests across MTA 329/329 + API 462/462):** `maybeResetDailyCounters` keyed on the
+UTC calendar date, polled every 60s from the worker (a poll of the date, not a scheduled reset, so
+cadence can't wipe counters mid-day); warm-up start date persisted via `SET NX` + `GET` in the
+counters' Redis (env override wins; no-Redis mode logs process-local); `senderDomainWhere()` binds
+domain AND the job's accountId; retry policy moved into `defaultJobOptions` so every producer
+inherits attempts 8 + exponential/60s (drift-guard test pins messages.ts's explicit options to the
+same constants); `addedAt` now sent by agent-send (shape truthful); `UPSTASH_REDIS_URL` fallback
+removed from queue.ts, webhook-dispatcher.ts, redis.ts, and the DNS liveness job — `REDIS_URL` is
+the single source, with a structural test forbidding reintroduction, and `routes/health.ts` now
+resolves URL + queue name through `lib/queue.ts` so health can never report on a different Redis
+than the producer; `registerDnsLivenessJob()` wired at server startup (gated on Redis configured,
+`.catch` so boot can't crash) with `closeDnsLivenessQueue()` in shutdown; MTA health checks
+registered (listener check conditional on `MTA_ENABLE_SMTP_RECEIVER` so the correct default
+deployment isn't reported unhealthy); `start` script added; `source: "outbound"` on the send
+insert; all five doc files corrected re DKIM env vars; fly.toml given a prominent
+not-the-production-method warning.
+
+**Known residuals logged as open issues #166–#170 in CLAUDE.md.**

@@ -29,15 +29,55 @@ function gate(overrides: Partial<Parameters<typeof makeGate>[0]> = {}) {
   return makeGate({ enabled: true, ...overrides });
 }
 
-function makeGate(opts: { enabled: boolean; redis?: unknown }) {
+function makeGate(opts: {
+  enabled: boolean;
+  redis?: unknown;
+  /** `null` omits the explicit start date so the gate resolves it durably. */
+  startedAt?: number | null;
+}) {
   return new WarmupGate({
     identity: "203.0.113.9",
-    warmupStartedAt: T0,
+    ...(opts.startedAt === null ? {} : { warmupStartedAt: opts.startedAt ?? T0 }),
     enabled: opts.enabled,
-    // The gate only ever calls incr/expire/decr; a null redis exercises the
-    // in-process path.
+    // The gate only ever calls set/get/incr/expire/decr; a null redis
+    // exercises the in-process path.
     redis: (opts.redis ?? null) as never,
   });
+}
+
+/**
+ * In-memory Redis fake implementing exactly the commands the gate uses,
+ * including real SET NX semantics (only the first writer wins).
+ */
+function fakeRedis(): {
+  store: Map<string, string>;
+  set: (key: string, value: string, mode: string) => Promise<"OK" | null>;
+  get: (key: string) => Promise<string | null>;
+  incr: (key: string) => Promise<number>;
+  decr: (key: string) => Promise<number>;
+  expire: (key: string, seconds: number) => Promise<number>;
+} {
+  const store = new Map<string, string>();
+  return {
+    store,
+    set: async (key, value, mode) => {
+      if (mode === "NX" && store.has(key)) return null;
+      store.set(key, value);
+      return "OK";
+    },
+    get: async (key) => store.get(key) ?? null,
+    incr: async (key) => {
+      const next = Number(store.get(key) ?? "0") + 1;
+      store.set(key, String(next));
+      return next;
+    },
+    decr: async (key) => {
+      const next = Number(store.get(key) ?? "0") - 1;
+      store.set(key, String(next));
+      return next;
+    },
+    expire: async () => 1,
+  };
 }
 
 describe("WarmupGate — per-ISP caps", () => {
@@ -186,13 +226,77 @@ describe("warmupGateOptionsFromEnv", () => {
     expect(opts.warmupStartedAt).toBe(Date.parse("2026-03-02T00:00:00.000Z"));
   });
 
-  it("falls back to day 1 on an unparseable start date", () => {
+  it("defers to the persisted start date when the env value is unparseable", () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    const before = Date.now();
     const opts = warmupGateOptionsFromEnv("ip", {
       MTA_WARMUP_STARTED_AT: "not-a-date",
     });
-    expect(opts.warmupStartedAt).toBeGreaterThanOrEqual(before);
+    // Undefined means "resolve from Redis" — the gate then reads the durable
+    // first-seen date (or writes one), rather than restarting from day 1.
+    expect(opts.warmupStartedAt).toBeUndefined();
+  });
+
+  it("leaves the start date undefined when the env var is unset — Redis decides", () => {
+    const opts = warmupGateOptionsFromEnv("ip", {});
+    expect(opts.warmupStartedAt).toBeUndefined();
+  });
+});
+
+describe("WarmupGate — durable start date", () => {
+  const DAY8 = T0 + 7 * DAY;
+
+  it("persists the first-seen start date and keeps it across a restart", async () => {
+    const redis = fakeRedis();
+
+    // First-ever process: no env var, empty Redis. Day 1.
+    const first = makeGate({ enabled: true, redis, startedAt: null });
+    expect((await first.reserve("a@gmail.com", T0)).day).toBe(1);
+
+    // "Restart": a NEW gate instance against the SAME Redis, a week later.
+    // Before persistence this re-entered day 1 forever; now it must resume.
+    const restarted = makeGate({ enabled: true, redis, startedAt: null });
+    const d = await restarted.reserve("b@gmail.com", DAY8);
+    expect(d.day).toBe(8);
+    expect(await restarted.warmupStartedAt(DAY8)).toBe(T0);
+  });
+
+  it("lets an explicitly configured start date win over the persisted one", async () => {
+    const redis = fakeRedis();
+    redis.store.set("mta:warmup:203.0.113.9:started-at", String(T0 - 30 * DAY));
+
+    const g = makeGate({ enabled: true, redis, startedAt: T0 });
+    // Configured T0 wins: day 8 a week later, not day 38.
+    expect((await g.reserve("a@gmail.com", DAY8)).day).toBe(8);
+    expect(await g.warmupStartedAt(DAY8)).toBe(T0);
+  });
+
+  it("resolves one winner when two processes race on SET NX", async () => {
+    const redis = fakeRedis();
+    const a = makeGate({ enabled: true, redis, startedAt: null });
+    const b = makeGate({ enabled: true, redis, startedAt: null });
+
+    // Both resolve concurrently with different "now"s — exactly one write
+    // lands, and BOTH gates must agree on that single value afterwards.
+    const [fromA, fromB] = await Promise.all([
+      a.warmupStartedAt(T0),
+      b.warmupStartedAt(T0 + 6 * 60 * 60 * 1000),
+    ]);
+    expect(fromA).toBe(fromB);
+    expect(redis.store.get("mta:warmup:203.0.113.9:started-at")).toBe(
+      String(fromA),
+    );
+  });
+
+  it("degrades to a process-local start date without Redis, and says so", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const g = makeGate({ enabled: true, startedAt: null });
+
+    expect(await g.warmupStartedAt(T0)).toBe(T0);
+    // Cached: the start date is immutable once established in this process.
+    expect(await g.warmupStartedAt(DAY8)).toBe(T0);
+    expect(
+      warn.mock.calls.some((c) => String(c[0]).includes("process-local")),
+    ).toBe(true);
   });
 });
 

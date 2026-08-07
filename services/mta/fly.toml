@@ -1,4 +1,25 @@
 # ─── fly.toml ────────────────────────────────────────────────────────────────
+#
+# ⚠️⚠️⚠️ STALE — NOT THE PRODUCTION DEPLOYMENT METHOD. DO NOT DEPLOY AS-IS. ⚠️⚠️⚠️
+#
+# Production runs the MTA under systemd on the dedicated mail box
+# (docs/infra/mta-box-setup.md). This file predates that decision and has
+# NOT been reconciled with the code since:
+#
+#   - It publishes SMTP ports 25/587/465/2525 with TCP health checks, but the
+#     code defaults MTA_ENABLE_SMTP_RECEIVER=false (Known Issue #128 — the
+#     outbound service deliberately opens NO listening socket). A Fly deploy
+#     as written therefore fails its own TCP checks with nothing listening.
+#   - Even with the receiver force-enabled, its message handler DISCARDS all
+#     mail (inbound is services/inbound, a different service entirely).
+#   - HEALTH_PORT here is 8080; the code's default is 8082 (the env below
+#     still overrides, but it shows how far this file has drifted).
+#
+# If Fly is ever wanted for the MTA, this file must be reconciled with the
+# current code (outbound-only: no SMTP service blocks, health checks on
+# /healthz + /readyz only) BEFORE any `fly deploy`.
+#
+# Original rationale, kept for historical context:
 # Fly.io deployment config for the AlecRae Mail Transfer Agent (MTA).
 #
 # Why Fly.io for the MTA (and nothing else in this stack)?

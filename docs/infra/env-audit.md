@@ -93,9 +93,12 @@ _Last updated: 2026-06-20 14:00 UTC_
 
 | Var | Purpose | Where to get | Example | Services |
 |---|---|---|---|---|
-| `MTA_HOSTNAME` | EHLO hostname, reverse DNS must match | DNS | `mx1.alecrae.com` | mta |
-| `DKIM_PRIVATE_KEY` | DKIM signing key (PEM, multi-line) | `openssl genrsa 2048` | PEM block | mta |
-| `DKIM_SELECTOR` | DKIM selector (matches DNS TXT record) | Literal | `default` | mta |
+| `MTA_HOSTNAME` | EHLO hostname, reverse DNS must match | DNS | `smtp.alecrae.com` | mta |
+
+> **`DKIM_PRIVATE_KEY` / `DKIM_SELECTOR` env vars do not exist — no code reads them.**
+> DKIM keys are stored per-domain (encrypted) in the `domains` table and read by
+> `services/mta/src/worker.ts`. Earlier revisions of this table listed them as required
+> MTA env; an operator following that would have every message held for "no DKIM key".
 | `POSTMASTER_EMAIL` | RFC 5321 required postmaster contact | Literal | `postmaster@alecrae.com` | mta |
 | `ABUSE_EMAIL` | Abuse contact (RFC 2142) | Literal | `abuse@alecrae.com` | mta |
 | `DMARC_EMAIL` | DMARC aggregate report receiver | Literal | `dmarc@alecrae.com` | mta |
@@ -172,7 +175,6 @@ Only vars prefixed `NEXT_PUBLIC_*` are inlined into the client bundle:
 
 The following are PEM blocks with embedded newlines. Shell escaping will silently corrupt them if you paste directly into a web UI field without preserving `\n`:
 
-- `DKIM_PRIVATE_KEY`
 - `JWT_PRIVATE_KEY`
 - `JWT_PUBLIC_KEY`
 - `SAML_CERT`

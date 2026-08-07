@@ -97,10 +97,14 @@ describe("configuration", () => {
     expect(instances).toHaveLength(0);
   });
 
-  it("falls back to UPSTASH_REDIS_URL", () => {
+  it("does NOT fall back to UPSTASH_REDIS_URL — REDIS_URL is the only source", () => {
+    // The MTA and every queue producer read REDIS_URL alone; honouring a
+    // second var here would let this client point at a different Redis than
+    // the queues (the #149 split-brain class, one module at a time).
     delete process.env["REDIS_URL"];
     process.env["UPSTASH_REDIS_URL"] = "redis://upstash.example:6379";
-    expect(getRedisUrl()).toBe("redis://upstash.example:6379");
+    expect(getRedisUrl()).toBeNull();
+    expect(isRedisConfigured()).toBe(false);
   });
 
   it("reads the environment on every call, not at module load", () => {

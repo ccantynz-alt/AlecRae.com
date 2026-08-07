@@ -287,6 +287,32 @@ describe("POST /v1/messages/send", () => {
     expect(res.status).toBe(202);
   });
 
+  it("persists the email row with source: \"outbound\" (schema provenance contract)", async () => {
+    const res = await app.request("/v1/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: { email: "sender@example.com" },
+        to: [{ email: "recipient@example.com" }],
+        subject: "Provenance test",
+        text: "Hello",
+      }),
+    });
+
+    expect(res.status).toBe(202);
+
+    // The emails insert is the values() call carrying fromAddress — the
+    // delivery_results insert that follows carries recipientAddress instead.
+    const emailInsert = mockDb.values.mock.calls
+      .map((call) => call[0] as Record<string, unknown>)
+      .find((row) => row && typeof row === "object" && "fromAddress" in row);
+    expect(emailInsert).toBeDefined();
+    // The connected-account fast path sets source to the provider; the
+    // domain/MTA path used to omit it entirely, leaving first-party outbound
+    // mail indistinguishable from legacy rows.
+    expect(emailInsert).toMatchObject({ status: "queued", source: "outbound" });
+  });
+
   it("should accept messages with tags", async () => {
     const res = await app.request("/v1/messages/send", {
       method: "POST",

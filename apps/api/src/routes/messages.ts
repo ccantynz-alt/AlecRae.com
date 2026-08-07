@@ -775,6 +775,10 @@ async function handleSend(c: Context) {
     customHeaders:
       Object.keys(sanitizedHeaders).length > 0 ? sanitizedHeaders : null,
     status: "queued",
+    // Provenance per the schema's contract: "outbound" for mail we send. The
+    // connected-account fast path above sets its provider; this domain/MTA
+    // path omitted it, leaving first-party sends looking like legacy rows.
+    source: "outbound",
     tags: input.tags ?? [],
     isRead: true,
     scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : null,

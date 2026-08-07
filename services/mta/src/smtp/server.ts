@@ -113,6 +113,11 @@ export class SmtpServer extends EventEmitter<SmtpServerEvents> {
     });
   }
 
+  /** Whether the underlying TCP server is currently bound and listening. */
+  isListening(): boolean {
+    return this.server?.listening ?? false;
+  }
+
   /** Drop per-IP throttle entries that are no longer meaningful. */
   private pruneIpThrottleState(): void {
     const now = Date.now();
