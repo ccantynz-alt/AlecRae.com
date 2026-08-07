@@ -17,6 +17,7 @@ import type { MailboxRouter } from "./routing/router.js";
 import type { EmailStore } from "./storage/store.js";
 import type { SmtpEnvelope, MimeHeader, ResolvedRecipient } from "./types.js";
 import { isDsnMessage, processInboundDsn } from "./dsn-suppression.js";
+import { emitReceivedEvent, type ReceivedEventEmitter } from "./events/received-event.js";
 import { localizeForwardResolution, splitRawMessage } from "./inbound-handler.js";
 
 interface HttpInboundConfig {
@@ -41,6 +42,12 @@ interface HttpInboundConfig {
   detectDsn?: ((headers: MimeHeader[]) => boolean) | undefined;
   /** DSN processing — injectable for tests; defaults to the real processor. */
   processDsn?: ((rawMessage: string, envelopeTo?: string) => Promise<void>) | undefined;
+  /**
+   * email.received event/webhook emission — injectable for tests; defaults to
+   * the real emitter (events/received-event.ts). Fire-and-forget: never fails
+   * the ingest response.
+   */
+  emitReceivedEvent?: ReceivedEventEmitter | undefined;
 }
 
 /**
@@ -50,6 +57,7 @@ export function createHttpInbound(config: HttpInboundConfig): Hono {
   const { parser, pipeline, router, store } = config;
   const detectDsn = config.detectDsn ?? isDsnMessage;
   const processDsn = config.processDsn ?? processInboundDsn;
+  const emitReceived = config.emitReceivedEvent ?? emitReceivedEvent;
   const app = new Hono();
 
   // ── Health check ──────────────────────────────────────────────────────
@@ -117,6 +125,19 @@ export function createHttpInbound(config: HttpInboundConfig): Hono {
       console.log(
         `[HTTP-Inbound] Stored ${stored.id} in mailbox ${target.mailboxId} for ${recipient}`,
       );
+
+      // email.received event + webhook (issue #169, bounded half) — same
+      // fire-and-forget posture as the SMTP path: the message is stored, so
+      // the forwarder gets its 200 regardless of eventing failures. The
+      // emitter skips merged deliveries (one event per stored message).
+      // Issue #169's remaining half (AI triage / rules / semantic indexing)
+      // deliberately does not hook here — see inbound-handler.ts.
+      emitReceived(stored, target).catch((err) => {
+        console.error(
+          `[HTTP-Inbound] email.received emission failed for ${stored.id}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      });
       deliveries.push({
         id: stored.id,
         recipient,

@@ -7,6 +7,7 @@ import { InMemoryEmailStore } from "./storage/store.js";
 import { PostgresEmailStore } from "./storage/postgres-store.js";
 import { createHttpInbound } from "./http-inbound.js";
 import { createInboundHandler } from "./inbound-handler.js";
+import { closeReceivedEventQueue } from "./events/received-event.js";
 import { initTelemetry, shutdownTelemetry } from "@alecrae/shared";
 
 /**
@@ -94,6 +95,7 @@ async function shutdown(signal: string): Promise<void> {
   console.log(`[Inbound] Received ${signal} — shutting down...`);
   if (enableSmtp) await receiver.stop();
   if (httpServer) httpServer.stop();
+  await closeReceivedEventQueue();
   await shutdownTelemetry().catch(() => { /* no-op */ });
   console.log("[Inbound] Shutdown complete");
   process.exit(0);

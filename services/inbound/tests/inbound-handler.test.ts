@@ -122,6 +122,7 @@ interface HandlerSetup {
   processDsn: ReturnType<typeof vi.fn>;
   pipelineProcess: ReturnType<typeof vi.fn>;
   routerResolve: ReturnType<typeof vi.fn>;
+  emitReceived: ReturnType<typeof vi.fn>;
   handler: ReturnType<typeof createInboundHandler>;
 }
 
@@ -130,6 +131,7 @@ function setup(options: {
   verdict?: FilterVerdict;
   resolutions?: Map<string, ResolvedRecipient | null>;
   isDsn?: boolean;
+  emitReceived?: ReturnType<typeof vi.fn>;
 }): HandlerSetup {
   const parsed = options.parsed ?? makeParsed();
   const verdict = options.verdict ?? makeVerdict("accept");
@@ -141,6 +143,7 @@ function setup(options: {
   const processDsn = vi.fn().mockResolvedValue(undefined);
   const pipelineProcess = vi.fn().mockResolvedValue(verdict);
   const routerResolve = vi.fn().mockResolvedValue(resolutions);
+  const emitReceived = options.emitReceived ?? vi.fn().mockResolvedValue(undefined);
 
   const handler = createInboundHandler({
     parser: { parse: async (): Promise<ParsedEmail> => parsed },
@@ -149,9 +152,10 @@ function setup(options: {
     store,
     detectDsn: (): boolean => options.isDsn ?? false,
     processDsn,
+    emitReceivedEvent: emitReceived,
   });
 
-  return { store, processDsn, pipelineProcess, routerResolve, handler };
+  return { store, processDsn, pipelineProcess, routerResolve, emitReceived, handler };
 }
 
 const RAW = new TextEncoder().encode("Subject: hello\r\n\r\nbody");
@@ -200,6 +204,45 @@ describe("inbound handler — verdict handling", () => {
     const s = setup({ verdict: makeVerdict("quarantine", "Spam score above quarantine") });
     await expect(s.handler(makeSession(), makeEnvelope(), RAW)).resolves.toBeUndefined();
     expect(s.store.calls).toHaveLength(1);
+  });
+});
+
+describe("inbound handler — email.received emission (issue #169)", () => {
+  it("emits email.received once per stored delivery with the stored row and target", async () => {
+    const s = setup({ verdict: makeVerdict("accept") });
+    await s.handler(makeSession(), makeEnvelope(), RAW);
+
+    expect(s.emitReceived).toHaveBeenCalledTimes(1);
+    const [stored, target] = s.emitReceived.mock.calls[0] as [StoredEmail, ResolvedRecipient];
+    expect(stored.id).toBe("stored-1");
+    expect(stored.accountId).toBe("acct-1");
+    expect(target.resolvedAddress).toBe("user@example.com");
+  });
+
+  it("still delivers (no throw — sender gets 250) when the emitter rejects, and logs the error", async () => {
+    const emitReceived = vi.fn().mockRejectedValue(new Error("events table gone"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const s = setup({ verdict: makeVerdict("accept"), emitReceived });
+
+    await expect(s.handler(makeSession(), makeEnvelope(), RAW)).resolves.toBeUndefined();
+
+    // The message was stored — the eventing failure changed nothing about
+    // delivery — and the failure is visible in the logs, not swallowed.
+    expect(s.store.calls).toHaveLength(1);
+    expect(emitReceived).toHaveBeenCalledTimes(1);
+    // The rejection is handled asynchronously (fire-and-forget) — let it land.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("email.received"),
+      expect.stringContaining("events table gone"),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("does not emit for refused mail (reject verdict stores nothing, emits nothing)", async () => {
+    const s = setup({ verdict: makeVerdict("reject", "spam") });
+    await s.handler(makeSession(), makeEnvelope(), RAW).catch(() => undefined);
+    expect(s.emitReceived).not.toHaveBeenCalled();
   });
 });
 

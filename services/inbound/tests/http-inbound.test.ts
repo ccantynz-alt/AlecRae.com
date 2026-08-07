@@ -68,6 +68,7 @@ interface AppSetup {
   app: ReturnType<typeof createHttpInbound>;
   storeCalls: { recipient: ResolvedRecipient; verdict: FilterVerdict }[];
   processDsn: ReturnType<typeof vi.fn>;
+  emitReceived: ReturnType<typeof vi.fn>;
 }
 
 function setup(options: {
@@ -76,6 +77,7 @@ function setup(options: {
   verdict?: FilterVerdict;
   resolutions?: Map<string, ResolvedRecipient | null>;
   isDsn?: boolean;
+  emitReceived?: ReturnType<typeof vi.fn>;
 }): AppSetup {
   const parsed = options.parsed ?? makeParsed();
   const verdict = options.verdict ?? makeVerdict("accept");
@@ -85,6 +87,7 @@ function setup(options: {
 
   const storeCalls: AppSetup["storeCalls"] = [];
   const processDsn = vi.fn().mockResolvedValue(undefined);
+  const emitReceived = options.emitReceived ?? vi.fn().mockResolvedValue(undefined);
 
   const app = createHttpInbound({
     parser: { parse: async (): Promise<ParsedEmail> => parsed },
@@ -118,9 +121,10 @@ function setup(options: {
     webhookSecret: options.secret,
     detectDsn: (): boolean => options.isDsn ?? false,
     processDsn,
+    emitReceivedEvent: emitReceived,
   });
 
-  return { app, storeCalls, processDsn };
+  return { app, storeCalls, processDsn, emitReceived };
 }
 
 const RAW_BODY = "Subject: hello\r\nFrom: sender@remote.example\r\n\r\nbody";
@@ -258,6 +262,54 @@ describe("HTTP inbound — DSN processing", () => {
     // Suppression still updated — a spam-scored or deferred DSN must not
     // lose its bounce signal.
     expect(s.processDsn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("HTTP inbound — email.received emission (issue #169)", () => {
+  it("emits email.received once per stored delivery on the single-message path", async () => {
+    const s = setup({ secret: SECRET });
+    const res = await singleRequest(s.app, AUTH);
+    expect(res.status).toBe(200);
+    expect(s.emitReceived).toHaveBeenCalledTimes(1);
+    const [stored, target] = s.emitReceived.mock.calls[0] as [
+      { id: string; accountId: string },
+      ResolvedRecipient,
+    ];
+    expect(stored.id).toBe("stored-1");
+    expect(target.resolvedAddress).toBe("user@example.com");
+  });
+
+  it("emits email.received on the batch path too", async () => {
+    const s = setup({ secret: SECRET });
+    const res = await batchRequest(s.app, AUTH);
+    expect(res.status).toBe(200);
+    expect(s.emitReceived).toHaveBeenCalledTimes(1);
+  });
+
+  it("still answers 200 accepted when the emitter rejects (eventing never fails ingest)", async () => {
+    const emitReceived = vi.fn().mockRejectedValue(new Error("redis exploded"));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const s = setup({ secret: SECRET, emitReceived });
+
+    const res = await singleRequest(s.app, AUTH);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string };
+    expect(body.status).toBe("accepted");
+    expect(s.storeCalls).toHaveLength(1);
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("email.received"),
+      expect.stringContaining("redis exploded"),
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("does not emit for rejected mail", async () => {
+    const s = setup({ secret: SECRET, verdict: makeVerdict("reject", "spam") });
+    const res = await singleRequest(s.app, AUTH);
+    expect(res.status).toBe(422);
+    expect(s.emitReceived).not.toHaveBeenCalled();
   });
 });
 

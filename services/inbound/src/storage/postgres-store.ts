@@ -229,7 +229,10 @@ export class PostgresEmailStore implements EmailStore {
         `[PostgresEmailStore] Merged delivery for ${recipient.resolvedAddress} into existing email ${existing.id} (tags: ${mergedTags.join(", ")})`,
       );
 
-      return this.buildStoredEmail(existing.id, email, recipient, verdict, mailboxId, now);
+      // merged=true: the email.received event for this (accountId, messageId)
+      // was emitted by whichever delivery inserted the row — the caller must
+      // not emit a second one (see events/received-event.ts).
+      return this.buildStoredEmail(existing.id, email, recipient, verdict, mailboxId, now, true);
     }
 
     // Store attachments if any
@@ -281,10 +284,12 @@ export class PostgresEmailStore implements EmailStore {
     verdict: FilterVerdict,
     mailboxId: string,
     now: Date,
+    merged = false,
   ): StoredEmail {
     const fromAddr = Array.isArray(email.from) ? email.from[0] : email.from;
     return {
       id,
+      merged,
       accountId: recipient.accountId,
       mailboxId,
       messageId: email.messageId ?? `<${id}@inbound>`,

@@ -137,4 +137,12 @@ export interface StoredEmail {
   filterVerdict?: FilterVerdict | undefined;
   receivedAt: Date;
   internalDate: Date;
+  /**
+   * True when store() MERGED this delivery into an already-existing row
+   * (multi-recipient delivery on one account hitting the (account_id,
+   * message_id) unique index) rather than inserting a fresh one. Consumers
+   * that emit per-message side effects (the email.received event) use this
+   * to avoid double-emitting for the same stored message.
+   */
+  merged?: boolean | undefined;
 }
