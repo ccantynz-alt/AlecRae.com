@@ -152,6 +152,7 @@ import { reconcileStorageUsage } from "./lib/storage-quota.js";
 import { processExpiredGrace } from "./lib/billing.js";
 import { processScheduledAccountDeletions } from "./lib/account-deletion.js";
 import { getWarmupMonitor } from "@alecrae/reputation";
+import { registerDnsLivenessJob, closeDnsLivenessQueue } from "@alecrae/dns";
 
 // ─── Create the Hono app ───────────────────────────────────────────────────
 
@@ -1030,6 +1031,23 @@ const warmupHealthInterval = setInterval(
 );
 warmupHealthInterval.unref();
 
+// Register the daily DNS liveness re-verification job (03:00 UTC, BullMQ
+// repeatable — services/dns/src/jobs/dns-liveness-job.ts). It pauses domains
+// whose SPF/DKIM/DMARC records have gone missing; routes/messages.ts's
+// stale-DNS gate blocks sends on exactly the `verificationStatus: "failed"` /
+// `isActive: false` state this checker writes, and its comment has assumed
+// the daily run since it was written — while nothing registered the job
+// anywhere. Gated on isRedisConfigured() like the DLQ sweep above: the
+// registration awaits a Redis write for the repeatable-job config, so without
+// Redis it would retry forever instead of no-oping. The .catch means a
+// registration failure degrades to "no daily check" and can never take down
+// the HTTP server.
+if (isRedisConfigured()) {
+  registerDnsLivenessJob().catch((err) => {
+    console.warn("[api] DNS liveness job registration failed:", err);
+  });
+}
+
 // ─── Graceful shutdown ──────────────────────────────────────────────────────
 
 let isShuttingDown = false;
@@ -1061,6 +1079,10 @@ async function shutdown(signal: string): Promise<void> {
     // Close the webhook delivery worker
     await stopWebhookWorker();
     console.log("[api] Webhook worker stopped");
+
+    // Close the DNS liveness queue + worker (no-op if never registered)
+    await closeDnsLivenessQueue();
+    console.log("[api] DNS liveness queue closed");
 
     // Close the BullMQ send queue
     await closeSendQueue();

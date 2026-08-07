@@ -19,6 +19,7 @@
   },
   "scripts": {
     "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
     "build": "echo 'Service builds independently \u2014 not part of Vercel web deployment'",
     "test": "bun test",
     "test:watch": "vitest watch",

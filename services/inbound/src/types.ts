@@ -50,6 +50,12 @@ export interface SmtpSession {
   secure: boolean;
   mailFrom?: string | undefined;
   rcptTo: string[];
+  /**
+   * Recipients accepted because their domain is `bounce.<hosted-domain>` —
+   * the VERP return path, not a user mailbox (see routing/domain-verifier.ts).
+   * The delivery path runs DSN processing for these and never stores them.
+   */
+  bounceRcptTo?: string[] | undefined;
   authenticatedUser?: string | undefined;
   startedAt: Date;
 }

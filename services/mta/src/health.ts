@@ -311,6 +311,40 @@ export function queueDepthCheck(
 }
 
 /**
+ * Assemble the MTA's full readiness check set.
+ *
+ * Extracted from index.ts so the registration LOGIC is testable — index.ts
+ * boots the whole service on import. Previously only dbCheck and redisCheck
+ * were registered: the built-and-tested queueDepthCheck and smtpListenerCheck
+ * had zero callers, so the MTA reported ready while its outbound queue was
+ * backed up or its listener was down.
+ *
+ * The SMTP listener check is registered ONLY when the receiver is enabled:
+ * MTA_ENABLE_SMTP_RECEIVER is default-OFF by design (Known Issue #128 — the
+ * outbound service must open no listening socket), so an unconditional
+ * listener check would report a deliberately-disabled listener as a critical
+ * failure on every default deployment.
+ */
+export function buildMtaHealthChecks(opts: {
+  getDb: () => { execute: (sql: string) => Promise<unknown> };
+  redis: { ping: () => Promise<string> } | null;
+  getQueueDepth: () => Promise<number>;
+  maxHealthyQueueDepth: number;
+  smtpReceiverEnabled: boolean;
+  getSmtpStatus: () => { listening: boolean; port: number };
+}): HealthCheck[] {
+  const checks: HealthCheck[] = [dbCheck(opts.getDb)];
+  if (opts.redis) {
+    checks.push(redisCheck(opts.redis));
+  }
+  checks.push(queueDepthCheck(opts.getQueueDepth, opts.maxHealthyQueueDepth));
+  if (opts.smtpReceiverEnabled) {
+    checks.push(smtpListenerCheck(opts.getSmtpStatus));
+  }
+  return checks;
+}
+
+/**
  * SMTP listener check — verifies the SMTP server is bound and listening.
  * Critical: without the listener, we can't accept mail.
  */

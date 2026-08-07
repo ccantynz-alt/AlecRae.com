@@ -28,14 +28,16 @@ import { safeFetch } from "./ssrf-guard.js";
 // NOTE: BullMQ forbids ":" in queue names (it reserves the colon as the Redis
 // key separator), so use a hyphen. Must stay in sync with the MTA producer.
 const WEBHOOK_QUEUE_NAME = "alecrae-webhooks";
-const REDIS_URL =
-  process.env["REDIS_URL"] ??
-  process.env["UPSTASH_REDIS_URL"] ??
-  "redis://localhost:6379";
+// REDIS_URL only — deliberately NOT UPSTASH_REDIS_URL. Everything queue-shaped
+// (this dispatcher, lib/queue.ts, the MTA worker) must resolve the same way,
+// or an operator setting only UPSTASH_REDIS_URL splits producers and consumers
+// across two Redis instances silently (the issue #149 failure mode). Nothing
+// in the deployed architecture reads the UPSTASH_* connection vars (issue #150).
+const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
 
 /** True only when Redis is explicitly configured (not the localhost fallback). */
 function isRedisConfigured(): boolean {
-  return Boolean(process.env["REDIS_URL"] ?? process.env["UPSTASH_REDIS_URL"]);
+  return Boolean(process.env["REDIS_URL"]);
 }
 
 /** Maximum retries per delivery attempt. */
@@ -199,7 +201,7 @@ export function startWebhookWorker(): void {
 
   if (!isRedisConfigured()) {
     console.warn(
-      "[webhook-worker] Redis not configured (set REDIS_URL or UPSTASH_REDIS_URL); webhook delivery worker not started.",
+      "[webhook-worker] Redis not configured (set REDIS_URL); webhook delivery worker not started.",
     );
     return;
   }

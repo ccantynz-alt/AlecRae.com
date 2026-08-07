@@ -16,6 +16,11 @@ import { sql } from "drizzle-orm";
 import type Redis from "ioredis";
 import { createProbeRedis } from "../lib/redis.js";
 import { Queue } from "bullmq";
+// Redis config comes from lib/queue.ts, NOT read from process.env here: the
+// health probes must report on the exact Redis (and queue name) the send-queue
+// producer uses, or the split-Redis failure mode (issue #149) reports healthy
+// while every send vanishes into a queue no worker reads.
+import { getRedisUrl, isRedisConfigured, QUEUE_NAME as MTA_QUEUE_NAME } from "../lib/queue.js";
 import { MeiliSearch } from "meilisearch";
 import { getDeployedCommit, getDriftStatus, getServiceDriftStatus } from "../lib/deploy-info.js";
 
@@ -24,8 +29,6 @@ const health = new Hono();
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const SERVICE_VERSION = process.env["SERVICE_VERSION"] ?? "0.1.0";
-const REDIS_URL = process.env["REDIS_URL"] ?? "";
-const MTA_QUEUE_NAME = process.env["MTA_QUEUE_NAME"] ?? "alecrae-outbound";
 const startedAt = Date.now();
 
 /** Probe timeout in milliseconds — never block longer than this. */
@@ -60,7 +63,7 @@ async function checkDatabase(): Promise<ServiceStatus> {
 }
 
 async function checkRedis(): Promise<ServiceStatus> {
-  if (!REDIS_URL) {
+  if (!isRedisConfigured()) {
     return { status: "degraded", error: "REDIS_URL not configured — using in-memory fallback" };
   }
   const start = Date.now();
@@ -110,9 +113,9 @@ export interface MtaQueueProbe {
 
 export async function checkMtaQueue(
   queueFactory: () => MtaQueueProbe = () =>
-    new Queue(MTA_QUEUE_NAME, { connection: { url: REDIS_URL } }),
+    new Queue(MTA_QUEUE_NAME, { connection: { url: getRedisUrl() } }),
 ): Promise<ServiceStatus> {
-  if (!REDIS_URL) {
+  if (!isRedisConfigured()) {
     return { status: "degraded", error: "Redis not configured — MTA queue unavailable" };
   }
   const start = Date.now();
@@ -309,7 +312,7 @@ async function checkDatabaseDetailed(): Promise<ConfigCheck> {
 
 /** Run a quick Redis probe. */
 async function checkRedisDetailed(): Promise<ConfigCheck> {
-  if (!process.env["REDIS_URL"]) {
+  if (!isRedisConfigured()) {
     return {
       status: "warning",
       message: "REDIS_URL not set — rate limiting and queues run in-memory",

@@ -77,7 +77,11 @@ let sharedReady = false;
  * "configured" mean exactly one thing: an explicit URL is set.
  */
 export function getRedisUrl(): string | null {
-  const raw = process.env["REDIS_URL"] ?? process.env["UPSTASH_REDIS_URL"];
+  // REDIS_URL only — deliberately NOT UPSTASH_REDIS_URL. The MTA and the queue
+  // producers read REDIS_URL alone; a second fallback here meant this client
+  // could silently point at a different Redis than the queues (the #149
+  // split-brain class, one module at a time).
+  const raw = process.env["REDIS_URL"];
   const trimmed = raw?.trim();
   return trimmed !== undefined && trimmed !== "" ? trimmed : null;
 }

@@ -59,20 +59,24 @@ export function createDomainVerifier(): DomainVerifier {
     const { getDatabase, domains } = await import("@alecrae/db");
     const db = getDatabase();
 
-    const [row] = await db
-      .select({
-        isActive: domains.isActive,
-        verificationStatus: domains.verificationStatus,
-      })
-      .from(domains)
-      .where(eq(domains.domain, domain.toLowerCase()))
-      .limit(1);
+    const normalized = domain.toLowerCase();
 
-    if (!row) {
-      return { registered: false, active: false, dnsStale: false };
-    }
+    const lookup = async (name: string): Promise<{ isActive: boolean; verificationStatus: string } | null> => {
+      const [row] = await db
+        .select({
+          isActive: domains.isActive,
+          verificationStatus: domains.verificationStatus,
+        })
+        .from(domains)
+        .where(eq(domains.domain, name))
+        .limit(1);
+      return row ?? null;
+    };
 
-    return {
+    const toResult = (
+      row: { isActive: boolean; verificationStatus: string },
+      bounceDomain: boolean,
+    ): DomainCheckResult => ({
       registered: true,
       active: row.isActive,
       // A registered domain that has not passed DNS verification is treated as
@@ -80,6 +84,33 @@ export function createDomainVerifier(): DomainVerifier {
       // mail sent during onboarding is retried by the sender instead of being
       // permanently rejected while the customer is still publishing records.
       dnsStale: row.verificationStatus !== "verified",
-    };
+      bounceDomain,
+    });
+
+    const row = await lookup(normalized);
+    if (row) {
+      return toResult(row, false);
+    }
+
+    // VERP bounce path: the MTA sends with envelope sender
+    // `bounces+<emailId>@bounce.<customer-domain>` (services/mta/src/bounce/
+    // return-path.ts), so async DSNs come back addressed to
+    // `bounce.<customer-domain>` — a name that has no `domains` row of its
+    // own. Accept it ONLY when the remainder after the literal `bounce.`
+    // label exactly matches a hosted domain. This is deliberately NOT generic
+    // subdomain inheritance (which stays off — hosting example.com must not
+    // make us the relay for anything.example.com); the single `bounce.`
+    // prefix is the one label the VERP scheme requires.
+    if (normalized.startsWith("bounce.")) {
+      const parent = normalized.slice("bounce.".length);
+      if (parent.length > 0) {
+        const parentRow = await lookup(parent);
+        if (parentRow) {
+          return toResult(parentRow, true);
+        }
+      }
+    }
+
+    return { registered: false, active: false, dnsStale: false };
   };
 }

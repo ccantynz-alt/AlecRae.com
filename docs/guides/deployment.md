@@ -73,7 +73,8 @@ Quick-start env setup: `docs/infra/morning-setup.md`.
 | `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | Outlook OAuth |
 | `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Billing |
 | `RELAY_PROVIDER` + `SMTP_RELAY_*` | Email relay (Resend/SES) |
-| `DKIM_PRIVATE_KEY` | DKIM signing for outbound mail |
+
+> DKIM signing needs no env var: keys are stored per-domain (encrypted) in the `domains` table. A `DKIM_PRIVATE_KEY` env var is read by nothing.
 
 ---
 

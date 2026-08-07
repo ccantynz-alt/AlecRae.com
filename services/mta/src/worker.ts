@@ -14,7 +14,7 @@
  */
 
 import { Worker, Queue, type Job } from "bullmq";
-import { eq, and } from "drizzle-orm";
+import { eq, and, type SQL } from "drizzle-orm";
 import { getDatabase, emails, deliveryResults, domains, suppressionLists, events, webhooks as webhooksTable } from "@alecrae/db";
 import { openSecretSafe } from "@alecrae/crypto";
 import { getMtaHostname } from "./config.js";
@@ -72,6 +72,33 @@ export function mapVerdictToDbClassification(
   return { bounceType, bounceCategory };
 }
 
+/**
+ * WHERE clause resolving the sender's `domains` row for a queued email.
+ *
+ * `domains.domain` has NO unique constraint — two accounts can register the
+ * same domain string. A lookup by domain alone can therefore return the
+ * OTHER account's row, and the worker would sign with that account's DKIM
+ * key and read that account's suppression list. The job's `QueuedEmail`
+ * carries the sending account's id, so the lookup is scoped by BOTH.
+ *
+ * Exported so the predicate itself is pinned by tests (the job handler has
+ * no BullMQ+Postgres harness — same approach as `requireDkim`).
+ */
+export function senderDomainWhere(
+  email: Pick<QueuedEmail, "domain" | "accountId">,
+): SQL {
+  const where = and(
+    eq(domains.domain, email.domain),
+    eq(domains.accountId, email.accountId),
+  );
+  if (where === undefined) {
+    // `and()` is only undefined when called with no defined conditions;
+    // both are always defined here. This narrows the type without a cast.
+    throw new Error("unreachable: senderDomainWhere built no conditions");
+  }
+  return where;
+}
+
 // ─── Job payload as stored in Redis ─────────────────────────────────────────
 
 interface EmailJobData {
@@ -124,6 +151,7 @@ export class MtaWorker {
   private readonly warmupGate: WarmupGate;
   private shuttingDown = false;
   private maintenanceInterval: ReturnType<typeof setInterval> | null = null;
+  private dailyResetInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config?: Partial<WorkerConfig>) {
     this.config = { ...DEFAULT_WORKER_CONFIG, ...config };
@@ -206,6 +234,20 @@ export class MtaWorker {
       this.optimizer.pruneStaleState();
     }, 60 * 60 * 1000); // Every hour
 
+    // Daily counter reset. resetDailyCounters() previously had NO caller at
+    // all — messagesThisDay only ever incremented, so a long-lived process
+    // eventually saturated every ISP's daily cap and silently throttled to
+    // zero. Polled every minute against the UTC date (not scheduled from
+    // process start) so the reset fires just after midnight UTC — the same
+    // boundary checkThrottle's daily `throttledUntil` is computed against.
+    this.dailyResetInterval = setInterval(() => {
+      if (this.optimizer.maybeResetDailyCounters()) {
+        console.log(
+          "[mta-worker] UTC day rolled over — per-ISP daily throttle counters reset",
+        );
+      }
+    }, 60 * 1000); // Check every minute; resets at most once per UTC day
+
     console.log("[mta-worker] Worker started and listening for jobs");
   }
 
@@ -221,6 +263,11 @@ export class MtaWorker {
     if (this.maintenanceInterval) {
       clearInterval(this.maintenanceInterval);
       this.maintenanceInterval = null;
+    }
+
+    if (this.dailyResetInterval) {
+      clearInterval(this.dailyResetInterval);
+      this.dailyResetInterval = null;
     }
 
     if (this.worker) {
@@ -259,6 +306,9 @@ export class MtaWorker {
       .where(eq(emails.id, email.id));
 
     // ── 2. Fetch DKIM signing key for the sender domain ─────────────────
+    // Scoped by accountId as well as domain (senderDomainWhere): the domain
+    // string alone is not unique across accounts, and picking the wrong row
+    // means signing with — and suppressing against — another account's data.
     const [domainRecord] = await db
       .select({
         id: domains.id,
@@ -267,7 +317,7 @@ export class MtaWorker {
         domain: domains.domain,
       })
       .from(domains)
-      .where(eq(domains.domain, email.domain))
+      .where(senderDomainWhere(email))
       .limit(1);
 
     // ── 3. Sign with DKIM ───────────────────────────────────────────────

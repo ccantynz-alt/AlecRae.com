@@ -1,5 +1,6 @@
 import * as net from "node:net";
 import type { SmtpSession, SmtpEnvelope } from "../types.js";
+import { SmtpError } from "../errors.js";
 
 // ─── Domain verification callback ────────────────────────────────────────────
 
@@ -7,6 +8,13 @@ export interface DomainCheckResult {
   registered: boolean;
   active: boolean;
   dnsStale: boolean;
+  /**
+   * True when the recipient domain was accepted as a VERP bounce domain
+   * (`bounce.<hosted-domain>`) rather than a hosted domain itself. The
+   * delivery path uses this to route the message into DSN processing and
+   * never into a user mailbox.
+   */
+  bounceDomain?: boolean;
 }
 
 /**
@@ -114,6 +122,7 @@ export class SmtpConnectionHandler {
       remotePort,
       secure: false,
       rcptTo: [],
+      bounceRcptTo: [],
       startedAt: new Date(),
     };
   }
@@ -213,8 +222,20 @@ export class SmtpConnectionHandler {
       return { code: 250, message: `OK: message queued as ${this.session.id}` };
     } catch (err) {
       this.resetTransaction();
-      const message = err instanceof Error ? err.message : "Processing failed";
-      return { code: 451, message: `Temporary failure: ${message}` };
+      // Typed verdict errors carry their own SMTP code and a deliberately
+      // generic message (550 for reject, 451 for defer). Everything else is a
+      // 451 with NO detail on the wire: echoing internal error text (or the
+      // filter's reason/score, as the old `Temporary failure: <message>`
+      // response did) both misclassifies permanent rejections as retryable
+      // and hands senders a filter-tuning oracle. Full detail goes to logs.
+      if (err instanceof SmtpError) {
+        return { code: err.code, message: err.message };
+      }
+      console.error(
+        `[SmtpReceiver] Message processing failed for session ${this.session.id}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+      return { code: 451, message: "4.7.1 Temporary failure, try again later" };
     }
   }
 
@@ -227,6 +248,11 @@ export class SmtpConnectionHandler {
     this.session.clientHostname = hostname;
     this.state = "ready";
 
+    // STARTTLS is deliberately NOT advertised. There is no real TLS upgrade
+    // implemented (and no certificate on the box) — advertising it would make
+    // a conforming sender issue STARTTLS and then speak TLS at a socket that
+    // is still plaintext, which parses the ClientHello as SMTP garbage. See
+    // handleStartTls().
     const extensions = [
       `${this.config.hostname} greets ${hostname}`,
       `SIZE ${this.config.maxMessageSize}`,
@@ -235,10 +261,6 @@ export class SmtpConnectionHandler {
       "PIPELINING",
       "ENHANCEDSTATUSCODES",
     ];
-
-    if (!this.session.secure) {
-      extensions.push("STARTTLS");
-    }
 
     return { code: 250, message: extensions.join("\n") };
   }
@@ -330,6 +352,7 @@ export class SmtpConnectionHandler {
       return { code: 550, message: "Relay not permitted" };
     }
 
+    let isBounceDomain: boolean;
     {
       try {
         const result = await this.config.domainVerifier(recipientDomain);
@@ -345,6 +368,8 @@ export class SmtpConnectionHandler {
         if (!result.active) {
           return { code: 550, message: `Domain ${recipientDomain} is not active` };
         }
+
+        isBounceDomain = result.bounceDomain === true;
       } catch (err) {
         // On verifier error, temp-fail rather than silently accept
         console.error(`[SmtpReceiver] Domain verification error for ${recipientDomain}:`, err);
@@ -358,6 +383,11 @@ export class SmtpConnectionHandler {
     }
 
     this.session.rcptTo.push(recipient);
+    if (isBounceDomain) {
+      // Accepted as a VERP bounce address (`bounce.<hosted-domain>`), not a
+      // user mailbox — the delivery path runs DSN processing and never stores.
+      this.session.bounceRcptTo = [...(this.session.bounceRcptTo ?? []), recipient];
+    }
     this.state = "rcpt";
 
     return { code: 250, message: "OK" };
@@ -373,7 +403,11 @@ export class SmtpConnectionHandler {
     }
 
     if (this.config.requireTls && !this.session.secure) {
-      return { code: 530, message: "Must issue STARTTLS first" };
+      // With STARTTLS unimplemented (see handleStartTls) session.secure can
+      // never become true, so requireTls refuses ALL mail. That is the honest
+      // behaviour: a config that demands TLS on a server that cannot provide
+      // it must not pretend — and must never accept plaintext instead.
+      return { code: 530, message: "5.7.0 TLS required but not available on this server" };
     }
 
     this.state = "data";
@@ -384,14 +418,15 @@ export class SmtpConnectionHandler {
   }
 
   private handleStartTls(): SmtpResponse {
-    if (this.session.secure) {
-      return { code: 503, message: "TLS already active" };
-    }
-
-    // In production: initiate TLS handshake on the socket.
-    // The caller is responsible for upgrading the connection.
-    this.session.secure = true;
-    return { code: 220, message: "Ready to start TLS" };
+    // TLS support is NOT implemented. Nothing here upgrades the socket, and
+    // no certificate exists on the box. The previous behaviour answered
+    // "220 Ready to start TLS" and set session.secure = true WITHOUT any
+    // upgrade — so a conforming sender's TLS ClientHello was parsed as SMTP
+    // garbage, and `requireTls` could be defeated by issuing STARTTLS and
+    // simply continuing in plaintext. Real STARTTLS requires a genuine
+    // tls.TLSSocket upgrade with a certificate; until that exists we answer
+    // honestly and NEVER mark the session secure.
+    return { code: 502, message: "5.5.1 Command not implemented" };
   }
 
   private handleReset(): SmtpResponse {
@@ -407,6 +442,7 @@ export class SmtpConnectionHandler {
   private resetTransaction(): void {
     this.session.mailFrom = undefined;
     this.session.rcptTo = [];
+    this.session.bounceRcptTo = [];
     this.dataBuffer = [];
     this.dataSize = 0;
     this.state = "ready";
@@ -460,7 +496,11 @@ export class SmtpConnectionHandler {
   }
 
   getSession(): SmtpSession {
-    return { ...this.session, rcptTo: [...this.session.rcptTo] };
+    return {
+      ...this.session,
+      rcptTo: [...this.session.rcptTo],
+      bounceRcptTo: [...(this.session.bounceRcptTo ?? [])],
+    };
   }
 }
 

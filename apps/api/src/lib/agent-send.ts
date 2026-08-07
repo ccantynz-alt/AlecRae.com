@@ -259,7 +259,15 @@ export async function enqueueAgentDraftForSend(
     await db.insert(deliveryResults).values(rows);
   }
 
-  // 5. Queue the job
+  // 5. Queue the job.
+  //
+  //    Retry policy (attempts + exponential backoff) is NOT passed per-job:
+  //    it comes from the queue's `defaultJobOptions` (lib/queue.ts), which
+  //    mirror the canonical options routes/messages.ts passes explicitly.
+  //    Before that default existed, this producer's jobs got BullMQ's default
+  //    of 1 attempt — and the MTA worker throws on a greylist deferral to
+  //    trigger a retry, so a single deferral permanently failed an
+  //    agent-drafted message that would have retried 8× via /v1/messages.
   const queue = getSendQueue();
   await queue.add(
     emailId,
@@ -284,6 +292,10 @@ export async function enqueueAgentDraftForSend(
           agentRunId: draft.runId,
         },
       },
+      // The MTA worker's declared EmailJobData shape is { email, addedAt } —
+      // messages.ts sends it; omitting it here made this producer's payload
+      // lie about the type the consumer reads.
+      addedAt: now.toISOString(),
     },
     delayMs > 0 ? { delay: delayMs } : {},
   );

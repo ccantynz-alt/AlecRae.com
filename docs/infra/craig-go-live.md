@@ -148,7 +148,7 @@ Open a password manager (1Password or Bitwarden) now. You will paste every key b
 
 ### 17. Set MTA env vars on the mail box
 
-- **Action: Edit `/opt/alecrae/.env` on the 158 mail box** and add the MTA variables listed in the MTA section of [`env-audit.md`](./env-audit.md). Includes **`MTA_HOSTNAME=smtp.alecrae.com`** (required — the code default `mail.alecrae.com` is wrong for production), `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `DKIM_PRIVATE_KEY`, `RELAY_PROVIDER` + `SMTP_RELAY_*` (for Resend relay), etc.
+- **Action: Edit `/opt/alecrae/.env` on the 158 mail box** and add the MTA variables listed in the MTA section of [`env-audit.md`](./env-audit.md). Includes **`MTA_HOSTNAME=smtp.alecrae.com`** (required — the code default `mail.alecrae.com` is wrong for production), `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `RELAY_PROVIDER` + `SMTP_RELAY_*` (for Resend relay), etc. (Do NOT set `DKIM_PRIVATE_KEY` — no code reads it; DKIM keys live per-domain in the `domains` table.)
 - Then restart: `sudo systemctl restart alecrae-mta`
 
 ### 18. Verify the MTA

@@ -6,14 +6,8 @@ import { createDomainVerifier } from "./routing/domain-verifier.js";
 import { InMemoryEmailStore } from "./storage/store.js";
 import { PostgresEmailStore } from "./storage/postgres-store.js";
 import { createHttpInbound } from "./http-inbound.js";
-import { isDsnMessage, processInboundDsn } from "./dsn-suppression.js";
-import {
-  initTelemetry,
-  shutdownTelemetry,
-  recordEmailReceived,
-  recordEmailFilterDuration,
-} from "@alecrae/shared";
-import type { SmtpSession, SmtpEnvelope } from "./types.js";
+import { createInboundHandler } from "./inbound-handler.js";
+import { initTelemetry, shutdownTelemetry } from "@alecrae/shared";
 
 /**
  * Inbound email processing service.
@@ -24,45 +18,10 @@ import type { SmtpSession, SmtpEnvelope } from "./types.js";
  *  1. SMTP receiver (port 25 / SMTP_PORT) — direct MX delivery
  *  2. HTTP webhook (port 8025 / HTTP_PORT) — Cloudflare Email Workers or
  *     other HTTP-based forwarders POST raw MIME to /inbound/webhook
+ *
+ * The message handler itself lives in inbound-handler.ts; this file only
+ * wires the real dependencies and starts/stops the listeners.
  */
-
-/**
- * Split raw email bytes into the header block (as string) and body (as Uint8Array).
- * Headers and body are separated by a blank line (CRLF CRLF or LF LF).
- */
-function splitRawMessage(rawData: Uint8Array): { rawHeaders: string; rawBody: Uint8Array } {
-  const bytes = rawData;
-  // Search for CRLFCRLF (\r\n\r\n) or LFLF (\n\n)
-  let splitIndex = -1;
-  let separatorLength = 0;
-
-  for (let i = 0; i < bytes.length - 1; i++) {
-    if (bytes[i] === 0x0d && bytes[i + 1] === 0x0a &&
-        i + 3 < bytes.length && bytes[i + 2] === 0x0d && bytes[i + 3] === 0x0a) {
-      splitIndex = i;
-      separatorLength = 4;
-      break;
-    }
-    if (bytes[i] === 0x0a && bytes[i + 1] === 0x0a) {
-      splitIndex = i;
-      separatorLength = 2;
-      break;
-    }
-  }
-
-  if (splitIndex === -1) {
-    // No body found — entire message is headers
-    return {
-      rawHeaders: new TextDecoder().decode(bytes),
-      rawBody: new Uint8Array(0),
-    };
-  }
-
-  return {
-    rawHeaders: new TextDecoder().decode(bytes.subarray(0, splitIndex)),
-    rawBody: bytes.subarray(splitIndex + separatorLength),
-  };
-}
 
 const parser = new MimeParser();
 const pipeline = new FilterPipeline();
@@ -71,88 +30,7 @@ const store = process.env["DATABASE_URL"]
   ? new PostgresEmailStore()
   : new InMemoryEmailStore();
 
-async function handleInboundMessage(
-  session: SmtpSession,
-  envelope: SmtpEnvelope,
-  rawData: Uint8Array,
-): Promise<void> {
-  const startTime = Date.now();
-
-  // 1. Parse the MIME message
-  const parsed = await parser.parse(rawData);
-  console.log(
-    `[Inbound] Parsed message ${parsed.messageId} from ${envelope.mailFrom} (${rawData.length} bytes)`,
-  );
-
-  // 1b. Detect + process delivery-status notifications (bounces) — an async
-  // DSN is the common real-world bounce path (the sending MTA already
-  // handles same-connection SMTP-time rejections separately); this is what
-  // actually keeps suppression in sync for bounces that arrive later.
-  // Runs alongside normal storage below, not instead of it — the DSN
-  // itself is still a real message and gets delivered to its mailbox.
-  if (isDsnMessage(parsed.headers)) {
-    const rawText = new TextDecoder().decode(rawData);
-    // The envelope recipient is our VERP return path
-    // (bounces+<emailId>@bounce.<domain>), which attributes the bounce to the
-    // exact message rather than guessing from recency. A DSN is addressed to a
-    // single recipient, so the first entry is the one.
-    const dsnEnvelopeTo = Array.isArray(envelope.rcptTo) ? envelope.rcptTo[0] : envelope.rcptTo;
-    await processInboundDsn(rawText, dsnEnvelopeTo).catch((err) => {
-      console.error("[Inbound] DSN processing failed:", err instanceof Error ? err.message : String(err));
-    });
-  }
-
-  // 2. Run the filter pipeline (pass sender IP for SPF validation, raw data for DKIM)
-  const { rawHeaders, rawBody } = splitRawMessage(rawData);
-  const filterStart = performance.now();
-  const verdict = await pipeline.process(envelope, parsed, session.remoteAddress, rawHeaders, rawBody);
-  const filterDurationMs = performance.now() - filterStart;
-  recordEmailFilterDuration("full-pipeline", filterDurationMs);
-  console.log(
-    `[Inbound] Filter verdict for ${parsed.messageId}: ${verdict.action} (score: ${verdict.score})`,
-  );
-
-  if (verdict.action === "reject") {
-    // Extract domain from sender for metrics
-    const senderDomain = (envelope.mailFrom ?? "").split("@")[1] ?? "unknown";
-    recordEmailReceived(senderDomain, "rejected");
-    throw new Error(`Message rejected: ${verdict.reason}`);
-  }
-
-  // 3. Resolve recipients
-  const resolved = await router.resolve(envelope.rcptTo);
-
-  // 4. Store for each resolved recipient
-  let deliveryCount = 0;
-  for (const [recipient, resolution] of resolved) {
-    if (!resolution) {
-      console.warn(`[Inbound] No mailbox found for recipient: ${recipient}`);
-      continue;
-    }
-
-    if (resolution.rule.action === "forward") {
-      // In production: enqueue for outbound delivery to forwarding address
-      console.log(`[Inbound] Forwarding ${parsed.messageId} to ${resolution.resolvedAddress}`);
-      continue;
-    }
-
-    const stored = await store.store(parsed, resolution, verdict);
-    console.log(
-      `[Inbound] Stored ${stored.id} in mailbox ${resolution.mailboxId} for ${recipient}`,
-    );
-    deliveryCount++;
-  }
-
-  const elapsed = Date.now() - startTime;
-
-  // Record telemetry
-  const senderDomain = (envelope.mailFrom ?? "").split("@")[1] ?? "unknown";
-  recordEmailReceived(senderDomain, verdict.action === "quarantine" ? "quarantined" : "accepted");
-
-  console.log(
-    `[Inbound] Processed ${parsed.messageId}: ${deliveryCount} deliveries in ${elapsed}ms`,
-  );
-}
+const handleInboundMessage = createInboundHandler({ parser, pipeline, router, store });
 
 // --- Service Startup ---
 

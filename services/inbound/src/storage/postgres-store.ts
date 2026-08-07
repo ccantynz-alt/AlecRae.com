@@ -124,12 +124,34 @@ export class PostgresEmailStore implements EmailStore {
     const recipientDomain = recipient.resolvedAddress.split("@")[1] ?? "unknown";
     const domainId = await resolveDomainId(db, recipientDomain, recipient.accountId);
 
-    // Persist to the emails table
-    await db.insert(emails).values({
-      id,
-      accountId: recipient.accountId,
-      domainId,
-      messageId: email.messageId ?? `<${id}@inbound>`,
+    // Tags carry the verdict-derived folder first (issue #153 — `folder` and
+    // `tags[0]` are written from the same value so they cannot disagree),
+    // plus the recipient's routed mailbox id when it differs, so a message
+    // delivered to two provisioned mailboxes on one account records both.
+    const initialTags =
+      recipient.mailboxId && recipient.mailboxId !== mailboxId
+        ? [mailboxId, recipient.mailboxId]
+        : [mailboxId];
+
+    const messageId = email.messageId ?? `<${id}@inbound>`;
+
+    // Persist to the emails table.
+    //
+    // The emails table has a UNIQUE index on (account_id, message_id).
+    // Delivering one message to two recipients on the same account calls
+    // store() twice with the same pair — a plain insert throws on the second
+    // call, which used to fail the whole delivery, answer the sender 451,
+    // and make them redeliver forever. `onConflictDoNothing` targets that
+    // index so a concurrent insert can never throw either (the race is
+    // resolved by the database, not a read-then-write); when the row already
+    // exists we MERGE the new recipient's mailbox tag into it below.
+    const inserted = await db
+      .insert(emails)
+      .values({
+        id,
+        accountId: recipient.accountId,
+        domainId,
+        messageId,
       fromAddress,
       fromName,
       toAddresses: email.to.map((a) => {
@@ -145,19 +167,70 @@ export class PostgresEmailStore implements EmailStore {
       subject: email.subject ?? "(no subject)",
       textBody: email.text ?? null,
       htmlBody: email.html ?? null,
-      inReplyTo: email.inReplyTo ?? null,
-      references: email.references.length > 0 ? email.references : null,
-      status: "delivered",
-      folder: mailboxId,
-      tags: [mailboxId],
-      metadata: {
-        spamScore: String(verdict.score ?? 0),
-        filterAction: verdict.action,
-        receivedAt: now.toISOString(),
-      },
-      createdAt: now,
-      updatedAt: now,
-    });
+        inReplyTo: email.inReplyTo ?? null,
+        references: email.references.length > 0 ? email.references : null,
+        status: "delivered",
+        // Provenance: the schema documents "inbound" for mail received via
+        // our MTA (packages/db/src/schema/emails.ts). Omitting it left every
+        // received message indistinguishable from a legacy row.
+        source: "inbound",
+        folder: mailboxId,
+        tags: initialTags,
+        metadata: {
+          spamScore: String(verdict.score ?? 0),
+          filterAction: verdict.action,
+          receivedAt: now.toISOString(),
+        },
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: [emails.accountId, emails.messageId] })
+      .returning({ id: emails.id });
+
+    if (inserted.length === 0) {
+      // A row for (accountId, messageId) already exists — either an earlier
+      // recipient in this same delivery or a concurrent worker. Merge this
+      // recipient's mailbox tag into the existing row (without duplicating)
+      // and report the existing row: the delivery as a whole must succeed.
+      // The conflicting row is committed by the time onConflictDoNothing
+      // returns, so the follow-up read sees it.
+      const [existing] = await db
+        .select({ id: emails.id, tags: emails.tags })
+        .from(emails)
+        .where(
+          and(
+            eq(emails.accountId, recipient.accountId),
+            eq(emails.messageId, messageId),
+          ),
+        )
+        .limit(1);
+
+      if (!existing) {
+        // Should be unreachable (conflict implies a visible committed row);
+        // surface it rather than silently claiming delivery.
+        throw new Error(
+          `[PostgresEmailStore] Insert conflicted for (${recipient.accountId}, ${messageId}) but no existing row was found`,
+        );
+      }
+
+      const existingTags = existing.tags ?? [];
+      const mergedTags = [...existingTags];
+      for (const tag of initialTags) {
+        if (!mergedTags.includes(tag)) mergedTags.push(tag);
+      }
+      if (mergedTags.length !== existingTags.length) {
+        await db
+          .update(emails)
+          .set({ tags: mergedTags, updatedAt: now })
+          .where(eq(emails.id, existing.id));
+      }
+
+      console.log(
+        `[PostgresEmailStore] Merged delivery for ${recipient.resolvedAddress} into existing email ${existing.id} (tags: ${mergedTags.join(", ")})`,
+      );
+
+      return this.buildStoredEmail(existing.id, email, recipient, verdict, mailboxId, now);
+    }
 
     // Store attachments if any
     if (email.attachments && email.attachments.length > 0) {
@@ -198,7 +271,19 @@ export class PostgresEmailStore implements EmailStore {
     });
 
     // Build the StoredEmail return object
-    const stored: StoredEmail = {
+    return this.buildStoredEmail(id, email, recipient, verdict, mailboxId, now);
+  }
+
+  private buildStoredEmail(
+    id: string,
+    email: ParsedEmail,
+    recipient: ResolvedRecipient,
+    verdict: FilterVerdict,
+    mailboxId: string,
+    now: Date,
+  ): StoredEmail {
+    const fromAddr = Array.isArray(email.from) ? email.from[0] : email.from;
+    return {
       id,
       accountId: recipient.accountId,
       mailboxId,
@@ -229,8 +314,6 @@ export class PostgresEmailStore implements EmailStore {
       headers: email.headers ?? [],
       filterVerdict: verdict,
     };
-
-    return stored;
   }
 
   async getById(

@@ -139,6 +139,12 @@ export class DeliveryOptimizer {
   /** TTL for cached MX records in milliseconds (default 5 min). */
   private readonly mxCacheTtlMs: number;
 
+  /**
+   * UTC date (`YYYY-MM-DD`) the daily counters currently cover. Used by
+   * {@link maybeResetDailyCounters} to detect the midnight-UTC rollover.
+   */
+  private dailyCounterDate: string = new Date().toISOString().slice(0, 10);
+
   constructor(options?: {
     retryStrategy?: RetryStrategy;
     ispProfiles?: IspProfile[];
@@ -635,8 +641,29 @@ export class DeliveryOptimizer {
   }
 
   /**
+   * Reset the daily counters if (and only if) the UTC date has rolled over
+   * since the last reset. Returns whether a reset happened.
+   *
+   * This is the method the worker actually schedules: `resetDailyCounters()`
+   * itself had ZERO callers, so `messagesThisDay` only ever incremented and a
+   * long-lived process would eventually saturate every ISP's daily cap and
+   * throttle to zero, permanently and silently. Keying on the UTC date —
+   * rather than an interval counted from process start — means the reset
+   * lands at the same midnight-UTC boundary `checkThrottle` schedules its
+   * `throttledUntil` against, however long the process has been up.
+   */
+  maybeResetDailyCounters(now: Date = new Date()): boolean {
+    const today = now.toISOString().slice(0, 10);
+    if (today === this.dailyCounterDate) return false;
+    this.dailyCounterDate = today;
+    this.resetDailyCounters();
+    return true;
+  }
+
+  /**
    * Reset daily throttle counters.
-   * Should be called by an external scheduler once per day (midnight UTC).
+   * Should be called by an external scheduler once per day (midnight UTC) —
+   * in practice via {@link maybeResetDailyCounters}, which the worker polls.
    */
   resetDailyCounters(): void {
     for (const state of this.throttleStates.values()) {

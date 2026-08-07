@@ -16,10 +16,10 @@ import { runLivenessCheck } from "../liveness-checker.js";
 // ─── Configuration ────────────────────────────────────────────────────────
 
 const QUEUE_NAME = "alecrae-dns-liveness";
-const REDIS_URL =
-  process.env["REDIS_URL"] ??
-  process.env["UPSTASH_REDIS_URL"] ??
-  "redis://localhost:6379";
+// REDIS_URL only — deliberately NOT UPSTASH_REDIS_URL, matching the MTA and
+// every queue producer, so this job can never register against a different
+// Redis than the rest of the system (the #149 split-brain class).
+const REDIS_URL = process.env["REDIS_URL"] ?? "redis://localhost:6379";
 
 // ─── State ────────────────────────────────────────────────────────────────
 
