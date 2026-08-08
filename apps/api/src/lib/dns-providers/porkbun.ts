@@ -20,6 +20,28 @@ function relativeName(fullName: string, apexDomain: string): string {
   return fullName;
 }
 
+/**
+ * Porkbun rejects an API call for a domain when API access is not enabled for
+ * that specific domain — even with perfectly valid keys — and reports it as a
+ * bare "authentication"/"invalid api key"/"not opted in" message with no
+ * guidance. That per-domain toggle is off by default and is the overwhelmingly
+ * common cause, so when the message looks auth/permission-shaped we append the
+ * concrete fix. Left untouched for genuinely unrelated errors so we don't
+ * mislabel them.
+ */
+export function augmentPorkbunError(message: string | undefined): string {
+  const base = message?.trim() ? message.trim() : "Porkbun rejected the request";
+  const authShaped =
+    /auth|api key|apikey|api access|not opted|permission|forbidden|unauthor|disabled/i.test(base);
+  if (!authShaped) return base;
+  return (
+    `${base} — In Porkbun, enable API Access for THIS domain (Domain Management → ` +
+    `the domain → toggle "API Access" on), confirm account-level API access is enabled ` +
+    `(Account → API Access), and check the API Key (pk1_…) and Secret Key (sk1_…) are ` +
+    `correct and not swapped.`
+  );
+}
+
 interface PbRecord {
   id: string;
   type: string;
@@ -62,7 +84,7 @@ export async function configurePorkbun(
     return {
       success: false,
       records: [],
-      error: existing.message ?? "Could not retrieve existing DNS records from Porkbun",
+      error: augmentPorkbunError(existing.message ?? "Could not retrieve existing DNS records from Porkbun"),
     };
   }
   const existingRecords: PbRecord[] = existing.records ?? [];
@@ -87,7 +109,7 @@ export async function configurePorkbun(
           ...(rec.priority !== undefined && rec.priority !== null ? { prio: String(rec.priority) } : {}),
         });
         if (editRes.status !== "SUCCESS") {
-          return { type: rec.type, name: rec.name, status: "failed", error: editRes.message ?? "Update failed" };
+          return { type: rec.type, name: rec.name, status: "failed", error: augmentPorkbunError(editRes.message ?? "Update failed") };
         }
         return { type: rec.type, name: rec.name, status: "updated" };
       }
@@ -100,7 +122,7 @@ export async function configurePorkbun(
         ...(rec.priority !== undefined && rec.priority !== null ? { prio: String(rec.priority) } : {}),
       });
       if (createRes.status !== "SUCCESS") {
-        return { type: rec.type, name: rec.name, status: "failed", error: createRes.message ?? "Create failed" };
+        return { type: rec.type, name: rec.name, status: "failed", error: augmentPorkbunError(createRes.message ?? "Create failed") };
       }
       return { type: rec.type, name: rec.name, status: "created" };
     }),
