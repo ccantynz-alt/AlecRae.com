@@ -74,8 +74,9 @@ Query · Tiptap · Motion · Turbopack
 Transformers.js/WebLLM (local GPU) · Voyage (embeddings, when added)
 **Data:** Postgres (Drizzle; prod = local PG16 on Jarvis, 151 tables) · Redis (BullMQ; prod = local
 on Jarvis) · Meilisearch · Vapron Object Storage · IndexedDB (local-first cache) · ClickHouse (later)
-**Infra:** Jarvis box (66.42.121.161, systemd + Coolify/Traefik) · mail box 149.28.119.158 ·
-Cloudflare DNS · GitHub Actions · OTel → Grafana (aspirational, nothing alerts today — #72)
+**Infra:** Jarvis box (66.42.121.161, systemd + Coolify/Traefik — AlecRae web/api) · **Vapron box
+149.28.119.158** (Craig's live Vapron platform + its mail stack — AlecRae rides on it for mail, see
+#171; NOT a spare AlecRae box) · Cloudflare DNS · GitHub Actions · OTel → Grafana (aspirational — #72)
 **Auth/Security:** Passkeys/WebAuthn · Google/Microsoft OAuth · jose JWT · Web Crypto
 (RSA-OAEP-4096 + AES-256-GCM) · TLS 1.3 min
 **Payments:** Stripe. **Desktop/Mobile:** Electron→Tauri · React Native + Expo · PWA.
@@ -217,8 +218,15 @@ set the same var in both.** Mail box `149.28.119.158` is dedicated for mail (por
   wizard + nav de-clutter, Porkbun hint). No-op migrate (0011 already applied), 151 tables.
   `/v1/health` reports `degraded` **correctly**: `alecrae-mta` not running (deliberate, #105).
   Go-live path: `docs/infra/GO-LIVE-CHECKLIST.md`. (Prior: `f9d1528` 2026-08-06, the #120–#163 audit.)
-- **Not running anywhere:** `services/mta` (stopped since the #105 open-relay incident — restart is
-  Craig's call; relay control #127 + receiver-off-default #128 have since landed) and
+- **⚠️ MAIL ARCHITECTURE CORRECTED 2026-08-08 — read `docs/infra/alecrae-vapron-mail-integration.md`.**
+  `149.28.119.158` is **NOT a spare AlecRae mail box** — it is the **live Vapron production box**
+  (~30 services incl. a full email stack owning port 25). No unblocked port 25 is available to
+  AlecRae (Vultr won't; the 149 unblock was a fluke), and Cloudflare/Resend are competitors — so
+  **AlecRae relays send + receive through Vapron's own mail platform** (Vapron = transport/"own
+  Resend"; AlecRae = the product). `services/mta`/`services/inbound` running on a dedicated box is
+  **superseded**; the box-setup runbooks are contingency-only. Shared Redis (#149) is done but its
+  MTA-on-158 rationale is superseded (AlecRae's Jarvis API still uses that Redis).
+- **Not running anywhere (and now not the path):** `services/mta` (stopped since #105) and
   `services/inbound` (never deployed; it IS a complete, bootable receive pipeline — the
   "placeholder inbound" warning was about the MTA's removed duplicate, not this service).
 
@@ -252,7 +260,7 @@ Colors/logo TBD (Craig). Marketing phases + competitive positioning: see archive
 | Live infra state, box, outages | `DEVOPS_TRACKER.md` |
 | Backend↔UI wiring coverage (heuristic) | `docs/audits/route-coverage.md` (generated — never hand-edit) |
 | **Does a feature work end-to-end right now** | `docs/audits/2026-07-22-full-journey-audit.md` (49 journeys; trust it over "FIXED" claims for what it covers; re-run periodically) |
-| Mail architecture + multi-platform plan | `docs/infra/multi-platform-mail-plan.md` |
+| **Mail architecture (AUTHORITATIVE)** | `docs/infra/alecrae-vapron-mail-integration.md` — AlecRae rides on Vapron's mail. Supersedes the mail sections of `multi-platform-mail-plan.md`, `mta-box-setup.md`, `inbound-box-setup.md`. |
 | Incident history | `docs/postmortems/` |
 | **Fixed-issue history #120–#163 + session narratives through 2026-08-06** | `docs/archive/claude-bible-archive-2026-08-07.md` |
 | Historical build detail, tiers, issues #1–#57 | `docs/archive/claude-bible-archive-2026-07-13.md` + git history |
@@ -309,23 +317,28 @@ code-ready but **not operational** — bring-up is the critical path (see Next A
 | 167 | **Dead/duplicate spine modules — adopt or delete (some are Craig scope calls):** `EmailQueueManager` (360-line parallel queue impl, zero callers), `FeedbackLoopProcessor` (FBL subscription state machine, not even barrel-exported), DNS cluster (`AuthoritativeDnsServer`, `DnsRecordManager`, `DnsHealthMonitor`, `DnsPropagationChecker` — all dead), `retry-policy.ts` (bounce-class-aware 72h retry curve, test-only — worker uses generic BullMQ retries instead), `fbl-parser.ts` (full RFC 5965 parser test-only while `routes/fbl.ts` runs a weaker inline copy that misclassifies `not-spam`/`opt-out` as abuse), MTA `telemetry.ts` (DKIM-failure/queue-depth metrics never recorded), `warmup.ts` cap functions (re-implemented in warmup-gate), `ReputationEngine`. Postmaster/SNDS timers exist only as copy-paste shell in a runbook — nothing installs them. | MED |
 | 168 | **No real TLS on the mail path.** Inbound STARTTLS is now honestly absent (was fabricated — advertised + acked with no handshake, #164) so received mail transits plaintext; needs a certificate on the mail box (ACME task) + a genuine `tls.TLSSocket` upgrade. MTA outbound TLS cert is the same pending box task (#107 wired the manager; no cert exists). | HIGH |
 | 169 | **API-side half only (events + webhooks FIXED 2026-08-08, PR #95):** mail received via our own MX now emits `email.received` events + webhooks, but still gets no AI triage, no user rules, no semantic indexing — those live API-side (`storeReceivedEmail`) and need a design for how inbound reaches them (mind #130's spend guard). | MED |
+| 171 | **AlecRae⇄Vapron mail integration (THE business-email path — see `docs/infra/alecrae-vapron-mail-integration.md`).** AlecRae rides on Vapron's mail platform. TODO: (a) AlecRae outbound adapter → Vapron `email-send` REST `/v1/messages` (Bearer `EMAIL_SEND_TOKEN`); (b) AlecRae `http-inbound` accepts Vapron `email-receive`'s webhook payload + HMAC; (c) **Craig/Vapron:** set `INBOUND_SINK_URL/SECRET/DOMAINS` + restart `vapron-email-receive` (activates the dormant sink bridge — it's been rejecting all inbound as "no route matched" since ~2026-08-05), register AlecRae domains in `vapron-email-domain` for DKIM. Prove davenroe.com send+receive loop first. Phase 1 shared Redis DONE 2026-08-08. | HIGH |
 | 170 | **Spine-audit residuals:** warm-up gate's Redis connection never closed on worker stop; `postgres-store.resolveDomainId` auto-creates `domains` rows on lookup miss (policy question); catch-all routing dead for DB-resolved domains (`catchAllMailbox` never populated; falls through to a sentinel `"inbox"` mailboxId); inbound AV filter stage matches EICAR only with unscanned indistinguishable from clean; HTTP-ingest reject bodies include `verdict.reason` (authenticated-only, low); `packages/crypto/src/encryption.ts` produces placeholder S/MIME/PGP envelopes; IMAP mailbox state is a process-local Map + JMAP threading no-ops (both services undeployed); `emails.source` backfill for pre-existing rows not done (new rows only); calendar `/today` field named `aiAgenda` for a template sentence (content honest, name overclaims — rename pass); context-intelligence hardcodes `isExplicit: true` on every deadline (schema doc says false = AI-inferred — needs an extractor prompt change). | LOW-MED |
 
 ---
 
-## ⏳ WAITING ON CRAIG — business email cannot work without 1–4
+## ⏳ WAITING ON CRAIG — business email path (the Vapron integration, #171)
 
-1. **Tailnet Redis** executed on the boxes before the MTA ever starts (#149,
-   `docs/infra/redis-tailnet-setup.md`) — otherwise every send silently vanishes.
-2. **Deploy `services/inbound`** on the mail box (port 25 + ufw) — receiving is most of what
-   business email means. Runbook: `docs/infra/business-email-domain-onboarding.md`.
-3. **Per-platform DNS** (MX/SPF/DKIM/DMARC/bounce per domain) — auto-config broken (#83), so
-   manual; `GET /v1/domains/:id/dns` prints exactly what to paste.
+The mail path is now **AlecRae⇄Vapron** (`docs/infra/alecrae-vapron-mail-integration.md`), NOT a
+dedicated box. Tailnet Redis (#149) is DONE. Remaining Craig/Vapron-side steps:
+
+1. **Activate Vapron's inbound sink bridge:** set `INBOUND_SINK_URL` (AlecRae inbound webhook),
+   `INBOUND_SINK_SECRET`, `INBOUND_SINK_DOMAINS` on `vapron-email-receive` + restart it. It's been
+   rejecting all inbound as "no route matched" since ~2026-08-05. (Once AlecRae's inbound adapter is built.)
+2. **Register AlecRae domains in `vapron-email-domain`** (DKIM + FROM verification) and confirm the
+   `EMAIL_SEND_TOKEN` AlecRae's tenant should use.
+3. **Per-platform DNS** — MX already points at Vapron (correct); still need SPF authorising Vapron's
+   sending + the DKIM records Vapron issues, per domain.
 4. One TXT in the alecrae.com zone: `*._report._dmarc` → `v=DMARC1` (#148,
-   `docs/infra/dns-zone-alecrae.md` §5a) — without it no customer DMARC reports are ever sent.
-5. Vapron DNS API docs (#83) · Postmaster/SNDS credentials (#82) · Stripe live keys + webhook ·
-   Google OAuth test users (console step, documented in `docs/infra/morning-setup.md`) · disable
-   GitHub Default-Setup CodeQL.
+   `docs/infra/dns-zone-alecrae.md` §5a).
+5. Stripe live keys + webhook · Google OAuth test users (`docs/infra/morning-setup.md`) · disable
+   GitHub Default-Setup CodeQL. (Postmaster/SNDS #82 no longer AlecRae's concern — Vapron owns
+   sending reputation now.)
 6. **Decisions:** restart MTA (#105) · #152 marketing-vs-correspondence classification as policy ·
    dispatcher opt-in schema (#132) · keep-or-delete five services (#146) · register-grants-owner
    (#156a) · VirusTotal key (#158a).
@@ -343,10 +356,15 @@ Craig's goal (2026-08-04): each of his platforms (Zoobicon, BookARide, DavenRoe,
 Dominat8, …) gets an organisation with business email on its own domain. Critical path = **send AND
 receive on customer domains**, not the general backlog.
 
-1. **Send/receive smoke test against a real domain** once Craig's box steps (Waiting 1–4) are done —
-   nothing in this repo can prove the loop end to end. Includes SPF/DKIM/DMARC pass into Gmail.
-2. **#168** real TLS on the receive path (needs cert — Craig's box task) and the API-side half of
-   **#169** (AI triage/rules/indexing for MX-received mail; events + webhooks are DONE, PR #95).
+1. **#171 AlecRae⇄Vapron mail integration** (`docs/infra/alecrae-vapron-mail-integration.md`) —
+   THE business-email path. Build the AlecRae outbound adapter (→ Vapron send API) + inbound webhook
+   adapter (accept Vapron's payload+HMAC); Craig activates Vapron's sink bridge + registers domains.
+   Prove davenroe.com send+receive loop end to end.
+2. **DavenRoe workspace restructure** (one-workspace-per-platform decision) — move davenroe.com +
+   support@ out of the personal account into a dedicated DavenRoe org (globally-unique domain →
+   remove + re-add; DNS stays; recreate mailbox).
+3. **#168** real TLS is now Vapron's concern for the transport; the API-side half of **#169**
+   (AI triage/rules/indexing for received mail) still applies.
 3. **#154** real mailto-unsubscribe fix (shape above).
 4. **#116(d)** GDPR export/erasure — highest remaining compliance gap.
 5. **#110** token storage · **#114** HTML rendering (design-first) ·
@@ -369,6 +387,8 @@ receive on customer domains**, not the general backlog.
 | 2026-07-20 | Branch protection on main: PR + 4 required checks; admin bypass left open (Craig). |
 | 2026-07-29 | Redis bound to the tailnet, shared by both boxes, with `requirepass` (#149) — over hosted Redis or moving the MTA. |
 | 2026-08-04 | Business email on own domains is the driving priority. |
+| 2026-08-08 | **AlecRae mail rides on Vapron's platform** (Vapron = transport/own-Resend, AlecRae = product). Forced by: no unblocked port 25 available; Cloudflare/Resend are competitors; 149.28.119.158 is the live Vapron box, not a spare. Full contract: `docs/infra/alecrae-vapron-mail-integration.md`. Supersedes the dedicated-mail-box plan. |
+| 2026-08-08 | **One workspace per platform** (DavenRoe, Zoobicon, Gluecron, …), each its own org/domain/mailboxes. davenroe.com is currently in the personal account and needs moving. |
 
 **ADRs** (`docs/adrs/`): Neon over Supabase · Cloudflare over Vercel · Bun over Node ·
 Hono over Express · Tailwind over CSS-in-JS · Drizzle over Prisma · Claude over GPT.
@@ -425,4 +445,4 @@ If something contradicts this file, this file wins. If you don't know what to do
 you. Changing this file needs Craig's approval. Shipping something not in this file breaks the
 rules. **AlecRae dominates or AlecRae dies. There is no second place.**
 
-**Last updated:** 2026-08-08 05:15 UTC
+**Last updated:** 2026-08-08 08:30 UTC

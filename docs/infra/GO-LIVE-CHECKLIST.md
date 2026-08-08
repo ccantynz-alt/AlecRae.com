@@ -1,14 +1,15 @@
 # AlecRae — Business Email Go-Live Checklist
 
-> **The single tickable path to real mail flowing on your own domains.** Work top to bottom;
-> each phase depends on the ones above it. This supersedes the mail sections of
-> `craig-go-live.md` (which predates the local-Postgres/local-Redis reality and the business-email
-> path). Detailed procedures live in the linked sibling runbooks — this page is the ordered index.
+> **⚠️ SUPERSEDED 2026-08-08 for the mail path.** Phases 1–5 below assumed AlecRae would run its own
+> MTA/inbound on a dedicated box with an unblocked port 25. **That plan is dead** — no such box is
+> obtainable, and the mail path is now **AlecRae rides on Vapron's mail platform.** The authoritative
+> mail procedure is **`docs/infra/alecrae-vapron-mail-integration.md`**. Phase 0 (deploy) and Phase
+> 1 (shared Redis) are done and still valid; the DNS TXT and the non-mail items below still stand.
 >
-> **Legend:** `[CODE ✓]` done in the codebase already · `[BOX]` you run it on a server (Boss Rule #5) ·
-> `[DNS]` a DNS change · `[DECIDE]` a call only you can make · `[AUTO]` happens on its own.
+> **Legend:** `[CODE ✓]` done in the codebase · `[BOX]` server step · `[DNS]` a DNS change ·
+> `[DECIDE]` your call · `[AUTO]` happens on its own.
 
-**Last updated:** 2026-08-08 05:15 UTC
+**Last updated:** 2026-08-08 08:30 UTC
 
 ---
 
