@@ -524,6 +524,9 @@ export class MtaWorker {
         returnPath,
         relayRecipients,
         signedMessage,
+        // tenantId lets a REST relay (Vapron) scope the send to this account;
+        // SMTP/SES/MailChannels ignore it.
+        { tenantId: email.accountId },
       );
 
       const now = new Date();
@@ -563,7 +566,11 @@ export class MtaWorker {
         // undeliverable, so a relay failure ALWAYS defers: the retry
         // re-plans and can go direct MX once quota returns. Deferral is
         // the no-loss path; see relayFailureOutcome.
-        const outcome = relayFailureOutcome({ mode: relayMode, error: relayResult.error });
+        const outcome = relayFailureOutcome({
+          mode: relayMode,
+          error: relayResult.error,
+          permanent: relayResult.permanent,
+        });
 
         if (outcome === "bounced") {
           for (const recipient of relayRecipients) {

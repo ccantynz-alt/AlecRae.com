@@ -6,20 +6,26 @@
  *   - Amazon SES SMTP relay (STARTTLS + AUTH)
  *   - MailChannels HTTP API (POST raw MIME)
  *   - Generic SMTP relay (any relay with optional auth)
+ *   - Vapron REST send API (POST structured JSON to /v1/messages)
  *
  * DKIM signing happens upstream (services/mta/src/dkim/signer.ts) before
- * the message reaches the relay, so the relay sends the already-signed
- * raw message as-is.
+ * the message reaches the relay, so the SMTP/SES/MailChannels providers send
+ * the already-signed raw message as-is. The Vapron provider is the exception:
+ * Vapron re-composes and DKIM-signs the message itself (via its email-domain
+ * service), so its adapter parses the raw MIME back into the structured JSON
+ * shape Vapron's `/v1/messages` API expects. See
+ * docs/infra/alecrae-vapron-mail-integration.md.
  */
 
 import * as net from "node:net";
 import * as tls from "node:tls";
+import { parseEmail } from "@alecrae/email-parser";
 import { getMtaHostname } from "../config.js";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 export interface RelayConfig {
-  provider: "ses" | "mailchannels" | "smtp";
+  provider: "ses" | "mailchannels" | "smtp" | "vapron";
   /** Amazon SES SMTP relay */
   ses?: {
     host: string;
@@ -41,6 +47,15 @@ export interface RelayConfig {
     password?: string | undefined;
     tls?: boolean | undefined;
   };
+  /**
+   * Vapron REST send API. Base URL (e.g. http://100.89.227.39:8787); the
+   * adapter POSTs to `${url}/v1/messages` with a bearer token. AlecRae does
+   * not deliver to the internet itself — Vapron owns delivery + retry.
+   */
+  vapron?: {
+    url: string;
+    token: string;
+  };
 }
 
 export interface RelaySendResult {
@@ -48,6 +63,63 @@ export interface RelaySendResult {
   messageId?: string | undefined;
   response?: string | undefined;
   error?: string | undefined;
+  /**
+   * Explicit permanence classification for a FAILED send, used by
+   * delivery/routing.ts's `relayFailureOutcome` to decide bounce vs. defer.
+   *
+   *   true  → permanent; the message will never succeed on retry (bounce).
+   *   false → transient; retry may succeed (defer).
+   *   undefined → unclassified; the caller falls back to its SMTP-oriented
+   *               5xx string heuristic (the historical SES/SMTP behaviour).
+   *
+   * The Vapron provider sets this because its HTTP status semantics INVERT
+   * SMTP's: a 4xx (403 FROM-not-verified, 401 bad token, 422 validation) is
+   * permanent, while a 5xx is a transient gateway blip. String-sniffing the
+   * error for "5xx" — correct for SMTP — would misclassify both directions.
+   */
+  permanent?: boolean | undefined;
+}
+
+/** Per-send metadata not derivable from the raw MIME (e.g. the tenant). */
+export interface RelaySendOptions {
+  /** AlecRae account/workspace id → Vapron `tenantId`. */
+  tenantId?: string | undefined;
+}
+
+/** Minimal response shape the Vapron adapter needs from an HTTP transport. */
+export interface RelayFetchResponse {
+  status: number;
+  text(): Promise<string>;
+}
+
+/**
+ * Injectable HTTP transport for the Vapron adapter. The global `fetch` is
+ * assignable to this, and tests pass a mock so no network is touched.
+ */
+export type RelayFetch = (
+  url: string,
+  init: { method: string; headers: Record<string, string>; body: string },
+) => Promise<RelayFetchResponse>;
+
+/** One attachment in a Vapron `/v1/messages` request body. */
+export interface VapronAttachment {
+  filename: string;
+  contentBase64: string;
+  contentType: string;
+}
+
+/** The JSON body posted to Vapron's `/v1/messages`. */
+export interface VapronMessageBody {
+  from: string;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject?: string;
+  html?: string;
+  text?: string;
+  attachments?: VapronAttachment[];
+  headers?: Record<string, string>;
+  tenantId?: string;
 }
 
 // ─── Environment-based config builder ───────────────────────────────────────
@@ -69,6 +141,8 @@ export interface RelaySendResult {
  *   SMTP_RELAY_USERNAME     — optional
  *   SMTP_RELAY_PASSWORD     — optional
  *   SMTP_RELAY_TLS          — "true" or "false" (default true)
+ *   VAPRON_EMAIL_SEND_URL   — Vapron send base URL (required for "vapron")
+ *   VAPRON_EMAIL_SEND_TOKEN — Vapron bearer token (required for "vapron")
  */
 export function relayConfigFromEnv(): RelayConfig {
   const provider = (process.env["RELAY_PROVIDER"] ?? "smtp") as RelayConfig["provider"];
@@ -102,6 +176,16 @@ export function relayConfigFromEnv(): RelayConfig {
         username: process.env["SMTP_RELAY_USERNAME"] ?? undefined,
         password: process.env["SMTP_RELAY_PASSWORD"] ?? undefined,
         tls: process.env["SMTP_RELAY_TLS"] !== "false",
+      };
+      break;
+
+    case "vapron":
+      // Left possibly-empty here; RelayClient.validate() rejects a missing
+      // url/token with a clear message so a misconfigured deployment fails
+      // loudly at construction rather than on the first send.
+      config.vapron = {
+        url: process.env["VAPRON_EMAIL_SEND_URL"] ?? "",
+        token: process.env["VAPRON_EMAIL_SEND_TOKEN"] ?? "",
       };
       break;
   }
@@ -556,6 +640,242 @@ async function sendViaSmtpRelay(
   }
 }
 
+// ─── Provider: Vapron REST send API ─────────────────────────────────────────
+
+/**
+ * Headers Vapron reconstructs itself from the structured fields (or that are
+ * signing/transport artifacts of OUR upstream pass). Forwarding these would
+ * either duplicate a field or hand Vapron a stale DKIM signature over content
+ * it is about to re-sign, so they are dropped; everything else (X-*,
+ * List-Unsubscribe, Reply-To, In-Reply-To, References, …) is passed through.
+ */
+const VAPRON_STRUCTURAL_HEADERS = new Set<string>([
+  "from",
+  "to",
+  "cc",
+  "bcc",
+  "subject",
+  "date",
+  "message-id",
+  "mime-version",
+  "content-type",
+  "content-transfer-encoding",
+  "content-disposition",
+  "content-id",
+  "dkim-signature",
+  "domainkey-signature",
+  "arc-seal",
+  "arc-message-signature",
+  "arc-authentication-results",
+  "authentication-results",
+  "received",
+  "return-path",
+  "delivered-to",
+  "x-original-to",
+]);
+
+/**
+ * Build the Vapron `/v1/messages` JSON body from the raw (DKIM-signed) MIME
+ * message plus the envelope recipients the worker resolved for this batch.
+ *
+ * Exported so the mapping is unit-testable directly, not only through a
+ * mocked transport (same approach as `relayFailureOutcome`/`senderDomainWhere`).
+ *
+ * @param envelopeFrom   - The relay envelope sender (VERP return-path). NOT
+ *                         used as the Vapron `from`: Vapron verifies the FROM
+ *                         *domain*, and the return-path lives on the
+ *                         `bounce.<domain>` subdomain, which is not the
+ *                         verified sending domain. The header From address
+ *                         (parsed below) is the real sender.
+ * @param recipients     - Envelope recipients for this batch (authoritative
+ *                         delivery set — includes Bcc, which is not in headers).
+ * @returns the body, or null if the message has no usable From address.
+ */
+export function buildVapronMessage(
+  envelopeFrom: string,
+  recipients: readonly string[],
+  rawMessage: string,
+  options?: RelaySendOptions,
+): VapronMessageBody | null {
+  void envelopeFrom; // intentionally unused — see the From note above
+  const parsed = parseEmail(rawMessage);
+
+  const fromAddress = parsed.from.address.trim();
+  if (fromAddress === "") {
+    // No From header → cannot determine a verified sending domain. Returning
+    // null lets the caller surface a permanent, distinct error rather than
+    // sending FROM the bounce subdomain and getting a confusing 403.
+    return null;
+  }
+
+  // Split the authoritative envelope set back into To / Cc / Bcc so the
+  // recipient sees the same visibility the composer intended, while
+  // guaranteeing every envelope recipient lands in exactly one bucket (a Bcc
+  // recipient appears in no header, so it can only be recovered this way).
+  const envelope = [...recipients];
+  const envelopeSet = new Set(envelope.map((r) => r.toLowerCase()));
+  const inEnvelope = (addr: string): boolean => envelopeSet.has(addr.toLowerCase());
+
+  const headerTo = parsed.to.map((a) => a.address).filter(inEnvelope);
+  const headerCc = parsed.cc.map((a) => a.address).filter(inEnvelope);
+  const named = new Set([...headerTo, ...headerCc].map((a) => a.toLowerCase()));
+  const bcc = envelope.filter((r) => !named.has(r.toLowerCase()));
+
+  let to: string[];
+  let cc: string[];
+  let bccOut: string[];
+  if (headerTo.length > 0) {
+    to = headerTo;
+    cc = headerCc;
+    bccOut = bcc;
+  } else {
+    // No header To among the envelope recipients (all-Bcc, or headers we
+    // couldn't match). Put everyone in `to` so nobody is silently dropped —
+    // Vapron requires at least one recipient, and delivery beats cosmetics.
+    to = envelope;
+    cc = [];
+    bccOut = [];
+  }
+
+  // Custom (non-structural) headers, first value each.
+  const headers: Record<string, string> = {};
+  for (const [name, values] of parsed.headers) {
+    const lower = name.toLowerCase();
+    if (VAPRON_STRUCTURAL_HEADERS.has(lower)) continue;
+    if (lower.startsWith("content-")) continue;
+    const first = values[0];
+    if (first !== undefined && first.trim() !== "") headers[name] = first;
+  }
+
+  const attachments: VapronAttachment[] = parsed.attachments.map((a) => ({
+    filename: a.filename,
+    contentBase64: Buffer.from(a.content).toString("base64"),
+    contentType: a.contentType,
+  }));
+
+  const body: VapronMessageBody = { from: fromAddress, to };
+  if (cc.length > 0) body.cc = cc;
+  if (bccOut.length > 0) body.bcc = bccOut;
+  if (parsed.subject !== "") body.subject = parsed.subject;
+  if (parsed.htmlBody !== undefined) body.html = parsed.htmlBody;
+  if (parsed.textBody !== undefined) body.text = parsed.textBody;
+  if (attachments.length > 0) body.attachments = attachments;
+  if (Object.keys(headers).length > 0) body.headers = headers;
+  if (options?.tenantId !== undefined && options.tenantId !== "") {
+    body.tenantId = options.tenantId;
+  }
+
+  return body;
+}
+
+async function sendViaVapron(
+  config: NonNullable<RelayConfig["vapron"]>,
+  from: string,
+  to: string[],
+  rawMessage: string,
+  options: RelaySendOptions | undefined,
+  fetchImpl: RelayFetch,
+): Promise<RelaySendResult> {
+  const body = buildVapronMessage(from, to, rawMessage, options);
+  if (body === null) {
+    return {
+      success: false,
+      permanent: true,
+      error:
+        "Vapron: message has no From address; cannot determine a verified sending domain",
+    };
+  }
+
+  const endpoint = `${config.url.replace(/\/+$/, "")}/v1/messages`;
+
+  let response: RelayFetchResponse;
+  try {
+    response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    // Network / DNS / connection failure → transient, retryable.
+    const msg = error instanceof Error ? error.message : String(error);
+    return { success: false, permanent: false, error: `Vapron request failed: ${msg}` };
+  }
+
+  const status = response.status;
+  const responseText = await response.text().catch(() => "");
+  const snippet = responseText.slice(0, 500);
+
+  // 202 = queued. Vapron owns delivery + retry from here, so this is success.
+  if (status === 202) {
+    let messageId: string | undefined;
+    try {
+      const json = JSON.parse(responseText) as Record<string, unknown>;
+      if (typeof json["id"] === "string") messageId = json["id"];
+      else if (typeof json["messageId"] === "string") messageId = json["messageId"];
+    } catch {
+      // Body may be empty or non-JSON; a 202 is still success.
+    }
+    return { success: true, messageId, response: `202 ${snippet}`.trim() };
+  }
+
+  // 403 = the FROM domain is not verified in Vapron's email-domain service.
+  // Permanent for THIS message: it will 403 identically on every retry until
+  // the domain is registered/verified. Do NOT infinite-retry — bounce.
+  if (status === 403) {
+    return {
+      success: false,
+      permanent: true,
+      error:
+        `Vapron 403: FROM domain not verified in Vapron email-domain — register/verify the ` +
+        `sender domain before it can send. ${snippet}`.trim(),
+    };
+  }
+
+  // 401 = bad token. A deploy/config error, not a per-message problem. Loud,
+  // and permanent per the integration contract — piling up deferred mail
+  // behind a misconfigured token would hide the real fault.
+  if (status === 401) {
+    console.error(
+      "[relay:vapron] 401 Unauthorized from Vapron send API — VAPRON_EMAIL_SEND_TOKEN " +
+        "is missing or invalid. Fix the token; do not treat this as a delivery failure.",
+    );
+    return {
+      success: false,
+      permanent: true,
+      error: "Vapron 401: authentication rejected — VAPRON_EMAIL_SEND_TOKEN is invalid (config error)",
+    };
+  }
+
+  // 422 = request validation failed. Permanent: the same body fails identically.
+  if (status === 422) {
+    return {
+      success: false,
+      permanent: true,
+      error: `Vapron 422: request validation failed: ${snippet}`.trim(),
+    };
+  }
+
+  // Other 4xx → permanent (a client error the same request cannot fix by retry).
+  if (status >= 400 && status < 500) {
+    return {
+      success: false,
+      permanent: true,
+      error: `Vapron HTTP ${status} (permanent): ${snippet}`.trim(),
+    };
+  }
+
+  // 5xx and anything else (unexpected 2xx/3xx) → transient. Defer and retry;
+  // a gateway blip must not lose a message that is still deliverable.
+  return {
+    success: false,
+    permanent: false,
+    error: `Vapron HTTP ${status} (transient): ${snippet}`.trim(),
+  };
+}
+
 // ─── RelayClient ────────────────────────────────────────────────────────────
 
 /**
@@ -569,9 +889,17 @@ async function sendViaSmtpRelay(
  */
 export class RelayClient {
   private readonly config: RelayConfig;
+  private readonly fetchImpl: RelayFetch;
 
-  constructor(config: RelayConfig) {
+  /**
+   * @param config - the relay provider configuration.
+   * @param deps   - optional injected dependencies. `fetch` lets tests drive
+   *                 the Vapron HTTP path without touching the network; it
+   *                 defaults to the global `fetch`.
+   */
+  constructor(config: RelayConfig, deps?: { fetch?: RelayFetch }) {
     this.config = config;
+    this.fetchImpl = deps?.fetch ?? fetch;
     this.validate();
   }
 
@@ -602,6 +930,17 @@ export class RelayClient {
           throw new Error("RelayClient: SMTP relay host is required");
         }
         break;
+      case "vapron":
+        if (!this.config.vapron) {
+          throw new Error("RelayClient: provider is 'vapron' but vapron config is missing");
+        }
+        if (!this.config.vapron.url) {
+          throw new Error("RelayClient: VAPRON_EMAIL_SEND_URL is required when RELAY_PROVIDER=vapron");
+        }
+        if (!this.config.vapron.token) {
+          throw new Error("RelayClient: VAPRON_EMAIL_SEND_TOKEN is required when RELAY_PROVIDER=vapron");
+        }
+        break;
       default:
         throw new Error(`RelayClient: unknown provider '${this.config.provider as string}'`);
     }
@@ -615,11 +954,20 @@ export class RelayClient {
   /**
    * Send a raw MIME message through the configured relay.
    *
-   * @param from       - Envelope sender (MAIL FROM)
+   * @param from       - Envelope sender (MAIL FROM). For the Vapron provider
+   *                     this is the return-path; the Vapron `from` field is
+   *                     taken from the message's own From header instead.
    * @param to         - Envelope recipients (RCPT TO)
    * @param rawMessage - Complete RFC 5322 message (headers + body), already DKIM-signed
+   * @param options    - Per-send metadata not in the MIME (e.g. tenantId);
+   *                     only the Vapron provider consumes it.
    */
-  async send(from: string, to: string[], rawMessage: string): Promise<RelaySendResult> {
+  async send(
+    from: string,
+    to: string[],
+    rawMessage: string,
+    options?: RelaySendOptions,
+  ): Promise<RelaySendResult> {
     switch (this.config.provider) {
       case "ses": {
         const ses = this.config.ses;
@@ -637,6 +985,12 @@ export class RelayClient {
         const smtp = this.config.smtp;
         if (!smtp) return { success: false, error: "SMTP config missing" };
         return sendViaSmtpRelay(smtp, from, to, rawMessage);
+      }
+
+      case "vapron": {
+        const vapron = this.config.vapron;
+        if (!vapron) return { success: false, error: "Vapron config missing" };
+        return sendViaVapron(vapron, from, to, rawMessage, options, this.fetchImpl);
       }
 
       default:

@@ -77,6 +77,7 @@ const INTENTIONALLY_PUBLIC: Record<string, string> = {
   "/v1/realtime": "WebSocket upgrade; authenticates on the socket, not the route",
   "/v1/auth/passkey": "WebAuthn ceremony; cannot require a session to start one",
   "/v1/fbl": "ISP feedback-loop postbacks, authenticated by source not session",
+  "/v1/inbound": "HMAC-verified Vapron inbound webhook",
 };
 
 describe("route auth coverage (structural)", () => {

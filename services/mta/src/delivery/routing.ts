@@ -156,20 +156,31 @@ export async function planDelivery(opts: {
 /**
  * What happens to a relay batch when the relay send fails.
  *
- * "all" keeps the historical split: a 5xx in the error is a permanent
- * relay rejection → bounce; anything else defers for retry.
+ * A provider that classifies permanence explicitly (`permanent`) wins over
+ * everything below — the Vapron REST relay does this because its HTTP status
+ * codes INVERT SMTP's (4xx permanent, 5xx transient), so the 5xx string
+ * heuristic would misclassify both directions. A permanent failure bounces in
+ * BOTH modes: it will fail identically on every retry, and a Vapron 403
+ * (FROM-not-verified) has no direct-MX fallback to defer into, so deferring
+ * would be the endless retry we must avoid.
  *
- * "overflow" ALWAYS defers, even on a 5xx. Every recipient in an overflow
- * relay batch is there only because the warm-up cap refused them — nothing
- * has judged the message or recipient undeliverable. On retry they re-enter
- * planning and can go direct MX (quota returns at UTC midnight), which is
- * the authoritative verdict. Bouncing on a relay hiccup would lose mail the
- * direct path could still deliver; deferral is the no-loss path.
+ * With no explicit classification (SES / MailChannels / SMTP relay):
+ *  - "all" keeps the historical split: a 5xx in the error is a permanent
+ *    relay rejection → bounce; anything else defers for retry.
+ *  - "overflow" ALWAYS defers, even on a 5xx. Every recipient in an overflow
+ *    relay batch is there only because the warm-up cap refused them — nothing
+ *    has judged the message or recipient undeliverable. On retry they re-enter
+ *    planning and can go direct MX (quota returns at UTC midnight), which is
+ *    the authoritative verdict. Bouncing on a relay hiccup would lose mail the
+ *    direct path could still deliver; deferral is the no-loss path.
  */
 export function relayFailureOutcome(opts: {
   mode: RelayMode;
   error: string | undefined;
+  permanent?: boolean | undefined;
 }): "bounced" | "deferred" {
+  if (opts.permanent === true) return "bounced";
+  if (opts.permanent === false) return "deferred";
   if (opts.mode === "overflow") return "deferred";
   return /\b5\d{2}\b/.exec(opts.error ?? "") !== null ? "bounced" : "deferred";
 }

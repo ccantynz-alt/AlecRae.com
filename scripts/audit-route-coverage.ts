@@ -33,6 +33,15 @@ const UI_DIRS = ["apps/web", "apps/mobile", "apps/desktop"];
 const REPORT_PATH = "docs/audits/route-coverage.md";
 const EXCLUDE_RE = /node_modules|\.next|dist|\.turbo/;
 
+// Machine-facing route files that are UI-less BY DESIGN (webhooks, ingress,
+// probes) — never rendered in a product surface, so the "new route must be
+// UI-wired" regression must not fire on them. Each entry needs a stated reason
+// (mirrors route-auth-coverage.ts's INTENTIONALLY_PUBLIC). See also
+// docs/audits/ui-less-routes.md.
+const UI_LESS_ROUTES: Record<string, string> = {
+  "inbound-vapron.ts": "HMAC-authenticated inbound webhook — Vapron email-receive POSTs to it, no UI (#171)",
+};
+
 type Method = "get" | "post" | "put" | "patch" | "delete";
 type Status = "wired" | "partial" | "unwired";
 
@@ -331,7 +340,9 @@ async function main(): Promise<void> {
   if (checkRegression) {
     const baseRef = await resolveBaseRef();
     const addedFiles = await getAddedRouteFiles(baseRef);
-    const newlyUnwired = routeFiles.filter((rf) => addedFiles.has(rf.file) && rf.status === "unwired");
+    const newlyUnwired = routeFiles.filter(
+      (rf) => addedFiles.has(rf.file) && rf.status === "unwired" && !(rf.file in UI_LESS_ROUTES),
+    );
 
     if (newlyUnwired.length > 0) {
       console.error("✗ Route coverage regression: new route file(s) shipped with zero UI wiring:\n");
