@@ -27,6 +27,7 @@ import type { QueuedEmail, DkimSignOptions } from "./types.js";
 import { classifyBounce, type BounceVerdict } from "./bounce/classifier.js";
 import { buildReturnPath } from "./bounce/return-path.js";
 import { WarmupGate, warmupGateOptionsFromEnv } from "./delivery/warmup-gate.js";
+import { relayModeFromEnv, planDelivery, relayFailureOutcome } from "./delivery/routing.js";
 import IORedis from "ioredis";
 
 /**
@@ -113,7 +114,11 @@ export interface WorkerConfig {
   queueName: string;
   concurrency: number;
   localHostname: string;
-  /** When true, use the relay client (SES/MailChannels/SMTP relay) instead of direct MX delivery. */
+  /**
+   * When true, the relay client (SES/MailChannels/SMTP relay) is available.
+   * How it is USED is `MTA_RELAY_MODE` (see delivery/routing.ts): "all"
+   * relays everything, "overflow" relays only warm-up-cap spill.
+   */
   useRelay: boolean;
 }
 
@@ -443,9 +448,16 @@ export class MtaWorker {
     }
 
     // ── 4. Deliver to each recipient ──────────────────────────────────
-    //   When a relay is configured, bypass the delivery optimizer and send
-    //   directly through the relay (SES / MailChannels / SMTP relay).
-    //   Otherwise, fall back to direct MX delivery via the optimizer.
+    //   Routing is mode-aware (MTA_RELAY_MODE, read per job like
+    //   MTA_REQUIRE_DKIM — see delivery/routing.ts for the full rationale):
+    //     relay + "all"       → everything relays; the warm-up gate is NOT
+    //                           consulted (relayed reputation accrues to the
+    //                           relay's warm IPs, not ours).
+    //     relay + "overflow"  → direct MX within warm-up caps (consuming
+    //                           quota as usual); a CAP refusal routes that
+    //                           recipient via the relay in the same job.
+    //     no relay            → direct MX within caps; over-cap recipients
+    //                           defer to the UTC-midnight reset (unchanged).
 
     let anyDeferred = false;
     let allBounced = true;
@@ -453,81 +465,116 @@ export class MtaWorker {
     let lastBounceVerdict: BounceVerdict | null = null;
     const errors: string[] = [];
 
-    // ── 4a. Relay path: send through the configured relay provider ──
-    if (this.relayClient) {
-      // Filter out suppressed recipients first
-      const activeRecipients: string[] = [];
-      for (const recipient of email.to) {
-        if (suppressedSet.has(recipient.toLowerCase())) {
-          console.log(`[mta-worker] Skipping suppressed recipient: ${recipient}`);
-          await db
-            .update(deliveryResults)
-            .set({
-              status: "dropped",
-              remoteResponse: "Recipient is on the suppression list",
-              attemptCount: 1,
-              lastAttemptAt: new Date(),
-            })
-            .where(
-              and(
-                eq(deliveryResults.emailId, email.id),
-                eq(deliveryResults.recipientAddress, recipient),
-              ),
-            );
-          continue;
-        }
+    const relayMode = relayModeFromEnv();
+    const plan = await planDelivery({
+      recipients: email.to,
+      suppressedSet,
+      mode: relayMode,
+      relayAvailable: this.relayClient !== null,
+      gate: this.warmupGate,
+    });
 
-        // Warmup ramp: over-cap recipients are DEFERRED, never dropped —
-        // quota returns at UTC midnight, so the message is still deliverable.
-        const warmup = await this.warmupGate.reserve(recipient);
-        if (!warmup.allow) {
-          console.log(
-            `[mta-worker] Deferring ${recipient} — ${warmup.reason ?? "warmup cap"}`,
-          );
-          anyDeferred = true;
-          allBounced = false;
-          await db
-            .update(deliveryResults)
-            .set({
-              status: "deferred",
-              remoteResponse: `Deferred by IP warmup pacing: ${warmup.reason ?? "cap reached"}`,
-              lastAttemptAt: new Date(),
-            })
-            .where(
-              and(
-                eq(deliveryResults.emailId, email.id),
-                eq(deliveryResults.recipientAddress, recipient),
-              ),
-            );
-          continue;
-        }
-
-        activeRecipients.push(recipient);
-      }
-
-      if (activeRecipients.length > 0) {
-        const relayResult = await this.relayClient.send(
-          returnPath,
-          activeRecipients,
-          signedMessage,
+    // ── 4a. Suppressed recipients: dropped, never sent ────────────────
+    for (const recipient of plan.suppressed) {
+      console.log(`[mta-worker] Skipping suppressed recipient: ${recipient}`);
+      await db
+        .update(deliveryResults)
+        .set({
+          status: "dropped",
+          remoteResponse: "Recipient is on the suppression list",
+          attemptCount: 1,
+          lastAttemptAt: new Date(),
+        })
+        .where(
+          and(
+            eq(deliveryResults.emailId, email.id),
+            eq(deliveryResults.recipientAddress, recipient),
+          ),
         );
+    }
 
-        const now = new Date();
+    // ── 4b. Warm-up deferrals (no relay to overflow into) ─────────────
+    // DEFERRED, never dropped — quota returns at UTC midnight, so the
+    // message is still deliverable.
+    for (const { recipient, reason } of plan.deferredByWarmup) {
+      console.log(`[mta-worker] Deferring ${recipient} — ${reason}`);
+      anyDeferred = true;
+      allBounced = false;
+      await db
+        .update(deliveryResults)
+        .set({
+          status: "deferred",
+          remoteResponse: `Deferred by IP warmup pacing: ${reason}`,
+          lastAttemptAt: new Date(),
+        })
+        .where(
+          and(
+            eq(deliveryResults.emailId, email.id),
+            eq(deliveryResults.recipientAddress, recipient),
+          ),
+        );
+    }
 
-        if (relayResult.success) {
-          allBounced = false;
-          anyDelivered = true;
+    // ── 4c. Relay batch (mode "all", or overflow spill) ───────────────
+    // mxHost records `relay:<provider>` so delivery_results stay truthful
+    // about which path actually carried each recipient.
+    if (this.relayClient && plan.relay.length > 0) {
+      const relayRecipients = plan.relay;
+      const relayResult = await this.relayClient.send(
+        returnPath,
+        relayRecipients,
+        signedMessage,
+      );
 
-          for (const recipient of activeRecipients) {
+      const now = new Date();
+
+      if (relayResult.success) {
+        allBounced = false;
+        anyDelivered = true;
+
+        for (const recipient of relayRecipients) {
+          await db
+            .update(deliveryResults)
+            .set({
+              status: "delivered",
+              remoteResponse: relayResult.response ?? `Delivered via ${this.relayClient.provider} relay`,
+              mxHost: `relay:${this.relayClient.provider}`,
+              attemptCount: attemptNumber + 1,
+              lastAttemptAt: now,
+              deliveredAt: now,
+              ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
+            })
+            .where(
+              and(
+                eq(deliveryResults.emailId, email.id),
+                eq(deliveryResults.recipientAddress, recipient),
+              ),
+            );
+
+          console.log(
+            `[mta-worker] Delivered to ${recipient} via ${this.relayClient.provider} relay` +
+              (relayResult.messageId ? ` (id=${relayResult.messageId})` : ""),
+          );
+        }
+      } else {
+        // In "all" mode a 5xx is a permanent relay rejection → bounce, else
+        // defer (historical behaviour). In "overflow" the batch is made
+        // entirely of warm-up-cap spill — nothing judged the mail itself
+        // undeliverable, so a relay failure ALWAYS defers: the retry
+        // re-plans and can go direct MX once quota returns. Deferral is
+        // the no-loss path; see relayFailureOutcome.
+        const outcome = relayFailureOutcome({ mode: relayMode, error: relayResult.error });
+
+        if (outcome === "bounced") {
+          for (const recipient of relayRecipients) {
             await db
               .update(deliveryResults)
               .set({
-                status: "delivered",
-                remoteResponse: relayResult.response ?? `Delivered via ${this.relayClient.provider} relay`,
+                status: "bounced",
+                remoteResponse: relayResult.error ?? "Permanent relay failure",
                 mxHost: `relay:${this.relayClient.provider}`,
                 attemptCount: attemptNumber + 1,
                 lastAttemptAt: now,
-                deliveredAt: now,
                 ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
               })
               .where(
@@ -536,70 +583,40 @@ export class MtaWorker {
                   eq(deliveryResults.recipientAddress, recipient),
                 ),
               );
-
-            console.log(
-              `[mta-worker] Delivered to ${recipient} via ${this.relayClient.provider} relay` +
-                (relayResult.messageId ? ` (id=${relayResult.messageId})` : ""),
-            );
           }
+          // allBounced stays true
         } else {
-          // Relay failure — check if it looks permanent (5xx) or transient
-          const isPermanent = /\b5\d{2}\b/.exec(relayResult.error ?? "") !== null;
+          // Deferred — retry via BullMQ backoff
+          allBounced = false;
+          anyDeferred = true;
+          const errorMsg = relayResult.error ?? "Relay delivery failed";
 
-          if (isPermanent) {
-            for (const recipient of activeRecipients) {
-              await db
-                .update(deliveryResults)
-                .set({
-                  status: "bounced",
-                  remoteResponse: relayResult.error ?? "Permanent relay failure",
-                  mxHost: `relay:${this.relayClient.provider}`,
-                  attemptCount: attemptNumber + 1,
-                  lastAttemptAt: now,
-                  ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
-                })
-                .where(
-                  and(
-                    eq(deliveryResults.emailId, email.id),
-                    eq(deliveryResults.recipientAddress, recipient),
-                  ),
-                );
-            }
-            // allBounced stays true
-          } else {
-            // Transient failure — defer for retry
-            allBounced = false;
-            anyDeferred = true;
-            const errorMsg = relayResult.error ?? "Relay delivery failed";
-
-            for (const recipient of activeRecipients) {
-              await db
-                .update(deliveryResults)
-                .set({
-                  status: "deferred",
-                  remoteResponse: errorMsg,
-                  mxHost: `relay:${this.relayClient.provider}`,
-                  attemptCount: attemptNumber + 1,
-                  lastAttemptAt: now,
-                  ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
-                })
-                .where(
-                  and(
-                    eq(deliveryResults.emailId, email.id),
-                    eq(deliveryResults.recipientAddress, recipient),
-                  ),
-                );
-            }
-
-            errors.push(`relay(${this.relayClient.provider}): ${errorMsg}`);
+          for (const recipient of relayRecipients) {
+            await db
+              .update(deliveryResults)
+              .set({
+                status: "deferred",
+                remoteResponse: errorMsg,
+                mxHost: `relay:${this.relayClient.provider}`,
+                attemptCount: attemptNumber + 1,
+                lastAttemptAt: now,
+                ...(attemptNumber === 0 ? { firstAttemptAt: now } : {}),
+              })
+              .where(
+                and(
+                  eq(deliveryResults.emailId, email.id),
+                  eq(deliveryResults.recipientAddress, recipient),
+                ),
+              );
           }
+
+          errors.push(`relay(${this.relayClient.provider}): ${errorMsg}`);
         }
       }
+    }
 
-      // Skip the direct-delivery path below — jump to status update
-    } else {
-      // ── 4b. Direct MX delivery path (no relay configured) ───────────
-
+    // ── 4d. Direct MX batch (warm-up quota already reserved per recipient)
+    if (plan.direct.length > 0) {
     // Transport callback: uses SmtpClient to deliver to a specific MX host
     const transport = async (
       host: string,
@@ -624,56 +641,7 @@ export class MtaWorker {
       throw Object.assign(new Error(result.error.message), { code });
     };
 
-    for (const recipient of email.to) {
-      // Skip suppressed recipients
-      if (suppressedSet.has(recipient.toLowerCase())) {
-        console.log(`[mta-worker] Skipping suppressed recipient: ${recipient}`);
-
-        await db
-          .update(deliveryResults)
-          .set({
-            status: "dropped",
-            remoteResponse: "Recipient is on the suppression list",
-            attemptCount: 1,
-            lastAttemptAt: new Date(),
-          })
-          .where(
-            and(
-              eq(deliveryResults.emailId, email.id),
-              eq(deliveryResults.recipientAddress, recipient),
-            ),
-          );
-
-        continue;
-      }
-
-      // Warmup ramp: defer rather than drop — the cap resets at UTC midnight,
-      // so an over-cap message is still perfectly deliverable tomorrow.
-      const warmup = await this.warmupGate.reserve(recipient);
-      if (!warmup.allow) {
-        console.log(
-          `[mta-worker] Deferring ${recipient} — ${warmup.reason ?? "warmup cap"}`,
-        );
-        anyDeferred = true;
-        allBounced = false;
-
-        await db
-          .update(deliveryResults)
-          .set({
-            status: "deferred",
-            remoteResponse: `Deferred by IP warmup pacing: ${warmup.reason ?? "cap reached"}`,
-            lastAttemptAt: new Date(),
-          })
-          .where(
-            and(
-              eq(deliveryResults.emailId, email.id),
-              eq(deliveryResults.recipientAddress, recipient),
-            ),
-          );
-
-        continue;
-      }
-
+    for (const recipient of plan.direct) {
       const optimizerResult = await this.optimizer.deliverMessage(
         email.id,
         recipient,
@@ -813,7 +781,7 @@ export class MtaWorker {
         );
       }
     }
-    } // end else (direct MX delivery path)
+    } // end if (plan.direct.length > 0)
 
     // ── 5. Update overall email status ──────────────────────────────────
     const now = new Date();

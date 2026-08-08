@@ -1,6 +1,6 @@
 # MTA Setup on the Mail Box (149.28.119.158)
 
-> **Last updated: 2026-07-13 10:15 UTC**
+> **Last updated: 2026-08-08 03:55 UTC**
 
 AlecRae's outbound email path: web UI → API (`POST /v1/messages/send`) → BullMQ (Redis) → **MTA worker** → delivery.
 
@@ -10,16 +10,62 @@ The MTA worker (`services/mta`) must be running on the **dedicated mail box — 
 >
 > **⚠ Shared queue — do this BEFORE starting the MTA:** the API (on Jarvis) enqueues sends and the MTA (on 158) consumes them, so **both must point `REDIS_URL` at the same Redis**. Production does not yet: Redis runs on Jarvis bound to `127.0.0.1` only, which 158 cannot reach. Start the MTA in that state and **every send silently disappears** — the API enqueues, returns success, and the MTA watches a queue that never fills. No bounce, no error, no log line. **Decided 2026-07-29 (Craig): bind Redis to the tailnet — follow [`redis-tailnet-setup.md`](./redis-tailnet-setup.md) first**, including its Step 6, which proves the two boxes see the *same* queue rather than merely that each can reach *a* Redis.
 
-**Two delivery modes — pick one:**
+**Three delivery modes — pick one (see "Warm-up + relay bring-up" below for the full reasoning):**
 
 | Mode | When to use | Env to set |
 |---|---|---|
-| **Direct port-25** | Outbound port 25 on the 158 mail box is already Vultr-unblocked. Fastest path — no relay account needed. Requires PTR = `smtp.alecrae.com` (⚠ PTR currently reads `mail.alecrae.com` — Craig must CHANGE it in the Vultr panel). | `MTA_HOSTNAME=smtp.alecrae.com` (no `RELAY_PROVIDER`) |
-| **Resend relay** | More reliable for cold IPs; needs Resend account + domain verified | `MTA_HOSTNAME=smtp.alecrae.com`, `RELAY_PROVIDER=smtp`, `SMTP_RELAY_HOST=smtp.resend.com`, `SMTP_RELAY_PORT=465`, `SMTP_RELAY_TLS=true`, `SMTP_RELAY_USERNAME=resend`, `SMTP_RELAY_PASSWORD=<api_key>` |
+| **Direct port-25** | Outbound port 25 on the 158 mail box is already Vultr-unblocked. No relay account needed — but the IP warm-up ramp caps daily volume (over-cap mail defers to the next UTC day). Requires PTR = `smtp.alecrae.com` (⚠ PTR currently reads `mail.alecrae.com` — Craig must CHANGE it in the Vultr panel). | `MTA_HOSTNAME=smtp.alecrae.com` (no `RELAY_PROVIDER`) |
+| **Relay-all** | Everything via the relay's established IPs; ours sends nothing and does not warm. Needs Resend account + domain verified. The warm-up gate is not consulted for relayed mail (the reputation accrues to the relay's IPs, not ours). | `MTA_HOSTNAME=smtp.alecrae.com`, `RELAY_PROVIDER=smtp`, `MTA_RELAY_MODE=all` (or unset), + the `SMTP_RELAY_*` block below |
+| **Overflow hybrid** ⭐ | **Day-one full volume while the cold IP warms in parallel.** Direct MX within the warm-up caps; cap-refused recipients relay in the same job instead of deferring. Cuts over to all-direct automatically as caps grow. | `MTA_HOSTNAME=smtp.alecrae.com`, `RELAY_PROVIDER=smtp`, `MTA_RELAY_MODE=overflow`, + the `SMTP_RELAY_*` block below |
 
 > ⚠ **`MTA_HOSTNAME=smtp.alecrae.com` is REQUIRED in `/opt/alecrae/.env` on the mail box.** The code default is `mail.alecrae.com` (`services/mta/src/config.ts`) — **wrong for production**: `mail.alecrae.com` is the Cloudflare-proxied webmail app on Jarvis, not the MTA. The MTA's HELO/PTR sending identity is **`smtp.alecrae.com`** (A → 149.28.119.158, DNS-only, live since 2026-07-13).
 
 For the quickest first send, use **direct port-25**: the live SPF already authorizes the 158 IP, so start the MTA with `MTA_HOSTNAME=smtp.alecrae.com` and no relay env set. Inbound port 25 on 158 is currently closed — expected; it gets opened via ufw + the inbound service in mail-plan Phase 2 (outbound sending doesn't need it). ✅ **DNS prerequisites are now MET (Craig executed 2026-07-13, verified resolving live):** mx1/mx2/smtp A records → `149.28.119.158` (grey), MX 10/20, `_spf.alecrae.com` TXT, `bounce.alecrae.com` CNAME → `smtp.alecrae.com`. ⚠ **The one remaining DNS item is the PTR:** `149.28.119.158` currently reverse-resolves to `mail.alecrae.com` and must be **changed to `smtp.alecrae.com`** in the Vultr panel (158 instance → Settings → IPv4 → rDNS) for FCrDNS — until then the PTR is set-but-wrong-hostname. DKIM keys for `alecrae.com` must be in the `domains` table (they're set during domain onboarding in the Workspace page).
+
+---
+
+## Warm-up + relay bring-up
+
+A brand-new sending IP cannot do full volume on day one: the warm-up gate
+(`services/mta/src/delivery/warmup-gate.ts`, issue #139) enforces the
+week-by-week per-ISP ramp (e.g. Gmail 50/day in week 1, doubling weekly), and
+over-cap recipients are deferred to the next UTC day. That is correct for the
+IP's reputation but wrong for a platform that needs transactional mail out
+*now*. `MTA_RELAY_MODE` resolves the tension:
+
+| `MTA_RELAY_MODE` | Behaviour | When to use |
+|---|---|---|
+| *(unset)* or `all` | Everything relays. The warm-up gate is **not consulted** for relayed mail — those sends leave on the relay's warm IPs, so charging them to our ramp would throttle them needlessly and pollute the warm-up counters with volume our IP never emitted. Our own IP does not warm in this mode. | Existing deployments (this is the pre-mode behaviour, minus the pointless throttling); or when you want zero direct sending for a while. |
+| `overflow` | Direct MX within the warm-up caps, consuming quota exactly as in direct mode; when the gate refuses a recipient **for cap reasons**, that recipient goes via the relay in the same job instead of deferring. Non-cap deferrals (DKIM hold, suppression drops, transient MX failures) keep their normal behaviour. If the relay send fails, overflow recipients are deferred for retry — never bounced, never dropped. | **Day-one full volume from a cold IP.** No mail waits, the IP warms at exactly the safe rate, and as caps double weekly the relay share shrinks to zero — **cutover to all-direct is automatic, no operator action or redeploy needed.** |
+| anything else | Treated as `all`, with a loud warning in the logs. Only the exact values above change behaviour (the `MTA_REQUIRE_DKIM` pattern — a typo must fail safe). | — |
+
+With no `RELAY_PROVIDER` configured the mode is irrelevant: everything goes
+direct MX under the warm-up caps.
+
+**Resend SMTP settings for the relay (fill the real API key on the box —
+never commit it):**
+
+```bash
+RELAY_PROVIDER=smtp
+MTA_RELAY_MODE=overflow          # day-one volume + parallel warm-up
+SMTP_RELAY_HOST=smtp.resend.com  # Resend's documented SMTP interface
+SMTP_RELAY_PORT=587              # STARTTLS submission port (465/implicit-TLS also works)
+SMTP_RELAY_USERNAME=resend       # literally the string "resend"
+SMTP_RELAY_PASSWORD=<resend_api_key>
+SMTP_RELAY_TLS=true
+```
+
+> ⚠ **`MTA_WARMUP_ENABLED=false` is NOT the way to get day-one volume.**
+> Disabling the gate opens the firehose from the cold IP itself — the single
+> most reliable way to get it blocklisted, at which point no mode saves you.
+> `MTA_RELAY_MODE=overflow` achieves full day-one volume *safely*: the relay
+> absorbs everything above the ramp, and the ramp keeps the IP's own volume
+> inside what the ISPs will tolerate.
+
+`delivery_results.mx_host` records which path actually carried each
+recipient: `relay:<provider>` for relayed mail, the real MX hostname for
+direct — so you can watch the relay share shrink as the warm-up progresses
+(`SELECT mx_host, count(*) FROM delivery_results GROUP BY 1`).
 
 ---
 
@@ -166,7 +212,7 @@ A job stuck in `failed` means the Resend relay rejected it — check the MTA log
 
 ## Resend domain verification (required before sending)
 
-The MTA relay uses `smtp.resend.com:465` with your Resend API key. For emails from `@alecrae.com` to work, the domain must be verified in Resend:
+The MTA relay uses `smtp.resend.com:587` (STARTTLS; `465`/implicit-TLS also works) with your Resend API key. For emails from `@alecrae.com` to work, the domain must be verified in Resend:
 
 1. Go to `https://resend.com/domains`
 2. Find `alecrae.com`
