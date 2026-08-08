@@ -23,7 +23,7 @@
  *    "registered" on error would be the failure that matters.
  */
 
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import type {
   DomainVerifier,
   DomainCheckResult,
@@ -68,7 +68,10 @@ export function createDomainVerifier(): DomainVerifier {
           verificationStatus: domains.verificationStatus,
         })
         .from(domains)
-        .where(eq(domains.domain, name))
+        // lower() on the stored side: `name` is already lowercased, and a domain
+        // saved mixed-case before normalisation-on-write existed must still be
+        // recognised as ours — otherwise its inbound mail is refused as relay.
+        .where(sql`lower(${domains.domain}) = ${name}`)
         .limit(1);
       return row ?? null;
     };

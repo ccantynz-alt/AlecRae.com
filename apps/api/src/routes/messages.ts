@@ -426,7 +426,10 @@ async function handleSend(c: Context) {
   const resolvedSubject: string = input.subject;
 
   const id = generateId();
-  const senderDomain = domainOf(input.from.email);
+  // Lowercase: email domains are case-insensitive, and the domain row is
+  // matched/stored lowercase (see AddDomainSchema). Without this a From of
+  // user@Davenroe.com would not resolve its own verified domain.
+  const senderDomain = domainOf(input.from.email).toLowerCase();
   const messageId = generateMessageId(senderDomain);
 
   // ── 0c. Connected account fast-path ──────────────────────────────
@@ -697,7 +700,9 @@ async function handleSend(c: Context) {
       isActive: domains.isActive,
     })
     .from(domains)
-    .where(and(eq(domains.domain, senderDomain), eq(domains.accountId, auth.accountId)))
+    // lower() on the stored side so a domain saved mixed-case before
+    // normalisation-on-write existed still resolves (senderDomain is already lowercase).
+    .where(and(sql`lower(${domains.domain}) = ${senderDomain}`, eq(domains.accountId, auth.accountId)))
     .limit(1);
 
   if (!domainRecord) {
