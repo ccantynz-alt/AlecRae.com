@@ -212,9 +212,11 @@ set the same var in both.** Mail box `149.28.119.158` is dedicated for mail (por
 - alecrae.com / mail.alecrae.com / api.alecrae.com — ✅ live on Jarvis
 - mx1/mx2/smtp/bounce/_spf/_dmarc records — ✅ published (mail plan Phase 0)
 - status.alecrae.com — ❌ 503, nothing deployed (#71) · docs.alecrae.com — not set up
-- **Live code: `f9d1528` deployed 2026-08-06** (the full #120–#163 audit campaign). DB at
-  migration 0011, 151 tables. `/v1/health` reports `degraded` **correctly**: `alecrae-mta` is
-  stopped (deliberate, #105) and Meilisearch is down (predates deploy).
+- **Live code: `c908fc4` deployed 2026-08-08** (spine fixes, inbound `email.received` webhooks,
+  fabrication cleanup #166, e2e CI job #143, relay-overflow mode, the mailbox-aware inbox + setup
+  wizard + nav de-clutter, Porkbun hint). No-op migrate (0011 already applied), 151 tables.
+  `/v1/health` reports `degraded` **correctly**: `alecrae-mta` not running (deliberate, #105).
+  Go-live path: `docs/infra/GO-LIVE-CHECKLIST.md`. (Prior: `f9d1528` 2026-08-06, the #120–#163 audit.)
 - **Not running anywhere:** `services/mta` (stopped since the #105 open-relay incident — restart is
   Craig's call; relay control #127 + receiver-off-default #128 have since landed) and
   `services/inbound` (never deployed; it IS a complete, bootable receive pipeline — the
@@ -423,4 +425,4 @@ If something contradicts this file, this file wins. If you don't know what to do
 you. Changing this file needs Craig's approval. Shipping something not in this file breaks the
 rules. **AlecRae dominates or AlecRae dies. There is no second place.**
 
-**Last updated:** 2026-08-08 01:45 UTC
+**Last updated:** 2026-08-08 05:15 UTC

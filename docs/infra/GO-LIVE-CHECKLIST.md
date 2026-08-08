@@ -8,7 +8,7 @@
 > **Legend:** `[CODE ✓]` done in the codebase already · `[BOX]` you run it on a server (Boss Rule #5) ·
 > `[DNS]` a DNS change · `[DECIDE]` a call only you can make · `[AUTO]` happens on its own.
 
-**Last updated:** 2026-08-08 05:10 UTC
+**Last updated:** 2026-08-08 05:15 UTC
 
 ---
 
@@ -31,12 +31,11 @@ Production is **many commits behind `main`** — everything from the whole audit
 new mailbox-aware inbox, setup wizard, and relay-overflow mode is merged but **not running**. Until
 this is done, none of it exists for real users.
 
-- [ ] `[BOX]` `ssh root@jarvis` → run the deploy ritual (`docs/infra/box-deploy.md` / `scripts/box-deploy.sh`):
-      `git pull --ff-only origin main && bun install && bun run -C packages/db build && bun run db:migrate`
-      → `sudo systemctl restart alecrae-api alecrae-web`
-- [ ] `[BOX]` Before restarting the API, confirm `/opt/alecrae/.env` has **`API_URL=https://api.alecrae.com`**
-      — the API refuses to boot without it, by design (#140).
-- [ ] `[AUTO]` Verify: `curl https://api.alecrae.com/health` shows the new commit SHA and `deployDrift.drifted=false`.
+- [x] `[BOX]` **DONE 2026-08-08** — deployed `c908fc4` (was `22945bb`): ff-only pull, `bun install`,
+      db build, `db:migrate` (no-op, 0011 already applied), web rebuild at the SHA, restarted both units.
+- [x] `[BOX]` `API_URL` already present from the 2026-08-06 deploy — API booted clean.
+- [x] `[AUTO]` Verified: `/health` → `ok` at `c908fc4`; `/v1/health` → `deployDrift.drifted=false`,
+      DB+Redis ok, MTA correctly `degraded` (not yet running).
 
 ---
 
