@@ -15,6 +15,39 @@ export interface AISuggestion {
   preview: string;
 }
 
+/**
+ * A "send as" choice for the From field: one provisioned mailbox address the
+ * account may send from. When `mailboxOptions` is supplied the From field
+ * becomes a dropdown of these; when it's omitted the field stays the plain text
+ * input it has always been (consumer / connected-account use).
+ */
+export interface ComposeMailboxOption {
+  address: string;
+  displayName?: string | null;
+  /** The workspace's default sending address — selected first when present. */
+  isDefault?: boolean;
+}
+
+/**
+ * Resolve the From address to start on. An explicit `initialFrom` that matches
+ * a real mailbox wins (e.g. a reply/draft that already named one); otherwise
+ * the default mailbox, else the first; and with no options at all, whatever
+ * `initialFrom` was (the login address is the intended fallback).
+ */
+export function resolveInitialFrom(
+  initialFrom: string,
+  options: ComposeMailboxOption[] | undefined,
+): string {
+  if (options && options.length > 0) {
+    if (initialFrom && options.some((o) => o.address === initialFrom)) {
+      return initialFrom;
+    }
+    const chosen = options.find((o) => o.isDefault) ?? options[0];
+    return chosen?.address ?? initialFrom;
+  }
+  return initialFrom;
+}
+
 export interface ComposeData {
   from: string;
   to: string;
@@ -34,6 +67,14 @@ export type CalendarSlotRequestFn = (text: string, recipientEmail: string) => Pr
 
 export interface ComposeEditorProps extends HTMLAttributes<HTMLDivElement> {
   from?: string;
+  /**
+   * Provisioned mailbox addresses this account can send from. When provided and
+   * non-empty, the From field renders as a "send as" dropdown of these,
+   * defaulting to the workspace default (or first) mailbox. When omitted, the
+   * From field keeps its plain text-input behaviour — so existing callers are
+   * unaffected.
+   */
+  mailboxOptions?: ComposeMailboxOption[];
   to?: string;
   cc?: string;
   bcc?: string;
@@ -88,6 +129,7 @@ const INITIAL_SLOT_STATE: CalendarSlotState = {
 export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(function ComposeEditor(
   {
     from: initialFrom = "",
+    mailboxOptions,
     to: initialTo = "",
     cc: initialCc = "",
     bcc: initialBcc = "",
@@ -107,12 +149,27 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
   ref
 ) {
   const [showCcBcc, setShowCcBcc] = useState(!!initialCc || !!initialBcc);
-  const [from, setFrom] = useState(initialFrom);
+  const [from, setFrom] = useState(() => resolveInitialFrom(initialFrom, mailboxOptions));
+  const hasMailboxPicker = !!mailboxOptions && mailboxOptions.length > 0;
   const [to, setTo] = useState(initialTo);
   const [cc, setCc] = useState(initialCc);
   const [bcc, setBcc] = useState(initialBcc);
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
+
+  // Mailbox options usually arrive asynchronously (the parent fetches them on
+  // mount, after this editor already exists). When they land, snap From to the
+  // default/first mailbox — but only if the current value isn't already one of
+  // the real options, so a user's explicit pick is never overwritten. Idempotent
+  // (returns the current value when it's valid), so it's safe if it re-runs.
+  useEffect(() => {
+    if (!mailboxOptions || mailboxOptions.length === 0) return;
+    setFrom((cur) =>
+      cur && mailboxOptions.some((o) => o.address === cur)
+        ? cur
+        : resolveInitialFrom(cur, mailboxOptions),
+    );
+  }, [mailboxOptions]);
 
   // Calendar slot suggestion state (B7)
   const [slotState, setSlotState] = useState<CalendarSlotState>(INITIAL_SLOT_STATE);
@@ -230,19 +287,46 @@ export const ComposeEditor = forwardRef<HTMLDivElement, ComposeEditorProps>(func
       <Box className="flex flex-1 overflow-hidden">
         <Box className="flex-1 flex flex-col">
           <Box className="px-4 py-2 border-b border-border space-y-2">
-            {from && (
+            {hasMailboxPicker ? (
               <Box className="flex items-center gap-2">
-                <Text variant="label" className="w-16 text-content-secondary">
+                <Text
+                  as="label"
+                  htmlFor="compose-from-select"
+                  variant="label"
+                  className="w-16 text-content-secondary"
+                >
                   From
                 </Text>
-                <Input
-                  variant="email"
+                <Box
+                  as="select"
+                  id="compose-from-select"
                   value={from}
-                  onChange={(e) => setFrom(e.target.value)}
-                  placeholder="you@example.com"
-                  className="border-0 shadow-none focus:ring-0"
-                />
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFrom(e.target.value)}
+                  aria-label="Send as"
+                  className="flex-1 h-9 px-2 rounded-md bg-transparent text-body-md text-content border border-border focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  {mailboxOptions?.map((opt) => (
+                    <Box as="option" key={opt.address} value={opt.address}>
+                      {opt.displayName ? `${opt.displayName} <${opt.address}>` : opt.address}
+                    </Box>
+                  ))}
+                </Box>
               </Box>
+            ) : (
+              from && (
+                <Box className="flex items-center gap-2">
+                  <Text variant="label" className="w-16 text-content-secondary">
+                    From
+                  </Text>
+                  <Input
+                    variant="email"
+                    value={from}
+                    onChange={(e) => setFrom(e.target.value)}
+                    placeholder="you@example.com"
+                    className="border-0 shadow-none focus:ring-0"
+                  />
+                </Box>
+              )
             )}
             <Box className="flex items-center gap-2">
               <Text variant="label" className="w-16 text-content-secondary">

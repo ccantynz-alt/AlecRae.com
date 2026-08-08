@@ -101,6 +101,15 @@ export function InboxSelectableList({
                 <div className="truncate text-caption text-content-tertiary">
                   {email.preview}
                 </div>
+                {email.deliveredTo && (
+                  <span
+                    className="mt-1 inline-flex max-w-full items-center gap-1 truncate rounded bg-surface-tertiary px-1.5 py-0.5 text-[10px] font-medium text-content-tertiary"
+                    title={`Delivered to ${email.deliveredTo.address}`}
+                  >
+                    <span aria-hidden="true">↳</span>
+                    <span className="truncate">to {email.deliveredTo.address}</span>
+                  </span>
+                )}
               </div>
             </div>
             <button

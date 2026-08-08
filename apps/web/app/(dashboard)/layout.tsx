@@ -70,6 +70,8 @@ const ICONS: Record<string, string> = {
   workspace: "M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21",
   admin: "M12 9v3.75m0-10.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.75c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.249-8.25-3.286zm0 13.036h.008v.008H12v-.008z",
   domains: "M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418",
+  setup: "M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z",
+  "ai-triage": "M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z",
 };
 
 // ─── Nav data structures ──────────────────────────────────────────────────────
@@ -79,14 +81,60 @@ interface NavEntry {
   label: string;
   href: string;
   planBadge?: PlanTier;
+  /** Owner/admin only — filtered out of the rendered sidebar for members.
+   *  (The page's own server-side authorization is the real gate; this just
+   *  keeps admin surfaces out of a member's nav.) */
+  adminOnly?: boolean;
+  /** Removed from the RENDERED sidebar but NOT from the app. The route still
+   *  works by URL — flip this to restore the item. Nothing is deleted. */
+  hidden?: boolean;
 }
 
 interface NavSection {
   title?: string;
+  /** Render the title as an expand/collapse toggle. */
+  collapsible?: boolean;
+  /** Initial open state for a collapsible group (a group that contains the
+   *  active route is always shown open regardless of this). */
+  defaultOpen?: boolean;
   entries: NavEntry[];
 }
 
-const BASE_SECTIONS: NavSection[] = [
+/**
+ * ─── NAV, DE-CLUTTERED FOR THE BUSINESS-EMAIL USE CASE ──────────────────────
+ *
+ * The sidebar carried ~45 items; most are irrelevant or permanently-empty for
+ * running business email. This config keeps EVERY route in the app (nothing is
+ * deleted, every page stays reachable by URL) but renders only what earns a
+ * place, grouped into a clean IA. Two collapsible groups ("Intelligence",
+ * "More") hold genuinely-working-but-secondary surfaces so they're present
+ * without crowding the core.
+ *
+ * `hidden: true` marks the items pulled OUT of the rendered sidebar. They are
+ * listed here, in one place, precisely so the change is auditable and trivially
+ * reversible — remove the flag and the item returns.
+ *
+ * HIDDEN (inert / permanently-empty / not business-email-relevant):
+ *   achievements      — gamification, not business email
+ *   ai-intelligence   — AI panel family (hosts "relationship insights", which
+ *                        never populates); not among the working AI kept below
+ *   knowledge         — Knowledge Graph: empty panel, nothing dispatches to it
+ *   sentiment         — Sentiment: empty panel
+ *   productivity      — Productivity: empty panel
+ *   attachments       — Attachment intelligence: empty panel
+ *   scheduling        — Scheduling intelligence: empty panel
+ *   voice             — Voice / voice-clone
+ *   meet              — Meet (video), host meet.alecrae.com is not served
+ *   programs          — Programs (user-authored TS, no dispatcher)
+ *   scripts           — Scripts (execution endpoint disabled)
+ *   ab-tests          — A/B Testing
+ *   mail-merge        — Mail Merge
+ *   encryption        — Encryption settings (E2EE pipeline not built)
+ *   integrations      — Zapier/Make/n8n connector catalog (no dispatcher)
+ * (Also named in the brief but with no standalone nav entry today: Spatial
+ *  inbox and "Relationship insights" — no route to hide.)
+ */
+const NAV_SECTIONS: NavSection[] = [
   {
     title: "Mail",
     entries: [
@@ -95,95 +143,106 @@ const BASE_SECTIONS: NavSection[] = [
       { id: "sent", label: "Sent", href: "/sent" },
       { id: "drafts", label: "Drafts", href: "/drafts" },
       { id: "snoozed", label: "Snoozed", href: "/snoozed" },
-    ],
-  },
-  {
-    title: "AI Features",
-    entries: [
-      { id: "agent", label: "AI Agent", href: "/agent", planBadge: "pro" },
-      { id: "ai-intelligence", label: "AI Intelligence", href: "/ai-intelligence", planBadge: "pro" },
-      { id: "commitments", label: "Commitments", href: "/commitments", planBadge: "pro" },
-      { id: "knowledge", label: "Knowledge Graph", href: "/knowledge", planBadge: "pro" },
-      { id: "attachments", label: "Attachments", href: "/attachments", planBadge: "pro" },
-      { id: "scheduling", label: "Scheduling", href: "/scheduling", planBadge: "pro" },
-      { id: "ai-triage", label: "AI Triage", href: "/ai-triage", planBadge: "personal" },
-      { id: "voice", label: "Voice", href: "/voice", planBadge: "personal" },
-      { id: "translate", label: "Translation", href: "/translate", planBadge: "personal" },
-      { id: "achievements", label: "Achievements", href: "/achievements" },
-      { id: "hygiene", label: "Hygiene", href: "/hygiene", planBadge: "personal" },
-    ],
-  },
-  {
-    title: "Tools",
-    entries: [
-      { id: "templates", label: "Templates", href: "/templates" },
-      { id: "contacts", label: "Contacts", href: "/contacts" },
-      { id: "calendar", label: "Calendar", href: "/calendar" },
-      { id: "tasks", label: "Tasks", href: "/tasks" },
-      { id: "files", label: "Files", href: "/files", planBadge: "personal" },
-      { id: "documents", label: "Documents", href: "/documents" },
-      { id: "meet", label: "Meet", href: "/meet", planBadge: "pro" },
       { id: "search", label: "Search", href: "/search" },
-      { id: "smart-folders", label: "Smart Folders", href: "/smart-folders" },
-      { id: "scripts", label: "Scripts", href: "/scripts" },
     ],
   },
   {
-    title: "Automation",
+    // Genuinely-working AI, kept but tucked so it doesn't crowd the core.
+    title: "Intelligence",
+    collapsible: true,
+    defaultOpen: false,
     entries: [
-      { id: "automations", label: "Automations", href: "/automations" },
-      { id: "auto-responder", label: "Auto-Responder", href: "/auto-responder" },
-      { id: "ab-tests", label: "A/B Testing", href: "/ab-tests", planBadge: "pro" },
-      { id: "mail-merge", label: "Mail Merge", href: "/mail-merge", planBadge: "pro" },
-      { id: "programs", label: "Programs", href: "/programs", planBadge: "pro" },
+      { id: "ai-triage", label: "AI Triage", href: "/ai-triage", planBadge: "personal" },
+      { id: "commitments", label: "Commitments", href: "/commitments", planBadge: "pro" },
+      { id: "translate", label: "Translation", href: "/translate", planBadge: "personal" },
+      { id: "hygiene", label: "Hygiene", href: "/hygiene", planBadge: "personal" },
+      { id: "agent", label: "AI Agent", href: "/agent", planBadge: "pro" },
     ],
   },
   {
-    title: "Security & Compliance",
+    title: "Contacts",
     entries: [
-      { id: "security", label: "Security", href: "/security-center" },
-      { id: "notifications", label: "Notifications", href: "/notifications" },
+      { id: "contacts", label: "Contacts", href: "/contacts" },
+      { id: "templates", label: "Templates", href: "/templates" },
+      { id: "signatures", label: "Signatures", href: "/settings/signatures" },
     ],
   },
   {
-    title: "Integrations",
+    title: "Business",
     entries: [
-      { id: "integrations", label: "Integrations", href: "/integrations", planBadge: "pro" },
-    ],
-  },
-  {
-    title: "Insights",
-    entries: [
-      { id: "analytics", label: "Analytics", href: "/analytics" },
-      { id: "productivity", label: "Productivity", href: "/productivity", planBadge: "pro" },
-      { id: "sentiment", label: "Sentiment", href: "/sentiment", planBadge: "pro" },
-    ],
-  },
-  {
-    title: "Team",
-    entries: [
-      { id: "chat", label: "Team Chat", href: "/chat", planBadge: "team" },
+      { id: "setup", label: "Set up business email", href: "/setup", adminOnly: true },
+      { id: "domains", label: "Domains", href: "/domains", adminOnly: true },
+      { id: "mailboxes", label: "Mailboxes", href: "/mailboxes", adminOnly: true },
       { id: "shared-inboxes", label: "Shared Inboxes", href: "/shared-inboxes", planBadge: "team" },
       { id: "delegation", label: "Delegation", href: "/delegation", planBadge: "team" },
     ],
   },
+  {
+    title: "Workspace",
+    entries: [
+      { id: "workspace", label: "Workspace", href: "/workspace", adminOnly: true },
+      { id: "billing", label: "Billing", href: "/billing" },
+      { id: "settings", label: "Settings", href: "/settings" },
+      { id: "admin", label: "Admin", href: "/admin", adminOnly: true },
+    ],
+  },
+  {
+    // Working, but secondary to business email — kept, tucked behind a toggle.
+    title: "More",
+    collapsible: true,
+    defaultOpen: false,
+    entries: [
+      { id: "analytics", label: "Analytics", href: "/analytics" },
+      { id: "security", label: "Security", href: "/security-center" },
+      { id: "notifications", label: "Notifications", href: "/notifications" },
+      { id: "calendar", label: "Calendar", href: "/calendar" },
+      { id: "tasks", label: "Tasks", href: "/tasks" },
+      { id: "documents", label: "Documents", href: "/documents" },
+      { id: "files", label: "Files", href: "/files", planBadge: "personal" },
+      { id: "smart-folders", label: "Smart Folders", href: "/smart-folders" },
+      { id: "automations", label: "Automations", href: "/automations" },
+      { id: "auto-responder", label: "Auto-Responder", href: "/auto-responder" },
+      { id: "sso", label: "Single Sign-On", href: "/settings/sso", planBadge: "team" },
+      { id: "developer", label: "Developer", href: "/settings/developer" },
+    ],
+  },
+  {
+    // Present ONLY to keep every route in one auditable config. Every entry is
+    // hidden, so this section renders nothing — the pages remain reachable by
+    // URL. Un-hide any line to bring it back to the sidebar.
+    title: "Hidden (not rendered — routes still work)",
+    entries: [
+      { id: "achievements", label: "Achievements", href: "/achievements", hidden: true },
+      { id: "ai-intelligence", label: "AI Intelligence", href: "/ai-intelligence", planBadge: "pro", hidden: true },
+      { id: "knowledge", label: "Knowledge Graph", href: "/knowledge", planBadge: "pro", hidden: true },
+      { id: "sentiment", label: "Sentiment", href: "/sentiment", planBadge: "pro", hidden: true },
+      { id: "productivity", label: "Productivity", href: "/productivity", planBadge: "pro", hidden: true },
+      { id: "attachments", label: "Attachments", href: "/attachments", planBadge: "pro", hidden: true },
+      { id: "scheduling", label: "Scheduling", href: "/scheduling", planBadge: "pro", hidden: true },
+      { id: "voice", label: "Voice", href: "/voice", planBadge: "personal", hidden: true },
+      { id: "meet", label: "Meet", href: "/meet", planBadge: "pro", hidden: true },
+      { id: "programs", label: "Programs", href: "/programs", planBadge: "pro", hidden: true },
+      { id: "scripts", label: "Scripts", href: "/scripts", hidden: true },
+      { id: "ab-tests", label: "A/B Testing", href: "/ab-tests", planBadge: "pro", hidden: true },
+      { id: "mail-merge", label: "Mail Merge", href: "/mail-merge", planBadge: "pro", hidden: true },
+      { id: "encryption", label: "Encryption", href: "/settings/encryption", planBadge: "personal", hidden: true },
+      { id: "integrations", label: "Integrations", href: "/integrations", planBadge: "pro", hidden: true },
+    ],
+  },
 ];
 
-const SETTINGS_ENTRIES: NavEntry[] = [
-  { id: "settings", label: "Settings", href: "/settings" },
-  { id: "signatures", label: "Signatures", href: "/settings/signatures" },
-  { id: "encryption", label: "Encryption", href: "/settings/encryption", planBadge: "personal" },
-  { id: "sso", label: "Single Sign-On", href: "/settings/sso", planBadge: "team" },
-  { id: "billing", label: "Billing", href: "/billing" },
-  { id: "developer", label: "Developer", href: "/settings/developer" },
-];
-
-const ADMIN_ENTRIES: NavEntry[] = [
-  { id: "workspace", label: "Workspace", href: "/workspace" },
-  { id: "domains", label: "Domains", href: "/domains" },
-  { id: "mailboxes", label: "Mailboxes", href: "/mailboxes" },
-  { id: "admin", label: "Admin", href: "/admin" },
-];
+/** Resolve the sections actually rendered: drop hidden items, drop admin-only
+ *  items for non-admins, and drop any section left with no visible entries. */
+function visibleSections(sections: NavSection[], isAdmin: boolean): NavSection[] {
+  return sections
+    .map((section) => ({
+      ...section,
+      entries: section.entries.filter(
+        (e) => !e.hidden && (!e.adminOnly || isAdmin),
+      ),
+    }))
+    .filter((section) => section.entries.length > 0);
+}
 
 interface UserInfo {
   name: string;
@@ -238,9 +297,7 @@ export default function DashboardLayout({
 
   const isAdmin = user.role === "owner" || user.role === "admin";
 
-  const settingsEntries = isAdmin
-    ? [...SETTINGS_ENTRIES, ...ADMIN_ENTRIES]
-    : SETTINGS_ENTRIES;
+  const sections = visibleSections(NAV_SECTIONS, isAdmin);
 
   const initials =
     user.name
@@ -335,8 +392,7 @@ export default function DashboardLayout({
       <SidebarNav
         collapsed={collapsed}
         pathname={pathname}
-        baseSections={BASE_SECTIONS}
-        settingsEntries={settingsEntries}
+        sections={sections}
         brand={brand}
         footer={footer}
         onNavigate={(href) => router.push(href as Route)}
@@ -387,24 +443,36 @@ export default function DashboardLayout({
 interface SidebarNavProps {
   collapsed: boolean;
   pathname: string | null;
-  baseSections: NavSection[];
-  settingsEntries: NavEntry[];
+  sections: NavSection[];
   brand: ReactNode;
   footer: ReactNode;
   onNavigate: (href: string) => void;
 }
 
+function isActiveHref(pathname: string | null, href: string): boolean {
+  return pathname === href || (pathname?.startsWith(href + "/") ?? false);
+}
+
 function SidebarNav({
   collapsed,
   pathname,
-  baseSections,
-  settingsEntries,
+  sections,
   brand,
   footer,
   onNavigate,
 }: SidebarNavProps): ReactNode {
-  const settingsSection: NavSection = { entries: settingsEntries };
-  const allSections: NavSection[] = [...baseSections, settingsSection];
+  // User overrides for collapsible groups, keyed by title. When a group has no
+  // override yet, its open state falls back to defaultOpen OR "contains the
+  // active route" — so navigating into a tucked page reveals its group.
+  const [toggled, setToggled] = useState<Record<string, boolean>>({});
+
+  const groupOpen = (section: NavSection): boolean => {
+    if (section.title && section.title in toggled) {
+      return toggled[section.title] ?? false;
+    }
+    const containsActive = section.entries.some((e) => isActiveHref(pathname, e.href));
+    return (section.defaultOpen ?? false) || containsActive;
+  };
 
   return (
     <nav
@@ -420,71 +488,101 @@ function SidebarNav({
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
-        {allSections.map((section, si) => (
-          <div key={si} className="px-2">
-            {/* Group label */}
-            {section.title && !collapsed && (
-              <span className="block px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest opacity-50 text-content">
-                {section.title}
-              </span>
-            )}
-            {/* Spacer when collapsed */}
-            {section.title && collapsed && <div className="h-2" />}
-            <ul role="list" className="space-y-0.5">
-              {section.entries.map((entry) => {
-                const isActive =
-                  pathname === entry.href ||
-                  (pathname?.startsWith(entry.href + "/") ?? false);
-                const iconPath = ICONS[entry.id] ?? ICONS.inbox;
+        {sections.map((section, si) => {
+          // Collapsible groups can be toggled shut when the sidebar is expanded.
+          // In icon-only (collapsed) mode there is no header to toggle, so the
+          // icons always show.
+          const isOpen = collapsed ? true : !section.collapsible || groupOpen(section);
+          const listId = section.title
+            ? `nav-group-${section.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`
+            : `nav-group-${si}`;
 
-                return (
-                  <li key={entry.id}>
-                    <a
-                      href={entry.href}
-                      className={[
-                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
-                        isActive
-                          ? "bg-brand-50 text-brand-700 font-medium"
-                          : "text-content-secondary hover:bg-surface-tertiary hover:text-content",
-                        collapsed ? "justify-center" : "",
-                      ].join(" ")}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onNavigate(entry.href);
-                      }}
-                      title={collapsed ? entry.label : undefined}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      {/* Icon */}
-                      <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={1.75}
-                          aria-hidden="true"
+          return (
+            <div key={section.title ?? si} className="px-2">
+              {/* Group label — a static heading, or a toggle for collapsible groups */}
+              {section.title && !collapsed && section.collapsible && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setToggled((prev) => ({
+                      ...prev,
+                      [section.title as string]: !isOpen,
+                    }))
+                  }
+                  aria-expanded={isOpen}
+                  aria-controls={listId}
+                  className="w-full flex items-center gap-1 px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest opacity-50 hover:opacity-80 text-content transition-opacity"
+                >
+                  <span className="flex-1 text-left">{section.title}</span>
+                  <span aria-hidden="true" className="text-[8px]">
+                    {isOpen ? "▼" : "▶"}
+                  </span>
+                </button>
+              )}
+              {section.title && !collapsed && !section.collapsible && (
+                <span className="block px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-widest opacity-50 text-content">
+                  {section.title}
+                </span>
+              )}
+              {/* Spacer when collapsed */}
+              {section.title && collapsed && <div className="h-2" />}
+
+              {isOpen && (
+                <ul id={listId} role="list" className="space-y-0.5">
+                  {section.entries.map((entry) => {
+                    const isActive = isActiveHref(pathname, entry.href);
+                    const iconPath = ICONS[entry.id] ?? ICONS.inbox;
+
+                    return (
+                      <li key={entry.id}>
+                        <a
+                          href={entry.href}
+                          className={[
+                            "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
+                            isActive
+                              ? "bg-brand-50 text-brand-700 font-medium"
+                              : "text-content-secondary hover:bg-surface-tertiary hover:text-content",
+                            collapsed ? "justify-center" : "",
+                          ].join(" ")}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onNavigate(entry.href);
+                          }}
+                          title={collapsed ? entry.label : undefined}
+                          aria-current={isActive ? "page" : undefined}
                         >
-                          <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
-                        </svg>
-                      </span>
+                          {/* Icon */}
+                          <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={1.75}
+                              aria-hidden="true"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" d={iconPath} />
+                            </svg>
+                          </span>
 
-                      {/* Label + plan badge (hidden when collapsed) */}
-                      {!collapsed && (
-                        <>
-                          <span className="flex-1 truncate">{entry.label}</span>
-                          {entry.planBadge && (
-                            <PlanBadge tier={entry.planBadge} />
+                          {/* Label + plan badge (hidden when collapsed) */}
+                          {!collapsed && (
+                            <>
+                              <span className="flex-1 truncate">{entry.label}</span>
+                              {entry.planBadge && (
+                                <PlanBadge tier={entry.planBadge} />
+                              )}
+                            </>
                           )}
-                        </>
-                      )}
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="px-4 py-4 border-t border-border">

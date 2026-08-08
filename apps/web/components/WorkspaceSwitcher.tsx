@@ -10,28 +10,52 @@
 import { useState, useEffect, useCallback, type ReactNode } from "react";
 import { Box, Text, Button, Input } from "@alecrae/ui";
 import { workspacesApi, type Workspace } from "../lib/api";
+import { getWorkspaceUnreadCounts } from "../lib/api-workspaces";
 
 export function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }): ReactNode {
   const [open, setOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null);
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
 
+  // Never throws; degrades to {} (no badges) when counts are unavailable.
+  const refreshUnread = useCallback((list: Workspace[]) => {
+    getWorkspaceUnreadCounts(list)
+      .then(setUnread)
+      .catch(() => setUnread({}));
+  }, []);
+
   const load = useCallback(() => {
     workspacesApi
       .list()
-      .then((res) => setWorkspaces(res.data))
+      .then((res) => {
+        setWorkspaces(res.data);
+        refreshUnread(res.data);
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "Failed to load workspaces"));
-  }, []);
+  }, [refreshUnread]);
 
   useEffect(() => {
-    if (open && workspaces === null) load();
-  }, [open, workspaces, load]);
+    if (!open) return;
+    if (workspaces === null) {
+      load();
+    } else {
+      // Re-check counts each time the switcher opens — mail arrives between opens.
+      refreshUnread(workspaces);
+    }
+  }, [open, workspaces, load, refreshUnread]);
 
   const active = workspaces?.find((w) => w.active);
+  // Unread in OTHER workspaces — the signal the collapsed dot represents ("mail
+  // is waiting somewhere you're not"). The active workspace's own unread lives
+  // in the inbox, not here.
+  const otherUnread = (workspaces ?? []).some(
+    (w) => !w.active && (unread[w.accountId] ?? 0) > 0,
+  );
 
   const switchTo = async (accountId: string): Promise<void> => {
     setBusy(true);
@@ -51,7 +75,10 @@ export function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }): ReactN
     try {
       const res = await workspacesApi.create({ name: newName.trim() });
       await workspacesApi.switchTo(res.data.accountId);
-      window.location.href = "/workspace";
+      // Land a brand-new workspace on the guided business-email setup flow
+      // rather than the bare workspace admin page — this IS the entry point
+      // "on the workspace-create landing".
+      window.location.href = "/setup";
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : "Failed to create workspace");
       setBusy(false);
@@ -63,11 +90,22 @@ export function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }): ReactN
       <Box
         as="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Switch workspace"
+        aria-label={
+          otherUnread
+            ? "Switch workspace — unread mail in another workspace"
+            : "Switch workspace"
+        }
         title={active?.name ?? "Switch workspace"}
-        className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-semibold text-body-sm"
+        className="relative w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 font-semibold text-body-sm"
       >
         {(active?.name ?? "W").slice(0, 1).toUpperCase()}
+        {otherUnread && (
+          <Box
+            as="span"
+            aria-hidden="true"
+            className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-brand-600 ring-2 ring-surface"
+          />
+        )}
       </Box>
     );
   }
@@ -131,11 +169,22 @@ export function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }): ReactN
                   {w.role}
                 </Text>
               </Box>
-              {w.active && (
-                <Text as="span" variant="caption" className="text-brand-700 flex-shrink-0">
-                  Active
-                </Text>
-              )}
+              <Box className="flex items-center gap-2 flex-shrink-0">
+                {(unread[w.accountId] ?? 0) > 0 && (
+                  <Box
+                    as="span"
+                    aria-label={`${unread[w.accountId]} unread`}
+                    className="min-w-[1.25rem] h-5 px-1.5 rounded-full bg-brand-600 text-white text-[11px] font-semibold flex items-center justify-center tabular-nums"
+                  >
+                    {(unread[w.accountId] ?? 0) > 99 ? "99+" : unread[w.accountId]}
+                  </Box>
+                )}
+                {w.active && (
+                  <Text as="span" variant="caption" className="text-brand-700">
+                    Active
+                  </Text>
+                )}
+              </Box>
             </Box>
           ))}
 

@@ -14,7 +14,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import crypto from "node:crypto";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
@@ -22,6 +22,7 @@ import {
   getDatabase,
   mailboxes as mailboxesTable,
   domains as domainsTable,
+  emails,
 } from "@alecrae/db";
 
 const mailboxes = new Hono();
@@ -153,6 +154,72 @@ mailboxes.get("/", requireScope("domains:manage"), async (c) => {
     .where(eq(mailboxesTable.accountId, auth.accountId))
     .orderBy(desc(mailboxesTable.createdAt));
   return c.json({ data: rows });
+});
+
+// GET /v1/mailboxes/unread-counts — unread inbox count per mailbox + catch-all
+//
+// The inbox count badge each mailbox shows in the switcher. Two bounded
+// queries, never one-per-mailbox:
+//
+//  1. A LEFT JOIN grouped by mailbox — driven by the `mailboxes` table (bounded
+//     by the account's mailbox count, not the message count), so a mailbox with
+//     zero unread still returns a 0 row. The join matches an unread inbox
+//     message when its `tags` array contains the mailbox's row id — the same
+//     axis `deliveredTo` and the `?mailboxId=` filter resolve.
+//  2. One count for the "unrouted" bucket: unread inbox mail carrying NONE of
+//     this account's mailbox ids (the account-level catch-all), so catch-all
+//     volume is visible rather than silently uncounted.
+//
+// Registered before the `/:id` routes; a static path, so no collision.
+mailboxes.get("/unread-counts", requireScope("domains:manage"), async (c) => {
+  const auth = c.get("auth");
+  const db = getDatabase();
+
+  const perMailbox = await db
+    .select({
+      mailboxId: mailboxesTable.id,
+      address: mailboxesTable.address,
+      unreadCount: sql<number>`count(${emails.id})::int`,
+    })
+    .from(mailboxesTable)
+    .leftJoin(
+      emails,
+      and(
+        eq(emails.accountId, mailboxesTable.accountId),
+        eq(emails.folder, "inbox"),
+        eq(emails.isRead, false),
+        sql`${emails.tags} @> jsonb_build_array(${mailboxesTable.id})`,
+      ),
+    )
+    .where(eq(mailboxesTable.accountId, auth.accountId))
+    .groupBy(mailboxesTable.id, mailboxesTable.address);
+
+  // Unrouted: reuse the mailbox ids we already have rather than re-querying.
+  const unroutedConditions = [
+    eq(emails.accountId, auth.accountId),
+    eq(emails.folder, "inbox"),
+    eq(emails.isRead, false),
+  ];
+  for (const mb of perMailbox) {
+    unroutedConditions.push(
+      sql`NOT (${emails.tags} @> ${JSON.stringify([mb.mailboxId])}::jsonb)`,
+    );
+  }
+  const [unroutedRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(emails)
+    .where(and(...unroutedConditions));
+
+  return c.json({
+    data: {
+      mailboxes: perMailbox.map((r) => ({
+        mailboxId: r.mailboxId,
+        address: r.address,
+        unreadCount: Number(r.unreadCount ?? 0),
+      })),
+      unrouted: Number(unroutedRow?.count ?? 0),
+    },
+  });
 });
 
 // PATCH /v1/mailboxes/:id — update a mailbox's mutable fields
