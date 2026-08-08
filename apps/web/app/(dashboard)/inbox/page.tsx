@@ -14,7 +14,8 @@ import {
   type EmailMessage,
 } from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
-import { messagesApi, snoozeApi, authApi, aiWritingApi, connectApi, type Message, type MessageDetail } from "../../../lib/api";
+import { messagesApi, mailboxesApi, snoozeApi, authApi, aiWritingApi, connectApi, type Message, type MessageDetail } from "../../../lib/api";
+import { MailboxFilter, type MailboxFilterItem } from "./mailbox-filter";
 import { useFocusMode } from "../../../lib/focus-mode";
 import { useCommandPalette } from "../../../lib/command-palette-store";
 import { NewsletterSummaryPreview } from "../../../components/NewsletterSummaryPreview";
@@ -94,6 +95,9 @@ function toEmailListItem(msg: Message): EmailListItem {
     starred: msg.isStarred,
     priority: "normal" as const,
     hasAttachments: msg.hasAttachments,
+    // Which business-email mailbox claimed this message (null = catch-all).
+    // Absence and null are treated identically by the row renderer.
+    deliveredTo: msg.deliveredTo ?? null,
   };
 }
 
@@ -163,6 +167,13 @@ export default function InboxPage(): React.ReactNode {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "unread" | "starred">("all");
+  // Mailbox filter (business-email domains): null = All mail, "unrouted" =
+  // catch-all, otherwise a provisioned mailbox id. Drives a `?mailboxId=`
+  // narrowing on the list fetch. Empty list ⇒ consumer inbox, filter hidden.
+  const [selectedMailboxId, setSelectedMailboxId] = useState<string | null>(null);
+  const [mailboxFilterItems, setMailboxFilterItems] = useState<MailboxFilterItem[]>([]);
+  const [unroutedCount, setUnroutedCount] = useState<number | undefined>(undefined);
+  const [mailboxesLoading, setMailboxesLoading] = useState(true);
   // First-run: null while checking, false when the user has no connected
   // email accounts (drives the "connect an account" empty state).
   const [hasConnectedAccounts, setHasConnectedAccounts] = useState<boolean | null>(null);
@@ -681,9 +692,14 @@ export default function InboxPage(): React.ReactNode {
       setLoading(true);
       setError(null);
 
-      // Cache-first: try IndexedDB for instant load
+      // Cache-first: try IndexedDB for instant load.
+      // Skipped when a mailbox filter is active — the local cache is not
+      // mailbox-scoped, so showing it under a "?mailboxId=" narrowing would
+      // display the wrong (unfiltered) mail until the network reply lands.
       try {
-        const cached = await getCachedEmails({ limit: 50, filter: "all" });
+        const cached = selectedMailboxId
+          ? []
+          : await getCachedEmails({ limit: 50, filter: "all" });
         if (cached.length > 0) {
           const cachedItems: EmailListItem[] = cached.map((c) => ({
             id: c.id,
@@ -707,7 +723,10 @@ export default function InboxPage(): React.ReactNode {
       }
 
       // Network: fetch fresh data and update cache
-      const res = await messagesApi.list({ limit: 50 });
+      const res = await messagesApi.list({
+        limit: 50,
+        ...(selectedMailboxId ? { mailboxId: selectedMailboxId } : {}),
+      });
       const items = res.data.map(toEmailListItem);
       const nlMap = new Map<string, boolean>();
       for (const msg of res.data) {
@@ -720,32 +739,35 @@ export default function InboxPage(): React.ReactNode {
         setSelectedEmailId(first.id);
       }
 
-      // Update cache in background
-      const toCache: CachedEmail[] = res.data.map((msg) => ({
-        id: msg.id,
-        messageId: msg.id,
-        from: msg.from,
-        to: msg.to,
-        cc: msg.cc ?? [],
-        subject: msg.subject,
-        preview: msg.preview,
-        status: msg.status,
-        tags: msg.tags,
-        hasAttachments: msg.hasAttachments,
-        starred: msg.isStarred,
-        read: msg.isRead,
-        createdAt: msg.createdAt,
-        updatedAt: msg.updatedAt ?? msg.createdAt,
-        sentAt: msg.sentAt ?? null,
-        cachedAt: Date.now(),
-      }));
-      cacheEmails(toCache).catch(() => { /* background cache — non-fatal */ });
+      // Update cache in background — only for the unfiltered view, so the
+      // mailbox-agnostic cache never gets overwritten with a partial slice.
+      if (!selectedMailboxId) {
+        const toCache: CachedEmail[] = res.data.map((msg) => ({
+          id: msg.id,
+          messageId: msg.id,
+          from: msg.from,
+          to: msg.to,
+          cc: msg.cc ?? [],
+          subject: msg.subject,
+          preview: msg.preview,
+          status: msg.status,
+          tags: msg.tags,
+          hasAttachments: msg.hasAttachments,
+          starred: msg.isStarred,
+          read: msg.isRead,
+          createdAt: msg.createdAt,
+          updatedAt: msg.updatedAt ?? msg.createdAt,
+          sentAt: msg.sentAt ?? null,
+          cachedAt: Date.now(),
+        }));
+        cacheEmails(toCache).catch(() => { /* background cache — non-fatal */ });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load emails");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedMailboxId]);
 
   const fetchDetail = useCallback(async (id: string) => {
     try {
@@ -759,11 +781,58 @@ export default function InboxPage(): React.ReactNode {
     }
   }, []);
 
+  // Load the mailbox filter's items + unread counts. Degrades in two steps so
+  // the filter is as useful as the API allows: the counts endpoint first, then
+  // the plain mailbox list (addresses without counts) if that 404s, then hidden
+  // entirely if the account has no provisioned mailboxes or nothing responds.
+  const loadMailboxCounts = useCallback(async (): Promise<void> => {
+    setMailboxesLoading(true);
+    try {
+      const res = await mailboxesApi.unreadCounts();
+      const counts = res.data;
+      setMailboxFilterItems(
+        counts.mailboxes.map((m) => ({
+          id: m.mailboxId,
+          address: m.address,
+          unreadCount: m.unreadCount,
+        })),
+      );
+      setUnroutedCount(counts.unrouted);
+    } catch {
+      // Counts endpoint unavailable — fall back to the mailbox list so the
+      // filter still works, just without unread badges.
+      try {
+        const listRes = await mailboxesApi.list();
+        setMailboxFilterItems(
+          listRes.data.map((mb) => ({ id: mb.id, address: mb.address })),
+        );
+        setUnroutedCount(undefined);
+      } catch {
+        // No mailboxes reachable at all — leave the filter empty, which hides
+        // it and degrades the inbox to plain "All mail".
+        setMailboxFilterItems([]);
+        setUnroutedCount(undefined);
+      }
+    } finally {
+      setMailboxesLoading(false);
+    }
+  }, []);
+
+  // Selecting a mailbox: update state and let fetchEmails re-run via its dep.
+  // Also drop any stale selection whose message may not be in the new slice.
+  const handleSelectMailbox = useCallback((value: string | null) => {
+    setSelectedMailboxId(value);
+  }, []);
+
   useEffect(() => {
-    fetchEmails();
+    void fetchEmails();
+  }, [fetchEmails]);
+
+  useEffect(() => {
     void loadMutedThreads();
+    void loadMailboxCounts();
     authApi.me().then((res) => setUserEmail(res.data.email)).catch(() => { /* non-fatal */ });
-  }, [fetchEmails, loadMutedThreads]);
+  }, [loadMutedThreads, loadMailboxCounts]);
 
   useEffect(() => {
     if (selectedEmailId) {
@@ -870,6 +939,15 @@ export default function InboxPage(): React.ReactNode {
       <PageLayout header={searchHeader} fullWidth>
         <Box className="flex flex-1 h-full">
           <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
+            {/* Keep the mailbox filter mounted during loading so switching
+                mailboxes doesn't make it vanish (and lose keyboard focus). */}
+            <MailboxFilter
+              mailboxes={mailboxFilterItems}
+              unroutedCount={unroutedCount}
+              selected={selectedMailboxId}
+              onSelect={handleSelectMailbox}
+              loading={mailboxesLoading}
+            />
             <Box className="px-4 py-2 border-b border-border bg-surface-secondary">
               <Text variant="body-sm" muted>Loading...</Text>
             </Box>
@@ -944,6 +1022,13 @@ export default function InboxPage(): React.ReactNode {
       </Box>
       <Box className="flex flex-1 h-full">
         <Box className="w-96 border-r border-border overflow-y-auto flex-shrink-0">
+          <MailboxFilter
+            mailboxes={mailboxFilterItems}
+            unroutedCount={unroutedCount}
+            selected={selectedMailboxId}
+            onSelect={handleSelectMailbox}
+            loading={mailboxesLoading}
+          />
           <AnimatePresence>
             {selectedIds.size > 0 && (
               <InboxBulkToolbar

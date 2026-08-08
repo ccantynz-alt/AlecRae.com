@@ -11,10 +11,10 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
-import { getDatabase, accounts, organizations, users, workspaceMembers } from "@alecrae/db";
+import { getDatabase, accounts, organizations, users, workspaceMembers, emails } from "@alecrae/db";
 import { upsertWorkspaceMembership } from "../lib/workspace-membership.js";
 
 const workspacesRouter = new Hono();
@@ -87,6 +87,63 @@ workspacesRouter.get("/", requireScope("account:read"), async (c) => {
       planTier: r.planTier,
       active: r.accountId === auth.accountId,
       createdAt: r.createdAt.toISOString(),
+    })),
+  });
+});
+
+// GET /unread — unread inbox count per workspace the caller belongs to.
+//
+// The switcher needs an unread badge for EACH workspace without switching into
+// it. The rest of the API is scoped to a single `auth.accountId` (the active
+// workspace), but counting across workspaces is safe here precisely because the
+// account set is derived from the caller's OWN `workspaceMembers` rows — a
+// non-member's account id can never enter the `IN` list, so no other account's
+// total is ever exposed to someone who doesn't belong to it.
+//
+// One grouped count over the (account_id, folder) index, narrowed by is_read —
+// bounded by the number of workspaces a user is in (small), and indexed, so the
+// switcher stays fast even against a large mailbox.
+//
+// Static path — registered before nothing conflicting (`/` and `POST /` only).
+workspacesRouter.get("/unread", requireScope("account:read"), async (c) => {
+  const auth = c.get("auth");
+  if (!auth.userId) return c.json(MISSING_USER_ID, 401);
+
+  const db = getDatabase();
+
+  const memberships = await db
+    .select({ accountId: workspaceMembers.accountId })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.userId, auth.userId));
+
+  const accountIds = memberships.map((m) => m.accountId);
+  if (accountIds.length === 0) return c.json({ data: [] });
+
+  const counts = await db
+    .select({
+      accountId: emails.accountId,
+      unreadCount: sql<number>`count(*)::int`,
+    })
+    .from(emails)
+    .where(
+      and(
+        inArray(emails.accountId, accountIds),
+        eq(emails.folder, "inbox"),
+        eq(emails.isRead, false),
+      ),
+    )
+    .groupBy(emails.accountId);
+
+  const byAccount = new Map(
+    counts.map((r) => [r.accountId, Number(r.unreadCount ?? 0)]),
+  );
+
+  // Emit a row for every membership, defaulting to 0 — a workspace with no
+  // unread mail must still appear (the switcher renders all workspaces).
+  return c.json({
+    data: accountIds.map((accountId) => ({
+      accountId,
+      unreadCount: byAccount.get(accountId) ?? 0,
     })),
   });
 });

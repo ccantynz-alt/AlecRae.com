@@ -23,7 +23,7 @@ import type {
   PaginationParams,
   PaginatedResponse,
 } from "../types.js";
-import { getDatabase, emails, events, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts, emailLabels, labels } from "@alecrae/db";
+import { getDatabase, emails, events, deliveryResults, domains, accounts, suppressionLists, templates, connectedAccounts, emailLabels, labels, mailboxes as mailboxesTable } from "@alecrae/db";
 import { getSendQueue } from "../lib/queue.js";
 import { ensureFreshAccessToken } from "../sync/engine.js";
 import { registerUndoable } from "./snooze.js";
@@ -68,6 +68,67 @@ function generateMessageId(domain: string): string {
 function domainOf(address: string): string {
   const idx = address.lastIndexOf("@");
   return idx === -1 ? address : address.slice(idx + 1).toLowerCase();
+}
+
+/**
+ * Map the mailbox-row-ids carried in a page of messages' tags to their
+ * addresses, so the list can report which provisioned mailbox each received
+ * message was delivered to.
+ *
+ * The inbound store writes `tags` as `[folder, mailboxRowId?]` — the routed
+ * mailbox row id is present only when mail was addressed to a provisioned
+ * mailbox (services/inbound/src/storage/postgres-store.ts). Folder-name tags
+ * ("inbox", "spam") are never mailbox ids, so they simply don't resolve and
+ * fall through to `deliveredTo: null` (the account-level catch-all).
+ *
+ * ONE bounded `IN` query for the whole page, scoped to the caller's account so
+ * a tag carrying another tenant's mailbox id can never resolve to an address.
+ * A failure degrades to an empty map (every `deliveredTo` becomes null) rather
+ * than breaking the inbox list — the same posture as the openedAt/labels
+ * enrichment above it (issue #133).
+ */
+async function resolveDeliveredToAddresses(
+  db: ReturnType<typeof getDatabase>,
+  accountId: string,
+  tagSets: (string[] | null | undefined)[],
+): Promise<Map<string, string>> {
+  const addressById = new Map<string, string>();
+  const candidateIds = new Set<string>();
+  for (const tags of tagSets) {
+    for (const t of tags ?? []) candidateIds.add(t);
+  }
+  if (candidateIds.size === 0) return addressById;
+
+  try {
+    const rows = await db
+      .select({ id: mailboxesTable.id, address: mailboxesTable.address })
+      .from(mailboxesTable)
+      .where(
+        and(
+          eq(mailboxesTable.accountId, accountId),
+          inArray(mailboxesTable.id, [...candidateIds]),
+        ),
+      );
+    for (const r of rows) addressById.set(r.id, r.address);
+  } catch (err) {
+    console.error(
+      "[messages] deliveredTo mailbox lookup failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+  return addressById;
+}
+
+/** Pick the first tag that is one of this account's mailbox ids. */
+function pickDeliveredTo(
+  tags: string[] | null | undefined,
+  addressById: Map<string, string>,
+): { mailboxId: string; address: string } | null {
+  for (const t of tags ?? []) {
+    const address = addressById.get(t);
+    if (address) return { mailboxId: t, address };
+  }
+  return null;
 }
 
 /**
@@ -258,6 +319,17 @@ const ListMessagesQuery = PaginationSchema.extend({
     ])
     .optional(),
   tag: z.string().optional(),
+  /**
+   * Filter the list to one provisioned mailbox by its row id — the same axis
+   * `deliveredTo` resolves. `?tag=<mailboxId>` already expresses this via the
+   * jsonb-containment filter below; `mailboxId` is the named, discoverable form
+   * of it and additionally understands the sentinel "unrouted".
+   *
+   * "unrouted" returns account-level catch-all mail — inbox messages carrying
+   * NONE of this account's mailbox ids in their tags — so catch-all delivery is
+   * reachable rather than invisible behind the per-mailbox views.
+   */
+  mailboxId: z.string().optional(),
   /** Defaults to "inbox" (excludes trash, archive and spam) — pass "archive",
    *  "trash", "spam", "drafts", or "all" explicitly to see those. When
    *  `status=draft` is requested the default becomes "drafts", since drafts are
@@ -1221,12 +1293,20 @@ messages.get(
       .from(deliveryResults)
       .where(eq(deliveryResults.emailId, id));
 
+    // Which provisioned mailbox this received message landed in, if any — same
+    // resolution as the list, one bounded lookup, null for catch-all/unrouted.
+    const addressById = await resolveDeliveredToAddresses(db, auth.accountId, [
+      emailRecord.tags,
+    ]);
+
     return c.json({
       data: {
         id: emailRecord.id,
         messageId: emailRecord.messageId,
         /** Same derivation as the list, so the two never disagree. */
         threadId: threadKeyFor(emailRecord),
+        /** The provisioned mailbox this was delivered to, or null (catch-all). */
+        deliveredTo: pickDeliveredTo(emailRecord.tags, addressById),
         from: {
           email: emailRecord.fromAddress,
           name: emailRecord.fromName,
@@ -1270,6 +1350,7 @@ messages.get(
       PaginationParams & {
         status?: string;
         tag?: string;
+        mailboxId?: string;
         folder?: "inbox" | "archive" | "trash" | "spam" | "drafts" | "all";
       }
     >(c);
@@ -1313,6 +1394,32 @@ messages.get(
       conditions.push(
         sql`${emails.tags} @> ${JSON.stringify([query.tag])}::jsonb`,
       );
+    }
+
+    // Per-mailbox filtering by row id, plus the "unrouted" catch-all view.
+    if (query.mailboxId) {
+      if (query.mailboxId === "unrouted") {
+        // Account-level catch-all: inbox mail carrying none of this account's
+        // mailbox ids. Force "inbox" (the definition of unrouted) even if the
+        // caller passed folder=all, then exclude every mailbox id. Bounded by
+        // the account's mailbox count; one query.
+        if (folder === "all") {
+          conditions.push(eq(emails.folder, "inbox"));
+        }
+        const accountMailboxes = await db
+          .select({ id: mailboxesTable.id })
+          .from(mailboxesTable)
+          .where(eq(mailboxesTable.accountId, auth.accountId));
+        for (const mb of accountMailboxes) {
+          conditions.push(
+            sql`NOT (${emails.tags} @> ${JSON.stringify([mb.id])}::jsonb)`,
+          );
+        }
+      } else {
+        conditions.push(
+          sql`${emails.tags} @> ${JSON.stringify([query.mailboxId])}::jsonb`,
+        );
+      }
     }
 
     const rows = await db
@@ -1436,6 +1543,15 @@ messages.get(
       }
     }
 
+    // Which provisioned mailbox each received message was delivered to. One
+    // bounded lookup over the mailbox ids present in this page's tags, scoped
+    // to the account; degrades to null per message on failure (see helper).
+    const deliveredAddressById = await resolveDeliveredToAddresses(
+      db,
+      auth.accountId,
+      page.map((r) => r.tags),
+    );
+
     const data = page.map((row) => ({
       id: row.id,
       messageId: row.messageId,
@@ -1443,6 +1559,8 @@ messages.get(
       threadId: threadKeyFor(row),
       /** Labels applied to this message, empty when none. */
       labels: labelsByEmail.get(row.id) ?? [],
+      /** The provisioned mailbox this was delivered to, or null (catch-all). */
+      deliveredTo: pickDeliveredTo(row.tags, deliveredAddressById),
       from: { email: row.fromAddress, name: row.fromName },
       to: row.toAddresses,
       cc: row.ccAddresses,

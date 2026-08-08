@@ -58,6 +58,16 @@ export interface Message {
   isRead: boolean;
   isStarred: boolean;
   folder: "inbox" | "archive" | "trash" | string;
+  /**
+   * Which provisioned mailbox this message was delivered to, for
+   * business-email domains (e.g. info@ / support@ / sales@). `null` means the
+   * message was catch-all / unrouted — no specific mailbox claimed it.
+   *
+   * Optional because a cached response, a consumer/connected-account inbox, or
+   * an API build from before this field existed won't carry it — callers must
+   * treat its absence the same as `null`.
+   */
+  deliveredTo?: { mailboxId: string; address: string } | null;
   hasAttachments: boolean;
   /**
    * When the recipient first opened this message, from the real tracking
@@ -645,8 +655,23 @@ export interface Mailbox {
   displayName: string | null;
   forwardTo: string[] | null;
   isActive: boolean;
+  /** Marks the mailbox to send from by default when composing. */
+  isDefault?: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** Per-mailbox unread tally, plus the catch-all bucket, for the inbox filter. */
+export interface MailboxUnreadCount {
+  mailboxId: string;
+  address: string;
+  unreadCount: number;
+}
+
+export interface MailboxUnreadCounts {
+  mailboxes: MailboxUnreadCount[];
+  /** Unread count for catch-all / unrouted mail no mailbox claimed. */
+  unrouted: number;
 }
 
 /**
@@ -693,6 +718,17 @@ export const mailboxesApi = {
   },
   remove(id: string): Promise<{ deleted: boolean; id: string }> {
     return apiFetch(`/v1/mailboxes/${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+  /**
+   * Per-mailbox unread counts for the inbox filter, plus the catch-all bucket.
+   *
+   * Enveloped as `{ data }` to match the LIST convention above. The caller must
+   * degrade gracefully if this 404s — the endpoint is newer than `list()`, so
+   * the mailbox filter falls back to `list()` (addresses without counts) rather
+   * than disappearing when only the counts endpoint is missing.
+   */
+  unreadCounts(): Promise<{ data: MailboxUnreadCounts }> {
+    return apiFetch("/v1/mailboxes/unread-counts");
   },
 };
 
@@ -975,13 +1011,26 @@ export const messagesApi = {
     );
   },
 
-  list(params?: { cursor?: string; limit?: number; status?: string; tag?: string; folder?: "inbox" | "archive" | "trash" | "drafts" | "all" }) {
+  list(params?: {
+    cursor?: string;
+    limit?: number;
+    status?: string;
+    tag?: string;
+    folder?: "inbox" | "archive" | "trash" | "drafts" | "all";
+    /**
+     * Narrow to a single provisioned mailbox by its id, or the literal
+     * "unrouted" for catch-all mail that no mailbox claimed. Omit for all mail.
+     * Matches the documented `GET /v1/messages?mailboxId=` contract.
+     */
+    mailboxId?: string;
+  }) {
     const qs = new URLSearchParams();
     if (params?.cursor) qs.set("cursor", params.cursor);
     if (params?.limit) qs.set("limit", String(params.limit));
     if (params?.status) qs.set("status", params.status);
     if (params?.tag) qs.set("tag", params.tag);
     if (params?.folder) qs.set("folder", params.folder);
+    if (params?.mailboxId) qs.set("mailboxId", params.mailboxId);
     const query = qs.toString();
     return apiFetch<PaginatedResponse<Message>>(
       `/v1/messages${query ? `?${query}` : ""}`,

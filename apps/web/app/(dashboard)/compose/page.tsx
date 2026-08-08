@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { PageLayout, ComposeEditor, Box, Text, type ComposeData } from "@alecrae/ui";
+import { PageLayout, ComposeEditor, Box, Text, type ComposeData, type ComposeMailboxOption } from "@alecrae/ui";
 import { AnimatePresence, motion } from "motion/react";
-import { messagesApi, authApi, calendarApi, grammarApi } from "../../../lib/api";
+import { messagesApi, mailboxesApi, authApi, calendarApi, grammarApi } from "../../../lib/api";
 import { initLocalAI, grammarCheck as localGrammarCheck } from "../../../lib/local-ai";
 import { RecipientAutocomplete } from "../../../components/RecipientAutocomplete";
 import { SendTimePanel } from "../../../components/SendTimePanel";
@@ -71,6 +71,10 @@ function ComposePage(): React.ReactNode {
   } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState("");
+  // "Send as" options for business-email domains. Empty ⇒ no picker, and the
+  // From field falls back to the plain text input seeded with the login email
+  // (consumer / connected-account use), so nothing breaks without mailboxes.
+  const [mailboxOptions, setMailboxOptions] = useState<ComposeMailboxOption[]>([]);
   const [recipientForPrediction, setRecipientForPrediction] = useState("");
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
   // Grammar check result — a full corrected-text version of the body, not a
@@ -254,6 +258,31 @@ function ComposePage(): React.ReactNode {
     authApi.me().then((res) => {
       setUserEmail(res.data.email);
     }).catch(() => { /* not authenticated */ });
+  }, []);
+
+  // Load the account's provisioned mailboxes for the "send as" picker. Only
+  // active ones can send, so paused mailboxes are excluded. Any failure (no
+  // mailboxes, endpoint unavailable) leaves the list empty, which keeps the
+  // plain From input — the send path validates domain ownership regardless.
+  useEffect(() => {
+    let cancelled = false;
+    mailboxesApi
+      .list()
+      .then((res) => {
+        if (cancelled) return;
+        const opts: ComposeMailboxOption[] = res.data
+          .filter((mb) => mb.isActive)
+          .map((mb) => ({
+            address: mb.address,
+            displayName: mb.displayName,
+            ...(mb.isDefault ? { isDefault: true } : {}),
+          }));
+        setMailboxOptions(opts);
+      })
+      .catch(() => { /* no mailboxes / unavailable — plain From input */ });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const initialSubject = mode === "forward"
@@ -656,6 +685,7 @@ function ComposePage(): React.ReactNode {
           <ComposeEditor
             key={editorKey}
             from={userEmail}
+            {...(mailboxOptions.length > 0 ? { mailboxOptions } : {})}
             to={loadedDraft?.to ?? replyTo}
             cc={loadedDraft?.cc ?? (mode === "replyAll" ? replyCc : "")}
             subject={loadedDraft?.subject ?? initialSubject}

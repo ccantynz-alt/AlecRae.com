@@ -28,6 +28,13 @@ export interface EmailListItem {
   labels?: string[];
   hasAttachments?: boolean;
   threadCount?: number;
+  /**
+   * Which provisioned business-email mailbox this message was delivered to
+   * (e.g. info@ / support@), or null/undefined for catch-all / unrouted mail.
+   * Surfaced as a small muted "to <address>" label so an operator can tell at
+   * a glance which mailbox a message hit.
+   */
+  deliveredTo?: { mailboxId: string; address: string } | null;
 }
 
 export interface EmailListProps extends Omit<HTMLAttributes<HTMLUListElement>, "onSelect"> {
