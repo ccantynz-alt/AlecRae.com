@@ -47,6 +47,7 @@ import { webhooks } from "./routes/webhooks.js";
 import { analytics } from "./routes/analytics.js";
 import { suppressions } from "./routes/suppressions.js";
 import { tracking } from "./routes/tracking.js";
+import { inboundVapron } from "./routes/inbound-vapron.js";
 import { apiKeysRouter } from "./routes/api-keys.js";
 import { account } from "./routes/account.js";
 import { gdprRouter } from "./routes/gdpr.js";
@@ -255,6 +256,12 @@ app.route("/v1/sso", sso);
 
 // Tracking endpoints (no auth — embedded in emails)
 app.route("/t", tracking);
+
+// Vapron inbound webhook (no auth — authenticated by HMAC, not a session).
+// Vapron's email-receive sink bridge forwards each inbound email here; the
+// route verifies the shared-secret HMAC itself. See issue #171 /
+// docs/infra/alecrae-vapron-mail-integration.md.
+app.route("/v1/inbound", inboundVapron);
 
 // Real-time WebSocket endpoint (auth via query param token — no middleware)
 app.route("/v1/realtime", realtime);
