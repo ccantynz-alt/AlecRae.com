@@ -14,7 +14,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { requireScope } from "../middleware/auth.js";
 import { validateBody, getValidatedBody } from "../middleware/validator.js";
 import { AddDomainSchema } from "../types.js";
@@ -56,10 +56,13 @@ domains.post(
     // We do NOT filter by accountId here — domains are unique across all tenants.
     // Return the same error regardless of which account owns it to avoid leaking
     // whether a given domain is registered by another user.
+    // Case-insensitive: input.domain is already lowercase (AddDomainSchema),
+    // but a pre-normalisation row could be stored mixed-case, so match on
+    // lower() to avoid creating a second row for the same domain.
     const [existing] = await db
       .select({ id: domainsTable.id })
       .from(domainsTable)
-      .where(eq(domainsTable.domain, input.domain))
+      .where(sql`lower(${domainsTable.domain}) = ${input.domain}`)
       .limit(1);
 
     if (existing) {

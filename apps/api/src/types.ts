@@ -124,14 +124,24 @@ export interface PaginatedResponse<T> {
 
 // --- Domain ---
 export const AddDomainSchema = z.object({
+  // `.trim()` runs before the regex so surrounding whitespace is tolerated,
+  // then the value is lowercased. DNS and email treat the domain as
+  // case-insensitive; normalising on write means the stored value always
+  // matches the lowercase domain that mailbox provisioning, the send path, and
+  // inbound routing extract from an email address — otherwise "Davenroe.com"
+  // stored ≠ "davenroe.com" looked up, and every mailbox/send/receive for that
+  // domain fails a case-sensitive comparison. `workspace-import.ts` already did
+  // this; the main add path did not.
   domain: z
     .string()
+    .trim()
     .min(1)
     .max(253)
     .regex(
       /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/,
       "Invalid domain format",
-    ),
+    )
+    .transform((s) => s.toLowerCase()),
 });
 
 export type AddDomainInput = z.infer<typeof AddDomainSchema>;

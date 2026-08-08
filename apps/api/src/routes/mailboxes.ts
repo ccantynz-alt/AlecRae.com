@@ -50,11 +50,17 @@ mailboxes.post(
     const input = getValidatedBody<z.infer<typeof CreateMailboxSchema>>(c);
     const db = getDatabase();
 
-    const atIdx = input.address.indexOf("@");
-    const localPart = input.address.slice(0, atIdx);
-    const domainName = input.address.slice(atIdx + 1);
+    // Normalise the address: local-part and domain are matched/stored
+    // lowercase (email domains are case-insensitive; a mixed-case address must
+    // resolve to the same mailbox and the same domain row).
+    const normalizedAddress = input.address.trim().toLowerCase();
+    const atIdx = normalizedAddress.indexOf("@");
+    const localPart = normalizedAddress.slice(0, atIdx);
+    const domainName = normalizedAddress.slice(atIdx + 1);
 
     // The domain must be registered + verified + active for this account.
+    // Compared case-insensitively (lower() on both sides) so a domain that was
+    // stored mixed-case before normalisation on write existed still resolves.
     const [domainRecord] = await db
       .select({
         id: domainsTable.id,
@@ -64,7 +70,7 @@ mailboxes.post(
       .from(domainsTable)
       .where(
         and(
-          eq(domainsTable.domain, domainName),
+          sql`lower(${domainsTable.domain}) = ${domainName}`,
           eq(domainsTable.accountId, auth.accountId),
         ),
       )
@@ -96,11 +102,11 @@ mailboxes.post(
       );
     }
 
-    // address is globally unique.
+    // address is globally unique (stored lowercase).
     const [existing] = await db
       .select({ id: mailboxesTable.id })
       .from(mailboxesTable)
-      .where(eq(mailboxesTable.address, input.address))
+      .where(eq(mailboxesTable.address, normalizedAddress))
       .limit(1);
 
     if (existing) {
@@ -108,7 +114,7 @@ mailboxes.post(
         {
           error: {
             type: "conflict_error",
-            message: `Mailbox "${input.address}" already exists.`,
+            message: `Mailbox "${normalizedAddress}" already exists.`,
             code: "mailbox_exists",
           },
         },
@@ -122,7 +128,7 @@ mailboxes.post(
       accountId: auth.accountId,
       domainId: domainRecord.id,
       localPart,
-      address: input.address,
+      address: normalizedAddress,
       displayName: input.displayName ?? null,
       forwardTo: input.forwardTo ?? null,
       isActive: true,
@@ -132,7 +138,7 @@ mailboxes.post(
       {
         id,
         accountId: auth.accountId,
-        address: input.address,
+        address: normalizedAddress,
         localPart,
         domainId: domainRecord.id,
         displayName: input.displayName ?? null,
