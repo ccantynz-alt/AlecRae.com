@@ -1,5 +1,11 @@
 # AlecRae Go-Live — Craig's Master Checklist
 
+> **⚠️ For BUSINESS EMAIL bring-up, use [`GO-LIVE-CHECKLIST.md`](./GO-LIVE-CHECKLIST.md) instead —**
+> it is the current, tickable, dependency-ordered path and reflects the real production stack
+> (local Postgres/Redis on the boxes, relay-overflow sending, the mailbox-aware inbox). This older
+> file predates that reality: its Neon/Upstash/signup phases (1–2) are aspirational, not what
+> production runs. Kept for its Google Cloud / Azure OAuth notes, which remain accurate.
+>
 > **This is the index. Every detail is in a sibling file under `docs/infra/`. Follow this in order. Do not skip.**
 
 ---
@@ -301,4 +307,4 @@ Referenced files:
 
 ---
 
-_Last updated: 2026-07-13 10:15 UTC_
+_Last updated: 2026-08-08 05:10 UTC_
